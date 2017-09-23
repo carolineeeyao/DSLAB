@@ -1,0 +1,1520 @@
+Automatic Discovery of the Statistical Types of Variables in   Dataset
+
+Isabel Valera   Zoubin Ghahramani    
+
+Abstract
+
+  common practice in statistics and machine
+learning is to assume that the statistical data types
+      ordinal  categorical or realvalued  of variables  and usually also the likelihood model  is
+known  However  as the availability of realworld data increases  this assumption becomes
+too restrictive  Data are often heterogeneous 
+complex  and improperly or incompletely documented  Surprisingly  despite their practical
+importance  there is still   lack of tools to automatically discover the statistical types of  as
+well as appropriate likelihood  noise  models for 
+the variables in   dataset  In this paper  we  ll
+this gap by proposing   Bayesian method  which
+accurately discovers the statistical data types in
+both synthetic and real data 
+
+  Introduction
+Data analysis problems often involve preprocessing raw
+data  which is   tedious and timedemanding task due to
+several reasons     raw data is often unstructured and largescale  ii  it contains errors and missing values  and iii 
+documentation may be incomplete or not available  As  
+consequence  as the availability of data increases  so does
+the interest of the data science community to automate this
+process  In particular  there are   growing body of work
+which focuses on automating the different stages of data
+preprocessing  including data cleaning  Hellerstein   
+data wrangling  Kandel et al    and data integration
+and fusion  Dong   Srivastava   
+The outcome of data preprocessing is commonly   structured dataset  in which the objects are described by   set of
+attributes  However  before being able to proceed with the
+predictive analytics step of the data analysis process  the
+data scientist often needs to identify which kind of variables       realvalues  categorical  ordinal  etc  these attributes represent  This labeling of the data is necessary
+to select the appropriate machine learning approach to ex 
+
+ University of Cambridge  Cambridge  United Kingdom 
+ Uber AI Labs  San Francisco  California  USA  Correspondence
+to  Isabel Valera  miv cam ac uk 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+plore   nd patterns or make predictions on the data  As an
+example    prediction task is solved differently depending
+on the kind of data to be predicted      while prediction
+on categorical variables is usually formulated as   classi 
+cation task  in the case of ordinal variables it is formulated
+as an ordinal regression problem  Agresti    Moreover  different data types should be preprocessed and input
+differently in the predictive tool      categorical inputs
+are often transformed into as many binary inputs  which
+state whether the object belongs to   category or not  as
+number of categories  positive real inputs might be logtransformed  etc 
+Information on the statistical data types in   dataset becomes particularly important in the context of statistical
+machine learning  Breiman    where the choice of  
+likelihood model appears as   main assumption  Although
+extensive work has focused on model selection  Ando 
+  Burnham   Anderson    the likelihood model
+is usually assumed to be known and  xed  As an example 
+  common approach is to model continuous data as Gaussian variables  and discrete data as categorical variables 
+However  while extensive work has shown the advantages
+of capturing the statistical properties of the observed data in
+the likelihood model  Chu   Ghahramani      Schmidt
+et al    Hilbe    Valera   Ghahramani   
+there still exists   lack of tools to automatically perform
+likelihood model selection  or equivalently to discover the
+most plausible statistical type of the variables in the data 
+directly from the data 
+In this work  we aim to  ll this gap by proposing   general and scalable Bayesian method to solve this task  The
+proposed method exploits the latent structure in the data to
+automatically distinguish among realvalued  positive realvalued and interval data as types of continuous variables 
+and among categorical  ordinal and count data as types of
+discrete variables  The proposed method is based on probabilistic modeling and exploits the following key ideas 
+
+   There exists   latent structure in the data that capture
+the statistical dependencies among the different objects and attributes in the dataset  Here  as in standard
+latent feature modeling  we assume that we can capture this structure by   lowrank representation  such
+that conditioning on it  the likelihood model factorizes
+for both number of objects and attributes 
+
+ii  The observation model for each attribute can be ex 
+
+Automatic Discovery of the Statistical Types of Variables in   Dataset
+
+pressed as   mixture of likelihood models  one per
+each considered data type  where the inferred weight
+associated to   likelihood model captures the probability of the attribute belonging to the corresponding
+data type 
+
+We derive an ef cient MCMC inference algorithm to
+jointly infer both the lowrank representation and the
+weight of each likelihood model for each attribute in the
+observed data  Our experimental results show that the proposed method accurately discovers the true data type of the
+variables in   dataset  and by doing so  it  ts the data substantially better than modeling continuous data as Gaussian
+variables and discrete data as categorical variables 
+  Problem Statement
+As stated above  the outcome of the preprocessing step
+of data analysis is   structured dataset  in which   set of
+objects are de ned by   set of attributes  and our objective is to automatically discover which type of variables
+these attributes correspond to  In order to distinguish between discrete and continuous variables  we can apply simple logic rules       count the number of unique values that
+the attribute takes and how many times we observe these attributes  Moreover  binary variables are invariant to the labeling of the categories  and therefore  both categorical and
+ordinal models are equivalent in this case  However  distinguishing among different types of discrete and continuous
+variables cannot be easily solved using simple heuristics 
+In the context of continuous variables  given the  nite size
+of observed datasets  it is complicated to identify whether
+  variable may take values in the entire real line  or only on
+an interval of it         or          In other words 
+due to the  nite observation sample  we cannot distinguish
+whether the data distribution has an in nite tail that we
+have not observed  or its support is limited to an interval 
+As an illustrative example  Figures       in Section  
+show two data distributions that  although at    rst sight
+look similar  correspond respectively to   Beta variable 
+which therefore takes values in the interval     and  
+gamma variable  which takes values in  
+In the context of discrete data  it is impossible to tell the difference between categorical and ordinal variables in isolation  The presence of an order in the data only makes sense
+given   context  As an example  while colors in   Ms
+usually do not present an order  colors in   traf   light
+clearly do  Similarly  we cannot easily distinguish between
+ordinal data  which take values in    nite ordered set  and
+count data  which take values in an in nite ordered set with
+equidistant values  due to two main reasons  First  similarly
+to continuous variables  since datasets contain    nite number of examples  it is dif cult to tell whether we have observed the  nite set of possible values of   variable  or simply    nite subsample of an in nite set  Second  we would
+
+need access to exact information on whether its consecutive values are equidistant or not  however  this information
+depends on how the data have been gathered  For example  an attribute that collects information on  frequency of
+an action  will correspond to an ordinal variable if its categories belong to        never   sometimes   usually 
+ often  and to   count variable if it takes values in  
+times per week    time per week       
+Previous work  HernandezLobato et al    proposed to
+distinguish between categorical and ordinal data by comparing the model evidence and the predictive test loglikelihood of ordinal and categorical models  However  this
+approach can be only used to distinguish between ordinal
+and categorical data  and it does so by assuming that it has
+access to   realvalued variable that contains information
+about the presence of an ordering in the observed discrete
+ ordinal or categorical  variable  As   consequence  it cannot be easily generalizable to label the data type of all the
+variables  or attributes  in   dataset  In contrast  in this paper we proposed   general method that allows us to distinguish among realvalued  positive realvalued and interval
+data as types of continuous variables  and among categorical  ordinal and count data as types of discrete variables 
+Moreover  the general framework we present can be readily
+extended to other data types as needed 
+  Methodology
+In this section  we introduce   Bayesian method to determine the statistical type of variable that corresponds to each
+of the attributes describing the objects in an observation
+matrix    In particular  we propose   probabilistic model 
+in which we assume that there exists   lowrank representation of the data that captures its latent structure  and therefore  the statistical dependencies among its objects and atIn detail  we consider that each observation xd
+tributes 
+ 
+can be explained by   Klength vector of latent variables
+zn    zn          znK  associated to the nth object and  
+    with   being the
+weighting vector bd    bd
+number of latent variables  whose elements bd
+  weight the
+contribution of kth the latent feature to the dth attribute
+in    Then  given the latent lowrank representation of the
+data  the attributes describing the objects in   dataset are
+assumed to be independent      
+
+          bd
+
+  cid 
+
+  
+
+      bd  
+
+    
+
+  xd    bd 
+
+where we gather the latent feature vectors zn in        
+matrix    For convenience  here zn is   Klength row vector  while bd is   Klength column vector  The above model
+resembles standard latent feature models  Salakhutdinov  
+Mnih    Grif ths   Ghahramani    which assume
+known and  xed likelihood models   xd    bd  In contrast  in this paper we aim to infer the statistical data type
+
+Automatic Discovery of the Statistical Types of Variables in   Dataset
+
+ or equivalently  the likelihood model  that better captures
+the distribution of each attribute in    To this end  here we
+assume that the likelihood model of the dth attribute in  
+is   mixture of likelihood functions such that
+
+  xd   bd
+
+ cid cid Ld    
+
+ cid    cid xd    bd
+wd
+ cid   
+
+ cid 
+
+ cid Ld
+
+likelihood model as long as  cid 
+
+where Ld is the set of possible types of variables  or equivalently  likelihood models  to be considered for this attribute  and the weight wd
+ cid  captures the probability of the
+likelihood function  cid  in the dth attribute of the observation matrix    Note that  the above expression is   valid
+ cid      and each
+ cid    is   normalized probability density funcp cid xd    bd
+tion or probability mass function for  respectively  continuous and discrete variables  Hence  under the proposed
+model  which is is illustrated in Figure     the likelihood
+factorizes as
+
+ cid Ld wd
+
+ cid      
+
+      bd
+
+ cid   
+
+wd
+ cid    cid xd    bd
+ cid   
+
+ 
+
+  cid 
+
+ cid 
+
+  
+
+ cid Ld
+
+We place   Dirichlet prior distribution on the likelihood
+weights wd    wd
+ cid   cid Ld  and similarly to  Salakhutdinov
+  Mnih    assume that both the latent feature vectors
+zn and the weighting vectors bd
+  are Gaussian distributed
+     rewith zero mean and covariance matrices  
+spectively  Here    denotes the identity matrix of size equal
+to the number of latent features   
+Moreover  we consider the following types of data for  respectively  continuous and discrete variables 
+
+    and  
+
+  Realvalued data  which takes values in the real
+
+  Continuous variables 
+     cid 
+
+line       xd
+
+  Positive realvalued data  which takes values in
+
+the positive real line       xd
+
+     cid 
+
+  Interval data  which takes values in an interval of
+             where         
+
+the real line       xd
+ cid  and         
+
+  Discrete variables 
+
+unordered set       xd
+
+  Categorical data  which takes values in    nite
+     blue   red   black 
+  Ordinal data  which takes values in    nite orn    never   sometimes   of 
+  Count data  which takes values in the natural
+
+dered set       xd
+ten   usually   always 
+numbers       xd
+
+             
+
+We remark that the main goal of this paper is to determine
+the types of variables that better capture each attribute in
+the observed matrix    which in our method translates to
+inferring the likelihood weights wd  However  solving this
+inference problem in an ef cient way is   challenging task
+for several reasons  First  we need to jointly infer all the latent variables in the model       the lowrank representation
+
+    Proposed model
+
+    Alternative representation
+
+Figure   Model illustration 
+
+of the data  which includes the latent feature matrix   and
+the corresponding weighting vectors  bd
+ cid cid Ld     
+   Second  we need to
+and the likelihood weights  wd  
+do so given   heterogeneous  and nonconjugate  observation model  which combines   different likelihood models  corresponding each of them to   mixture of likelihood
+functions and coupled through the latent feature matrix   
+Additionally  these likelihood functions do not only correspond to either   probability density function or   probability mass function depending on whether we are dealing with   continuous or   discrete variable  but also each
+mixture combines likelihood functions with different supports  For example  while realvalued data lead to   likelihood function with the real line as support  interval data
+only accounts for   segment of the real line  Similarly  both
+categorical and ordinal data assume    nite support  while
+count data requires an in nitesupport likelihood function 
+In order to allow for ef cient inference  we exploit the key
+idea in  Valera   Ghahramani    to propose an alternative and equivalent model representation  shown in Figure     which ef ciently deal with heterogeneous likeliIn this alternative model representation 
+hood functions 
+  as many Gaussian variwe include for each observation xd
+ables  or pseudoobservations  yd
+   as the
+  cid       znbd
+number of likelihood functions in Ld  and assume that
+there exists   transformation function over the variables yd
+  cid 
+which maps the real line  cid  into the support of the likelihood
+function  cid   cid      
+
+ cid     
+
+  cid     cid   cid   cid 
+     
+
+ 
+
+ 
+
+Note that  if we condition on the pseudoobservations the
+latent variable model behaves as   conjugate Gaussian
+model  allowing for ef cient inference of the latent fea 
+ cid  Additure matrix   and the weighting vectors  bd
+tionally  we include   latent multinomial variable sd
+   
+  ultinomial wd  which indicates the type of variable
+ or likelihood function  that the observation xd
+  belongs to 
+Then  given sd
+
+   we can obtain the observation xd
+
+  as
+
+xd
+    fsd
+
+   yd
+
+nsd
+ 
+
+  ud
+
+  
+
+ 
+
+where ud
+likelihood assignments sd
+
+         
+
+   is   noise variable  We gather the
+
+  in         matrix   
+
+ZBdd Dxdwdd Dwdxdnsdnydn bd zn Ldn  Automatic Discovery of the Statistical Types of Variables in   Dataset
+
+  Likelihood functions
+In this section  we provide the set of transformations to map
+from the Gaussian pseudoobservations yd
+  cid  into the types
+of data de ned above  specifying also the six likelihood
+functions that our method will account for 
+
+  DISCRETE VARIABLES
+  Categorical Data  Now we account for categorical observations       each observation xd
+  can take values in the
+unordered index set           Rd  Hence  assuming   multinomial probit model  we can write
+
+  CONTINUOUS VARIABLES
+In the case of continuous variables  we assume that the
+mapping functions   cid  are continuous invertible and differentiable functions  such that we can obtain corresponding likelihood function  after integrating out the pseudoobservation yd
+
+  cid  as
+
+ cid 
+
+ 
+
+     
+  
+
+ cid cid cid cid 
+
+ 
+ cid 
+
+ 
+
+ xd
+  
+
+ cid cid cid cid   
+
+dxd
+ 
+
+ cid 
+
+  cid xd
+
+ cid    sd
+
+     cid   
+
+ cid 
+  zn  bd
+
+ 
+     
+  
+
+ 
+  
+ cid 
+
+ 
+
+ 
+
+ xd
+
+ 
+
+ cid   
+     znbd
+
+  exp
+ 
+is the inverse function of the transformation
+where  
+ 
+ cid 
+  cid        
+   cid         Next  we provide examples of
+ cid 
+mapping functions that allow us to account for realvalued 
+positive realvalued  and interval data 
+  Realvalued Data  In order to obtain realvalued observations       xd
+     cid  we need   transformation over
+  that maps from the real numbers to the real numbers 
+yd
+       cid     cid     cid  The simplest case is to assume that
+      cid                 and therefore  each observation
+   Nevertheless 
+is distributed as xd
+       znbd cid   
+other mapping functions can be used       we will use in
+our experiments the transformation
+
+     
+
+      cid                      
+
+where   and   are parameters allowing attribute rescaling 
+and tuneable by the user 
+  Positive Realvalued Data  As an example of   function that maps from the real numbers to the positive real
+numbers         cid     cid   cid   cid  we consider
+
+      cid          log    exp         
+
+where   allows attribute rescaling 
+  Interval Data  As an example of   function the maps
+from the real numbers into the interval                 cid   
+ cid   cid           we consider the transformation
+
+    fInt         
+
+    exp         
+where       and    are user hyperparameters 
+
+       
+
+     
+
+ In our experiments  we assume      arg minn xd
+
+       and
+   where       is   user hyperparameter 
+     arg maxn xd
+We set the rescaling parameter       max xd  for the three
+continuous data types 
+
+    fcat      arg max
+
+  Rd      
+
+cat     
+
+   where bd
+
+ncat         znbd
+
+where in this case there are as many pseudoobservations as
+number of categories and each pseudoobservation can be
+sampled as yd
+cat   
+denotes the Klength weighting vector  which weights the
+in uence the latent features for   categorical observation
+  taking value    Note that  under this likelihood model 
+xd
+we need one pseudoobservation yd
+ncat    and   weighting
+vector bd
+cat    for each possible value of the observation
+              Rd 
+Under the multinomial probit model  we can obtain the
+  taking value               Rd  as  Giroprobability of xd
+lami   Rogers   
+ cid 
+pcat       zn  bd
+   
+ 
+
+ cid  Rd cid 
+
+ cid cid 
+
+    cat 
+
+    zn bd
+
+cat  sd
+
+cat  
+
+    
+
+ 
+
+ cid 
+
+ 
+
+cat      bd
+
+ cid 
+ cid cid  
+
+ 
+ 
+
+where   denotes the cumulative density function of the
+standard normal distribution and  
+     denotes expectay 
+tion with respect to the distribution             
+  Ordinal Data  Consider ordinal data  in which each elen takes values in the ordered index set           Rd 
+ment xd
+Then  assuming an ordered probit model  we can write
+
+ 
+
+ 
+ 
+
+Rd
+
+ 
+
+if yd
+if   
+
+nord     
+    yd
+
+ 
+
+nord     
+
+ 
+
+if   
+
+Rd    yd
+
+nord
+
+xd
+    ford yd
+
+nord   
+
+      
+
+   and   
+
+ord and variance  
+
+      and   
+
+   where   
+
+where again yd
+nord is Gaussian distributed with mean
+  for               Rd    
+znbd
+are the thresholds that divide the real line into Rd rer are sequentially
+gions  We assume the thresholds   
+generated from the truncated Gaussian distribution   
+   
+Rd    
+       
+As opposed to the categorical case  now we have   unique
+weighting vector bd
+for each observation xd
+by the region in which yd
+Under the ordered probit model  Chu   Ghahramani 
+    the probability of each element xd
+  taking value
+              Rd  can be written as
+ cid 
+
+ord and   unique Gaussian variable yd
+
+   and the value of xd
+
+nord
+  is determined
+
+nord falls 
+
+pord xd
+
+ord  sd
+
+ cid 
+
+ cid 
+
+ cid 
+      zn  bd
+  
+    znbd
+
+ord
+
+    ord 
+  
+     znbd
+
+ord
+
+   
+
+ 
+
+  
+
+   
+
+  
+
+Automatic Discovery of the Statistical Types of Variables in   Dataset
+
+  Count Data  In count data each observation xd
+nonnegative integer values       xd
+we assume
+
+  takes
+              Then 
+
+xd
+    fcount yd
+
+      cid   yd
+
+  cid 
+
+where  cid   cid  returns the  oor of    that is the largest integer
+that does not exceed    and      cid     cid  is   monotonic
+differentiable function  in our experiments        log   
+exp wy  We can thus write the likelihood function as
+ cid 
+pcount xd
+  xd
+
+  zn  bd
+        znbd
+
+     znbd
+
+    count   
+
+  xd
+
+ord  sd
+
+ cid 
+
+ cid 
+
+count
+
+ 
+
+count
+
+ cid 
+
+   
+
+  
+
+  
+
+ cid 
+
+In order
+
+where       cid     cid  is the inverse function of the transformation   
+  Inference Algorithm
+Here  we exploit the model representation in Figure    to
+derive an ef cient inference algorithm that allows us to infer all the latent variables in the model  providing as output
+the likelihood weights wd  which determine the probability of the dth attribute in   belonging to each of the above
+data types  Algorithm   summarizes the inference 
+Sampling lowrank decomposition 
+to
+feature matrix   and the associsample the latent
+ cid  we condition on the
+ated weighting vectors  bd
+pseudoobservations such that we can ef ciently sample the feature vectors as zn    
+ cid   cid     
+   
+    
+
+and     
+ cid   bd
+  Note that this step involves  
+  
+matrix inversion of size    the number of latent features 
+per iteration of the algorithm  Similarly  the weighting vectors can be sampled as bd
+
+ cid cid  
+ cid cid  
+ cid 
+ cid 
+
+ cid 
+    cid  and   
+
+ cid  
+ cid    where     
+ cid cid  
+
+  Since
+ cid  with  cid    Ld and                 
+   is shared for all  bd
+this step also involves one matrix inversions of size   per
+iteration of the algorithm 
+Sampling pseudoobservations  Given the lowrank decomposition and the likelihood assignments    we can samn cid  from its prior distribution
+ple each pseudoobservation yd
+if sd
+In the case of continuous variables  the posterior distribution of the pseudoobservation can be obtained as
+
+   cid   cid  and from its posterior distribution if sd
+
+ cid    where
+
+ cid Ld bd
+ cid  yd
+  cid 
+
+ cid  
+ cid 
+
+    cid      
+
+  
+ cid Ld bd
+
+ cid     
+
+    cid 
+
+     cid 
+
+ cid      
+
+  yd
+  cid 
+
+ cid      
+
+     
+
+ cid 
+
+ 
+
+ 
+
+ cid 
+
+ cid cid cid cid     
+
+ 
+
+ 
+
+yd
+ 
+
+ cid 
+ cid 
+
+   and  
+ 
+
+   
+
+   zn  bd
+
+ cid    sd
+
+ cid   znbd
+
+ 
+ 
+
+     cid     
+ xd
+  
+ 
+ 
+
+   
+
+ 
+ cid 
+
+ cid   
+
+  yd
+
+  cid xd
+ cid 
+where     
+
+ cid   
+
+   
+ 
+ 
+
+ 
+ 
+
+ 
+
+In the case of discrete variables  the posterior distribution
+of the pseudoobservation can be computed as follows 
+
+  cid 
+
+Sample  yd
+
+for  cid    Ld do
+
+for                 do
+
+  cid 
+ cid  and  yd
+
+Algorithm   Inference Algorithm 
+Input   
+Initialize      bd
+ cid  and  yd
+  for each iteration do
+Update   given  bd
+ 
+for                 do
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+  end for
+Output  Likelihood weights wd 
+
+end for
+ cid  given   and  yd
+Sample  bd
+for                 do
+  given xd
+
+end for
+Sample wd given   
+
+  cid  given xd
+
+Sample sd
+
+end for
+
+end for
+
+ cid  and sd
+  
+
+       bd
+  cid   
+     and  bd
+ cid 
+
+  For categorical observations 
+
+ cid 
+ncat   xd
+
+ncat         
+
+ 
+
+  yd
+
+cat    variance  
+
+ncat        cid   
+
+     znbd
+     znbd
+if xd
+
+cat  sd
+    cat 
+   maxj cid   yd
+   yd
+
+       zn  bd
+cat     
+cat     
+          we sample yd
+In words 
+nr
+from   truncated Normal distribution with mean
+  and truncated on the left by
+znbd
+ncat    Otherwise  we sample from  
+maxj cid   yd
+truncated Gaussian  with same mean and variance 
+truncated on the right by yd
+   Note
+that sampling from the variables yd
+ncat    corresponds
+to solve   multinomial probit regression problem 
+Hence  to achieve identi ability we assume  without
+loss of generality  that the regression function fRd zn 
+is identically zero  and thus  we    bd
+
+ncat    with     xd
+
+ cid   Rd     
+
+  For ordinal observations 
+
+  yd
+nord xd
+       yd
+
+       zn  bd
+nord znbd
+
+ord  sd
+     
+
+    ord 
+     
+   
+
+ord   
+
+Note that in this case  we also need to sample the valr with               Rd     as
+ues for the thresholds   
+
+   
+
+  yd
+
+nord xd
+
+    minn yd
+
+nord          
+
+    
+   maxn yd
+
+     min   max 
+nord xd
+  is constrained to be between   
+
+       and
+where  min   max  
+          In words 
+ max   min  
+  
+   and   
+each   
+as well as to ensure that the pseudoobservations yd
+nord
+associated to the observations xd
+         
+fall respectively at the left and at the right side of   
+   
+Since in this ordinal regression problem the thresholds
+   are unknown  we set   to    xed value in
+   Rd
+order to achieve identi ability 
+
+      and xd
+
+  For count observations 
+
+  yd
+ncount xd
+       yd
+
+   zn  bd
+ncount znbd
+
+count  sd
+
+    count 
+ xd
+
+    
+
+count   
+
+ xd
+
+     
+
+    
+
+Automatic Discovery of the Statistical Types of Variables in   Dataset
+
+    Interval Data
+
+    Beta   
+
+    Beta   
+
+    Beta   
+
+    Positive Realvalued Data
+
+       
+
+       
+
+       
+
+    Realvalued Data
+
+         
+
+         
+
+         
+
+Figure    Synthetic Continuous Data  The  rst column shows the distribution of the inferred likelihood weights wd when the ground
+truth data is     interval      positive realvalued  and     realvalued  The remaining columns show example histograms of the datasets 
+
+where       cid     cid  is the inverse function of        
+            Therefore  yd
+ncount is sampled from  
+Gaussian truncated on the left by   xd
+   and on the
+right by   xd
+
+     
+
+Sampling likelihood assignments 
+In order to improve
+the mixing properties of the sampler  when sampling  sd
+  
+we integrate out the pseudoobservations  yd
+  cid  Then  the
+posterior probability of each observation being assigned to
+the likelihood model  cid  can be obtained as
+ cid    cid xd
+
+wd
+
+  sd
+
+     cid wd    bd
+
+ cid   
+
+ cid 
+
+  zn  bd
+ cid   
+
+ 
+
+ cid cid Ld wd
+
+ cid cid    cid cid xd
+
+  zn  bd
+ cid cid 
+
+   sd
+
+distribution with parameters  cid   cid 
+
+Sampling likelihood weights  We assume the prior distribution on the vector wd to be   Dirichlet distribution with
+parameters  cid cid Ld  Then  by conjugacy  we can sample wd given the likelihood assignments   from   Dirichlet
+     cid cid Ld 
+Scalability  The overall complexity of Algorithm   is
+    DLmax       per iteration  where   is the number
+of objects    the number of attributes  Lmax the maximum
+number of considered data types  or likelihood models  and
+  the size of the lowrank representation  In all of our experiments  we ran the MCMC for   iterations  which
+lasted   minutes depending on the dataset 
+  Evaluation
+  Experiments on synthetic data
+In this section  we show that the proposed method is able
+to accurately discover the true statistical type of variables
+in synthetic datasets  where we have perfect knowledge of
+the distribution from which the data have been generated 
+
+First  we focus on continuous variables by generating univariate datasets with     observations sampled from  
+known probability density function  which corresponds to
+     Gaussian distribution when considering realvalued
+data  ii    Gamma distribution for positive realvalued data 
+and iii     scaled  Beta distribution for interval data lying
+in the interval       where    takes values     or  
+Figure   shows the distribution  by means of   boxplot  of
+the inferred likelihood weights wd for   independent simulations of Algorithm   with   iterations on   independent datasets generated with the parameters detailed in the
+ gure  Reassuringly we observe that the proposed method
+identi es interval data as the most likely type of data for the
+three considered Beta distributions  moreover  as the tail of
+the Beta distribution increases  so does the weight given to
+the positive realvalued variables  This effect can be explained by the  nite size of the dataset  since it is hard to
+determine whether the variable is limited to values smaller
+than     or we simply have not observed them in the  nite
+set of observations    similar effect occurs when applying
+our method to data sampled from Gamma  Figure      
+and Gaussian  Figure       distributions  Here  we observe that in addition to  respectively  positive realvalued
+and realvalued data types  our model  nds that the variable
+may also be of interval data type  This effect is larger for
+Gaussian variables  since in this example the Gaussian is  
+more heavytailed distribution than the Gamma 
+
+ In   boxplot  the central mark is the median  the edges of the
+box are the  th and  th percentiles  the whiskers extend to the
+ th and  th percentiles 
+
+Beta Beta Beta Weights wd RealPositiveInterval Weights wd RealPositiveInterval       Weights wd RealPositiveInterval Automatic Discovery of the Statistical Types of Variables in   Dataset
+
+Table   Information on real datasets
+
+  of Discrete
+
+Dataset
+Abalone
+Adult
+Chess
+Dermatology
+German
+Student
+Wine
+
+ 
+
+   
+   
+   
+
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+  of Binary
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+    Categorical Data
+
+    Ordinal Data
+
+    Count Data
+
+Figure    Synthetic Discrete Data  Distribution of the inferred
+likelihood weights wd when the ground truth data is     categorical      ordinal  and     count data  For categorical and ordinal
+data  we plot the likelihood weight distribution with respect to
+both the number of categories in the data and the model complexity    and for count data with respect to   
+
+Next  we study whether the proposed model is able to disambiguate among different discrete types of variables  particularly  among categorical  ordinal and count data  To
+this end  we generate three types of datasets of size    
+In the  rst type we account for categorical data by sampling   multinomial variable with   categories  where the
+probability of the categories is sampled from   Dirichlet
+distribution  Then  for each category we sample   multidimensional Gaussian centroid that corresponds to the mean
+of the multivariate Gaussian observations that complete the
+dataset  To account for ordinal observations  we  rst sample the  rst variable in our dataset from   uniform distribution in the interval      which we randomly divide into
+  categories that correspond to the ordinal variable in our
+dataset  Finally  to account for count data we  rst generate   Gamma variable sampled from     and then
+generate the counting variable in the dataset by taking the
+ oor of the Gamma variable  For both categorical and ordinal data  we generate   independent datasets for each
+value of the number of categories                 and for
+count data we generate another   datasets for each value
+of                 Figure   summarizes the likelihood
+weights obtained for each type of datasets       for each
+type of discrete variable  after running on each dataset  
+independent simulations of Algorithm   with   iterations
+for different model complexity values       for different
+numbers of latent feature variables                 In this
+ gure we can observe that we can accurately discover the
+true type of discrete variable robustly and independently
+of the assumed model complexity    We also observe on
+
+the top row of Figure       that    as the number of categories   in the discrete variable decreases  the harder is
+to distinguish between ordinal and categorical data       to
+ nd out whether the data takes values in   ordered set or
+in an unordered set  and ii  as   in ordinal data increases 
+the ordinal variable is more likely to be identi ed as count
+data  Both of these effects are intuitively sensible 
+  Experiments on real data
+In this section  we evaluate the performance of the proposed method on seven real datasets collected from the
+UCI machine learning repository  Lichman    Table  
+summarizes theses datasets by providing the number of objects and attributes in the dataset  as well as how many of
+these attributes are discrete 
+In order to quantitatively evaluate the performance of the
+proposed method  we select at random   of the observations in each dataset as   heldout set and compare the predictive performance  in terms of average test loglikelihood
+per observation  of our method with   baseline method 
+The baseline method corresponds to   latent feature model
+in which all the continuous variables are modeled as realvalued data and the discrete variables as categorical data 
+Figure   shows the obtained results for our method  solid
+line  and the baseline  dashed line  for several values of the
+model complexity       the number of latent features   
+averaged over   independent runs of the corresponding
+inference algorithms  Here  we observe that    both methods provide robust results with respect to the number of
+variables    and ii  our method clearly outperforms the
+baseline in all the datasets  except for the Student dataset
+where the baseline performs slightly better  In other words 
+this  gure shows that by taking into account the uncertainty
+in the statistical types of the variables  we provide   better
+ tting of the data 
+Additionally  Table   shows the list of  nonbinary  attributes in the Adult and the German datasets together with
+the data types with larger inferred likelihood weights      
+the discovered statistical data types  Here  the number in
+parenthesis corresponds to the observed number of categories in discrete data  The very heterogeneous nature of
+these datasets explains the substantial gain observed in Figure   Moreover  Table   shows some expected results      
+
+ In cases in which two data types present very similar likeli 
+
+hood weights     difference  we display both of them 
+
+  of Categories Weights wd CategoricalOrdinalCount  of Categories Weights wd CategoricalOrdinalCount  of Latent Variables    Weight wd CategoricalOrdinalCount  of Latent Variables    Weight wd  of Latent Variables    Weight wd CategoricalOrdinalCountAutomatic Discovery of the Statistical Types of Variables in   Dataset
+
+Figure    Real Data  Comparison between our model  solid  and
+the baseline  dashed  in terms of average test loglikelihood per
+observation evaluated on   heldout set containing   of the observations in each dataset 
+
+Table   Inferred data types 
+
+Adult
+
+Attribute
+age  
+workclass  
+ nal weight
+education  
+education num   
+marital status  
+occupation  
+relationship  
+race  
+sex  
+capitalgain
+capitalloss
+hours per week  
+nativecountry  
+
+Type
+ord 
+cat 
+positive
+cat 
+cat 
+cat 
+cat ord 
+ord 
+cat 
+binary
+real
+real
+cat ord 
+ord 
+
+German
+Attribute
+status account  
+duration  
+credit hist   
+purpose  
+amount
+savings  
+installment  
+personal status  
+debtors  
+residence  
+property  
+age  
+plans  
+housing  
+  credits  
+job  
+
+Type
+cat 
+ord 
+cat ord 
+cat ord 
+interval
+ord 
+cat ord 
+cat 
+ord 
+cat 
+cat ord 
+count
+cat 
+ord 
+ord 
+ord 
+
+marital status and race are identi ed as categorical  while
+the age is of count data type for both datasets  However 
+other results might seem surprising  For example  the duration  in months  which one would expect it to be count
+data  is identi ed as ordinal  or the   priori categorical attributes native country and job are inferred to be ordinal 
+In order to better understand these results  we show the histograms of several variables in these datasets and the associated inferred likelihood weights  Figure   shows the
+histograms of two continuous variables  length and weight
+of the Abalone dataset  which take only positive real values  but are assigned to different data types  respectively  to
+realvalued and positive realvalued data  This can be explained by the fact that  while the distribution of the length
+presents large tails  the distribution of the weight is clearly
+truncated at zero  Additionally  Figure       shows two
+discrete variables  the duration  in months  and the age in
+German data  which based on the documentation are expected to be count data  However  our model assigns the
+duration to ordinal data  This result can be explained by the
+irregular distribution that this variable has  In count data
+the distance between every two consecutive values should
+be roughly the same  there is the same distance from  
+pen  to   pens  as from   pens  to   pens  that is  
+pen  resulting therefore in smooth probability mass functions  We found in Figure       that while the number of
+credits and the job variables can be   priori thought as re 
+
+    Length  mm 
+
+    Weight  grams 
+
+Figure    Abalone dataset 
+
+    Duration  months 
+
+    Age
+
+     of Credits
+
+    Job
+
+Figure    German dataset 
+
+spectively count and categorical data  they are both inferred
+In the case of the number of credits 
+to be ordinal data 
+this can be explained by the small  nite  number of values
+that the variable takes  while in the case of the job  this assignment can be explained by the labels of its categories 
+      unskilled nonresident  unskilled resident  skilled employee and highly quali ed employee  which clearly represent an ordered set 
+From these results  we can conclude that    our model accurately discovers the true statistical type of the data  which
+might not be easily extracted from its documentation  and
+by doing so  ii  it provides   better    of the data  Moreover 
+apparent failures are in fact sensible when data histograms
+are carefully examined 
+  Conclusions
+In this paper  we presented the  rst approach to automatically discover the statistical types of the variables in  
+dataset  Our experiments showed that the proposed approach accurately infers the data type  or equivalently likelihood model  that best  ts the data 
+Our work opens many interesting avenues for future work 
+For example  it would be interesting to extend the proposed method to account for other data types  We would
+like to include directional data  also called circular data 
+which arise in   multitude of datamodelling contexts ranging from robotics to the social sciences  Navarro et al 
+  Moreover  since the proposed method can be seen
+as   likelihood selection method  it would be interesting to
+study how to incorporate our framework in any statistical
+machine learning tool  where the likelihood model  instead
+of being  xed   priori  would be inferred directly from the
+data jointly with the rest of the model parameters 
+
+Number of Latent Variables    Test loglikelihood AbaloneAdultChessDermatologyGermanStudentWineNumber of Latent Variables    wRe     wRe      wInt    wRe     wRe      wInt    wcat     word     wcount    wcat     word     wcount    wcat     word     wcount    nonresident          resident              skilled               highly qualified       wcat     word     wcount    Automatic Discovery of the Statistical Types of Variables in   Dataset
+
+Acknowledgement
+Isabel Valera acknowledges her Humboldt Research Fellowship for Postdoctoral Researchers  which funded this
+research during her stay at the Max Planck Institute for
+Software Systems  Zoubin Ghahramani acknowledges
+support from the Alan Turing Institute  EPSRC Grant
+EP    and EPSRC Grant EP    and donations from Google and Microsoft Research 
+The
+well as
+that
+presented in the paper 
+https github com ivaleraM DataTypes
+
+as
+reproduce the experiments
+are publicly available at 
+
+the scripts
+
+code
+
+implementing the proposed method 
+
+References
+Agresti     Analysis of ordinal categorical data  volume
+
+  John Wiley   Sons   
+
+Ando     Bayesian model selection and statistical model 
+
+ing  CRC Press   
+
+Breiman     Statistical modeling  The two cultures  with
+comments and   rejoinder by the author  Statistical science     
+
+Burnham       and Anderson        Model selection and
+multimodel inference    practical informationtheoretic
+approach  Springer Science   Business Media   
+
+Chu     and Ghahramani     Gaussian processes for ordinal regression  Journal of Machine Learning Research 
+ Jul     
+
+Chu     and Ghahramani     Gaussian processes for ordinal regression     Mach  Learn  Res   
+December     ISSN  
+
+Dong     Luna and Srivastava     Big data integration 
+In Data Engineering  ICDE    IEEE  th International Conference on  pp    IEEE   
+
+Girolami     and Rogers     Variational Bayesian multinomial probit regression with Gaussian process priors 
+Neural Computation     
+
+Grif ths        and Ghahramani     The Indian buffet process  an introduction and review  Journal of Machine
+Learning Research     
+
+Hellerstein        Quantitative data cleaning for large
+
+databases   
+
+HernandezLobato        Lloyd        HernandezLobato 
+   and Ghahramani     Learning the semantics of discrete random variables  Ordinal or categorical  In NIPS
+Workshop on Learning Semantics   
+
+Hilbe        Negative binomial regression  Cambridge Uni 
+
+versity Press   
+
+Kandel     Heer     Plaisant     Kennedy     van Ham 
+   Riche        Weaver     Lee     Brodbeck     and
+Buono     Research directions in data wrangling  Visualizations and transformations for usable and credible
+data  Information Visualization     
+
+Lichman     UCI machine learning repository    URL
+
+http archive ics uci edu ml 
+
+Navarro     KW  Frellsen     and Turner        The multivariate generalised von mises  Inference and applications  arXiv preprint arXiv   
+
+Salakhutdinov     and Mnih     Probabilistic matrix factorization  In Advances in Neural Information Processing
+Systems   
+
+Schmidt        Winther     and Hansen        Bayesian
+nonnegative matrix factorization  In International Conference on Independent Component Analysis and Signal
+Separation  pp    Springer   
+
+Valera     and Ghahramani     General table completion
+using   Bayesian nonparametric model  In Advances in
+Neural Information Processing Systems    
+
+

@@ -1,0 +1,1048 @@
+Deep Bayesian Active Learning with Image Data
+
+Yarin Gal     Riashat Islam   Zoubin Ghahramani    
+
+Abstract
+
+Even though active learning forms an important
+pillar of machine learning  deep learning tools
+are not prevalent within it  Deep learning poses
+several dif culties when used in an active learning setting  First  active learning  AL  methods
+generally rely on being able to learn and update
+models from small amounts of data  Recent advances in deep learning  on the other hand  are notorious for their dependence on large amounts of
+data  Second  many AL acquisition functions rely
+on model uncertainty  yet deep learning methods
+rarely represent such model uncertainty  In this
+paper we combine recent advances in Bayesian
+deep learning into the active learning framework
+in   practical way  We develop an active learning framework for high dimensional data    task
+which has been extremely challenging so far  with
+very sparse existing literature  Taking advantage
+of specialised models such as Bayesian convolutional neural networks  we demonstrate our active
+learning techniques with image data  obtaining  
+signi cant improvement on existing active learning approaches  We demonstrate this on both the
+MNIST dataset  as well as for skin cancer diagnosis from lesion images  ISIC  task 
+
+  Introduction
+  big challenge in many machine learning applications
+is obtaining labelled data  This can be   long  laborious 
+and costly process  often making the deployment of ML
+systems uneconomical    framework where   system could
+learn from small amounts of data  and choose by itself what
+data it would like the user to label  would make machine
+learning much more widely applicable  Such frameworks
+for learning are referred to as active learning  Cohn et al 
+   also known as  experiment design  in the statistics
+literature  and have been used successfully in  elds such as
+
+ University of Cambridge  UK  The Alan Turing Institute  UK  Uber AI Labs  Correspondence to  Yarin Gal
+ yg cam ac uk 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright   by
+the author   
+
+medical diagnosis  microbiology  and manufacturing  Tong 
+  In active learning    model is trained on   small
+amount of data  the initial training set  and an acquisition
+function  often based on the model   uncertainty  decides
+which data points to ask an external oracle for   label  The
+acquisition function selects one or more points from   pool
+of unlabelled data points  with the pool points lying outside
+of the training set  An oracle  often   human expert  labels
+the selected data points  these are added to the training set 
+and   new model is trained on the updated training set  This
+process is then repeated  with the training set increasing
+in size over time  The advantage of such systems is that
+they often result in dramatic reductions in the amount of
+labelling required to train an ML system  and therefore cost
+and time 
+Even though existing techniques for active learning have
+proven themselves useful in   variety of tasks    major remaining challenge in active learning is its lack of scalability
+to highdimensional data  Tong    This data appears often in image form  with   physician classifying MRI scans to
+diagnose Alzheimer   for example  Marcus et al    or
+an expert clinician diagnosing skin cancer from dermoscopic
+lesion images  To perform active learning    model has to
+be able to learn from small amounts of data and represent
+its uncertainty over unseen data  This severely restricts the
+class of models that can be used within the active learning
+framework  As   result most approaches to active learning
+have focused on low dimensional problems  Tong   
+HernandezLobato   Adams    with only   handful
+of exceptions  Zhu et al    Holub et al    Joshi
+et al    relying on kernel or graphbased approaches to
+handle highdimensional data 
+In recent years  with the increased availability of data in
+some domains  attention within the machine learning community has shifted from small data problems to big data
+problems  Sundermeyer et al    Krizhevsky et al 
+  Kalchbrenner   Blunsom    Sutskever et al 
+  And with the increased interest in big data problems 
+new tools were developed and existing tools were re ned
+for handling high dimensional data within such regimes 
+Deep learning  and convolutional neural networks  CNNs 
+ Rumelhart et al    LeCun et al    in particular  are
+an example of such tools  Originally developed in   to
+parse handwritten zip codes  these tools have  ourished and
+were adapted to   point where   CNN is able to beat   human on object recognition tasks  given enough training data 
+
+Deep Bayesian Active Learning with Image Data
+
+ He et al    New techniques such as dropout  Hinton
+et al    Srivastava et al    are used extensively to
+regularise these huge models  which often contain millions
+of parameters  Jozefowicz et al    But even though active learning forms an important pillar of machine learning 
+deep learning tools are not prevalent within it  Deep learning poses several dif culties when used in an active learning
+setting  First  we have to be able to handle small amounts of
+data  Recent advances in deep learning  on the other hand 
+are notorious for their dependence on large amounts of data
+ Krizhevsky et al    Second  many AL acquisition
+functions rely on model uncertainty  But in deep learning
+we rarely represent such model uncertainty 
+Relying on Bayesian approaches to deep learning  in this
+paper we combine recent advances in Bayesian deep learning into the active learning framework in   practical way 
+We develop an active learning framework for high dimensional data    task which has been extremely challenging
+so far with very sparse existing literature from the past  
+years  Zhu et al    Li   Guo    Holub et al   
+Joshi et al    Taking advantage of specialised models
+such as Bayesian convolutional neural networks  BCNNs 
+ Gal   Ghahramani        we demonstrate our active
+learning techniques with image data  Using   small model 
+our system is able to achieve   test error on MNIST with
+only   labelled images without relying on unlabelled data
+ in comparison    labelled images are needed to achieve
+  test error using random sampling   requiring an expert
+to label more than twice as many images to achieve the
+same accuracy  and achieves   test error with  
+labelled images  This is in comparison to   test error of DGN  Kingma et al    or   test error of
+the Ladder Network  model  Rasmus et al    both
+semisupervised learning techniques which additionally use
+the entire unlabelled training set  Finally  we study   realworld application by diagnosing melanoma  skin cancer 
+from   small number of lesion images by  netuning the
+VGG  convolutional neural network  Simonyan   Zisserman    on the ISIC   dataset  Gutman et al   
+
+  Related Research
+Past attempts at active learning of image data have concentrated on kernel based methods  Using ideas from previous
+research in active learning of low dimensional data  Tong 
+  Joshi et al    used  marginbased uncertainty 
+and extracted probabilistic outputs from support vector machines  SVM   Cortes   Vapnik    They used linear 
+polynomial  and Radial Basis Function  RBF  kernels on
+the raw images  picking the kernel that gave best classi cation accuracy  Analogously to SVM approaches  Li   Guo
+  used Gaussian processes  GPs  with RBF kernels
+to get model uncertainty  However Li   Guo   fed
+low dimensional features  such as SIFT features  to their
+RBF kernel  Lastly  making use of unlabelled data as well 
+
+Zhu et al    acquire points using   Gaussian random
+ eld model  evaluating an RBF kernel over raw images  We
+compare to this last technique and explain it in more detail
+below 
+Other related work includes semisupervised learning of image data  Weston et al    Kingma et al    Rasmus
+et al    In semisupervised learning   model is given  
+ xed set of labelled data  and    xed set of unlabelled data 
+The model can use the unlabelled data to learn about the
+distribution of the inputs  in the hopes that this information
+will aid in learning from the small labelled set as well  Although the learning paradigm is fairly different from active
+learning  this research forms the closest modern literature
+to active learning of image data  We will compare to these
+techniques below as well  in section  
+
+  Bayesian Convolutional Neural Networks
+In this paper we concentrate on high dimensional image
+data  and need   model able to represent prediction uncertainty on such data  Existing approaches such as  Zhu et al 
+  Li   Guo    Joshi et al    rely on kernel
+methods  and feed image pairs through linear  polynomial 
+and RBF kernels to capture image similarity as an input to
+an SVM for example  In contrast  we rely on specialised
+models for image data  and in particular on convolutional
+neural networks  CNNs   Rumelhart et al    LeCun
+et al    Unlike the kernels above  which cannot capture spatial information in the input image  CNNs are designed to use this spatial information  and have been used
+successfully to achieve stateof theart results  Krizhevsky
+et al    To perform active learning with image data
+we make use of the Bayesian equivalent of CNNs  proposed
+in  Gal   Ghahramani      These Bayesian CNNs are
+CNNs with prior probability distributions placed over   set
+of model parameters           WL 
+
+      
+
+with for example   standard Gaussian prior    We further
+de ne   likelihood model
+
+               softmax      
+
+for the case of classi cation  or   Gaussian likelihood for
+the case of regression  with       model output  with parameters  
+To perform approximate inference in the Bayesian CNN
+model we make use of stochastic regularisation techniques
+such as dropout  Hinton et al    Srivastava et al   
+originally used to regularise these models  As shown in
+ Gal   Ghahramani      Gal    dropout and various
+other stochastic regularisation techniques can be used to
+perform practical approximate inference in complex deep
+models  Inference is done by training   model with dropout
+
+ As far as we are aware  there are no other tools in current
+literature that offer model uncertainty in specialised models for
+image data  which perform as well as CNNs 
+
+Deep Bayesian Active Learning with Image Data
+
+before every weight layer  and by performing dropout at
+test time as well to sample from the approximate posterior
+ stochastic forward passes  referred to as MC dropout 
+More formally  this approach is equivalent to performing
+approximate variational inference where we  nd   distribution   
+    in   tractable family which minimises the
+KullbackLeibler  KL  divergence to the true model posterior   Dtrain  given   training set Dtrain  Dropout can be
+interpreted as   variational Bayesian approximation  where
+the approximating distribution is   mixture of two Gaussians
+with small variances and the mean of one of the Gaussians
+is  xed at zero  The uncertainty in the weights induces prediction uncertainty by marginalising over the approximate
+posterior using Monte Carlo integration 
+
+          Dtrain   
+ 
+
+              Dtrain   
+              
+
+     
+
+ cid 
+ cid 
+
+  cid 
+
+  
+
+   
+ 
+
+          cid   
+
+with cid       
+
+    where    is the Dropout distribution
+
+ Gal   
+Bayesian CNNs work well with small amounts of data  Gal
+  Ghahramani      and possess uncertainty information
+that can be used with existing acquisition functions  Gal 
+  Such acquisition functions for the case of classi cation are discussed next 
+
+  Acquisition Functions and their
+
+Approximations
+
+Given   model    pool data Dpool  and inputs     Dpool 
+an acquisition function        is   function of   that the
+AL system uses to decide where to query next 
+
+     argmaxx Dpoola     
+
+We next explore various acquisition functions appropriate
+for our image data setting  and develop tractable approximations for us to use with our Bayesian CNNs  In tasks
+involving regression we often use the predictive variance or
+  quantity derived from this for our acquisition function  although we still need to be careful to query from informative
+areas rather than querying noise  For example  we might
+look for images with high predictive variance and choose
+those to ask an expert to label   in the hope that these will
+decrease model uncertainty  However  many tasks involving
+image data are often phrased as classi cation problems  For
+classi cation  several acquisition functions are available 
+
+  Choose pool points that maximise the predictive en 
+
+tropy  Max Entropy   Shannon   
+      Dtrain   
+
+ cid 
+
+          Dtrain  log           Dtrain 
+
+ cid         cid 
+
+  Choose pool points that are expected to maximise the
+information gained about the model parameters      
+maximise the mutual information between predictions
+and model posterior  BALD   Houlsby et al   
+        Dtrain          Dtrain Ep Dtrain 
+with   the model parameters  here          is the
+entropy of   given model weights   Points that maximise this acquisition function are points on which the
+model is uncertain on average  but there exist model
+parameters that produce disagreeing predictions with
+high certainty  This is equivalent to points with high
+variance in the input to the softmax layer  the logits 
+  thus each stochastic forward pass through the model
+would have the highest probability assigned to   different class 
+
+  Maximise the Variation Ratios  Freeman   
+      Dtrain 
+
+variationratio          max
+
+ 
+
+Like Max Entropy  Variation Ratios measures lack of
+con dence 
+
+  Maximise mean standard deviation  Mean STD 
+
+ Kampffmeyer et al    Kendall et al   
+
+ cid Eq                Eq             
+
+    
+
+ cid 
+
+ 
+
+  
+
+     
+
+ 
+ 
+
+averaged over all   classes   can take  Compared to the
+above acquisition functions  this is more of an adhoc
+technique used in recent literature 
+
+  Random acquisition  baseline         unif  with
+unif    function returning   draw from   uniform distribution over the interval     Using this acquisition
+function is equivalent to choosing   point uniformly at
+random from the pool 
+
+These acquisition functions and their properties are discussed in more detail in  Gal    pp   
+We can approximate each of these acquisition functions
+using our approximate distribution   
+    For BALD  for
+example  we can write the acquisition function as follows 
+        Dtrain          Dtrain    Ep Dtrain 
+
+ cid         cid 
+
+          Dtrain  log           Dtrain 
+
+   cid 
+
+ 
+
+ 
+
+  Ep Dtrain 
+
+             log             
+with   the possible classes   can take          Dtrain  can
+be approximated in our setting using the identity      
+        Dtrain   
+
+    Dtrain   cid                Dtrain   
+ cid 
+
+              Dtrain   
+
+ cid 
+
+ cid cid 
+
+ cid 
+
+ 
+
+ 
+
+ 
+
+Deep Bayesian Active Learning with Image Data
+
+ cid 
+ cid cid 
+
+  log
+
+              Dtrain   
+             log             
+
+ cid 
+
+  Ep Dtrain 
+
+ 
+Swapping the posterior   Dtrain  with our approximate
+posterior   
+    and through MC sampling  we then have 
+
+ 
+
+ cid 
+
+   cid 
+
+ 
+
+              
+
+     
+
+ cid 
+
+application of skin cancer diagnosis from   small number of
+lesion images  relying on  netuning of   large CNN model 
+
+  Comparison of various acquisition functions
+We next study all acquisition functions above with our
+Bayesian CNN trained on the MNIST dataset  LeCun
+  Cortes   
+All acquisition functions are assessed with the same model structure  convolutionrelu 
+convolutionrelu max poolingdropout denserelu dropoutdense softmax  with   convolution kernels      kernel size 
+    pooling  dense layer with   units  and dropout probabilities   and    following the example Keras MNIST
+CNN implementation  fchollet   
+All models are trained on the MNIST dataset with    random
+but balanced  initial training set of   data points  and  
+validation set of   points on which we optimise the weight
+decay  this is   realistic validation set size  in comparison
+to the standard validation set size of    used in similar
+applications such as semisupervised learning on MNIST 
+We further use the standard test set of    points  and the
+rest of the points are used as   pool set  The test error of
+each model and each acquisition function was assessed after
+each acquisition  using the dropout approximation at test
+time  To decide what data points to acquire though we used
+MC dropout following the derivations above  We repeated
+the acquisition process   times  each time acquiring the
+  points that maximised the acquisition function over the
+pool set  Each experiment was repeated three times and
+the results averaged  the standard deviation for the three
+repetitions is shown below 
+
+ The
+
+code
+
+for
+
+these
+
+experiments
+
+is
+
+available
+
+at
+
+Figure   MNIST test accuracy as   function of number of acquired images from the pool set  up to   images  using validation set size   and averaged over   repetitions  Four acquisition
+functions  BALD  Variation Ratios  Max Entropy  and Mean STD 
+are evaluated and compared to   Random acquisition function 
+
+ cid 
+
+             log             
+
+     
+
+ 
+
+ 
+
+log
+
+ 
+
+  log
+
+ cid pt
+
+ 
+
+  Eq 
+
+   
+
+ cid 
+
+              
+
+ cid cid 
+ cid   
+ cid   
+ cid 
+ cid 
+   cid 
+ cid 
+ cid pt
+ cid 
+   cid         Dtrain 
+  log cid pt
+ cid pt
+de ning our approximation  with cid pt
+  with model parameters cid       
+ cid pt    cid pt
+   cid pt
+ cid         Dtrain   
+
+     softmax   cid     
+         
+  
+          Dtrain 
+
+      Eq 
+
+We then have
+
+ 
+
+ 
+
+ 
+ 
+
+ 
+
+ 
+
+ 
+
+   
+
+   
+
+  the probability of input
+    to take class   
+
+ cid         cid 
+
+resulting in   computationally tractable estimator approximating the BALD acquisition function  The other acquisition functions can be approximated similarly 
+In the next section we will experiment with these acquisition functions and assess them empirically  These will be
+compared to the baseline acquisition function which uniformly acquires new data points from the pool set at random 
+and to various other techniques for active learning of image
+data and semisupervised learning  This is followed by  
+realworld case study using cancer diagnosis 
+
+  Active Learning with Bayesian
+Convolutional Neural Networks
+
+We study the proposed technique for active learning of image data  We compare the various acquisition functions
+relying on Bayesian CNN uncertainty with   simple image
+classi cation benchmark  We then study the importance of
+model uncertainty by evaluating the same acquisition functions with   deterministic CNN  This is followed by   comparison to   current technique for active learning with image
+data  which relies on SVMs  We follow with   comparison to
+the closest modern models to our active learning with image
+data   semisupervised techniques with image data  These
+semisupervised techniques have access to much more data
+ the unlabelled data  than our active learning models  yet
+we still perform in comparable terms to them  Finally  we
+demonstrate the proposed methodology with   real world
+
+ BALDVarRatiosMaxEntropyMeanSTDRandomDeep Bayesian Active Learning with Image Data
+
+    BALD
+
+Figure   Test accuracy as   function of number of acquired images for various acquisition functions  using both   Bayesian CNN  red 
+and   deterministic CNN  blue 
+
+    Var Ratios
+
+    Max Entropy
+
+We compared the acquisition functions BALD  Variation
+Ratios  Max Entropy  Mean STD  and the baseline Random 
+We found Random and Mean STD to underperform compared to BALD  Variation Ratios  and Max Entropy  gure
+  The Variation Ratios acquisition function seems to obtain
+slightly better accuracy faster than BALD and Max Entropy 
+It is interesting that Mean STD seems to perform similarly
+to Random   which samples points at random from the pool
+set 
+Lastly  in table   we give the number of acquisition steps
+needed to get to test errors of   and   As can be seen 
+BALD  Variation Ratios  and Max Entropy attain   small
+test error with much fewer acquisitions than Mean STD and
+Random  This table demonstrates the importance of data
+ef ciency   an expert using the Variation Ratios model for
+example would have to label less than half the number of
+images she would have had to label had she acquired new
+images at random 
+
+  error BALD Var Ratios Max Ent Mean STD Random
+
+   
+ 
+ 
+
+ 
+ 
+
+ 
+ 
+
+ 
+ 
+
+ 
+ 
+
+Table   Number of acquired images to get to model error of   on
+MNIST 
+
+  Importance of model uncertainty
+We assess the importance of model uncertainty in our
+Bayesian CNN by evaluating three of the acquisition functions  BALD  Variation Ratios  and Max Entropy  with  
+deterministic CNN  Much like the Bayesian CNN  the deterministic CNN produces   probability vector which can
+be used with the acquisition functions of    formally  by
+            to be   point mass at the location
+setting   
+of the model parameters   Such deterministic models can
+capture aleatoric uncertainty   the noise in the data   but
+
+http mlg eng cam ac uk yarin publications 
+html Gal Active 
+
+cannot capture epistemic uncertainty   the uncertainty over
+the parameters of the CNN  which we try to minimise during active learning  The models in this experiment still use
+dropout  but for regularisation only       we do not perform
+MC dropout at test time 
+  comparison of the Bayesian models to the deterministic
+models for the BALD  Variation Ratios  and Max Entropy
+acquisition functions is given in       The Bayesian models  propagating uncertainty throughout the model  attain
+higher accuracy early on  and converge to   higher accuracy
+overall  This demonstrates that the uncertainty propagated
+throughout the Bayesian models has   signi cant effect on
+the models  measure of their con dence 
+
+  Comparison to current active learning techniques
+
+with image data
+
+We next compare to   method in the sparse existing literature
+of active learning with image data  concentrating on  Zhu
+et al    which relies on   kernel method and further
+leverages the unlabelled images  which will be discussed in
+more detail in the next section  Zhu et al    evaluate
+an RBF kernel over the raw images to get   similarity graph
+which can be used to share information about the unlabelled
+data  Active learning is then performed by greedily selecting
+unlabelled images to be labelled  such that an estimate to
+the expected classi cation error is minimised  This will be
+referred to as MBR 
+MBR was formulated for the binary classi cation case 
+hence we compared MBR to the acquisition functions
+BALD  Variation Ratios  Max Entropy  and Random on
+  binary classi cation task  two digits from the MNIST
+dataset  Classi cation accuracy is shown in       Note
+that even   random acquisition function  when coupled with
+  CNN    specialised model for image data  outperforms
+MBR which relies on an RBF kernel  We further experimented with   CNN version for MBR where we replaced
+the RBF kernel with   CNN  It is interesting to note that this
+did not give improved results 
+
+ BALDDeterministicBALD VarRatiosDeterministicVarRatios MaxEntropyDeterministicMaxEntropyDeep Bayesian Active Learning with Image Data
+
+Figure   MNIST test accuracy  two digit classi cation  as   function of number acquired images  compared to   current
+technique for active learning of image data  MBR  Zhu et al   
+
+  Comparison to semisupervised learning
+We continue with   comparison to the closest models
+ in modern literature  to our active learning with image
+data  semisupervised learning with image data  In semisupervised learning   model is given    xed set of labelled
+data  and    xed set of unlabelled data  The model can use
+the unlabelled dataset to learn about the distribution of the
+inputs  in the hopes that this information will aid in learning
+the mapping to the outputs as well  Several semisupervised
+models for image data have been suggested in recent years
+ Weston et al    Kingma et al    Rasmus et al 
+  models which have set benchmarks on MNIST given
+  small number of labelled images   random images 
+These models make further use of    very  large unlabelled
+set of    images  and   large validation set of     
+labelled images to tune model hyperparameters and model
+structure  Rasmus et al    These models have access
+to much more data than our active learning models  but we
+still compare to them as they are the most relevant models
+in the  eld given the constraint of small amounts of labelled
+data  We compare to semisupervised models which use  
+similar model structures to ours 
+Test error for our active learning models with various acquisition functions  after the acquisition of   training
+points  as well as the semisupervised models  is given in
+table   In this experiment  to be comparable to the other
+techniques  we use   validation set of    points  Our model
+attains similar performance to that of the semisupervised
+models  although note that we use   fairly small model compared to  Rasmus et al    for example  Rasmus et al 
+   ladder network  full  attains error   with  
+labelled images and   unlabelled images  However 
+Rasmus et al      model architecture is more directly
+comparable to ours  The  model attains   error  compared to   error of our Var Ratio acquisition function
+which relies on no additional unlabelled data 
+
+  Cancer diagnosis from lesion image data
+We  nish by assessing the proposed technique with   real
+world test case  We experiment with melanoma  skin cancer  diagnosis from dermoscopic lesion images  In this task
+we are given image data of skin segments  of both malignant  cancerous  as well as benign  noncancerous  lesions 
+Our task is to classify the images as malignant or benign
+ an example is shown in       The data used is the ISIC
+Archive  Gutman et al    This dataset was collected in
+order to provide    large public repository of expertly annotated high quality skin images  to provide clinical support
+in the identi cation of skin cancer  and to develop algorithms for skin cancer diagnosis  Speci cally  we use the
+training data of the  ISBI   Skin Lesion Analysis To 
+
+Test error
+
+Technique
+Semisupervised 
+ 
+Semisup  Embedding  Weston et al   
+ 
+Transductive SVM  Weston et al   
+ 
+MTC  Rifai et al   
+ 
+Pseudolabel  Lee   
+ 
+AtlasRBF  Pitelis et al   
+DGN  Kingma et al   
+ 
+Ladder Network  model   Rasmus et al     
+Virtual Adversarial  Miyato et al   
+ 
+Active learning with
+various acquisitions 
+Random
+BALD
+Max Entropy
+Var Ratios
+
+ 
+ 
+ 
+ 
+
+Table   Test error on MNIST with   labelled training samples  compared to semisupervised techniques  Active learning
+has access to only the   acquired images  Semisupervised further has access to the remaining images with no labels  Following
+existing research we use   large validation set of size  
+
+ BALDVarRatiosMaxEntropyMBRRandomDeep Bayesian Active Learning with Image Data
+
+Figure   Skin cancer  melanoma  example lesions from the ISIC   melanoma diagnosis dataset  The two lesions on the left are benign
+ noncancerous  while the two lesions on the right are malignant  cancerous 
+
+wards Melanoma Detection   Part     Segmented Lesion
+Classi cation  task  The data contains   dermoscopic
+lesion images in JPEG format with EXIF tags removed 
+Malignancy diagnosis for these lesions was obtained from
+expert consensus and pathology report information  The
+data contains lesion segmentation as well  which we did not
+use 
+For our model we replicate the model of  Agarwal et al 
+  This model achieved second place in the  Part    
+Segmented Lesion Classi cation  task  with its code opensourced  The model relies on data augmentation of the
+positive examples  ipping the lesions vertically and horizontally  and  netunes the VGG  CNN model  Simonyan
+  Zisserman          optimises   pretrained model with
+  small learning rate  The VGG  model was pretrained
+on ImageNet  Deng et al    The top layer of the
+model   logits  was removed and replaced with    
+dimensional output  for our classi cation task of malignant benign  Preceding the last layer are two fully connected layers of size   each one followed by   dropout
+layer with dropout probability   This architecture seems
+to provide good uncertainty estimates as observed before
+ Kendall et al    Gal   Ghahramani     
+The data is unbalanced  containing   negative  benign 
+examples  and   positive  malignant  examples   positive examples  Since the data is so small  to assess model
+performance reliably we have to take   large balanced test
+set  We randomly partition the data  and set aside   negative and   positive examples  All our experiments are
+performed on two different random splits   since even   test
+set size of   gives very different accuracy with different
+random splits  Note that on each such random split we
+repeat our experiments three times and average the results
+with respect to the  xed test set 
+We experiment with active learning by following the following procedure  We begin by creating an initial training
+set of   negative examples and   positive examples from
+our training data  as well as   pool set from the remaining
+data  With each experiment repetition  out of the three experiment repetitions        the  xed test split  the pool is
+shuf ed anew  The positive examples in the current training
+set are augmented following the original training procedure 
+and   model is trained on the augmented training set for
+  epochs until convergence  We use batch size   and
+
+weight decay set by          where   is the number of
+training points        is the dropout probability  and the
+lengthscale squared    is set to   An acquisition function
+is then used to select the   most informative images from
+the pool set  These points are removed from the pool set and
+added to the  nonaugmented  training set  where we use the
+original expertprovided labels for these points  The process
+is repeated until all pool points have been exhausted  where
+at each acquisition step we reset the model to its original
+pretrained weights  This reset is done in order to avoid
+local optima  and to avoid confusing model performance
+improvement with an improvement resulting from simply
+using longer  cumulative  optimisation time 
+After each acquisition the test performance of the model
+is logged using MC dropout with   samples  We further
+keep track of the number of positive examples acquired
+after each acquisition  Model performance is assessed using
+areaunder thecurve  AUC  as this seems to be the most
+informative of all metrics used by Gutman et al    We
+experimented with the average precision metric suggested
+by Gutman et al    as well  but managed to get results
+improving over the competition winner by simply predicting
+all points as  benign  This might be because of the data
+imbalance  AUC on the other hand takes into account all
+possible decisionthresholds possible to classify   malignant
+image 
+We assessed two acquisition functions    uniform baseline 
+and BALD  Even though Variation Ratios performs well on
+MNIST above  the function fails with the melanoma data
+since most malignant images are given only   slight higher
+probability of being malignant compared to the probability
+of benign images of being malignant  As   result all pool
+points are given identical Variation Ratios acquisition value 
+Experiment results are given in       where results are
+reported on both test splits  top and bottom  and where
+with each split the experiment is repeated three times and
+performance results are averaged on that  xed split  For
+each test split we report mean with standard error  AUC is
+reported for each split  left  and number of acquired positive examples is reported as well  right  for each acquisition
+step  BALD achieves better AUC faster than uniform  and
+acquires more positive examples at each acquisition step
+than uniform       BALD  nds positive examples as informative and adds these to the training set  whereas uniform
+
+Deep Bayesian Active Learning with Image Data
+
+    AUC as   function of acquisition step   rst test split
+
+      of positive examples as   function of acquisition
+step   rst test split
+
+    AUC as   function of acquisition step  second test
+split
+
+      of positive examples as   function of acquisition
+step  second test split
+
+Figure   AUC  left  as well as the number of acquired positive examples  right  for both the BALD acquisition function as well as
+uniform acquisition function  on ISIC   melanoma diagnosis dataset  Two random test splits are assessed  top and bottom  and on
+each test set the experiment was repeated three times with different random seeds  shown mean with standard error 
+
+simply selects positive examples from the pool set based on
+their frequency 
+Note how AUC range varies wildly between the two different test splits  but how AUC is similar for both acquisition
+functions on each  xed test set before the initial acquisition
+ when both uniform and BALD models are trained on the
+same initial training set  This demonstrates the dif culties
+with handling of small data  each test split gives radically
+different results  and in this case even though each acquisition function experiment has   relatively small standard
+error  averaging the AUC of the acquisition functions over
+the different test splits would arti cially increase the standard error  Lastly  it is interesting to experiment with  
+model trained over the entire pool set       with the settings
+of the second place winner in the ISIC  task  For the
+ rst test split this model attains AUC     whereas
+with the second test split it attains AUC       For
+both test splits this AUC is worse than BALD   converged
+AUC after   acquisition steps  This might be because BALD
+avoided selecting noisy points   nearby images for which
+there exist multiple noisy labels of different classes  Such
+points have large aleatoric uncertainty   uncertainty which
+cannot be explained away   rather than large epistemic uncertainty   the uncertainty which BALD captures in order
+
+to explain it away       reduce it 
+
+  Future Research
+We presented   new approach for active learning of image data  relying on recent advances at the intersection of
+Bayesian modelling and deep learning  and demonstrated
+  realworld application in medical diagnosis  We assessed
+the performance of the techniques by resetting the models
+after each acquisition  and training them again to convergence  This was done to isolate the effects of our acquisition
+functions  which came at   cost of prolonged training times
+  hours for each melanoma experiment for example  We
+showed that even with this long running time  our technique
+still reduces required expert labels  thus reduces costs for
+such   system  This running time can be reduced further by
+not resetting the system   with the potential price of falling
+into local optima  We leave this problem for future research 
+
+References
+Agarwal  Mohit  Damaraju  Nandita 
+
+and Chaieb 
+https github com 
+
+Sahbi 
+NanditaDamaraju DL   
+
+Dl 
+
+Deep Bayesian Active Learning with Image Data
+
+Cohn  David    Ghahramani  Zoubin  and Jordan  Michael   
+Active learning with statistical models  Journal of arti 
+cial intelligence research   
+
+Cortes  Corinna and Vapnik  Vladimir  Supportvector net 
+
+works  Machine learning     
+
+Deng  Jia  Dong  Wei  Socher  Richard  Li  LiJia  Li  Kai 
+and FeiFei  Li 
+Imagenet    largescale hierarchical
+image database  In Computer Vision and Pattern Recognition    CVPR   IEEE Conference on  pp   
+  IEEE   
+
+fchollet  Keras  https github com fchollet 
+
+keras   
+
+Freeman  Linton    Elementary applied statistics   
+
+Gal  Yarin  Uncertainty in Deep Learning  PhD thesis 
+
+University of Cambridge   
+
+Gal  Yarin and Ghahramani  Zoubin  Bayesian convolutional neural networks with Bernoulli approximate variational inference  ICLR workshop track     
+
+Gal  Yarin and Ghahramani  Zoubin  Dropout as   Bayesian
+approximation  Representing model uncertainty in deep
+learning  ICML     
+
+Gutman  David  Codella  Noel CF  Celebi  Emre  Helba 
+Brian  Marchetti  Michael  Mishra  Nabin  and Halpern 
+Allan  Skin lesion analysis toward melanoma detection    challenge at the international symposium on
+biomedical imaging  ISBI    hosted by the international skin imaging collaboration  ISIC  arXiv preprint
+arXiv   
+
+He  Kaiming  Zhang  Xiangyu  Ren  Shaoqing  and Sun 
+Jian  Delving deep into recti ers  Surpassing humanlevel performance on imagenet classi cation  In Proceedings of the IEEE International Conference on Computer
+Vision  pp     
+
+HernandezLobato  Jose Miguel and Adams  Ryan  Probabilistic backpropagation for scalable learning of Bayesian
+neural networks  In Proceedings of The  nd International Conference on Machine Learning  pp   
+ 
+
+Hinton  Geoffrey    Srivastava  Nitish  Krizhevsky  Alex 
+Sutskever  Ilya  and Salakhutdinov  Ruslan    Improving
+neural networks by preventing coadaptation of feature
+detectors  arXiv preprint arXiv   
+
+Holub  Alex  Perona  Pietro  and Burl  Michael    EntropyIn Combased active learning for object recognition 
+puter Vision and Pattern Recognition Workshops   
+CVPRW  IEEE Computer Society Conference on  pp 
+  IEEE   
+
+Houlsby  Neil  Husz ar  Ferenc  Ghahramani  Zoubin  and
+Lengyel    at    Bayesian active learning for classi cation
+and preference learning  arXiv preprint arXiv 
+ 
+
+Joshi  Ajay    Porikli  Fatih  and Papanikolopoulos  Nikolaos  Multiclass active learning for image classi cation 
+In Computer Vision and Pattern Recognition    CVPR
+  IEEE Conference on  pp    IEEE   
+
+Jozefowicz  Rafal  Vinyals  Oriol  Schuster  Mike  Shazeer 
+Noam  and Wu  Yonghui  Exploring the limits of language modeling  arXiv preprint arXiv   
+
+Kalchbrenner  Nal and Blunsom  Phil  Recurrent continuous
+
+translation models  In EMNLP   
+
+Kampffmeyer  Michael  Salberg  ArntBorre  and Jenssen 
+Robert  Semantic segmentation of small objects and
+modeling of uncertainty in urban remote sensing images
+using deep convolutional neural networks  In The IEEE
+Conference on Computer Vision and Pattern Recognition
+ CVPR  Workshops  June  
+
+Kendall  Alex  Badrinarayanan  Vijay  and Cipolla  Roberto 
+Bayesian segnet  Model uncertainty in deep convolutional encoderdecoder architectures for scene understanding  arXiv preprint arXiv   
+
+Kingma  Diederik    Mohamed  Shakir  Rezende 
+Danilo Jimenez  and Welling  Max  Semisupervised
+learning with deep generative models  In Advances in
+Neural Information Processing Systems  pp   
+ 
+
+Krizhevsky  Alex  Sutskever  Ilya  and Hinton  Geoffrey   
+Imagenet classi cation with deep convolutional neural
+networks  In Advances in neural information processing
+systems  pp     
+
+LeCun  Yann and Cortes  Corinna  The MNIST database of
+
+handwritten digits   
+
+LeCun  Yann  Boser  Bernhard  Denker  John    Henderson 
+Donnie  Howard  Richard    Hubbard  Wayne  and Jackel 
+Lawrence    Backpropagation applied to handwritten zip
+code recognition  Neural Computation   
+ 
+
+Lee  DongHyun  Pseudolabel  The simple and ef cient
+semisupervised learning method for deep neural networks  In Workshop on Challenges in Representation
+Learning   
+
+Li  Xin and Guo  Yuhong  Adaptive active learning for
+image classi cation  In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition  pp 
+   
+
+Deep Bayesian Active Learning with Image Data
+
+Marcus  Daniel    Fotenos  Anthony    Csernansky  John   
+Morris  John    and Buckner  Randy    Open access
+series of imaging studies  longitudinal mri data in nondemented and demented older adults  Journal of cognitive
+neuroscience     
+
+Zhu     Lafferty     and Ghahramani     Combining active
+learning and semisupervised learning using Gaussian
+In Proceedings of the
+ elds and harmonic functions 
+ICML  Workshop on The Continuum from Labeled
+to Unlabeled Data  pp    ICML   
+
+Miyato  Takeru  Maeda  Shinichi  Koyama  Masanori 
+Nakae  Ken  and Ishii  Shin  Distributional smootharXiv preprint
+ing by virtual adversarial examples 
+arXiv   
+
+Pitelis  Nikolaos  Russell  Chris  and Agapito  Lourdes 
+Semisupervised learning using an unsupervised atlas 
+In Joint European Conference on Machine Learning
+and Knowledge Discovery in Databases  pp   
+Springer   
+
+Rasmus  Antti  Berglund  Mathias  Honkala  Mikko 
+Valpola  Harri  and Raiko  Tapani  Semisupervised learning with ladder networks  In Advances in Neural Information Processing Systems  pp     
+
+Rifai  Salah  Dauphin  Yann    Vincent  Pascal  Bengio 
+Yoshua  and Muller  Xavier  The manifold tangent clasIn Advances in Neural Information Processing
+si er 
+Systems  pp     
+
+Rumelhart  David    Hinton  Geoffrey    and Williams 
+Ronald    Learning internal representations by error propagation  Technical report  DTIC Document   
+
+Shannon  Claude Elwood    mathematical theory of communication  Bell System Technical Journal   
+   
+
+Simonyan     and Zisserman     Very deep convolutional
+networks for largescale image recognition  In International Conference on Learning Representations   
+
+Srivastava  Nitish  Hinton  Geoffrey  Krizhevsky  Alex 
+Sutskever  Ilya  and Salakhutdinov  Ruslan  Dropout 
+  simple way to prevent neural networks from over tting 
+JMLR   
+
+Sundermeyer  Martin  Schl uter  Ralf  and Ney  Hermann 
+LSTM neural networks for language modeling  In INTERSPEECH   
+
+Sutskever  Ilya  Vinyals  Oriol  and Le  Quoc VV  Sequence
+In NIPS 
+
+to sequence learning with neural networks 
+ 
+
+Tong  Simon  Active Learning  Theory and Applications 
+
+PhD thesis    AAI 
+
+Weston  Jason  Ratle  Fr ed eric  Mobahi  Hossein  and Collobert  Ronan  Deep learning via semisupervised embedding  In Neural Networks  Tricks of the Trade  pp 
+  Springer   
+
+

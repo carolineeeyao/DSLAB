@@ -1,0 +1,1215 @@
+High Dimensional Bayesian Optimization with Elastic Gaussian Process
+
+Santu Rana     Cheng Li     Sunil Gupta   Vu Nguyen   Svetha Venkatesh  
+
+Abstract
+
+Bayesian optimization is an ef cient way to optimize expensive blackbox functions such as designing   new product with highest quality or
+tuning hyperparameter of   machine learning algorithm  However  it has   serious limitation
+when the parameter space is highdimensional
+as Bayesian optimization crucially depends on
+solving   global optimization of   surrogate utility function in the same sized dimensions  The
+surrogate utility function  known commonly as
+acquisition function is   continuous function but
+can be extremely sharp at high dimension   having only   few peaks marooned in   large terrain of almost  at surface  Global optimization algorithms such as DIRECT are infeasible at
+higher dimensions and gradientdependent methods cannot move if initialized in the  at terrain  We propose an algorithm that enables local
+gradientdependent algorithms to move through
+the  at terrain by using   sequence of grossto 
+ ner Gaussian process priors on the objective
+function as we leverage two underlying facts  
+   there exists   large enough lengthscales for
+which the acquisition function can be made to
+have   signi cant gradient at any location in the
+parameter space  and    the extrema of the consecutive acquisition functions are close although
+they are different only due to   small difference in
+the lengthscales  Theoretical guarantees are provided and experiments clearly demonstrate the
+utility of the proposed method on both benchmark test functions and realworld case studies 
+
+  Introduction
+Bayesian optimization method has established itself as an
+ef cient way to optimize blackbox functions  Jones et al 
+
+ Equal contribution  Centre for Pattern Recognition and Data
+Analytics  PRaDA  Deakin University  Australia  Correspondence to  Santu Rana  santu rana deakin edu au 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+  which are also expensive to evaluate  Examples include experimental design to optimize the quality of   physical product  Brochu et al    or hyperparameter tuning
+of machine learning algorithms  Bardenet et al    In
+both cases the response functions are unknown and each
+evaluation of either making the product to test the quality
+or training   model from large data can be timeconsuming 
+Likewise  it has found applications in   variety of domains
+including computer vision  Denil et al    and sensor
+set selection  Garnett et al   
+Bayesian optimization is   sequential procedure where  
+probabilistic form of the unknown function is maintained
+using   Gaussian process  GP    GP is speci ed by   mean
+function and   covariance function    popular choice of
+covariance function is the squared exponential kernel  Rasmussen and Williams      crucial parameter of the
+kernel is the lengthscale which dictates prior belief about
+the smoothness of the objective function  The posterior of
+  Gaussian process is analytically tractable and is used to
+estimate both the mean and the variance of the estimation
+at unobserved locations  Next    cheap surrogate function
+is built that seeks the location where lies the highest possibility of obtaining   higher response  The possibility is
+expressed through   variety of acquisition functions which
+tradeoff exploitation of the predicted best mean and exploration around high predicted variance  Typical acquisition
+functions include Expected Improvement  EI   Mockus 
+  and GPUCB  Srinivas et al   
+Acquisition functions are continuous functions  yet they
+may be extremely sharp functions at higher dimensions 
+especially when the size of observed data is small  Generally  they have some peaks and   large area of mostly
+ at surface  For this reason  the global optimization of
+highdimensional acquisition functions is hard and can be
+prohibitively expensive  This makes it dif cult to scale
+Bayesian optimization to high dimensions  Generic global
+optimization algorithms such as DIRECT  Jones et al 
+  or simplexbased methods such as NelderMead
+ Olsson and Nelson    or genetic algorithm based
+methods  Runarsson and Yao    Beyer and Schwefel 
+  perform reasonably when the dimension is low  but
+at higher dimensions they can become extremely inef cient
+and actually become infeasible within the practical limitation of resource and time  Multistart based method start
+
+High Dimensional Bayesian Optimization with Elastic Gaussian Process
+
+addressed the
+
+from multiple initializations to achieve local maxima and
+then choose the best one  However  the multistart method
+may not be able to  nd the non at portion of the acquisition function by random search    related discussion for
+high dimensional Bayesian optimization concerns with the
+usefulness of Gaussian process for high dimensional modeling  Fortunately  Srinivas et al    showed that Gaussian process  GP  can handle  curse of dimensionality  to
+  good extent 
+issue of highLimited work has
+Nearly all
+dimensionality in Bayesian optimization 
+the existing work assumes that
+the objective function
+only depends on   limited number of  active  features
+ Chen et al    Wang et al    Djolonga et al 
+  For example  Wang et al    projected the
+highdimensional space into   lowdimensional subspace
+by random embedding and then optimized the acquisition
+function in   lowdimensional subspace assuming that
+many dimensions are correlated  This assumption seems
+too restrictive in real applications  Kandasamy et al   
+Li et al    The AddGP UCB model  Kandasamy
+et al    allows the objective function to vary along the
+entire feature domain  The objective function is assumed
+to be the sum of   set of lowdimensional functions with
+disjoint feature dimensions  Thus the optimization of
+acquisition function is performed in the lowdimensional
+space  Li et al      further generalized the AddGP UCB by eliminating an axisaligned representation 
+However  none of them are not applicable if the underlying
+function does not have assumed structure  that is  if the
+dimensions are not correlated or if the function is not
+decomposable in some prede ned forms  Thus ef cient
+Bayesian optimization for high dimensional functions is
+still an open problem 
+To address that we propose an ef cient algorithm to optimize the acquisition function in high dimension without
+requiring any assumption on the structure of the underlying
+function  We recall   key characteristic of the acquisition
+function that they are mostly  at functions with only   few
+peaks  Gradients on the large mostly  at surfaces of the
+highdimensional acquisition functions would be close to
+zero  Thus gradientdependent methods would fail to work
+since   random initialization would most likely fall in the
+large  at region  However  we theoretically prove that for
+  location where the gradient is currently insigni cant it
+is possible to  nd   large enough kernel lengthscale which
+when used to build   new GP can make the derivative of the
+new acquisition function becomes signi cant  Different locations may need different lengthscales above which the
+derivative at that location becomes signi cant  We prove it
+for both the Expected Improvement  EI  and Upper Con 
+dence Bound  UCB  acquisition functions  Next  we theoretically prove that the difference in the acquisition func 
+
+Figure   Simple regret as   function of iteration for an unnormalized GaussianPDF function with maximum of   in   dimension using three different length scales for SE kernel  Average
+and standard errors for   trials with different initializations is
+reported 
+tions is smooth with respect to the change in lengthscales 
+which implies that the extremums of the consecutive acquisition functions are close if the difference in the lengthscales is small  Based on these two observations we build  
+novel optimization algorithm for acquisition functions  In
+the  rst part of our algorithm we search for   large enough
+lengthscale for which   randomly selected location in the
+domain starts to have signi cant gradients  Next  we gradually reduce the length scale to move from   gross to  
+ ner function approximation  controlling this transition by
+slowly reducing the lengthscale of the Gaussian process
+kernel  We solve   sequence of local optimization problems wherein we begin with   very gross approximation
+of the function and then the extrema of this approximation
+is used as the initial point for the optimization of the next
+approximation which is   little bit  ner  Following this sequence we reach to the extrema of the acquisition function
+for the Gaussian process with the target lengthscale  The
+target lengthscale is either prespeci ed by the user or estimated for some covariance functions  It may seem to the
+reader that the problem can be avoided if   large length
+scale is chosen for the original GP model itself  however 
+as it shows in Figure   the right lengthscale actually lies
+at   smaller value  especially for high dimensional functions  Since in our algorithm we use Gaussian processes
+with large to small lengthscales akin to  tting an elastic
+function  we denote our method as Elastic Gaussian Process  EGP  method  We note that EGP is   metaalgorithm
+that enables   gradientdependent local optimization algorithm to perform by removing the problem associated with
+ at surface  Newton   gradient based method is used as  
+local optimization tool for our algorithm  It is to be noted
+that our algorithm EGP can easily be converted to pursue  
+global solution by employing multiple starts with different
+random initializations 
+We demonstrate our algorithm on two synthetic examples
+and two realworld applications involving one of training
+
+ Iteration Simple RegretGaussianPDF   kernel length scale    kernel length scale    kernel length scale    High Dimensional Bayesian Optimization with Elastic Gaussian Process
+
+cascaded classi er and the other involving optimization of
+an alloy based on thermodynamic simulation  We compare
+with the the stateof theart additive model  Kandasamy
+et al    high dimensional optimization using random
+embedding  Wang et al      vanilla multistart method
+and    random search  All the methods are given equal
+computational budget to have   fair comparison  In all experiments our proposed method outperforms the baselines 
+In summary  our main contributions are 
+
+  Proposal of   new method to handle high dimensional
+Bayesian optimization without any assumptions about
+the underlying structure in the objective function 
+
+  Derivation of theoretical guarantees that underpins our
+
+proposed algorithm 
+
+  Validation on both synthetic and realworld applica 
+
+tions to demonstrate the usefulness of our method 
+
+  Background
+  Gaussian Process
+
+We brie   review Gaussian process  Rasmussen and
+Williams    here  Gaussian process  GP  is   distribution over functions speci ed by its mean    and covariance kernel function      Give   set of observations
+     the probability of any  nite set of   is Gaussian
+
+                               
+
+ 
+
+where         is   vector of response values of     and
+            is   covariance matrix presented by
+
+         
+
+ 
+
+  xt    
+
+ 
+ 
+ 
+
+     xt 
+
+ 
+
+  xt  xt 
+
+   
+
+             
+
+where   is   kernel function  If the observations are contaminated with noise    should include the noise variance 
+The choice of the kernel depends on prior beliefs about
+smoothness properties of the objective function    popular
+kernel function is the squared exponential  SE  function 
+which is de ned as
+
+ cid 
+
+ cid 
+
+  xi  xj    exp
+
+   xi   xj 
+   
+
+where the kernel lengthscale   re ects the smoothness of
+the objective function 
+The predictive distribution of GP is tractable analytically 
+For   new point xt  the joint probability distribution of
+the known values               and the predicted function
+value ft  is given by
+
+ cid cid        
+
+  xt 
+
+ cid           
+
+ cid 
+
+ 
+
+kT   xt  xt 
+
+ cid 
+
+ cid     
+
+ft 
+
+   
+
+ cid cid 
+
+where        xt         xt  xt   and          
+            We simplify the problem by using
+           The predictive distribution of ft  can be
+represented by
+ft               xt               
+
+  xt             
+ 
+ 
+
+and  
+
+  
+
+with    
+  xt  xt    kT     
+
+ 
+
+kT      
+
+  Bayesian Optimization
+
+  traditional optimization problem is to  nd the maximum
+or minimum of   function       over   compact domain    
+In real applications such as hyperparameter tuning for  
+machine learning model or experiments involving making
+of physical products        is unknown in advance and expensive to evaluate  Bayesian optimization  BO  is   powerful tool to optimize such expensive blackbox functions 
+  common method to model the unknown function is using
+  Gaussian process as   prior  The posterior is maintained
+based on observations and allows prediction for expected
+function values at unseen locations  Eq    acquisition
+function                 is constructed to guide the search
+for the optimum  Some examples about acquisition functions include Expected Improvement  EI  and UCB  Srinivas et al   
+The EIbased acquisition function is to compute the expected improvement with respect to the current maximum
+      The improvement function is written as
+       max  ft           
+
+ cid 
+
+ft    is Gaussian distributed with the mean     and
+variance     as per the predictive distribution of GP
+  Thus the expected improvement is the expectation
+over these Gaussian variables 
+In closed form  Mockus
+et al    Jones et al   
+
+EI     
+
+                             
+       
+ 
+ 
+      and     are the CDF and
+
+where             
+PDF of standard normal distribution 
+The UCB  Srinivas et al    acquisition function is de 
+ ned as
+
+   
+
+UCB               
+
+ 
+
+where   is   sequence of increasing positive numbers 
+In each iteration of Bayesian optimization 
+the most
+promising xt  is found by maximizing the acquisition
+function and then yt  is evaluated  The new observation
+is augmented to update the GP and in turn is used to construct   new acquisition function  These steps are repeated
+till   satisfactory outcome is reached or the iteration budget
+is exhausted 
+
+High Dimensional Bayesian Optimization with Elastic Gaussian Process
+
+  OPTIMIZATION OF ACQUISITION FUNCTIONS
+
+In Bayesian optimization  the objective function is expensive to evaluate while the acquisition function is tractable
+analytically  Our task is to maximize the acquisition function            over   compact region or with constraints 
+Global optimization heuristics are often used to  nd the extremum of   function  The gradientbased and derivativefree approaches are two main types  Gradients for the
+EI acquisition function can be computed as in  Frean and
+Boyle    DIRECT  Jones et al    is   popular
+choice to globally optimize the acquisition function  It is
+  deterministic and derivativefree algorithm which divides
+the search space into smaller and smaller hyperrectangles
+and leverages the Lipschitiziancontinuity of the acquisition function  However 
+it takes time exponential to dimension and becomes practically infeasible beyond   dimensions  The multistart gradient based approach is potentially attractive in high dimension but it mostly fails in
+highdimensional scenario as   random initialization may
+not be able to escape from the large  at region that acquisition functions generally have  Our proposed method
+utilizes properties of the acquisition function to derive  
+metaalgorithm that enables the gradientbased optimizer
+to move even when initialized in   seemingly  at region 
+
+  Highdimensional Bayesian Optimization
+
+with Elastic Gaussian Process
+
+We would like to employ Bayesian optimization to solve  
+highdimensional maximization problem maxx         in  
+compact subset        To model       we use   Gaussian
+process with zero mean as   prior and the SE kernel as the
+covariance function with   target lengthscale      The target lengthscale can be set by the user or can be separately
+inferred by using the maximum likelihoodbased estimation method  Snoek et al    The SE kernel although
+  simple kernel  is versatile and popular  Hence we choose
+to use it in our framework  Acquisition functions  such as
+EI  Mockus    and UCB  Srinivas et al    depend
+on the predictive mean     and variance     of GP
+
+      kT    
+          kT    
+
+Hence  the acquisition function is also associated with the
+GP kernel lengthscale   and we denote it as              
+The core task of Bayesian optimization is to  nd the most
+promising point xt  for the next function evaluation by
+globally maximizing acquisition function 
+Figure   serves as an inspired example for our approach 
+We plot the acquisition function for different lengthscales 
+As can be seen when the lengthscale is low  some portions
+of the parameter space are  at  This is especially remark 
+
+Figure   The illustration for the elastic Gaussian process  EGP 
+at one dimension  The acquisition function presents different terrains with varied kernel lengthscales    The optimal points at
+      and       are close  The optimal point   
+   can be
+   is the point   
+achieved if the initial point  xinit
+  
+
+able in highdimensional problems  For example  the acquisition function with lengthscale   is extremely  at 
+However when the lengthscale is above   the acquisition functions starts to have signi cant gradients  Additionally  we also show that the optimal solutions for different
+lengthscales are close 
+We construct our method based on the above observations  Speci cally in Lemma   we theoretically guarantee
+that it is possible to  nd   large enough lengthscale for
+which the derivative of the acquisition function becomes
+noninsigni cant at any location in the domain  Proof
+for both the Expected Improvement  EI  and Upper Con 
+ dence Bound  UCB  based acquisition functions are derived  Relying on this guarantee  we search for   large
+enough lengthscale for which   randomly selected location in the domain starts to have signi cant gradients  Next
+in Lemma   we theoretically guarantee that the difference
+in the acquisition function is smooth with respect to the
+change in lengthscale  This implies that the extrema of
+the consecutive acquisition functions are close but different
+only due to   small difference in the lengthscales  The details of these lemmas are provided later  However  we can
+now conceive that an algorithm to overcome  at region can
+be constructed by  rst  nding   large enough lengthscale
+to solve for the optima at that lengthscale and then gradually reduce the lengthscale and solve   sequence of local optimization problems wherein the optimum of   larger
+lengthscale is used as the initialization for the optimization
+of the acquisition function based on the Gaussian process
+with   smaller lengthscale  This is continued till the optimum at the target lengthscale    is reached  We denote our
+method as Elastic GP  EGP  method  The whole proposed
+algorithms are presented in Alg  and Alg   
+
+                                xinitl     High Dimensional Bayesian Optimization with Elastic Gaussian Process
+
+Algorithm   High Dimensional Bayesian Optimization
+with Elastic Gaussian Process
+  for         do
+ 
+
+Sample the next point xt argmaxxt        
+        using Alg   
+Evaluate the value yt 
+Augment the data             xt  yt 
+Update the kernel matrix  
+
+ 
+ 
+ 
+  end for
+
+  Theoretical Analysis
+
+In the  rst step of our algorithm  seen in Step   of Alg   
+we want to show that gradient of the acquisition functions
+becomes signi cant beyond   certain   so that our algorithm
+can  nd an optimal solution compared to any start point 
+Lemma       
+
+    for          lmax 
+
+Proof 
+
+ cid cid cid       
+
+ xi
+
+ cid cid cid        We consider both forms  UCB and EI 
+
+The Lemma can be proved if we prove that
+
+ cid cid cid cid       
+
+  
+
+ cid cid cid cid 
+
+  For the UCB acquisition function  Eq   
+
+the partial derivative of UCB can be written as
+
+     
+ xi
+
+ 
+
+ 
+
+   
+ xi
+ kT
+ xi
+
+   
+
+   
+ xi
+
+     
+
+ 
+
+   
+
+   kT
+ xi
+
+    
+
+The  kT
+is dependent on the form of the covariance func 
+ xi
+tion  it is     matrix whose     th element is  cov   xj  
+ 
+For the SE kernel
+
+ cid 
+
+ cov    xj 
+
+ xi
+
+  exp
+
+     xj 
+
+   
+
+    dji
+
+   cov    xj 
+
+ xi
+
+ cid cid 
+   xi   xji 
+
+ cid 
+
+  
+
+ 
+
+where dji   xi   xji 
+To simplify the proof  we assume that we have the worst
+case that only one observation    exists and thus
+
+     
+ xi
+
+ 
+
+  cov      
+
+ xi
+
+ 
+
+       
+
+ 
+
+   
+  
+
+ cid 
+
+   cov          
+vcov      
+
+ cid    cov      
+
+vcov      
+
+ cid    cov      
+ cid    cov      
+
+vcov      
+
+  cov        
+
+ cov      
+
+ xi
+   
+   cov      
+
+ cid 
+
+ 
+
+Algorithm   Optimizing acquistion function using EGP
+Input    random start point xinit     the lengthscale
+
+interval  cid            
+
+  Step  
+  while     lmax do
+ 
+
+Sample      argmaxx                 starting
+with xinit 
+if  xinit          then
+
+         cid  
+xinit      break 
+
+else
+
+ 
+ 
+ 
+ 
+ 
+  end while
+
+end if
+
+  Step  
+  while        do
+ 
+ 
+
+         cid  
+Sample      argmaxx                 starting
+with xinit 
+if  xinit          then
+ cid   cid   
+xinit     
+
+ 
+ 
+ 
+ 
+ 
+  end while
+Output  the optimal point xt       to be used in Alg 
+
+end if
+
+else
+
+The cov       is   small value due to          cid    and
+then the  rst term in the fourth line of the Eq  can be
+ignored compared to its second term  Therefore we have
+
+   
+
+exp
+
+ xi
+
+     
+ xi
+
+       
+
+ 
+   exp
+
+ cid cid cid cid   
+
+   cov        
+
+      iy 
+  
+
+ cid 
+
+ 
+
+We rewrite it as cid cid cid cid       
+
+ cid 
+       
+ cid 
+ cid   
+ cid cid cid      the equation exp cid   
+    to hold the inequality since exp cid   
+
+where        iy  and            
+To have
+must
+hold for     between          lmax  In fact  we can  nd
+
+ cid       
+ cid  is   decreasing
+
+ cid cid cid       
+
+  
+function with the range     whilst    
+is an increasing
+function with the range     by considering    can ap 
+ 
+proach to   and lmax can approach to in nity in theory 
+Therefore Lemma   has been proved for the UCB acquisition function 
+
+ xi
+
+  
+
+ 
+
+  
+
+High Dimensional Bayesian Optimization with Elastic Gaussian Process
+
+  For the EI acquisition function  Eq   
+
+the partial derivative can be written as
+
+     
+ xi
+
+             
+
+   
+ xi
+
+       
+
+  
+ xi
+
+For the UCB  we compute the derivative of         with
+respect to   based on Eq 
+
+   xi    
+
+  
+
+ 
+
+   iy 
+
+  
+  iy 
+
+  
+
+ 
+
+exp
+
+exp
+
+ cid 
+ cid 
+       
+ cid         
+ cid 
+       
+
+   
+
+   
+
+  
+
+Apparently     xi   
+is continuous in the domain of   
+Therefore          is   smooth function with respect to   
+The similar proof can be done for EI 
+
+  
+
+  Experiments
+We evaluate our method on three different benchmark test
+functions and two realworld applications including training cascaded classi ers and for alloy composition optimization  We use low memory BFGS implementation in
+NLopt  Johnson    as the local optimization algorithm 
+and   variant of DIRECT  GN DIRECT    for global optimization  Our comparators are 
+
+  Global optimization using DIRECT  Global 
+  Multistart local optimization  Multistart 
+  Highdimensional Bayesian optimization via additive
+models  Kandasamy et al     Addd cid  where   cid  is
+the dimensionality in each group 
+
+  Bayesian optimization using random embedding
+ Wang et al     REMBOd cid  where   cid  is the projected dimensionality 
+
+  Best of     Random search  which has shown competitiveness over many algorithms Li et al     
+
+Global optimization with DIRECT is used only at dimension       as it consistently returns erroneous results at
+higher dimension 
+For the additive model variables are
+divided into   set of additive clusters by maximizing the
+marginal likelihood  Kandasamy et al    In all experiments  we use EI as the acquisition function and the SE
+kernel as the covariance function  The search bounds are
+rescaled to     We use the target lengthscale       
+  and  cid lmin     In Figure   we plot the
+lmax  
+simple regret vs iteration for three different choices of scale
+        and   Out of them       provides the
+fastest convergence  justifying our choice for the lengthscale 
+In our experience any smaller lengthscale slows
+down the convergence and surprisingly  in most of the cases
+       turns out to be   good choice  The number of initial observations are set at       All the algorithms are
+
+ 
+
+ The code is available on request 
+
+where             
+
+   
+
+   
+ xi
+
+   
+
+ cid   kT
+ cid   kT
+
+ xi
+
+  
+ xi
+
+ 
+
+therefore 
+
+and
+
+ cid   kT
+
+ xi
+
+ cid 
+
+   
+
+   
+
+ cid 
+
+       
+
+   
+ xi
+
+   
+
+ cid 
+
+ xi
+
+   
+
+     
+
+     
+
+     
+ xi
+
+   
+ 
+We substitute Eq  into Eq    and make the similar
+assumption within the proof at the UCB acquisition function  The Eq    then becomes as
+
+ kT
+ xi
+
+     
+ xi
+
+ 
+
+ 
+
+   
+  
+
+ cid 
+
+    cov      
+
+ xi
+
+ cid    cov      
+
+   cov      
+
+ cid    cov      
+
+     cov      
+
+  cov    xj     
+
+ cov      
+
+ cid 
+
+ xi
+
+Since     lies   we can ignore the  rst term  The equation above is further written as
+
+     
+ xi
+
+       
+
+   exp
+
+       
+
+   
+
+           
+
+   
+
+ 
+
+  
+
+ cid 
+
+ cid 
+
+As   increasing      becomes smaller and     becomes
+larger and then       The equation above becomes
+similar with Eq  Therefore Lemma   is proved for EI 
+In the second step of our algorithm  seen in Step   of
+Alg  our purpose is to  nd  cid   which makes the start
+point of the local optimizer move to    ner region  We
+need to show that
+
+ cid cid cid cid cid       
+
+ xi
+
+ cid cid cid cid     
+
+ cid cid cid cid     cid  
+
+ cid cid cid cid cid        or  cid      
+
+       
+ xi
+
+It is directly related to            
+  
+lowing lemma guarantees that 
+Lemma           is   smooth function with respect to   
+where                      
+
+being smooth  The fol 
+
+ 
+
+  
+
+High Dimensional Bayesian Optimization with Elastic Gaussian Process
+
+    Hertmann   Topt    ms 
+
+    Hertmann   Topt    ms 
+
+    Gaussian   Topt    ms 
+
+    Gaussian   Topt    ms 
+
+Figure   Simple regret as   function of Bayesian optimization iteration  Optimization time Topt shown is for each iteration  Both mean
+ line  and the standard errors are reported for   trials with random initializations 
+
+    Rosenbrock   Topt    sec      Rosenbrock   Topt    sec 
+    Gaussian   Topt    sec 
+Figure   Simple regret as   function of Bayesian optimization iteration  Optimization time Topt has been set as       sec  Both mean
+ line  and the standard errors are reported for   trials with random initializations 
+
+    Gaussian   Topt    sec 
+
+given the same  xed time duration per iteration  Topt  The
+computer used is   Xeon Quadcore PC running at   GHz 
+with   GB of RAM  Bayesian optimization has been implemented in Matlab with mex interface to   Cbased acquisition function optimizer that uses NLOPT library  We
+run each algorithm   trials with different initializations
+and report the average results and standard errors  
+
+  Benchmark Test Functions
+
+In this study we demonstrate the application of Bayesian
+optimization on three different benchmark test functions
+
+  Hertmann   in     for all dimensions 
+
+  Unnormalized Gaussian PDF with   maximum of   in
+
+     for    and      for   
+
+  Generalized Rosenbrock function  Picheny et al 
+
+  in      
+
+We set the covariance matrix of the Gaussian PDF to be
+
+     
+
+ 
+
+ 
+ 
+     
+
+ 
+
+  where
+
+  block diagonal matrix    
+
+ cid   
+
+ cid 
+
+ 
+ 
+
+ 
+
+  In this case  variables are partially
+   
+correlated and  therefore  the function does not admit additive decomposition with high probability  The function is
+further scaled such that the maximum value of the function
+
+remains at   irrespective of the number of variables  dimensions  Since  for all these test functions neither the assumptions of additive decomposition based method or the
+assumptions of REMBO  many dimensions are correlated 
+are true  they perform poorly on these  Hence  we do not
+include them in our comparison for benchmark functions 
+We  rst demonstrate the ef ciency of our EGP based optimization given limited amount of time 
+In Figure  
+we show how the three algorithms perform when given
+two different amounts of optimization time per iteration
+ Topt      and Topt       on both Hertmann 
+and Gaussian PDF functions  The plot shows that when
+Topt is small then Multistart performs the worst  even performing lower than the    Random search  However  both
+EGP and the DIRECT perform much better and almost perform similarly  When Topt is increased then all the methods start to perform almost similarly with EGP providing
+slightly better performance  This demonstrates two things 
+   EGP is more ef cient in using time than the Multistart 
+and    EGP being gradientbased is more numerically precise than the gridbased DIRECT algorithm  In Figure   we
+demonstrate our method on both Rosenbrock and Gaussian
+PDF functions at high dimensions  The optimization time
+for all these highdimensional optimization problem is set
+as Topt      sec  EGP clearly beats all the comparators
+for these benchmark test functions  Then UCB acquisition
+function has the similar behaviour with EI for our model
+although no result shown here 
+
+ Iteration Simple RegretHartmann   GlobalMultistartEGPBest xRandom Search Iteration Simple RegretHartmann   GlobalMultistartEGPBest xRandom Search Iteration Simple RegretGaussianPDF   GlobalMultistartEGPBest xRandom Search Iteration Simple RegretGaussianPDF   GlobalMultistartEGPBest xRandom Search Iteration Simple Regret Rosenbrock   GlobalMultistartEGPBest xRandom Search Iteration Simple Regret Rosenbrock   MultistartBest xRandom Search EGP Iteration Simple RegretGaussianPDF   EGPMultistartBest xRandom Search Iteration Simple RegretGaussianPDF   MultistartEGPBest xRandom Search High Dimensional Bayesian Optimization with Elastic Gaussian Process
+
+    Ionosphere
+
+    German
+
+    IJCNN 
+
+    Alloy optimization
+
+Figure         Training AUC as   function of iteration for cascade classi er training  The number of stages in the classi er is equal to
+the number of features in three datasets from left to right    Ionosphere          German          IJCNN        Both mean
+ line  and the standard errors  shaded region  are reported for   trials with random initializations      Alloy utility value as   function
+of the iteration for the optimization of AA  alloy system 
+
+  Training cascade classi er
+
+Here we evaluate our method by training   cascade classi er on three real datasets from UCI repository  Blake
+and Merz    Ionosphere  German and IJCNN   
+Kcascade classi er consists of   stages and each stage
+has   weak classi er    onelevel decision stump  Instances
+are reweighted after each stage  Generally  independently
+computing the thresholds are not an optimal strategy and
+thus we seek to  nd an optimal set of thresholds by maximizing the training AUC  Features in all datesets are scaled
+between     The number of stages is set same with the
+number of features in the dataset  Therefore  simultaneously optimizing thresholds in multiple stages is   dif cult
+task and thus being used as   challenging test case for highdimensional Bayesian optimization  We create the additive
+model with   dimensions per group and   dimensions
+for random embedding in REMBO  The results are plotted in Figure         In all three cases EGP provides the
+best performance  REMBO performs the worst of all  Surprisingly  for IJCNN  the Random Search turned out to be
+competitive to EGP  However  in the other two datasets it
+performs much worse than EGP 
+
+  Optimizing alloy for aeronautic applications
+
+AA  is   low density high corrosion resistant alloy and
+is used for aerospace applications  The current alloy has
+been designed decades ago and is considered by our metallurgist collaborator as   prime candidate for further improvement  ThermoCalc    software based thermodynamic
+simulator  Andersson et al    is used to compute the
+utility of   composition by looking at the occurrences of
+different phases at different temperatures  Some phases are
+bene cial for mechanical properties whereas some are not 
+Guided by our metallurgist partners   weighted combination of phase fractions is used as the utility function The
+alloy consists of   elements  Al  Cu  Mg  Zn  Cr  Mn  Ti 
+Zr  and Sc  and along with that we have   operational pa 
+
+rameters that have to be optimized together  In all we have
+   dimensional optimization problem  The result is given
+in Figure     Since  the simulations are expensive we run
+only upto   iterations and compare with only the additive model and the REMBO  We ran only once after starting from expertspeci ed starting points  Clearly  EGP is
+quicker in reaching better value and always remained better than both the baselines 
+
+  Conclusion
+In this paper we propose   novel algorithm for Bayesian
+optimization in high dimension  At high dimension the acquisition function becomes very  at on   large region of
+the space rendering gradientdependent methods to fail at
+high dimension  We prove    gradient can be induced by
+increasing the lengthscales of the GP prior and    acquisition functions which differ only due to small difference in
+lengthscales are close  Based on these we formulate our
+algorithm that  rst  nds   large enough lengthscale to enable the gradientdependent optimizer to perform  and then
+the gradually reduces the lengthscale while also sequentially using the optimum of the larger lengthscale as the
+initialization for the smaller  In experiments the proposed
+algorithm clearly performs better than the baselines on  
+set of test functions and two real applications of training
+cascade classi ers and alloy composition optimization 
+
+Acknowledgement
+This work is partially funded by Australian Government
+through ARC and the TelstraDeakin Centre of Excellence in Big Data and Machine Learning  Prof Venkatesh
+is the recipient of an ARC Australian Laureate Fellowship  FL  We thank our metallurgist collaborators Dr Thomas Dorin from Institute of Frontier Materials
+Deakin and his team for the alloy case study and anonymous reviewers for their valuable comments 
+
+ Iteration AUCd EGPBest xRandom Search REMBO Add Iteration AUCd EGPBest xRandom Search REMBO Add Iteration AUCd EGPBest xRandom Search REMBO Add Iteration Utilityd EGPREMBO Add High Dimensional Bayesian Optimization with Elastic Gaussian Process
+
+References
+JanOlof Andersson  Thomas Helander  Lars   oglund 
+Pingfang Shi  and Bo Sundman  Thermocalc   dictra 
+computational tools for materials science  Calphad   
+   
+
+  emi Bardenet      ty  as Brendel    egl Bal azs  et al  ColIn Proceedings of
+laborative hyperparameter tuning 
+the  th International Conference on Machine Learning
+ ICML  pages    
+
+HansGeorg Beyer and HansPaul Schwefel  Evolution
+strategies   comprehensive introduction  Natural computing     
+
+Catherine Blake and Christopher   Merz   UCI  repository
+
+of machine learning databases   
+
+Eric Brochu  Vlad    Cora  and Nando de Freitas    tutorial on bayesian optimization of expensive cost functions  with application to active user modeling and hierarchical reinforcement learning   
+
+Bo Chen  Rui Castro  and Andreas Krause  Joint optimization and variable selection of highdimensional gaussian
+In Proc  International Conference on Maprocesses 
+chine Learning  ICML   
+
+Misha Denil  Loris Bazzani  Hugo Larochelle  and Nando
+de Freitas  Learning where to attend with deep architectures for image tracking  Neural Comput   
+  August  
+
+Josip Djolonga  Andreas Krause  and Volkan Cevher  HighIn Advances in
+
+dimensional gaussian process bandits 
+Neural Information Processing Systems   
+
+Marcus Frean and Phillip Boyle  Using Gaussian Processes to Optimize Expensive Functions  pages  
+Berlin  Heidelberg   
+
+Roman Garnett  Michael   Osborne  and Stephen  
+Roberts  Bayesian optimization for sensor set selection 
+In International Conference on Information Processing
+in Sensor Networks   
+
+Steven    Johnson  The nlopt nonlinearoptimization package    URL http abinitio mit edu 
+nlopt 
+
+      Jones        Perttunen  and       Stuckman  Lipschitzian optimization without the lipschitz constant 
+Journal of Optimization Theory and Applications   
+   
+
+Donald    Jones  Matthias Schonlau  and William    Welch 
+Ef cient global optimization of expensive blackbox
+functions  Journal of Global Optimization   
+    ISSN  
+
+Kirthevasan Kandasamy  Jeff    Schneider  and Barnabs
+Pczos  High Dimensional Bayesian Optimisation and
+Bandits via Additive Models  In ICML   
+
+   Li     Kandasamy     Poczos  and    Schneider  High
+dimensional bayesian optimization via restricted projection pursuit models  In AISTATS  pages      
+
+Cheng Li  Sunil Kumar Gupta  Santu Rana  Svetha
+Venkatesh  Vu Nguyen  and Alistair Shilton  High dimensional bayesian optimisation using dropout  In The
+ th International Joint Conference on Arti cial Intelligence   
+
+   Li     Jamieson     DeSalvo     Rostamizadeh  and
+   Talwalkar  Hyperband   novel banditbased approach
+In ArXiv eprints 
+to hyperparameter optimization 
+   
+
+   Mockus     Tiesis  and    Zilinskas  The application of
+bayesian methods for seeking the extremum  Towards
+Global Optimisation     
+
+Jonas Mockus  Application of bayesian approach to numerical methods of global and stochastic optimization 
+Journal of Global Optimization     
+
+Donald   Olsson and Lloyd   Nelson  The neldermead
+simplex procedure for function minimization  Technometrics     
+
+Victor Picheny  Tobias Wagner  and David Ginsbourger   
+benchmark of krigingbased in ll criteria for noisy optimization  Structural and Multidisciplinary Optimization     
+
+Carl Edward Rasmussen and Christopher       Williams 
+Gaussian Processes for Machine Learning  The MIT
+Press   
+
+Thomas Philip Runarsson and Xin Yao  Search biases in
+constrained evolutionary optimization  Systems  Man 
+and Cybernetics  Part    Applications and Reviews 
+IEEE Transactions on     
+
+Jasper Snoek  Hugo Larochelle  and Ryan   Adams  Practical bayesian optimization of machine learning algorithms  In NIPS  pages    
+
+Niranjan Srinivas  Andreas Krause  Sham Kakade  and
+Matthias Seeger  Gaussian process optimization in the
+bandit setting  No regret and experimental design 
+In
+ICML   
+
+Ziyu Wang  Masrour Zoghi  Frank Hutter  David Matheson  and Nando De Freitas  Bayesian optimization in
+In IJCAI 
+high dimensions via random embeddings 
+pages    
+
+

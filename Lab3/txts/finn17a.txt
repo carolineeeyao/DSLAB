@@ -1,0 +1,1031 @@
+ModelAgnostic MetaLearning for Fast Adaptation of Deep Networks
+
+Chelsea Finn   Pieter Abbeel     Sergey Levine  
+
+Abstract
+
+We propose an algorithm for metalearning that
+is modelagnostic  in the sense that it is compatible with any model trained with gradient descent and applicable to   variety of different
+learning problems  including classi cation  regression  and reinforcement learning  The goal
+of metalearning is to train   model on   variety of learning tasks  such that it can solve new
+learning tasks using only   small number of training samples  In our approach  the parameters of
+the model are explicitly trained such that   small
+number of gradient steps with   small amount
+of training data from   new task will produce
+good generalization performance on that task  In
+effect  our method trains the model to be easy
+to  netune  We demonstrate that this approach
+leads to stateof theart performance on two fewshot image classi cation benchmarks  produces
+good results on fewshot regression  and accelerates  netuning for policy gradient reinforcement
+learning with neural network policies 
+
+  Introduction
+Learning quickly is   hallmark of human intelligence 
+whether it involves recognizing objects from   few examples or quickly learning new skills after just minutes of
+experience  Our arti cial agents should be able to do the
+same  learning and adapting quickly from only   few examples  and continuing to adapt as more data becomes available  This kind of fast and  exible learning is challenging 
+since the agent must integrate its prior experience with  
+small amount of new information  while avoiding over tting to the new data  Furthermore  the form of prior experience and new data will depend on the task  As such 
+for the greatest applicability  the mechanism for learning to
+learn  or metalearning  should be general to the task and
+
+ University of California  Berkeley  OpenAI  Correspondence
+
+to  Chelsea Finn  cb nn eecs berkeley edu 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+the form of computation required to complete the task 
+In this work  we propose   metalearning algorithm that
+is general and modelagnostic  in the sense that it can be
+directly applied to any learning problem and model that
+is trained with   gradient descent procedure  Our focus
+is on deep neural network models  but we illustrate how
+our approach can easily handle different architectures and
+different problem settings  including classi cation  regression  and policy gradient reinforcement learning  with minimal modi cation  In metalearning  the goal of the trained
+model is to quickly learn   new task from   small amount
+of new data  and the model is trained by the metalearner
+to be able to learn on   large number of different tasks 
+The key idea underlying our method is to train the model  
+initial parameters such that the model has maximal performance on   new task after the parameters have been updated through one or more gradient steps computed with
+  small amount of data from that new task  Unlike prior
+metalearning methods that learn an update function or
+learning rule  Schmidhuber    Bengio et al   
+Andrychowicz et al    Ravi   Larochelle    our
+algorithm does not expand the number of learned parameters nor place constraints on the model architecture      
+by requiring   recurrent model  Santoro et al    or  
+Siamese network  Koch    and it can be readily combined with fully connected  convolutional  or recurrent neural networks  It can also be used with   variety of loss functions  including differentiable supervised losses and nondifferentiable reinforcement learning objectives 
+The process of training   model   parameters such that  
+few gradient steps  or even   single gradient step  can produce good results on   new task can be viewed from   feature learning standpoint as building an internal representation that is broadly suitable for many tasks  If the internal
+representation is suitable to many tasks  simply  netuning
+the parameters slightly       by primarily modifying the top
+layer weights in   feedforward model  can produce good
+results  In effect  our procedure optimizes for models that
+are easy and fast to  netune  allowing the adaptation to
+happen in the right space for fast learning  From   dynamical systems standpoint  our learning process can be viewed
+as maximizing the sensitivity of the loss functions of new
+tasks with respect to the parameters  when the sensitivity
+is high  small local changes to the parameters can lead to
+
+ModelAgnostic MetaLearning for Fast Adaptation of Deep Networks
+
+large improvements in the task loss 
+The primary contribution of this work is   simple modeland taskagnostic algorithm for metalearning that trains
+  model   parameters such that   small number of gradient updates will lead to fast learning on   new task  We
+demonstrate the algorithm on different model types  including fully connected and convolutional networks  and in several distinct domains  including fewshot regression  image
+classi cation  and reinforcement learning  Our evaluation
+shows that our metalearning algorithm compares favorably to stateof theart oneshot learning methods designed
+speci cally for supervised classi cation  while using fewer
+parameters  but that it can also be readily applied to regression and can accelerate reinforcement learning in the presence of task variability  substantially outperforming direct
+pretraining as initialization 
+
+  ModelAgnostic MetaLearning
+We aim to train models that can achieve rapid adaptation   
+problem setting that is often formalized as fewshot learning  In this section  we will de ne the problem setup and
+present the general form of our algorithm 
+
+  MetaLearning Problem SetUp
+
+The goal of fewshot metalearning is to train   model that
+can quickly adapt to   new task using only   few datapoints
+and training iterations  To accomplish this  the model or
+learner is trained during   metalearning phase on   set
+of tasks  such that the trained model can quickly adapt to
+new tasks using only   small number of examples or trials 
+In effect  the metalearning problem treats entire tasks as
+training examples  In this section  we formalize this metalearning problem setting in   general manner  including
+brief examples of different learning domains  We will discuss two different learning domains in detail in Section  
+We consider   model  denoted   
+that maps observations   to outputs    During metalearning  the model
+is trained to be able to adapt to   large or in nite number of tasks  Since we would like to apply our framework to   variety of learning problems  from classi cation to reinforcement learning  we introduce   generic
+notion of   learning task below 
+Formally  each task
+                     xH   aH          xt xt  at    
+consists of   loss function      distribution over initial observations        transition distribution   xt xt  at 
+and an episode length    In        supervised learning problems  the length       The model may generate samples
+of length   by choosing an output at at each time    The
+loss                 xH   aH        provides taskspeci  
+feedback  which might be in the form of   misclassi cation
+loss or   cost function in   Markov decision process 
+
+   
+   
+
+ 
+
+   
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+Figure   Diagram of our modelagnostic metalearning algorithm  MAML  which optimizes for   representation   that can
+quickly adapt to new tasks 
+
+In our metalearning scenario  we consider   distribution
+over tasks       that we want our model to be able to adapt
+to  In the Kshot learning setting  the model is trained to
+learn   new task Ti drawn from       from only   samples
+drawn from qi and feedback LTi generated by Ti  During
+metatraining    task Ti is sampled from       the model
+is trained with   samples and feedback from the corresponding loss LTi from Ti  and then tested on new samples
+from Ti  The model   is then improved by considering how
+the test error on new data from qi changes with respect to
+the parameters  In effect  the test error on sampled tasks Ti
+serves as the training error of the metalearning process  At
+the end of metatraining  new tasks are sampled from      
+and metaperformance is measured by the model   performance after learning from   samples  Generally  tasks
+used for metatesting are held out during metatraining 
+
+    ModelAgnostic MetaLearning Algorithm
+
+In contrast to prior work  which has sought to train recurrent neural networks that ingest entire datasets  Santoro et al    Duan et al      or feature embeddings that can be combined with nonparametric methods at
+test time  Vinyals et al    Koch    we propose  
+method that can learn the parameters of any standard model
+via metalearning in such   way as to prepare that model
+for fast adaptation  The intuition behind this approach is
+that some internal representations are more transferrable
+than others  For example    neural network might learn
+internal features that are broadly applicable to all tasks in
+      rather than   single individual task  How can we encourage the emergence of such generalpurpose representations  We take an explicit approach to this problem  since
+the model will be  netuned using   gradientbased learning rule on   new task  we will aim to learn   model in such
+  way that this gradientbased learning rule can make rapid
+progress on new tasks drawn from       without over tting  In effect  we will aim to  nd model parameters that
+are sensitive to changes in the task  such that small changes
+in the parameters will produce large improvements on the
+loss function of any task drawn from       when altered in
+the direction of the gradient of that loss  see Figure   We
+
+metalearninglearning adaptationModelAgnostic MetaLearning for Fast Adaptation of Deep Networks
+
+Algorithm   ModelAgnostic MetaLearning
+Require        distribution over tasks
+Require      step size hyperparameters
+  randomly initialize  
+  while not done do
+ 
+ 
+ 
+ 
+
+Sample batch of tasks Ti        
+for all Ti do
+
+Evaluate  LTi     with respect to   examples
+Compute adapted parameters with gradient descent   cid 
+
+         LTi   
+
+ cid Ti       LTi   cid 
+
+ 
+
+ 
+
+end for
+Update          
+
+ 
+ 
+  end while
+
+make no assumption on the form of the model  other than
+to assume that it is parametrized by some parameter vector
+  and that the loss function is smooth enough in   that we
+can use gradientbased learning techniques 
+Formally  we consider   model
+represented by  
+parametrized function    with parameters   When adapting to   new task Ti  the model   parameters   become  cid 
+  
+In our method  the updated parameter vector  cid 
+  is computed
+using one or more gradient descent updates on task Ti  For
+example  when using one gradient update 
+         LTi   
+ cid 
+
+The step size   may be  xed as   hyperparameter or metalearned  For simplicity of notation  we will consider one
+gradient update for the rest of this section  but using multiple gradient updates is   straightforward extension 
+The model parameters are trained by optimizing for the performance of   cid 
+with respect to   across tasks sampled from
+      More concretely  the metaobjective is as follows 
+LTi   LTi    
+
+LTi   cid 
+
+ cid 
+
+ cid 
+
+min
+
+   
+
+ 
+
+ 
+
+ 
+
+Ti      
+
+Ti      
+
+Note that the metaoptimization is performed over the
+model parameters   whereas the objective is computed using the updated model parameters  cid  In effect  our proposed method aims to optimize the model parameters such
+that one or   small number of gradient steps on   new task
+will produce maximally effective behavior on that task 
+The metaoptimization across tasks is performed via
+stochastic gradient descent  SGD  such that the model parameters   are updated as follows 
+
+         
+
+LTi   cid 
+
+ 
+
+ 
+
+ 
+
+ cid 
+
+Ti      
+
+where   is the meta step size  The full algorithm  in the
+general case  is outlined in Algorithm  
+The MAML metagradient update involves   gradient
+through   gradient  Computationally  this requires an additional backward pass through   to compute Hessianvector
+
+products  which is supported by standard deep learning libraries such as TensorFlow  Abadi et al   
+In our
+experiments  we also include   comparison to dropping
+this backward pass and using    rstorder approximation 
+which we discuss in Section  
+
+  Species of MAML
+In this section  we discuss speci   instantiations of our
+metalearning algorithm for supervised learning and reinforcement learning  The domains differ in the form of loss
+function and in how data is generated by the task and presented to the model  but the same basic adaptation mechanism can be applied in both cases 
+
+  Supervised Regression and Classi cation
+
+Fewshot learning is wellstudied in the domain of supervised tasks  where the goal is to learn   new function from
+only   few input output pairs for that task  using prior data
+from similar tasks for metalearning  For example  the goal
+might be to classify images of   Segway after seeing only
+one or   few examples of   Segway  with   model that has
+previously seen many other types of objects  Likewise  in
+fewshot regression  the goal is to predict the outputs of
+  continuousvalued function from only   few datapoints
+sampled from that function  after training on many functions with similar statistical properties 
+To formalize the supervised regression and classi cation
+problems in the context of the metalearning de nitions in
+Section   we can de ne the horizon       and drop the
+timestep subscript on xt  since the model accepts   single
+input and produces   single output  rather than   sequence
+of inputs and outputs  The task Ti generates          observations   from qi  and the task loss is represented by the
+error between the model   output for   and the corresponding target values   for that observation and task 
+Two common loss functions used for supervised classi cation and regression are crossentropy and meansquared error  MSE  which we will describe below  though  other supervised loss functions may be used as well  For regression
+tasks using meansquared error  the loss takes the form 
+
+LTi     
+
+ cid              cid 
+ 
+
+ 
+
+ cid 
+
+        Ti
+
+where           are an input output pair sampled from task
+Ti 
+In Kshot regression tasks    input output pairs are
+provided for learning for each task 
+Similarly  for discrete classi cation tasks with   crossentropy loss  the loss takes the form 
+     log       
+
+LTi     
+
+ cid 
+
+        Ti
+
+           log          
+
+ 
+
+ModelAgnostic MetaLearning for Fast Adaptation of Deep Networks
+
+Algorithm   MAML for FewShot Supervised Learning
+Require        distribution over tasks
+Require      step size hyperparameters
+  randomly initialize  
+  while not done do
+ 
+ 
+ 
+ 
+
+Sample batch of tasks Ti        
+for all Ti do
+
+Sample   datapoints                from Ti
+Evaluate  LTi     using   and LTi in Equation  
+or  
+Compute adapted parameters with gradient descent 
+         LTi    
+ cid 
+Sample datapoints   cid 
+               from Ti for the
+ cid 
+metaupdate
+end for
+Update          
+and LTi in Equation   or  
+
+Ti       LTi    cid 
+
+  using each   cid 
+
+ 
+
+ 
+
+ 
+ 
+
+ 
+
+ 
+
+  end while
+
+According to the conventional terminology  Kshot classi 
+ cation tasks use   input output pairs from each class  for
+  total of     data points for Nway classi cation  Given  
+distribution over tasks   Ti  these loss functions can be directly inserted into the equations in Section   to perform
+metalearning  as detailed in Algorithm  
+
+  Reinforcement Learning
+
+In reinforcement learning  RL  the goal of fewshot metalearning is to enable an agent to quickly acquire   policy for
+  new test task using only   small amount of experience in
+the test setting    new task might involve achieving   new
+goal or succeeding on   previously trained goal in   new
+environment  For example  an agent might learn to quickly
+ gure out how to navigate mazes so that  when faced with
+  new maze  it can determine how to reliably reach the exit
+with only   few samples  In this section  we will discuss
+how MAML can be applied to metalearning for RL 
+Each RL task Ti contains an initial state distribution qi   
+and   transition distribution qi xt xt  at  and the loss
+LTi corresponds to the  negative  reward function    The
+entire task is therefore   Markov decision process  MDP 
+with horizon    where the learner is allowed to query  
+limited number of sample trajectories for fewshot learning  Any aspect of the MDP may change across tasks in
+      The model being learned     is   policy that maps
+from states xt to   distribution over actions at at each
+timestep            The loss for task Ti and model
+   takes the form
+
+ cid    cid 
+
+ cid 
+
+LTi       Ext at   qTi
+
+Ri xt  at 
+
+ 
+
+ 
+
+  
+
+In Kshot reinforcement learning    rollouts from    and
+task Ti          xH   and the corresponding rewards
+  xt  at  may be used for adaptation on   new task Ti 
+
+Algorithm   MAML for Reinforcement Learning
+Require        distribution over tasks
+Require      step size hyperparameters
+  randomly initialize  
+  while not done do
+ 
+ 
+ 
+
+Sample batch of tasks Ti        
+for all Ti do
+
+Sample   trajectories             xH   using   
+in Ti
+Evaluate  LTi     using   and LTi in Equation  
+Compute adapted parameters with gradient descent 
+         LTi    
+ cid 
+Sample trajectories   cid 
+            xH   using   cid 
+ cid 
+in Ti
+end for
+Update          
+and LTi in Equation  
+
+Ti       LTi    cid 
+
+  using each   cid 
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+
+ 
+
+ 
+ 
+
+  end while
+
+Since the expected reward is generally not differentiable
+due to unknown dynamics  we use policy gradient methods to estimate the gradient both for the model gradient
+update    and the metaoptimization  Since policy gradients are an onpolicy algorithm  each additional gradient
+step during the adaptation of    requires new samples from
+the current policy     cid    We detail the algorithm in Algorithm   This algorithm has the same structure as Algorithm   with the principal difference being that steps   and
+  require sampling trajectories from the environment corresponding to task Ti  Practical implementations of this
+method may also use   variety of improvements recently
+proposed for policy gradient algorithms  including state
+or actiondependent baselines and trust regions  Schulman
+et al   
+
+  Related Work
+The method that we propose in this paper addresses the
+general problem of metalearning  Thrun   Pratt   
+Schmidhuber    Naik   Mammone    which includes fewshot learning    popular approach for metalearning is to train   metalearner that learns how to update the parameters of the learner   model  Bengio et al 
+  Schmidhuber    Bengio et al    This approach has been applied to learning to optimize deep networks  Hochreiter et al    Andrychowicz et al   
+Li   Malik    as well as for learning dynamically
+changing recurrent networks  Ha et al    One recent
+approach learns both the weight initialization and the optimizer  for fewshot image recognition  Ravi   Larochelle 
+  Unlike these methods  the MAML learner   weights
+are updated using the gradient  rather than   learned update 
+our method does not introduce additional parameters for
+metalearning nor require   particular learner architecture 
+Fewshot learning methods have also been developed for
+
+ModelAgnostic MetaLearning for Fast Adaptation of Deep Networks
+
+speci   tasks such as generative modeling  Edwards  
+Storkey    Rezende et al    and image recognition  Vinyals et al    One successful approach for
+fewshot classi cation is to learn to compare new examples in   learned metric space using      Siamese networks  Koch    or recurrence with attention mechanisms  Vinyals et al    Shyam et al    Snell
+et al    These approaches have generated some of the
+most successful results  but are dif cult to directly extend
+to other problems  such as reinforcement learning  Our
+method  in contrast  is agnostic to the form of the model
+and to the particular learning task 
+Another approach to metalearning is to train memoryaugmented models on many tasks  where the recurrent
+learner is trained to adapt to new tasks as it is rolled out 
+Such networks have been applied to fewshot image recognition  Santoro et al    Munkhdalai   Yu    and
+learning  fast  reinforcement learning agents  Duan et al 
+    Wang et al    Our experiments show that
+our method outperforms the recurrent approach on fewshot classi cation  Furthermore  unlike these methods  our
+approach simply provides   good weight initialization and
+uses the same gradient descent update for both the learner
+and metaupdate  As   result  it is straightforward to  netune the learner for additional gradient steps 
+Our approach is also related to methods for initialization of
+deep networks  In computer vision  models pretrained on
+largescale image classi cation have been shown to learn
+effective features for   range of problems  Donahue et al 
+ 
+In contrast  our method explicitly optimizes the
+model for fast adaptability  allowing it to adapt to new tasks
+with only   few examples  Our method can also be viewed
+as explicitly maximizing sensitivity of new task losses to
+the model parameters    number of prior works have explored sensitivity in deep networks  often in the context of
+initialization  Saxe et al    Kirkpatrick et al   
+Most of these works have considered good random initializations  though   number of papers have addressed datadependent initializers  Kr ahenb uhl et al    Salimans  
+Kingma    including learned initializations  Husken
+  Goerick    Maclaurin et al    In contrast  our
+method explicitly trains the parameters for sensitivity on
+  given task distribution  allowing for extremely ef cient
+adaptation for problems such as Kshot learning and rapid
+reinforcement learning in only one or   few gradient steps 
+
+  Experimental Evaluation
+The goal of our experimental evaluation is to answer the
+following questions    Can MAML enable fast learning
+of new tasks    Can MAML be used for metalearning
+in multiple different domains  including supervised regression  classi cation  and reinforcement learning    Can  
+
+model learned with MAML continue to improve with additional gradient updates and or examples 
+All of the metalearning problems that we consider require
+some amount of adaptation to new tasks at testtime  When
+possible  we compare our results to an oracle that receives
+the identity of the task  which is   problemdependent representation  as an additional input  as an upper bound on
+the performance of the model  All of the experiments were
+performed using TensorFlow  Abadi et al    which allows for automatic differentiation through the gradient update    during metalearning  The code is available online 
+
+  Regression
+
+We start with   simple regression problem that illustrates
+the basic principles of MAML  Each task involves regressing from the input to the output of   sine wave  where the
+amplitude and phase of the sinusoid are varied between
+tasks  Thus        is continuous  where the amplitude
+varies within     and the phase varies within    
+and the input and output both have   dimensionality of  
+During training and testing  datapoints   are sampled uniformly from     The loss is the meansquared error
+between the prediction       and true value  The regressor is   neural network model with   hidden layers of size
+  with ReLU nonlinearities  When training with MAML 
+we use one gradient update with       examples with
+   xed step size       and use Adam as the metaoptimizer  Kingma   Ba    The baselines are likewise trained with Adam  To evaluate performance  we  netune   single metalearned model on varying numbers of  
+examples  and compare performance to two baselines     
+pretraining on all of the tasks  which entails training   network to regress to random sinusoid functions and then  at
+testtime   netuning with gradient descent on the   provided points  using an automatically tuned step size  and
+    an oracle which receives the true amplitude and phase
+as input  In Appendix    we show comparisons to additional multitask and adaptation methods 
+We evaluate performance by  netuning the model learned
+by MAML and the pretrained model on          
+datapoints  During  netuning  each gradient step is computed using the same   datapoints  The qualitative results 
+shown in Figure   and further expanded on in Appendix  
+show that the learned model is able to quickly adapt with
+only   datapoints  shown as purple triangles  whereas the
+model that is pretrained using standard supervised learning
+on all tasks is unable to adequately adapt with so few datapoints without catastrophic over tting  Crucially  when
+the   datapoints are all in one half of the input range  the
+
+ Code for the regression and supervised experiments is at
+github com cbfinn maml and code for the RL experiments is at github com cbfinn maml rl
+
+ModelAgnostic MetaLearning for Fast Adaptation of Deep Networks
+
+Figure   Fewshot adaptation for the simple regression task  Left  Note that MAML is able to estimate parts of the curve where there are
+no datapoints  indicating that the model has learned about the periodic structure of sine waves  Right  Finetuning of   model pretrained
+on the same distribution of tasks without MAML  with   tuned step size  Due to the often contradictory outputs on the pretraining tasks 
+this model is unable to recover   suitable representation and fails to extrapolate from the small number of testtime samples 
+
+We follow the experimental protocol proposed by Vinyals
+et al    which involves fast learning of Nway classi cation with   or   shots  The problem of Nway classi 
+ cation is set up as follows  select   unseen classes  provide the model with   different instances of each of the  
+classes  and evaluate the model   ability to classify new instances within the   classes  For Omniglot  we randomly
+select   characters for training  irrespective of alphabet 
+and use the remaining for testing  The Omniglot dataset is
+augmented with rotations by multiples of   degrees  as
+proposed by Santoro et al   
+Our model follows the same architecture as the embedding
+function used by Vinyals et al    which has   modules with         convolutions and    lters  followed by
+batch normalization  Ioffe   Szegedy      ReLU nonlinearity  and       maxpooling  The Omniglot images
+are downsampled to       so the dimensionality of the
+last hidden layer is   As in the baseline classi er used
+by Vinyals et al    the last layer is fed into   softmax  For Omniglot  we used strided convolutions instead
+of maxpooling  For MiniImagenet  we used    lters per
+layer to reduce over tting  as done by  Ravi   Larochelle 
+  In order to also provide   fair comparison against
+memoryaugmented neural networks  Santoro et al   
+and to test the  exibility of MAML  we also provide results for   nonconvolutional network  For this  we use  
+network with   hidden layers with sizes        
+each including batch normalization and ReLU nonlinearities  followed by   linear layer and softmax  For all models 
+the loss function is the crossentropy error between the predicted and true class  Additional hyperparameter details are
+included in Appendix   
+We present the results in Table   The convolutional model
+learned by MAML compares well to the stateof theart results on this task  narrowly outperforming the prior methods  Some of these existing methods  such as matching
+networks  Siamese networks  and memory models are designed with fewshot classi cation in mind  and are not
+readily applicable to domains such as reinforcement learning  Additionally  the model learned with MAML uses
+
+Figure   Quantitative sinusoid regression results showing the
+learning curve at meta testtime  Note that MAML continues to
+improve with additional gradient steps without over tting to the
+extremely small dataset during metatesting  achieving   loss that
+is substantially lower than the baseline  netuning approach 
+
+model trained with MAML can still infer the amplitude and
+phase in the other half of the range  demonstrating that the
+MAML trained model   has learned to model the periodic
+nature of the sine wave  Furthermore  we observe both in
+the qualitative and quantitative results  Figure   and Appendix    that the model learned with MAML continues
+to improve with additional gradient steps  despite being
+trained for maximal performance after one gradient step 
+This improvement suggests that MAML optimizes the parameters such that they lie in   region that is amenable to
+fast adaptation and is sensitive to loss functions from      
+as discussed in Section   rather than over tting to parameters   that only improve after one step 
+
+  Classi cation
+
+To evaluate MAML in comparison to prior metalearning
+and fewshot learning algorithms  we applied our method
+to fewshot image recognition on the Omniglot  Lake et al 
+  and MiniImagenet datasets  The Omniglot dataset
+consists of   instances of   characters from   different alphabets  Each instance was drawn by   different
+person  The MiniImagenet dataset was proposed by Ravi
+  Larochelle   and involves   training classes   
+validation classes  and   test classes  The Omniglot and
+MiniImagenet image recognition tasks are the most common recently used fewshot learning benchmarks  Vinyals
+et al    Santoro et al    Ravi   Larochelle   
+
+ModelAgnostic MetaLearning for Fast Adaptation of Deep Networks
+
+Table   Fewshot classi cation on heldout Omniglot characters  top  and the MiniImagenet test set  bottom  MAML achieves results
+that are comparable to or outperform stateof theart convolutional and recurrent models  Siamese nets  matching nets  and the memory
+module approaches are all speci   to classi cation  and are not directly applicable to regression or RL scenarios  The   shows  
+con dence intervals over tasks  Note that the Omniglot results may not be strictly comparable since the train test splits used in the prior
+work were not available  The MiniImagenet evaluation of baseline methods and matching networks is from Ravi   Larochelle  
+
+ way Accuracy
+
+ way Accuracy
+
+           
+
+Omniglot  Lake et al   
+MANN  no conv  Santoro et al   
+MAML  no conv  ours 
+Siamese nets  Koch   
+matching nets  Vinyals et al   
+neural statistician  Edwards   Storkey   
+memory mod   Kaiser et al   
+MAML  ours 
+
+ shot
+ 
+
+ 
+ 
+ 
+ 
+
+ shot
+ 
+
+ 
+ 
+ 
+ 
+
+ shot
+
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+ shot
+
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+                       
+
+MiniImagenet  Ravi   Larochelle   
+ netuning baseline
+nearest neighbor baseline
+matching nets  Vinyals et al   
+metalearner LSTM  Ravi   Larochelle   
+MAML   rst order approx   ours 
+MAML  ours 
+
+ way Accuracy
+
+ shot
+
+ shot
+
+     
+     
+     
+     
+     
+     
+     
+     
+           
+           
+
+fewer overall parameters compared to matching networks
+and the metalearner LSTM  since the algorithm does not
+introduce any additional parameters beyond the weights
+of the classi er itself  Compared to these prior methods 
+memoryaugmented neural networks  Santoro et al   
+speci cally  and recurrent metalearning models in general  represent   more broadly applicable class of methods that  like MAML  can be used for other tasks such as
+reinforcement learning  Duan et al      Wang et al 
+  However  as shown in the comparison  MAML signi cantly outperforms memoryaugmented networks and
+the metalearner LSTM on  way Omniglot and MiniImagenet classi cation  both in the  shot and  shot case 
+  signi cant computational expense in MAML comes
+from the use of second derivatives when backpropagating the metagradient through the gradient operator in
+the metaobjective  see Equation   On MiniImagenet 
+we show   comparison to    rstorder approximation of
+MAML  where these second derivatives are omitted  Note
+that the resulting method still computes the metagradient
+at the postupdate parameter values  cid 
+   which provides for
+effective metalearning  Surprisingly however  the performance of this method is nearly the same as that obtained
+with full second derivatives  suggesting that most of the
+improvement in MAML comes from the gradients of the
+objective at the postupdate parameter values  rather than
+the second order updates from differentiating through the
+gradient update  Past work has observed that ReLU neural networks are locally almost linear  Goodfellow et al 
+  which suggests that second derivatives may be close
+to zero in most cases  partially explaining the good perfor 
+
+Figure   Top  quantitative results from    navigation task  Bottom  qualitative comparison between model learned with MAML
+and with  netuning from   pretrained network 
+
+mance of the  rstorder approximation  This approximation removes the need for computing Hessianvector products in an additional backward pass  which we found led to
+roughly   speedup in network computation 
+
+  Reinforcement Learning
+
+To evaluate MAML on reinforcement learning problems 
+we constructed several sets of tasks based off of the simulated continuous control environments in the rllab benchmark suite  Duan et al      We discuss the individual
+domains below  In all of the domains  the model trained
+by MAML is   neural network policy with two hidden layers of size   with ReLU nonlinearities  The gradient
+updates are computed using vanilla policy gradient  REINFORCE   Williams    and we use trustregion policy optimization  TRPO  as the metaoptimizer  Schulman
+et al    In order to avoid computing third derivatives 
+
+ModelAgnostic MetaLearning for Fast Adaptation of Deep Networks
+
+the negative absolute value between the current velocity of
+the agent and   goal  which is chosen uniformly at random
+between   and   for the cheetah and between   and
+  for the ant  In the goal direction experiments  the reward is the magnitude of the velocity in either the forward
+or backward direction  chosen at random for each task in
+      The horizon is       with   rollouts per gradient step for all problems except the ant forward backward
+task  which used   rollouts per step  The results in Figure   show that MAML learns   model that can quickly
+adapt its velocity and direction with even just   single gradient update  and continues to improve with more gradient steps  The results also show that  on these challenging
+tasks  the MAML initialization substantially outperforms
+random initialization and pretraining  In fact  pretraining
+is in some cases worse than random initialization    fact
+observed in prior RL work  Parisotto et al   
+
+Figure   Reinforcement learning results for the halfcheetah and ant locomotion tasks  with the tasks shown on the far right  Each
+gradient step requires additional samples from the environment  unlike the supervised learning tasks  The results show that MAML can
+adapt to new goal velocities and directions substantially faster than conventional pretraining or random initialization  achieving good
+performs in just two or three gradient steps  We exclude the goal velocity  random baseline curves  since the returns are much worse
+    for cheetah and     for ant 
+we use  nite differences to compute the Hessianvector
+products for TRPO  For both learning and metalearning
+updates  we use the standard linear feature baseline proposed by Duan et al      which is  tted separately at
+each iteration for each sampled task in the batch  We compare to three baseline models      pretraining one policy on
+all of the tasks and then  netuning      training   policy
+from randomly initialized weights  and     an oracle policy
+which receives the parameters of the task as input  which
+for the tasks below corresponds to   goal position  goal direction  or goal velocity for the agent  The baseline models
+of     and     are  netuned with gradient descent with  
+manually tuned step size  Videos of the learned policies
+can be viewed at sites google com view maml
+   Navigation  In our  rst metaRL experiment  we study
+  set of tasks where   point agent must move to different
+goal positions in     randomly chosen for each task within
+  unit square  The observation is the current    position 
+and actions correspond to velocity commands clipped to be
+in the range     The reward is the negative squared
+distance to the goal  and episodes terminate when the agent
+is within   of the goal or at the horizon of       The
+policy was trained with MAML to maximize performance
+after   policy gradient update using   trajectories  Additional hyperparameter settings for this problem and the
+following RL problems are in Appendix    In our evaluation  we compare adaptation to   new task with up to   gradient updates  each with   samples  The results in Figure  
+show the adaptation performance of models that are initialized with MAML  conventional pretraining on the same set
+of tasks  random initialization  and an oracle policy that
+receives the goal position as input  The results show that
+MAML can learn   model that adapts much more quickly
+in   single gradient update  and furthermore continues to
+improve with additional updates 
+Locomotion  To study how well MAML can scale to more
+complex deep RL problems  we also study adaptation on
+highdimensional locomotion tasks with the MuJoCo simulator  Todorov et al    The tasks require two simulated robots     planar cheetah and      quadruped  the
+ ant    to run in   particular direction or at   particular
+velocity 
+In the goal velocity experiments  the reward is
+
+  Discussion and Future Work
+We introduced   metalearning method based on learning
+easily adaptable model parameters through gradient descent  Our approach has   number of bene ts  It is simple
+and does not introduce any learned parameters for metalearning  It can be combined with any model representation
+that is amenable to gradientbased training  and any differentiable objective  including classi cation  regression  and
+reinforcement learning  Lastly  since our method merely
+produces   weight initialization  adaptation can be performed with any amount of data and any number of gradient steps  though we demonstrate stateof theart results
+on classi cation with only one or  ve examples per class 
+We also show that our method can adapt an RL agent using
+policy gradients and   very modest amount of experience 
+Reusing knowledge from past tasks may be   crucial ingredient in making highcapacity scalable models  such as
+deep neural networks  amenable to fast training with small
+datasets  We believe that this work is one step toward   simple and generalpurpose metalearning technique that can
+be applied to any problem and any model  Further research
+in this area can make multitask initialization   standard ingredient in deep learning and reinforcement learning 
+
+ModelAgnostic MetaLearning for Fast Adaptation of Deep Networks
+
+Acknowledgements
+The authors would like to thank Xi Chen and Trevor Darrell
+for helpful discussions  Yan Duan and Alex Lee for technical advice  Nikhil Mishra  Haoran Tang  and Greg Kahn for
+feedback on an early draft of the paper  and the anonymous
+reviewers for their comments  This work was supported in
+part by an ONR PECASE award and an NSF GRFP award 
+
+References
+Abadi  Mart    Agarwal  Ashish  Barham  Paul  Brevdo 
+Eugene  Chen  Zhifeng  Citro  Craig  Corrado  Greg   
+Davis  Andy  Dean  Jeffrey  Devin  Matthieu  et al  Tensor ow  Largescale machine learning on heterogeneous
+distributed systems  arXiv preprint arXiv 
+ 
+
+Andrychowicz  Marcin  Denil  Misha  Gomez  Sergio 
+Hoffman  Matthew    Pfau  David  Schaul  Tom  and
+de Freitas  Nando  Learning to learn by gradient descent
+by gradient descent  In Neural Information Processing
+Systems  NIPS   
+
+Bengio  Samy  Bengio  Yoshua  Cloutier  Jocelyn  and
+Gecsei  Jan  On the optimization of   synaptic learning
+In Optimality in Arti cial and Biological Neural
+rule 
+Networks  pp     
+
+Bengio  Yoshua  Bengio  Samy  and Cloutier  Jocelyn 
+Learning   synaptic learning rule 
+Universit   de
+Montr eal    epartement   informatique et de recherche
+op erationnelle   
+
+Donahue  Jeff  Jia  Yangqing  Vinyals  Oriol  Hoffman 
+Judy  Zhang  Ning  Tzeng  Eric  and Darrell  Trevor  Decaf    deep convolutional activation feature for generic
+visual recognition  In International Conference on Machine Learning  ICML   
+
+Duan  Yan  Chen  Xi  Houthooft  Rein  Schulman  John 
+and Abbeel  Pieter  Benchmarking deep reinforcement
+In International Conlearning for continuous control 
+ference on Machine Learning  ICML     
+
+Duan  Yan  Schulman  John  Chen  Xi  Bartlett  Peter   
+Sutskever  Ilya  and Abbeel  Pieter  Rl  Fast reinforcement learning via slow reinforcement learning  arXiv
+preprint arXiv     
+
+Edwards  Harrison and Storkey  Amos  Towards   neural
+statistician  International Conference on Learning Representations  ICLR   
+
+Ha  David  Dai  Andrew  and Le  Quoc    Hypernetworks 
+International Conference on Learning Representations
+ ICLR   
+
+Hochreiter  Sepp  Younger    Steven  and Conwell  Peter    Learning to learn using gradient descent 
+In
+International Conference on Arti cial Neural Networks 
+Springer   
+
+Husken  Michael and Goerick  Christian  Fast learning for
+problem classes using knowledge based network initialIn Neural Networks    IJCNN   Proization 
+ceedings of the IEEEINNS ENNS International Joint
+Conference on  volume   pp    IEEE   
+
+Ioffe  Sergey and Szegedy  Christian  Batch normalization 
+Accelerating deep network training by reducing internal
+International Conference on Machine
+covariate shift 
+Learning  ICML   
+
+Kaiser  Lukasz  Nachum       Roy  Aurko  and Bengio 
+Samy  Learning to remember rare events  International
+Conference on Learning Representations  ICLR   
+
+Kingma  Diederik and Ba  Jimmy  Adam    method for
+International Conference on
+
+stochastic optimization 
+Learning Representations  ICLR   
+
+Kirkpatrick  James  Pascanu  Razvan  Rabinowitz  Neil 
+Veness  Joel  Desjardins  Guillaume  Rusu  Andrei   
+Milan  Kieran  Quan  John  Ramalho  Tiago  GrabskaBarwinska  Agnieszka  et al 
+Overcoming catastrophic forgetting in neural networks  arXiv preprint
+arXiv   
+
+Koch  Gregory  Siamese neural networks for oneshot image recognition  ICML Deep Learning Workshop   
+
+Kr ahenb uhl  Philipp  Doersch  Carl  Donahue  Jeff  and
+Darrell  Trevor  Datadependent initializations of convolutional neural networks  International Conference on
+Learning Representations  ICLR   
+
+Lake  Brenden    Salakhutdinov  Ruslan  Gross  Jason 
+and Tenenbaum  Joshua    One shot learning of simple
+visual concepts  In Conference of the Cognitive Science
+Society  CogSci   
+
+Li  Ke and Malik  Jitendra  Learning to optimize  International Conference on Learning Representations  ICLR 
+ 
+
+Goodfellow  Ian    Shlens  Jonathon  and Szegedy  Christian  Explaining and harnessing adversarial examples 
+International Conference on Learning Representations
+ ICLR   
+
+Maclaurin  Dougal  Duvenaud  David  and Adams  Ryan 
+Gradientbased hyperparameter optimization through reIn International Conference on Maversible learning 
+chine Learning  ICML   
+
+ModelAgnostic MetaLearning for Fast Adaptation of Deep Networks
+
+Munkhdalai  Tsendsuren and Yu  Hong  Meta networks  International Conferecence on Machine Learning  ICML   
+
+Snell  Jake  Swersky  Kevin  and Zemel  Richard    Prototypical networks for fewshot learning  arXiv preprint
+arXiv   
+
+Thrun  Sebastian and Pratt  Lorien  Learning to learn 
+
+Springer Science   Business Media   
+
+Todorov  Emanuel  Erez  Tom  and Tassa  Yuval  Mujoco 
+In InterA physics engine for modelbased control 
+national Conference on Intelligent Robots and Systems
+ IROS   
+
+Vinyals  Oriol  Blundell  Charles  Lillicrap  Tim  Wierstra 
+Daan  et al  Matching networks for one shot learning  In
+Neural Information Processing Systems  NIPS   
+
+Wang  Jane    KurthNelson  Zeb  Tirumala  Dhruva 
+Soyer  Hubert  Leibo  Joel    Munos  Remi  Blundell  Charles  Kumaran  Dharshan  and Botvinick 
+Matt  Learning to reinforcement learn  arXiv preprint
+arXiv   
+
+Williams  Ronald    Simple statistical gradientfollowing
+learning 
+
+algorithms for connectionist reinforcement
+Machine learning     
+
+Naik  Devang   and Mammone  RJ  Metaneural networks
+that learn by learning  In International Joint Conference
+on Neural Netowrks  IJCNN   
+
+Parisotto  Emilio  Ba  Jimmy Lei  and Salakhutdinov  Ruslan  Actormimic  Deep multitask and transfer reinforceInternational Conference on Learning
+ment learning 
+Representations  ICLR   
+
+Ravi  Sachin and Larochelle  Hugo  Optimization as  
+In International Confer 
+
+model for fewshot learning 
+ence on Learning Representations  ICLR   
+
+Rei  Marek 
+
+current neural
+arXiv   
+
+Online representation learning in rearXiv preprint
+
+language models 
+
+Rezende  Danilo Jimenez  Mohamed  Shakir  Danihelka 
+Ivo  Gregor  Karol  and Wierstra  Daan  Oneshot generalization in deep generative models  International Conference on Machine Learning  ICML   
+
+Salimans  Tim and Kingma  Diederik    Weight normalization    simple reparameterization to accelerate training
+of deep neural networks  In Neural Information Processing Systems  NIPS   
+
+Santoro  Adam  Bartunov  Sergey  Botvinick  Matthew 
+Wierstra  Daan  and Lillicrap  Timothy  Metalearning
+In Internawith memoryaugmented neural networks 
+tional Conference on Machine Learning  ICML   
+
+Saxe  Andrew  McClelland  James  and Ganguli  Surya 
+Exact solutions to the nonlinear dynamics of learning in
+International Conference
+deep linear neural networks 
+on Learning Representations  ICLR   
+
+Schmidhuber  Jurgen  Evolutionary principles in selfreferential learning  On learning how to learn  The
+metameta  hook  Diploma thesis  Institut    Informatik  Tech  Univ  Munich   
+
+Schmidhuber    urgen  Learning to control fastweight
+memories  An alternative to dynamic recurrent networks  Neural Computation   
+
+Schulman  John  Levine  Sergey  Abbeel  Pieter  Jordan 
+Michael    and Moritz  Philipp  Trust region policy
+optimization  In International Conference on Machine
+Learning  ICML   
+
+Shyam  Pranav  Gupta  Shubham  and Dukkipati  Ambedkar  Attentive recurrent comparators  International Conferecence on Machine Learning  ICML   
+
+

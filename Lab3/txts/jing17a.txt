@@ -1,0 +1,1049 @@
+Tunable Ef cient Unitary Neural Networks  EUNN  and their application to
+
+RNNs
+
+Li Jing     Yichen Shen     Tena Dubcek   John Peurifoy   Scott Skirlo   Yann LeCun   Max Tegmark  
+
+Marin Solja ci    
+
+Abstract
+
+Using unitary  instead of general  matrices in
+arti cial neural networks  ANNs  is   promising way to solve the gradient explosion vanishing
+problem  as well as to enable ANNs to learn
+longterm correlations in the data  This approach appears particularly promising for Recurrent Neural Networks  RNNs  In this work  we
+present   new architecture for implementing an
+Ef cient Unitary Neural Network  EUNNs  its
+main advantages can be summarized as follows 
+Firstly  the representation capacity of the unitary space in an EUNN is fully tunable  ranging from   subspace of SU    to the entire unitary space  Secondly  the computational complexity for training an EUNN is merely    per
+parameter  Finally  we test the performance of
+EUNNs on the standard copying task  the pixelpermuted MNIST digit recognition benchmark
+as well as the Speech Prediction Test  TIMIT 
+We  nd that our architecture signi cantly outperforms both other stateof theart unitary RNNs
+and the LSTM architecture  in terms of the  
+nal performance and or the wallclock training
+speed  EUNNs are thus promising alternatives
+to RNNs and LSTMs for   wide variety of applications 
+
+  Introduction
+Deep Neural Networks  LeCun et al    have been successful on numerous dif cult machine learning tasks  including image recognition Krizhevsky et al    Donahue et al    speech recognition Hinton et al   
+and natural language processing Collobert et al   
+
+ Equal contribution  Massachusetts Institute of Technology
+ New York University  Facebook AI Research  Correspondence
+to  Li Jing  ljing mit edu  Yichen Shen  ycshen mit edu 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+Bahdanau et al    Sutskever et al    However 
+deep neural networks can suffer from vanishing and exploding gradient problems Hochreiter    Bengio et al 
+  which are known to be caused by matrix eigenvalues far from unity being raised to large powers  Because
+the severity of these problems grows with the the depth of
+  neural network  they are particularly grave for Recurrent
+Neural Networks  RNNs  whose recurrence can be equivalent to thousands or millions of equivalent hidden layers 
+Several solutions have been proposed to solve these problems for RNNs  Long Short Term Memory  LSTM  networks  Hochreiter   Schmidhuber    which help
+RNNs contain information inside hidden layers with gates 
+remains one of the the most popular RNN implementations 
+Other recently proposed methods such as GRUs Cho et al 
+  and Bidirectional RNNs  Berglund et al    also
+perform well in numerous applications  However  none of
+these approaches has fundamentally solved the vanishing
+and exploding gradient problems  and gradient clipping is
+often required to keep gradients in   reasonable range 
+  recently proposed solution strategy is using orthogonal hidden weight matrices or their complex generalization
+ unitary matrices   Saxe et al    Le et al    Arjovsky et al    Henaff et al    because all their
+eigenvalues will then have absolute values of unity  and can
+safely be raised to large powers  This has been shown to
+help both when weight matrices are initialized to be unitary  Saxe et al    Le et al    and when they are
+kept unitary during training  either by restricting them to  
+more tractable matrix subspace  Arjovsky et al    or
+by alternating gradientdescent steps with projections onto
+the unitary subspace  Wisdom et al   
+In this paper  we will  rst present an Ef cient Unitary Neural Network  EUNN  architecture that parametrizes the entire space of unitary matrices in   complete and computationally ef cient way  thereby eliminating the need for
+timeconsuming unitary subspaceprojections  Our architecture has   wide range of capacitytunability to represent
+subspace unitary models by  xing some of our parameters 
+the abovementioned unitary subspace models correspond
+to special cases of our architecture  We also implemented
+
+Tunable Ef cient Unitary Neural Networks  EUNN  and their application to RNNs
+
+an EUNN with an earlier introduced FFTlike architecture
+which ef ciently approximates the unitary space with minimum number of required parameters Mathieu   LeCun 
+   
+We then benchmark EUNN   performance on both simulated and real tasks  the standard copying task  the pixelpermuted MNIST task  and speech prediction with the
+TIMIT dataset  Garofolo et al    We show that our
+EUNN algorithm with an       hidden layer size can
+compute up to the entire       gradient matrix using
+   computational steps and memory access per parameter  This is superior to the       computational complexity
+of the existing training method for   fullspace unitary network  Wisdom et al    and   log     more ef cient
+than the subspace Unitary RNN Arjovsky et al   
+
+  Background
+  Basic Recurrent Neural Networks
+
+  recurrent neural network takes an input sequence and
+uses the current hidden state to generate   new hidden state
+during each step  memorizing past information in the hidden layer  We  rst review the basic RNN architecture 
+Consider an RNN updated at regular time intervals    
+      whose input is the sequence of vectors      whose
+hidden layer      is updated according to the following
+rule 
+
+        Ux            
+
+ 
+
+where   is the nonlinear activation function  The output is
+generated by
+
+       Wh        
+
+ 
+
+where   is the bias vector for the hiddento output layer 
+For       the hidden layer    can be initialized to some
+special vector or set as   trainable variable  For convenience of notation  we de ne        Ux      Wh   
+so that             
+
+  The Vanishing and Exploding Gradient Problems
+
+When training the neural network to minimize   cost function   that depends on   parameter vector    the gradient
+descent method updates this vector to         
+     where  
+         For an RNN  the
+is    xed learning rate and   
+vanishing or exploding gradient problem is most signi 
+cant during back propagation from hidden to hidden layers  so we will only focus on the gradient for hidden layers 
+Training the inputto hidden and hiddento output matrices
+is relatively trivial once the hiddento hidden matrix has
+been successfully optimized 
+In order to evaluate   
+ Wij
+
+  one  rst computes the derivative
+
+  
+
+      using the chain rule 
+
+  
+     
+
+ 
+
+ 
+
+ 
+
+  
+
+      
+
+  
+
+      
+
+  
+
+      
+
+      
+     
+
+  cid 
+  cid 
+
+   
+
+     
+     
+
+      
+
+   
+
+ 
+
+ 
+
+ 
+
+where        diag cid Ux      Wh    is the Jacobian matrix of the pointwise nonlinearity  For large times
+
+    the term  cid    plays   signi cant role  As long as
+the eigenvalues of      are of order unity  then if   has
+eigenvalues     cid    they will cause gradient explosion
+           while if   has eigenvalues     cid    they
+    
+can cause gradient vanishing      
+           Either situation
+prevents the RNN from working ef ciently 
+
+  Unitary RNNs
+  Partial Space Unitary RNNs
+
+In   breakthrough paper  Arjovsky  Shah   Bengio  Arjovsky et al    showed that unitary RNNs can overcome the exploding and vanishing gradient problems and
+perform well on long term memory tasks if the hiddento hidden matrix in parametrized in the following unitary
+form 
+
+              FD 
+
+ cid      where cid   is   vector with each of its en 
+
+ 
+Here    are diagonal matrices with each element
+ei                     are re ection matrices  and
+           cid   cid   
+tries as   parameter to be trained    is    xed permutation
+matrix    and    are Fourier and inverse Fourier transform matrices respectively  Since each factor matrix here
+is unitary  the product   is also   unitary matrix 
+This model uses       parameters  which spans merely
+  part of the whole      dimensional space of unitary
+      matrices to enable computational ef ciency  Several subsequent papers have tried to expand the space to
+      in order to achieve better performance  as summarized below 
+
+  Full Space Unitary RNNs
+
+In order to maximize the power of Unitary RNNs  it is
+preferable to have the option to optimize the weight matrix   over the full space of unitary matrices rather than
+  subspace as above    straightforward method for implementing this is by simply updating   with standard backpropagation and then projecting the resulting matrix  which
+will typically no longer be unitary  back onto to the space
+
+Tunable Ef cient Unitary Neural Networks  EUNN  and their application to RNNs
+
+ Wij
+
+of unitary matrices  De ning Gij     
+as the gradient
+with respect to    this can be implemented by the procedure de ned by  Wisdom et al   
+ cid cid 
+           
+ 
+ 
+
+ cid 
+           
+
+    
+     
+ 
+
+      
+
+    
+
+ cid 
+
+    
+
+    
+
+   
+
+ 
+
+This method shows that full space unitary networks are superior on many RNN tasks  Wisdom et al      key
+limitation is that the backpropation in this method cannot avoid Ndimensional matrix multiplication  incurring
+      computational cost 
+
+  Ef cient Unitary Neural Network  EUNN 
+
+Architectures
+
+In the following  we  rst describe   general parametrization
+method able to represent arbitrary unitary matrices with up
+to     degrees of freedom  We then present an ef cient
+algorithm for this parametrization scheme  requiring only
+   computational and memory access steps to obtain the
+gradient for each parameter  Finally  we show that our
+scheme performs signi cantly better than the above mentioned methods on   few wellknown benchmarks 
+
+  Unitary Matrix Parametrization
+Any       unitary matrix WN can be represented as  
+product of rotation matrices  Rij  and   diagonal matrix
+   Rij  where Rij is
+de ned as the Ndimensional identity matrix with the elements Rii  Rij  Rji and Rjj replaced as follows  Reck
+et al    Clements et al   
+
+   such that WN     cid  
+ cid Rii Rij
+
+ cid ei ij cos  ij  ei ij sin  ij
+
+ cid   
+
+ cid 
+
+ cid 
+
+  
+
+ 
+
+ 
+
+Rji Rjj
+
+sin  ij
+
+cos  ij
+
+ 
+
+where  ij and  ij are unique parameters corresponding
+to Rij  Each of these matrices performs       unitary
+transformation on   twodimensional subspace of the Ndimensional Hilbert space  leaving an     dimensional
+subspace unchanged  In other words    series of     rotations can be used to successively make all offdiagonal
+elements of the given       unitary matrix zero  This
+generalizes the familiar factorization of      rotation matrix into    rotations parametrized by the three Euler angles  To provide intuition for how this works  let us brie  
+describe   simple way of doing this that is similar to Gaussian elimination by  nishing one column at   time  There
+are in nitely many alternative decomposition schemes as
+well  Fig    shows two that are particularly convenient to
+implement in software  and even in neuromorphic hardware  Shen et al    The unitary matrix WN is multiplied from the right by   succession of unitary matrices
+
+RN   for               Once all elements of the last
+row except the one on the diagonal are zero  this row will
+not be affected by later transformations  Since all transformations are unitary  the last column will then also contain
+only zeros except on the diagonal 
+WN RN   RN       RN   
+
+ cid WN 
+
+ cid 
+
+ 
+
+ 
+
+ 
+
+eiwN
+
+Figure   Unitary matrix decomposition  An arbitrary unitary
+matrix   can be decomposed     with the square decomposition method of Clements et al   Clements et al    discussed
+in section   or approximated     by the Fast Fourier Transformation FFT  style decomposition method  Mathieu   LeCun 
+    discussed in section   Each junction in the    and   
+graphs above represent the    matrix as shown in   
+
+The effective dimensionality of the the matrix   is thus
+reduced to    The same procedure can then be repeated
+      times until the effective dimension of   is reduced
+to   leaving us with   diagonal matrix 
+WN RN   RN      Ri jRi               
+ 
+where   is   diagonal matrix whose diagonal elements are
+eiwj   from which we can write the direct representation of
+WN as
+
+WN   DR 
+
+   
+   cid 
+
+          
+          cid 
+
+      
+      cid 
+
+    
+    
+
+  DR cid 
+
+ 
+
+where
+ij     ij ij      ij   ij      
+  cid 
+ Note that Gaussian Elimination would make merely the upper triangle of   matrix vanish  requiring   subsequent series of
+rotations  complete GaussJordan Elimination  to zero the lower
+triangle  We need no such subsequent series because since   is
+unitary  it is easy to show that if   unitary matrix is triangular  it
+must be diagonal 
+
+ 
+
+ij
+
+ WR Tunable Ef cient Unitary Neural Networks  EUNN  and their application to RNNs
+
+ cid 
+ cid 
+
+       
+  DF 
+
+ cid 
+
+ cid 
+
+This parametrization thus involves          different
+ ijvalues           different  ijvalues and   different wivalues  combining to     parameters in total and
+spans the entire unitary space  Note we can always     
+portion of our parameters  to span only   subset of unitary
+space   indeed  our benchmark test below will show that
+for certain tasks  full unitary space parametrization is not
+necessary   
+
+  Tunable space implementation
+
+The representation in Eq    can be made more compact
+by reordering and grouping speci   rotational matrices  as
+was shown in the optical community  Reck et al   
+Clements et al    in the context of universal multiport
+interferometers  For example  Clements et al      unitary matrix can be decomposed as
+
+WN    
+
+  
+
+   
+   
+
+          
+          
+
+  
+
+    
+
+    
+
+    
+
+            
+   
+
+ 
+
+where every
+
+    
+        
+
+     
+
+            
+
+    
+
+is   block diagonal matrix  with   angle parameters in total  and
+
+    
+        
+
+     
+
+            
+
+    
+
+with    parameters  as is schematically shown in Fig     
+By choosing different values for     WN will span   different subspace of the unitary space  Speci cally when
+       WN will span the entire unitary space 
+Following this physicsinspired scheme  we decompose our
+unitary hiddento hidden layer matrix   as
+        
+   
+
+    DF 
+
+    
+
+    
+
+    
+
+ 
+
+  FFTstyle approximation
+
+Inspired by  Mathieu   LeCun      an alternative way
+to organize the rotation matrices is implementing an FFTstyle architecture  Instead of using adjacent rotation matrices  each   here performs   certain distance pairwise rotations as shown in Fig     
+
+    DF          Flog    
+
+ 
+
+The rotation matrices in Fi are performed between pairs of
+coordinates
+
+ pk                  
+
+ 
+
+ Our preliminary experimental tests even suggest that   full 
+
+capacity unitary RNN is even undesirable for some tasks 
+
+                 and           
+where      
+This requires only log     matrices  so there are   total
+of   log     rotational pairs  This is also the minimal
+number of rotations that can have all input coordinates interacting with each other  providing an approximation of
+arbitrary unitary matrices 
+
+  Ef cient implementation of rotation matrices
+
+To implement this decomposition ef ciently in an RNN 
+we apply vector elementwise multiplications and permutations  we evaluate the product Fx as
+
+Fx                 permute   
+
+ 
+where   represents elementwise multiplication    refers to
+general rotational matrices such as FA   in Eq    and Fi
+in Eq    For the case of the tunablespace implementation  if we want to implement     
+  in Eq    we de ne  
+and the permutation as follows 
+
+  cos    
+
+    cos    
+    sin    
+
+    ei   
+   ei   
+
+      ei   
+      ei   
+
+     
+  cos    
+     
+  sin    
+permute                          
+For the FFTstyle approach  if we want to implement    in
+Eq   we de ne   and the permutation as follows 
+
+    cos    
+  sin   sin    
+
+      ei   
+      ei   
+
+  cos    
+  sin    
+
+    ei   
+   ei   
+
+permute          
+
+      cos    
+  cos    
+  sin     sin    
+
+     
+     
+      xn           
+
+       
+
+In general  the pseudocode for implementing operation  
+is as follows 
+
+Algorithm   Ef cient implementation for   with parameter    and    
+
+Input  input    size    parameters   and   size   
+constant permuatation index list ind  and ind 
+Output  output    size   
+     concatenate cos   cos     exp   
+     concatenate sin     sin     exp   
+     permute    ind 
+     permute    ind 
+                  permute    ind 
+
+Note that ind  and ind  are different for different   
+From   computational complexity viewpoint  since the operations   and permute take       computational steps 
+evaluating Fx only requires       steps  The product Dx
+is trivial  consisting of an elementwise vector multiplication  Therefore  the product Wx with the total unitary
+
+Tunable Ef cient Unitary Neural Networks  EUNN  and their application to RNNs
+
+matrix   can be computed in only        steps  and
+only requires        memory access  for fullspace implementation        for FFTstyle approximation gives
+    log      detailed comparison on computational
+complexity of the existing unitary RNN architectures is
+given in Table  
+
+  Nonlinearity
+
+We use the same nonlinearity as  Arjovsky et al   
+
+ modReLU         
+
+zi zi    ReLU zi    bi 
+
+ 
+
+where the bias vector   is   shared trainable parameter  and
+ zi  is the norm of the complex number zi 
+For real number input  modReLU can be simpli ed to 
+ modReLU          sign zi    ReLU zi    bi 
+where  zi  is the absolute value of the real number zi 
+We empirically  nd that this nonlinearity function performs
+the best  We believe that this function possibly also serves
+as   forgetting  lter that removes the noise using the bias
+threshold 
+
+ 
+
+  Experimental tests of our method
+In this section  we compare the performance of our Ef 
+cient Unitary Recurrent Neural Network  EURNN  with
+
+  an LSTM RNN  Hochreiter   Schmidhuber   
+
+    Partial Space URNN  Arjovsky et al    and
+
+    Projective fullspace URNN  Wisdom et al   
+
+All models are implemented in both Tensor ow and
+from https github com 
+Theano 
+jingli EUNNtensorflow
+https 
+ github com iguanaus EUNNtheano 
+
+available
+
+and
+
+  Copying Memory Task
+
+We compare these networks by applying them all to the
+well de ned Copying Memory Task  Hochreiter   Schmidhuber    Arjovsky et al    Henaff et al   
+The copying task is   synthetic task that is commonly used
+to test the network   ability to remember information seen
+  time steps earlier 
+Speci cally  the task is de ned as follows  Hochreiter  
+Schmidhuber    Arjovsky et al    Henaff et al 
+  An alphabet consists of symbols  ai  the  rst   of
+which represent data  and the remaining two representing
+ blank  and  start recall  respectively  as illustrated by the
+following example where       and      
+
+Input 
+BACCA 
+Output   BACCA
+In the above example        and  ai               
+The input consists of   random data symbols       
+above  followed by       blanks  the  start recall  symbol
+and   more blanks  The desired output consists of      
+blanks followed by the data sequence  The cost function
+  is de ned as the cross entropy of the input and output
+sequences  which vanishes for perfect performance 
+We use       and input length       The symbol
+for each input is represented by an ndimensional onehot
+vector  We trained all  ve RNNs for       with the
+same batch size   using RMSProp optimization with  
+learning rate of   The decay rate is set to   for EURNN  and   for all other models respectively   Fig   
+This results show that the EURNN architectures introduced
+in both Sec   EURNN with    selecting    and
+Sec   FFTstyle EURNN with    outperform the
+LSTM model  which suffers from long term memory problems and only performs well on the copy task for small time
+delays     and all other unitary RNN models  both interms
+of learnability and interms of convergence rate  Note that
+the only other unitary RNN model that is able to beat the
+baseline for        Wisdom et al    is signi 
+cantly slower than our method 
+Moreover  we  nd that by either choosing smaller   or by
+using the FFTstyle method  so that   spans   smaller unitary subspace  the EURNN converges toward optimal performance signi cantly more ef ciently  and also faster in
+wall clock time  than the partial  Arjovsky et al    and
+projective  Wisdom et al    unitary methods  The EURNN also performed more robustly  This means that   fullcapacity unitary matrix is not necessary for this particular
+task 
+
+  PixelPermuted MNIST Task
+
+The MNIST handwriting recognition problem is one of the
+classic benchmarks for quantifying the learning ability of
+neural networks  MNIST images are formed by    
+grayscale image with   target label between   and  
+To test different RNN models  we feed all pixels of the
+MNIST images into the RNN models in   time steps 
+where one pixel at   time is fed in as    oatingpoint number     xed random permutation is applied to the order
+of input pixels  The output is the probability distribution
+quantifying the digit prediction  We used RMSProp with  
+learning rate of   and   decay rate of   and set the
+batch size to  
+As shown in Fig    EURNN signi cantly outperforms
+LSTM with the same number of parameters  It learns faster 
+in fewer iteration steps  and converges to   higher classi 
+
+Tunable Ef cient Unitary Neural Networks  EUNN  and their application to RNNs
+
+Table   Performance comparison of four Recurrent Neural Network algorithms  URNN  Arjovsky et al    PURNN  Wisdom et al 
+  and EURNN  our algorithm    denotes the RNN length and   denotes the hidden state size  For the tunablestyle EURNN   
+is an integer between   and   parametrizing the unitary matrix capacity 
+
+Model
+
+URNN
+PURNN
+
+EURNN  tunable style 
+
+EURNN  FFT style 
+
+Time complexity of one
+
+online gradient step
+      log    
+             
+      log    
+
+        
+
+number of parameters
+in the hidden matrix
+
+     
+     
+      
+
+    log    
+
+Transition matrix
+
+search space
+
+subspace of      
+full space of      
+
+tunable space of      
+
+subspace of      
+
+Table   MNIST Task result  EURNN corresponds to our algorithm  PURNN corresponds to algorithm presented in  Wisdom et al 
+  URNN corresponds to the algorithm presented in  Arjovsky et al   
+
+Model
+
+hidden size
+ capacity 
+
+number of
+parameters
+
+validation
+accuracy
+
+test
+
+accuracy
+
+LSTM
+URNN
+PURNN
+
+EURNN  tunable style 
+
+EURNN  FFT style 
+
+ 
+ 
+ 
+
+   
+   FFT 
+
+  
+  
+  
+  
+  
+
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+
+Figure   Copying Task for       EURNN corresponds to
+our algorithm  projective URNN corresponds to algorithm presented in  Wisdom et al    URNN corresponds to the algorithm presented in  Arjovsky et al      useful baseline performance is that of the memoryless strategy  which outputs     
+blanks followed by   random data symbols and produces   cross
+entropy        log                Note that each iteration
+for PURNN takes about   times longer than for EURNN models  for this particular simulation  so the speed advantage is much
+greater than apparent in this plot 
+
+cation accuracy  In addition  the EURNN reaches   similar
+accuracy with fewer parameters  In Table    we compare
+the performance of different RNN models on this task 
+
+Figure   Pixelpermuted MNIST performance on the validation
+dataset 
+
+  Speech Prediction on TIMIT dataset
+
+We also apply our EURNN to realworld speech prediction task and compare its performance to LSTM  The main
+task we consider is predicting the logmagnitude of future
+frames of   shorttime Fourier transform  STFT   Wisdom
+et al    Sejdi et al    We use the TIMIT dataset
+ Garofolo et al    sampled at   kHz  The audio  wav
+ le is initially diced into different time frames  all frames
+have the same duration referring to the Hann analysis window below  The audio amplitude in each frame is then
+
+ Training iterations Cross EntropyCopying Memory Task  delay time   EURNN with      EURNN with    FFTPURNN with   URNN with   LSTM with   baseline Training iterations AccuracyPermutedPixel MNIST TaskEURNN with      EURNN with    FFTLSTM with   Tunable Ef cient Unitary Neural Networks  EUNN  and their application to RNNs
+
+Table   Speech Prediction Task result  EURNN corresponds to our algorithm  projective URNN corresponds to algorithm presented in
+ Wisdom et al    URNN corresponds to the algorithm presented in  Arjovsky et al   
+
+Model
+
+hidden size
+ capacity 
+
+number of
+parameters
+
+MSE
+
+ validation 
+
+LSTM
+LSTM
+
+EURNN  tunable style 
+EURNN  tunable style 
+EURNN  tunable style 
+
+EURNN  FFT style 
+
+ 
+ 
+
+   
+   
+   
+   FFT 
+
+  
+  
+  
+  
+  
+  
+
+ 
+ 
+ 
+ 
+ 
+ 
+
+MSE
+ test 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Figure   Example spectrograms of ground truth and RNN prediction results from evaluation sets 
+
+Fourier transformed into the frequency domain  The logmagnitude of the Fourier amplitude is normalized and used
+as the data for training testing each model  In our STFT
+operation we uses   Hann analysis window of   samples   milliseconds  and   window hop of   samples
+  milliseconds  The frame prediction task is as follows 
+given all the logmagnitudes of STFT frames up to time   
+predict the logmagnitude of the STFT frame at time      
+that has the minimum mean square error  MSE  We use
+
+  training set with   utterances    validation set of  
+utterances and an evaluation set of   utterances  The
+training  validation  and evaluation sets have distinct speakers  We trained all RNNs for with the same batch size  
+using RMSProp optimization with   learning rate of  
+  momentum of   and   decay rate of  
+The results are given in Table    in terms of the meansquared error  MSE  loss function  Figure    shows prediction examples from the three types of networks  illustrat 
+
+Tunable Ef cient Unitary Neural Networks  EUNN  and their application to RNNs
+
+ing how EURNNs generally perform better than LSTMs 
+Furthermore  in this particular task  fullcapacity EURNNs
+outperform small capacity EURNNs and FFTstyle EURNNs 
+
+  Conclusion
+We have presented   method for implementing an Ef cient
+Unitary Neural Network  EUNN  whose computational
+cost is merely    per parameter  which is   log    
+more ef cient than the other methods discussed above  It
+signi cantly outperforms existing RNN architectures on
+the standard Copying Task  and the pixelpermuted MNIST
+Task using   comparable parameter count  hence demonstrating the highest recorded ability to memorize sequential
+information over long time periods 
+It also performs well on real tasks such as speech prediction  outperforming an LSTM on TIMIT data speech prediction 
+We want to emphasize the generality and tunability of our
+method  The ordering of the rotation matrices we presented
+in Fig    are merely two of many possibilities  we used it
+simply as   concrete example  Other ordering options that
+can result in spanning the full unitary matrix space can be
+used for our algorithm as well  with identical speed and
+memory performance  This tunability of the span of the
+unitary space and  correspondingly  the total number of parameters makes it possible to use different capacities for
+different tasks  thus opening the way to an optimal performance of the EUNN  For example  as we have shown   
+small subspace of the full unitary space is preferable for the
+copying task  whereas the MNIST task and TIMIT task are
+better performed by EUNN covering   considerably larger
+unitary space  Finally  we note that our method remains
+applicable even if the unitary matrix is decomposed into  
+different product of matrices  Eq   
+This powerful and robust unitary RNN architecture also
+might be promising for natural language processing because of its ability to ef ciently handle tasks with longterm
+correlation and very high dimensionality 
+
+Acknowledgment
+We thank Hugo Larochelle and Yoshua Bengio for helpful
+discussions and comments 
+This work was partially supported by the Army Research
+Of ce through the Institute for Soldier Nanotechnologies
+under contract   NF    the National Science
+Foundation under Grant No  CCF  and the Rothberg Family Fund for Cognitive Science 
+
+References
+Arjovsky  Martin  Shah  Amar  and Bengio  Yoshua  Unitary evolution recurrent neural networks  arXiv preprint
+arXiv   
+
+Bahdanau  Dzmitry  Cho  Kyunghyun  and Bengio 
+Yoshua  Neural machine translation by jointly learning
+to align and translate  arXiv preprint arXiv 
+ 
+
+Bengio  Yoshua  Simard  Patrice  and Frasconi  Paolo 
+Learning longterm dependencies with gradient descent
+is dif cult  IEEE transactions on neural networks   
+   
+
+Berglund  Mathias  Raiko  Tapani  Honkala  Mikko 
+  arkk ainen  Leo  Vetek  Akos  and Karhunen  Juha   
+Bidirectional recurrent neural networks as generative
+models  In Advances in Neural Information Processing
+Systems  pp     
+
+Cho  Kyunghyun  Van Merri enboer  Bart  Bahdanau 
+Dzmitry  and Bengio  Yoshua  On the properties of neural machine translation  Encoderdecoder approaches 
+arXiv preprint arXiv   
+
+Clements  William    Humphreys  Peter    Metcalf  Benjamin    Kolthammer     Steven  and Walmsley  Ian   
+An optimal design for universal multiport interferometers    arXiv 
+
+Collobert  Ronan  Weston  Jason  Bottou    eon  Karlen 
+Michael  Kavukcuoglu  Koray  and Kuksa  Pavel  Natural language processing  almost  from scratch  Journal
+of Machine Learning Research   Aug 
+ 
+
+Donahue  Jeffrey  Anne Hendricks  Lisa  Guadarrama 
+Sergio  Rohrbach  Marcus  Venugopalan  Subhashini 
+Saenko  Kate  and Darrell  Trevor  Longterm recurrent convolutional networks for visual recognition and
+In Proceedings of the IEEE Conference
+description 
+on Computer Vision and Pattern Recognition  pp   
+   
+
+Garofolo  John    Lamel  Lori    Fisher  William    Fiscus 
+Jonathon    and Pallett  David    Darpa timit acousticphonetic continous speech corpus cdrom  nist speech
+disc   NASA STI Recon technical report       
+
+Henaff  Mikael  Szlam  Arthur  and LeCun  Yann  Orthogonal rnns and longmemory tasks  arXiv preprint
+arXiv   
+
+Hinton  Geoffrey  Deng  Li  Yu  Dong  Dahl  George   
+Mohamed  Abdelrahman  Jaitly  Navdeep  Senior  Andrew  Vanhoucke  Vincent  Nguyen  Patrick  Sainath 
+
+Tunable Ef cient Unitary Neural Networks  EUNN  and their application to RNNs
+
+Tara    et al  Deep neural networks for acoustic modeling in speech recognition  The shared views of four
+research groups  IEEE Signal Processing Magazine   
+   
+
+Sutskever  Ilya  Vinyals  Oriol  and Le  Quoc   
+
+Sequence to sequence learning with neural networks 
+In
+Advances in neural information processing systems  pp 
+   
+
+Wisdom  Scott  Powers  Thomas  Hershey  John  Le Roux 
+Jonathan  and Atlas  Les  Fullcapacity unitary recurrent neural networks  In Advances In Neural Information
+Processing Systems  pp     
+
+Hochreiter  Sepp 
+
+Untersuchungen zu dynamischen
+neuronalen netzen  Diploma  Technische Universit at
+  unchen  pp     
+
+Hochreiter  Sepp and Schmidhuber    urgen  Long shortterm memory  Neural computation   
+ 
+
+Krizhevsky  Alex  Sutskever  Ilya  and Hinton  Geoffrey   
+Imagenet classi cation with deep convolutional neural
+networks  In Advances in neural information processing
+systems  pp     
+
+Le  Quoc    Jaitly  Navdeep  and Hinton  Geoffrey     
+simple way to initialize recurrent networks of recti ed
+linear units  arXiv preprint arXiv   
+
+LeCun  Yann  Bengio  Yoshua  and Hinton  Geoffrey  Deep
+
+learning  Nature     
+
+Mathieu  Michael and LeCun  Yann  Fast approximation of rotations and hessians matrices  arXiv preprint
+arXiv     
+
+Mathieu  Michal and LeCun  Yann  Fast approximation of
+rotations and hessians matrices  CoRR  abs 
+   
+URL http arxiv org abs 
+ 
+
+Reck  Michael  Zeilinger  Anton  Bernstein  Herbert   
+realization of
+and Bertani  Philip 
+Phys  Rev  Lett 
+any discrete unitary operator 
+ PhysRevLett 
+ 
+  URL http link aps org doi 
+ PhysRevLett 
+
+Experimental
+
+Jul  
+
+doi 
+
+Saxe  Andrew    McClelland  James    and Ganguli 
+Surya  Exact solutions to the nonlinear dynamics of
+learning in deep linear neural networks  arXiv preprint
+arXiv   
+
+Sejdi  Ervin  Djurovi  Igor  and Jiang  Jin 
+
+Timefrequency feature representation using energy concentration  An overview of recent advances  Digital Signal Processing         
+ISSN  
+ 
+http dx doi org   dsp 
+  URL http www sciencedirect com 
+science article pii     
+
+doi 
+
+Shen  Yichen  Harris  Nicholas    Skirlo  Scott  Prabhu 
+Mihika  BaehrJones  Tom  Hochberg  Michael  Sun 
+Xin  Zhao  Shijie  Larochelle  Hugo  Englund  Dirk 
+et al  Deep learning with coherent nanophotonic circuits 
+arXiv preprint arXiv   
+
+

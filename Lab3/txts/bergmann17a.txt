@@ -1,0 +1,778 @@
+Learning Texture Manifolds with the Periodic Spatial GAN
+
+Urs Bergmann     Nikolay Jetchev     Roland Vollgraf  
+
+Abstract
+
+This paper introduces   novel approach to texture synthesis based on generative adversarial
+networks  GAN   Goodfellow et al    and
+call this technique Periodic Spatial GAN  PSGAN  The PSGAN has several novel abilities
+which surpass the current state of the art in texture synthesis  First  we can learn multiple textures  periodic or nonperiodic  from datasets of
+one or more complex large images  Second 
+we show that the image generation with PSGANs has properties of   texture manifold  we
+can smoothly interpolate between samples in the
+structured noise space and generate novel samples  which lie perceptually between the textures
+of the original dataset  We make multiple experiments which show that PSGANs can  exibly
+handle diverse texture and image data sources 
+and the method is highly scalable and can generate output images of arbitrary large size 
+
+  Introduction
+  Textures and Texture Synthesis
+
+Textures are important perceptual elements  both in the
+real world and in the visual arts  Many textures have random noise characteristics  formally de ned as stationary 
+ergodic  stochastic processes
+ Georgiadis et al   
+There are many natural image examples with such properties       rice randomly spread on the ground  However 
+more complex textures also exist in nature       those that
+exhibit periodicity like   honeycomb or  sh scales 
+The goal of texture synthesis is to learn from   given example image   generating process  which allows to create
+many images with similar properties  Classical texture synthesis methods include instance based approaches  Efros
+
+ Equal contribution  Zalando Research  Berlin  Correspondence to  Urs Bergmann  urs bergmann zalando de  Nikolay Jetchev  nikolay jetchev zalando de  Roland Vollgraf
+ roland vollgraf zalando de 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+  Leung    Efros   Freeman    where pixels or
+patches of the source image are resampled and copied next
+to similar image regions  so that   seamless bigger texture
+image is obtained  Such methods have good visual quality
+and can deal with periodic images  but have   high runtime complexity when generating big images  In addition 
+since they do not learn an explicit model of images but just
+copy patches from the original pixels  they cannot be used
+to generate novel textures from multiple examples 
+Parametric methods de ne an explicit model of    good 
+texture by specifying some statistical properties  new texture images that are optimal        the speci ed criteria are
+synthesized by optimization  The method of  Portilla  
+Simoncelli    yields good results in creating various
+textures  including periodic ones  the parametric statistics
+include phase variables of prespeci ed periodicity  However  the runtime complexity is high  even for small output
+images  The authors also tried blending of textures  but
+the results were not satisfactory  patchwise mixtures were
+obtained  rather than   new homogeneous texture that perceptually interpolates the originals 
+More recently  deep learning methods were shown to be
+  powerful  fast and datadriven  parametric approach to
+texture synthesis  The work of  Gatys et al      is
+  milestone 
+they showed that  lters from   discriminatively trained deep neural network can be used as effective
+parametric image descriptors  Texture synthesis is modeled as an optimization problem   Gatys et al      also
+showed the interesting application of painting   target content photo in the style of   given input image   neural
+art style transfer  Related works speedup texture synthesis and style transfer by approximating the optimization
+process by feedforward convolutional networks  Ulyanov
+et al    Johnson et al   
+However  the choice of descriptor in all of these related
+works   the Gram matrix of learned  lters   is   speci  
+prior on the learnable textures for the method  It generalizes to many  but not all textures        periodic textures are
+reproduced inaccurately  Another limitation is that texture
+synthesis is performed from   single example image only 
+lacking the ability to represent and morph textures de ned
+by several different images  In   related work   Dumoulin
+et al    explored the blending of multiple styles by
+
+Learning Texture Manifolds
+
+Figure   PSGANs can extract textures from complex datasets of natural images  here the Oxford Describable Textures Dataset  Cimpoi
+et al      category  scaly  The image shows   quilt of     different tiles  each containing   novel synthesized texture  not originally
+in the dataset  Methodologically  the image is created by setting the global dimensions of the noise tensor    spatial dimensions    
+to be identical for local regions of     spatial dimensions  resulting in   generated image of   total size     in pixels 
+
+parametrically mixing their statistical descriptors  The results are interesting in terms of image stylization  but the
+synthesis of novel blended textures has not been shown 
+
+  GANs
+
+Purely data driven generative models are an alternative
+deep learning approach to texture synthesis 
+Introduced
+in  Goodfellow et al    generative adversarial networks  GAN  train   model   that learns   data distribution from example data  and   discriminator   that attempts to distinguish generated from training data  The
+GAN architecture was further improved  Radford et al 
+  by using deep convolutional layers with  fractional 
+stride  GANs have successfully created  natural  images
+of great perceptual quality that can fool even human observers  However  pixel resolution is usually low  and the
+output image size is prespeci ed and  xed at training time 
+For the texture synthesis use case  fully convolutional
+layers  which can scale to any image size  are advantageous   Li   Wand    presented an interesting architecture  that combines ideas from GANs and the pretrained
+descriptor of  Gatys et al      in order to generate small
+patches with the statistics of layer activations from the
+VGG network  This method allows fast texture synthesis
+and style transfer 
+Spatial GAN  SGAN   Jetchev et al    applied for
+
+the  rst time fully unsupervised GANs for texture synthesis  SGANs had properties like good scalability        speed
+and memory  and showed excellent results on certain texture classes  surpassing the results of  Gatys et al     
+However  some classes of textures cannot be handled  and
+no plausible texture morphing is possible 
+The current contribution  PSGAN  makes   great step forward with respect to the types of images   neural texture synthesis method can create   both periodic and nonperiodic images are learned in an unsupervised way from
+single images or large datasets of images  Afterwards   exible sampling in the noise space allows to create novel textures of potentially in nite output size  and smoothly transition between them  Figure   shows   few example textures generated with   PSGAN  In the next section we describe in detail the architecture of the PSGAN  and then
+proceed to illustrate its abilities with   number of experiments 
+
+  Methods  Periodic GAN
+In GANs  the generative model      maps   noise vector
+  to the input data space  As in SGANs  Jetchev et al 
+  we generalize the generator      to map   noise
+
+Our source code is available at https github com 
+
+ubergmann psgan
+
+Learning Texture Manifolds
+
+Figure   Illustration of the PSGAN model    The fully convolutional generator network      maps   spatial tensor        and  
+being the spatial indices  to an input image    Every subvector at   spatial location in         the blue or green columns in the Figure 
+map to   limited area in    To alleviate the independence property of distant areas in   we construct the   tensor out of three parts 
+  local part        global part     and   periodic part       see text  As usual in GAN training  the discriminator gets either   generated
+image   or  as in    an image patch   cid  from the real data distribution 
+
+tensor     RL     to an image     RH    see
+Figure   The  rst two dimensions    and    are spatial
+dimensions  and are blown up by the generator      to the
+respective input spatial dimensions       and       
+The  nal dimension of       is the channel dimension 
+In analogy to the extension of the generator    we extend
+the discriminator   to map from an input image   to  
+twodimensional  eld of spatial size        Each position of the resulting discriminator             
+  and            responds only to   local part    which
+we call     effective receptive  eld  The response of
+     represents the estimated probability that the respective part of   is real instead of being generated by   
+As the discriminator outputs    eld  we extend the standard
+GAN cost function          to marginalize spatially 
+
+  cid 
+  cid 
+
+ 
+
+          
+
+ 
+
+LM
+
+ 
+
+ 
+
+LM
+
+  cid 
+  cid 
+
+ 
+
+ 
+
+ 
+
+EZ pZ      log           
+
+EX cid pdata     log     cid 
+
+ 
+
+This function is then minimized in   and maximized in   
+minG maxD          Maximizing the  rst line of eq   
+in   leads the discriminator to return values close to        
+ fake  for generated images   and  vice versa  minimiza 
+
+tion in   aims at the discriminator taking large output values close to          real  On the other hand  maximizing
+  in the second line of eq    anchors the discriminator on
+real data   cid    pdata    to return values close to   As
+we want the model to be able to learn from   single image  the input image data is augmented by selecting patches
+  cid  from the image    at random positions  To speedup
+convergence  in particular in the beginning of the learning process  we employ the standard GAN trick and substitute log        with   log         Goodfellow
+et al   
+We base the design of the generator network   and the
+discriminator network   on the DCGAN model  Radford
+et al    Empirically  choosing   and   to be symmetric in their architecture       depth and channel dimensions 
+turned out to stabilize the learning dynamics  In particular  we chose equal sizes for the image patches   cid  and the
+generated data          As   deviation from this symmetry rule  we found that removing batch normalization in
+the discriminator yields better results  especially on training with single images 
+In contrast to the DCGAN architecture  our model contains
+exclusively convolutional layers  Due to the convolutional
+weight sharing  this allows that   network   trained on
+small image patches   can be rolled out to synthesize arbitrary large output images after training  Upon successful
+training  the sampled images then match the local image
+
+dl dpdpdgdldgMLP Learning Texture Manifolds
+
+statistics of the training data  Hence  the model implements
+  spatial stochastic process  Further  if components of   are
+sampled independently  the limited receptive  elds of the
+generator   imply that the generator implements   stationary  ergodic and strongly mixing stochastic process  This
+means that sampling of different textures is not possible
+  this would require   nonergodic process  For independent   sampling  learning from   set of textures results in
+the generation of textures combining elements of the whole
+set  Another limitation of independent sampling is the impossibility to align far away regions in the generated image
+  alignment violates translation invariance  stationarity and
+mixing  However  periodic textures depend on longrange
+correlations 
+To get rid of these limitations  we extend   to be composed of three distinct parts    local independent part     
+  spatially global part      and   periodic part      Each
+part has the same spatial dimensions       but may vary
+in their respective channel dimensions dl  dg  and dp  Let
+                    be their concatenation with total channel
+dimension     dl   dg   dp  We proceed with   discussion
+on     three parts 
+
+  Local Dimensions
+
+Conceptually  the simplest approach is to sample each slice
+    Rdl  independently
+of     at position   and       zl
+from the uniform distribution      where         with
+          and            As each zl
+  affects  
+ nite region in the image  we speak of local dimensions 
+Intuitively  local dimensions allow the generative process
+to produce spatial variance and diversity by sampling from
+its statistical model 
+
+  Global Dimensions
+
+For the global dimensions    unique vector zg of dimensionality dg is sampled from      which is then repeated
+along all       spatial dimensions of      or    
+     zg
+   
+where                       and         dg  Thus 
+zg has global impact on the whole image  and allows for
+the selection of the type of structure to be generated   employing global dimensions  the generative stochastic process becomes nonergodic  Consider the task of learning
+from two texture images  the generator then only needs to
+ learn    splitting of Rdg in two halfspaces       by learning   hyperplane  where vectors zg from each halfspace
+generate samples in the style of one of the two textures 
+Besides the scenario of learning from   set of texture
+images  combination with random patch selection from
+  larger image  see Section   is particularly interesting 
+here  the converged generator   samples textures that are
+consistent with the local statistics of an image  Notably 
+
+ cid 
+
+ cid 
+
+ cid 
+
+ 
+
+ cid 
+
+ 
+
+the source image does not necessarily have to be   texture 
+but the method will extract   texture generating stochastic
+process from the image  nevertheless  see Figure  
+After learning  each vector zg represents   texture from the
+manifold of learned textures of the PSGAN  where zg corresponds to   generating stochastic process of   texture  not
+just   static image  For the purpose of image generation     
+does not need to be composed of   single vector  but can be
+  smooth function in   and   As long as neighboring vectors in     don   vary too rapidly  the statistics of     is close
+to the statistics during training  Hence  smoothness in    
+implies   smooth texture change in    see Figure  
+
+  Spatially Periodic Dimensions
+
+The third part of         contains spatial periodic functions 
+or plane waves in each channel   
+
+   
+
+kT
+ 
+
+    
+
+             sin
+
+ 
+where                               dp  and  
+is       dp matrix which contains the wave vectors ki as
+its column vectors  These vectors parametrize the direction and the number of radians per spatial   unit distance
+in the periodic channel       is   random phase offset uniformly sampled from     and mimics the random positional extraction of patches from the real images  Adding
+this periodic global tensor breaks translation invariance and
+stationarity of the generating process  However  it is still
+cyclostationary 
+While wave numbers   could be set to    xed basis  we
+note that   speci   texture has associated wave vectors      
+different textures will have different axes of periodicities
+and scales  Hence  we make   dependent on the global
+dimensions zg through   multilayer perceptron  MLP 
+when more than one texture is learned  When only one
+texture is learned       dg     the wave numbers   are direct parameters to the system  In Figure   we indicate this
+alternative dependency on zg with   dotted arrow between
+the MLP and    All parameters of the MLP are learned
+endto end alongside the parameters of the generator   and
+the discriminator   
+
+  Experiments
+  Experimental Setup
+
+We base our system on the DCGAN architecture  Radford
+  for the generator and   for
+et al    with   stride of  
+the discriminator  Local and global noise dimensions are
+sampled from   uniform distribution  As in DCGAN   lters have   channels at the highest spatial resolution  and
+are doubled after every layer  which halves the spatial resolution       the   layer architecture has          
+
+Learning Texture Manifolds
+
+channels between the noise input and output RGB image 
+Training was done with ADAM  Kingma   Ba    with
+the settings of  Radford et al      learning rate  
+minibatch size of   The typical image patch size was
+    pixels  We usually used   layers in   and  
+ see Table   kernels of size     with zero padding  and
+batch normalization  Such   generator upsamples the spaM     and has   receptive
+tial noise by   factor of  
+ eld size of   Receptive  eld and image patch size can
+both affect learning  Jetchev et al    On our hardware
+ Theano and Nvidia Tesla    GPU  we measured  
+seconds for the generation of       pixels image and
+  seconds for       pixels image 
+The MLP for the spatially periodic dimensions has one hidden layer of dimensionality dh 
+
+     
+
+ cid 
+
+ cid 
+
+image
+text    
+
+single honeycomb
+
+Merrigum
+
+DTD
+Facades
+Sydney
+
+dg
+ 
+ 
+ 
+ 
+ 
+ 
+
+dl
+ 
+ 
+ 
+ 
+ 
+ 
+
+dp
+ 
+ 
+ 
+ 
+ 
+ 
+
+layer depth
+
+ 
+ 
+ 
+ 
+ 
+ 
+
+Table   The dimension cardinality we used for different experiments  Note that when dg     dp     the MLP for wave number
+learning simpli es to just learning the bias values      
+
+erties of   source image  In order to illustrate this  we will
+demonstrate how we can learn complex periodic images
+and texture manifolds  which allow texture blending 
+
+     zg   
+
+        zg           
+        zg           
+
+ 
+
+  PERIODIC TEXTURES
+
+where   is the pointwise recti edlinear unit function  and
+we have     Rdh dg      Rdh     and      Rdp dh 
+   and      Rdp  We used dh     for the experiments 
+All parameters are initialized from an independent random
+Gaussian distribution       except    and    which
+have   nonzero mean           The constant vector
+    Rdp is chosen with entries spread in the interval    
+For simplicity  we write    zg       zg       
+   
+or brie          zg  to summarize the way the periodic dimensions arise from the global ones  Alternatively  for     not being composed of   single vector zg 
+we write for simplicity             and understand this as
+   
+           
+  denotes
+the vector slice in     along its last          dimension 
+The following image sources were used for the experiments
+in this paper 
+the Oxford Describable Textures Dataset
+ DTD   Cimpoi et al    which is composed of various categories  each containing   images  the Facades
+dataset  Radim Tyle cek    which contains   facades
+of different houses in Prague  Both datasets comprise objects of different scales and sizes  We also used satellite
+images of Sydney from Google Maps  The    and Merrigum house are from Wikimedia Commons 
+
+            
+
+  where    
+
+  Learning and Sampling Textures
+
+What are criteria for good texture synthesis  The way
+humans perceive   texture is not easily quanti able with
+  statistic or metric  Still  one can qualitatively assess
+whether   texture synthesis method captures the right prop 
+ Ideally  the wave numbers Kji  with         should
+be within the valid interval between the negative and positive
+Nyquist wave numbers  here     However  wave numbers
+of single sinusoids are projected back into this interval  Hence 
+no constraint is necessary 
+
+First  we demonstrate learning   single periodic texture
+image  Figure   illustrates the results of PSGAN compared with SGAN  Jetchev et al    and the methods
+of  Gatys et al      Efros   Freeman    Portilla
+  Simoncelli    The text example in the top row has
+  periodic and stochastic dimension  The PSGAN learns
+this and arranges  text  in regular lines  while varying their
+content horizontally  The methods of  Efros   Freeman 
+  Portilla   Simoncelli    also manage to do this 
+SGAN  equivalent to   PSGAN without periodic dimensions  and Gatys  method fail to capture the periodic structure 
+The second row in Figure   demonstrates learning   honeycomb texture     basic hexagonal pattern   where our
+method captures both the underlying periodicity and the
+random coloring effects inside the cells  The method of
+ Efros   Freeman    was inaccurate for that texture  
+the borders between the copied patches     pixels large 
+were inaccurately aligned  The other   methods fail to produce   hexagonal structure even locally  The last row of
+Figure   shows the autocorrelation plots of the honeycomb
+textures  where the periodicity reveals itself as   regular
+grid superimposed onto the background    feature only PSGAN is able to reproduce 
+While dp     periodic dimensions are enough to learn
+the above patterns  we noticed that training convergence
+is faster when setting dp     However  for dp     beating of sinusoids with close wave numbers can occur  which
+rarely happens also for dp     due to subNyquist artefacts  Amidror         when the texture periodicity is
+close to an integer fractional of the Nyquist wavenumber 
+Figure   shows   larger slice of the learned periodic textures  In particular  Figure    shows that learning works
+for more complex patterns  here   pattern with      wallpa 
+
+Learning Texture Manifolds
+
+Figure   Comparing the results of   texture synthesis methods on
+  input images  text     pixels  in the top row and honeycomb     pixels  in the middle row  The green boxes show
+the receptive  elds of the generator      pixels for the text and
+    for the honeycomb example  In both cases  PSGAN best
+captures the underlying data periodicity  The autocorrelation plot
+of the honeycomb  shown in the bottom row  reveals periodicity
+as   grid of intensity peaks  The red arrows are the periodicity
+ inverse wave numbers  of the PSGAN  which neatly align with
+the autocorrelation structure  best seen zoomed 
+
+  Honeycomb
+
+     wallpaper group
+
+Figure   Accurate wave number learning by PSGAN allows correct generation of periodic textures  even for very large images 
+  the honeycomb can be repeated in large images     pixels  with no aliasing    the nonorthogonal bases of the periodicities and complicated symmetries and rotations present in the   
+pattern are faithfully reproduced 
+
+per group symmetry  with nonorthogonal symmetry axes 
+
+  TEXTURE MANIFOLDS
+
+Next  we extract multiple textures from   single large image  or   set of images  The chosen images       landscape
+photography or satellite images  have   global structure 
+but also exhibit characteristics of many textures in   single
+image       various vegetation and houses  The structured
+PSGAN generator noise with global dimensions allows to
+extract textures  corresponding to different image regions 
+In order to visualize the texture diversity of   model  we de 
+ ne   quilt array that can generate different textures from
+  trained PSGAN model by setting rectangular spatial re 
+  of size       to the same vecgions  tiles     
+tor  randomly sampled from the prior  Since the generator
+is   convolutional network with receptive  elds over sev 
+
+ en wikipedia org wiki Wallpaper group 
+
+Note that only translational symmetries are represented in
+PSGANs  no rotation and re ection symmetries 
+
+Figure   PSGAN learns   whole texture manifold from DTD
+ scaly  allowing smooth texture morphing  here illustrated in  
+single image of size     pixels  All regions of that image are plausible textures  The generator has as input   tensor
+               spatial dimensions  calculated by bilinear
+interpolation between   randomly sampled zg in the   corners 
+
+eral spatial elements of      the borders between tiles look
+partially aligned  For example  in Figure   the borders of
+the tiles have scaly elements across them  rather than being
+sharply separated  as the input     per construction 
+Figure   shows results when trained on   single large image  PSGAN extracts diverse bricks  grass and leaf textures  In contrast  SGAN forces the output to be   single
+mixing process  rather than   multitude of different visual
+textures  Gatys  method also learns   single texturelike
+process with statistics from the whole image   
+Figure    shows texture learning from city satellite images    challenging image domain due to  ne details of the
+images  Figures    and   show results from training on  
+set of multiple texturelike images from DTD 
+In order to show that textures vary smoothly  we sample
+  different zg values in the four corners of   target image
+and then interpolate bilinearly between them to construct
+the     tensor  Figure   shows that all zg values lying between the original   points generate proper textures as well 
+Hence  we speak of   learned texture manifold 
+
+  DISENTANGLING FREQUENCIES AND GLOBAL
+
+DIMENSIONS
+
+In this section  we explore how     and              
+the global and periodic dimensions   in uence the output
+                 generated from the noise tensor  Take  
+    array with quilt structure  We de ne as      an array of
+the same size as      where all     
+  are set to the same zg 
+We calculate two different periodic tensors             
+
+ As   technical note  the whole image did not    in memory
+for Gatys  method  so we trained it only on       clipout 
+
+Gatys et al Efros at al InputPSGANSGANPortilla et al Learning Texture Manifolds
+
+Input
+
+PSGAN
+
+SGAN
+
+Gatys et al 
+
+Figure   Learning from   single large photo  the Merrigum House      pixels        clipout is shown in order to have
+the same scale as the generated textures  PSGAN can extract multiple varied textures  bricks  grass and bushes  samples from which
+are shown in       quilt  where each tile has size       for   total of     pixels in the generated image  Both Gatys  method
+and the SGAN mix the whole image instead 
+
+  Sydney
+
+  DTD  braided 
+
+  DTD  honeycomb 
+
+Figure   More examples of learned textures  using rich and variable input image information    uses   satellite images    
+pixels  of Sydney      use   small texture images  The outputs show     different textures on the quilt       sampled from the
+model  total image size     pixels  best seen when maximally zoomedin 
+
+Figure   Morphing of house textures by linearly interpolating between two different textures  The disentangling properties of PSGAN allows to morph in   controlled manner  the house window
+periodicity stays the same  but the facade type and appearance
+change signi cantly due to the changing global dimensions 
+
+the  rst tensor with wave numbers varying as   function of
+the different elements of the quilt  and the second tensor 
+               with the same wave numbers everywhere 
+The PSGAN is trained with minibatches for which it holds
+that             but the model is  exible and produces
+meaningful outputs even when setting     and     to different values  Figure   shows that the global and periodic
+dimensions encode complementary aspects of the image
+generation process  texture identity and periodicity  The
+
+facades dataset has strong vertical and horizontal periodicity which is easily interpretable   the height of  oors and
+window placement directly depends on these frequencies 
+This disentangling leads to instructive visualizations  Figure   shows the generation from   tensor      which is
+constructed as   linear interpolation between two sampled
+zg at the left and right border  However  the wave numbers of the periodic dimensions are  xed  independently of
+the changing global dimensions  The  gure clearly shows
+  change in visual appearance of the texture  controlled
+by the global dimensions  while preserving   consistent
+periodic structure  xed by the constant wave numbers 
+This PSGAN disentangling property is reminiscent of the
+way  Chen et al    construct categorical and continuous noise variables  which explain factors of variation such
+as object identity and spatial transformation 
+
+  Discussion
+Texture synthesis from large unlabeled image datasets requires novel datadriven methods  going beyond older tech 
+
+Learning Texture Manifolds
+
+  different global and periodic
+
+  same periodic dimensions
+
+  same global dimensions
+
+Figure   The in uence of global and periodic dimensions of the noise tensor on texture appearance    shows the generation of the
+image quilt                      resulting in houses with different material and window periodicity    shows                      
+  houses with different material and color  but the same aligned periodical structure   windows    horizontally in each tile    shows
+                        same color but different window periodicity  The local dimensions     are  xed 
+
+niques that learn from single textures and rely on prespeci ed statistical descriptors  Previous methods like
+SGAN are limited to stationary  ergodic and stochastic textures   even if trained on many images  SGAN fuses them
+and outputs   single mixing process for them  Our experiments suggest that Gatys  method exhibits similar limitations  In contrast  PSGAN models nonergodic cyclostationary processes  and can learn   whole texture manifold
+from sets of images  or from   single large image 
+CGANs  Mirza   Osindero    use additional label information as input to the GAN generator and discriminator 
+which allows for class conditional generation  In comparison  the PSGAN also uses additional information in the
+generator input  the speci cally designed periodic dimensions      but not in the discriminator  Our method remains fully unsupervised and uses only sampled noise  unlike CGANs which require speci   label information 
+Concerning the model architecture  the SGAN  Jetchev
+et al    model is similar   it can be seen as an ablated
+PSGAN instance with dg     dp     This architecture
+allows great scalability  linear memory and runtime complexity        output image pixel size  of the PSGAN when
+generating outputs  High resolution images can be created
+by splitting parts of the arrays and rendering them sequentially  thus having   constant GPU memory footprint  Another nice property of our architecture is the ability to stitch
+seamlessly output texture images and get tileable textures 
+potentially increasing the output image size even more 
+To summarize  these are the key abilities of the PSGAN 
+  learn textures of great variability from large images
+  learn periodical textures
+  learn whole manifolds of textures and smoothly blend
+between their elements  thus creating novel textures
+  generate images of any desired size with   fast forward
+
+pass of   convolutional neural network
+
+  linear scalability in memory and speed        output
+
+image size 
+
+Our method has   few limitations  convergence can be
+sometimes tricky  as noted for other GAN models  Radford et al    like GANs  the PSGAN can suffer from
+ mode dropping    given   large set of textures it may learn
+only some of them  especially if the data varies in scale and
+periodicity  Finally  PSGANs can represent arbitrary probability distributions that extend in spatial scale to the largest
+periods in      and can generalize to periodic structures beyond that  However  images that have larger structures or
+more general nonperiodic features are not representable 
+     images with   global trend  or with   perspective projection  or aperiodic images  like Penrose tilings 
+
+  Future work
+
+The PSGAN has   great potential to be adapted to further
+use cases  Inpainting is   possible application   our method
+can  ll random missing image regions with  tting textures 
+Texture style transfer   painting   target image with textures   can be done similar to the way the quilts in this paper were constructed  Further  explicit modeling with periodic dimensions in the PSGAN could be   great    in other
+modalities  in particular timeseries and audio data  Here 
+we   expect the model to extract  sound textures  which
+might be useful in synthesizing completely novel sounds
+by interpolating on the manifold 
+On the theoretical side  to capture more symmetries of texture images  one could extend the   tensor even further  by
+adding dimensions with re ection or rotation symmetries 
+In terms of model stability and convergence  we ll investigate alternative GAN training criteria  Metz et al   
+Arjovsky et al    which may alleviate the mode dropping problem 
+
+Learning Texture Manifolds
+
+Acknowledgements
+We would like to thank Christian Bracher for his valuable
+feedback on the manuscript  and Sebastian Heinz  Calvin
+Seward and other colleagues at Zalando Research for fruitful and inspiring discussions  We are also thankful to the
+anonymous reviewers for their constructive feedback 
+
+References
+Amidror  Isaac  Subnyquist artefacts and sampling moir  
+effects  Royal Society open science     
+
+Arjovsky  Martin  Chintala  Soumith  and Bottou    eon 
+Wasserstein GAN    URL http arxiv org 
+abs 
+
+Ilya  and Abbeel  Pieter 
+
+Chen  Xi  Duan  Yan  Houthooft  Rein  Schulman 
+John  Sutskever 
+Infogan  Interpretable representation learning by information maximizing generative adversarial nets  CoRR 
+abs    URL http arxiv org 
+abs 
+
+Cimpoi     Maji     Kokkinos     Mohamed     and
+Vedaldi     Describing textures in the wild  In Proceedings of the IEEE Conf  on Computer Vision and Pattern
+Recognition  CVPR   
+
+Dumoulin  Vincent  Shlens  Jonathon  and Kudlur  Manjunath    learned representation for artistic style  CoRR 
+abs    URL http arxiv org 
+abs 
+
+Image
+Efros  Alexei    and Freeman  William   
+In Proquilting for texture synthesis and transfer 
+ceedings of the  th Annual Conference on Computer
+Graphics and Interactive Techniques  SIGGRAPH 
+ 
+ISBN     doi   
+  URL http doi acm org 
+ 
+
+Efros  Alexei    and Leung  Thomas    Texture synIn Proceedings of
+thesis by nonparametric sampling 
+the International Conference on Computer Vision   
+ISBN   URL http dl acm org 
+citation cfm id 
+
+Gatys  Leon  Ecker  Alexander  and Bethge  Matthias 
+Texture synthesis using convolutional neural networks 
+In Advances in Neural Information Processing Systems
+      URL http arxiv org abs 
+ 
+
+Gatys  Leon    Ecker  Alexander    and Bethge 
+Matthias    neural algorithm of artistic style  CoRR 
+abs      URL http arxiv org 
+abs 
+
+Georgiadis     Chiuso     and Soatto     Texture comIn Data Compression Conference  March
+
+pression 
+ 
+
+Goodfellow  Ian    PougetAbadie  Jean  Mirza  Mehdi 
+Xu  Bing  WardeFarley  David  Ozair  Sherjil 
+Courville  Aaron    and Bengio  Yoshua  Generative
+adversarial nets  In Advances in Neural Information Processing Systems    
+
+Jetchev  Nikolay  Bergmann  Urs  and Vollgraf  Roland 
+Texture synthesis with spatial generative adversarial networks  CoRR  abs    URL http 
+ arxiv org abs 
+
+Johnson  Justin  Alahi  Alexandre  and FeiFei  Li  Perceptual losses for realtime style transfer and superresolution  In European Conference on Computer Vision 
+ 
+
+Kingma  Diederik    and Ba  Jimmy  Adam    method
+for stochastic optimization  CoRR  abs   
+URL http arxiv org abs 
+
+Li  Chuan and Wand  Michael  Precomputed realtime
+texture synthesis with Markovian generative adversarial
+networks  CoRR  abs   
+
+Metz  Luke  Poole  Ben  Pfau  David  and SohlDickstein 
+Jascha  Unrolled generative adversarial networks  CoRR 
+abs    URL http arxiv org 
+abs 
+
+Mirza  Mehdi and Osindero  Simon  Conditional generative adversarial nets  CoRR  abs    URL
+http arxiv org abs 
+
+Portilla  Javier and Simoncelli  Eero      parametric texture model based on joint statistics of complex wavelet
+coef cients  Int     Comput  Vision    October  
+doi      URL http dx 
+doi org   
+
+Radford  Alec  Metz  Luke  and Chintala  Soumith 
+Unsupervised representation learning with deep conCoRR 
+volutional generative adversarial networks 
+abs    URL http arxiv org 
+abs 
+
+Radim Tyle cek  Radim    ara  Spatial pattern templates for
+In Proc 
+
+recognition of objects with regular structure 
+GCPR  Saarbr ucken  Germany   
+
+Ulyanov  Dmitry  Lebedev  Vadim  Vedaldi  Andrea  and
+Lempitsky  Victor  Texture networks  Feedforward synthesis of textures and stylized images  In International
+Conference on Machine Learning   
+
+

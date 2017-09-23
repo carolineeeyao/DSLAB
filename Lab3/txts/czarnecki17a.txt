@@ -1,0 +1,785 @@
+Understanding Synthetic Gradients and Decoupled Neural Interfaces
+
+Wojciech Marian Czarnecki   Grzegorz Swirszcz   Max Jaderberg   Simon Osindero   Oriol Vinyals  
+
+Koray Kavukcuoglu  
+
+Abstract
+
+When training neural networks  the use of Synthetic Gradients  SG  allows layers or modules
+to be trained without update locking   without
+waiting for   true error gradient to be backpropagated   resulting in Decoupled Neural Interfaces  DNIs  This unlocked ability of being
+able to update parts of   neural network asynchronously and with only local information was
+demonstrated to work empirically in Jaderberg
+et al    However  there has been very little demonstration of what changes DNIs and SGs
+impose from   functional  representational  and
+learning dynamics point of view  In this paper 
+we study DNIs through the use of synthetic gradients on feedforward networks to better understand their behaviour and elucidate their effect
+on optimisation  We show that the incorporation of SGs does not affect the representational
+strength of the learning system for   neural network  and prove the convergence of the learning
+system for linear and deep linear models  On
+practical problems we investigate the mechanism
+by which synthetic gradient estimators approximate the true loss  and  surprisingly  how that
+leads to drastically different layerwise representations  Finally  we also expose the relationship
+of using synthetic gradients to other error approximation techniques and  nd   unifying language for discussion and comparison 
+
+  Introduction
+Neural networks can be represented as   graph of computational modules  and training these networks amounts to
+optimising the weights associated with the modules of this
+graph to minimise   loss  At present  training is usually performed with  rstorder gradient descent style algorithms 
+
+ DeepMind  London  United Kingdom  Correspondence to 
+
+WM Czarnecki  lejlot google com 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+Figure   Visualisation of SGbased learning     vs  regular backpropagation    
+
+where the weights are adjusted along the direction of the
+negative gradient of the loss  In order to compute the gradient of the loss with respect to the weights of   module 
+one performs backpropagation  Williams   Hinton   
+  sequentially applying the chain rule to compute the exact gradient of the loss with respect to   module  However 
+this scheme has many potential drawbacks  as well as lacking biological plausibility  Marblestone et al    Bengio et al    In particular  backpropagation results in
+locking   the weights of   network module can only be updated after   full forwards propagation of the data through
+the network  followed by loss evaluation  then  nally after waiting for the backpropagation of error gradients  This
+locking constrains us to updating neural network modules
+in   sequential  synchronous manner 
+One way of overcoming this issue is to apply Synthetic
+Gradients  SGs  to build Decoupled Neural Interfaces
+ DNIs   Jaderberg et al    In this approach  models of
+error gradients are used to approximate the true error gradient  These models of error gradients are local to the network modules they are predicting the error gradient for  so
+that an update to the module can be computed by using the
+predicted  synthetic gradients  thus bypassing the need for
+subsequent forward execution  loss evaluation  and backpropagation  The gradient models themselves are trained
+
+fifi fi fifi fi Mi   iMi           DifferentiableLegend fifi fi Mi       xyLhSGLSGxyLhForward connection  differentiableForward connection  nondifferentiableError gradient  nondifferentiableSynthetic error  gradient  differentiableLegend Synthetic error  gradient  nondifferentiableNon differentiableForward connectionError gradientSynthetic error gradientUnderstanding Synthetic Gradients and DNIs
+
+at the same time as the modules they are feeding synthetic
+gradients to are trained  The result is effectively   complex
+dynamical system composed of multiple subnetworks cooperating to minimise the loss 
+There is   very appealing potential of using DNIs      the
+potential to distribute and parallelise training of networks
+across multiple GPUs and machines  the ability to asynchronously train multinetwork systems  and the ability to
+extend the temporal modelling capabilities of recurrent networks  However  it is not clear that introducing DNIs and
+SGs into   learning system will not negatively impact the
+learning dynamics and solutions found  While the empirical evidence in Jaderberg et al    suggests that SGs
+do not have   negative impact and that this potential is attainable  this paper will dig deeper and analyse the result of
+using SGs to accurately answer the question of the impact
+of synthetic gradients on learning systems 
+In particular  we address the following questions  using
+feedforward networks as our probe network architecture 
+Does introducing SGs change the critical points of the
+neural network learning system  In Section   we show
+that the critical points of the original optimisation problem are maintained when using SGs  Can we characterise the convergence and learning dynamics for systems that use synthetic gradients in place of true gradients  Section   gives  rst convergence proofs when using
+synthetic gradients and empirical expositions of the impact
+of SGs on learning  What is the difference in the representations and functional decomposition of networks
+learnt with synthetic gradients compared to backpropagation  Through experiments on deep neural networks
+in Section   we  nd that while functionally the networks
+perform identically trained with backpropagation or synthetic gradients  the layerwise functional decomposition is
+markedly different due to SGs 
+In addition  in Section   we look at formalising the connection between SGs and other forms of approximate error
+propagation such as Feedback Alignment  Lillicrap et al 
+  Direct Feedback Alignment    kland    Baldi
+et al    and Kickback  Balduzzi et al    and
+show that all these error approximation schemes can be
+captured in   uni ed framework  but crucially only using
+synthetic gradients can one achieve unlocked training 
+  DNI using Synthetic Gradients
+The key idea of synthetic gradients and DNI is to approximate the true gradient of the loss with   learnt model which
+predicts gradients without performing full backpropagation 
+Consider   feedforward network consisting of   layers
+fn                   each taking an input hn 
+and pro 
+
+ 
+
+    fn hn 
+
+ 
+
+  where   
+
+    xi is the inducing an output hn
+put data point xi    loss is de ned on the output of the network Li     hN
+    yi  where yi is the given label or supervision for xi  which comes from some unknown        
+Each layer fn has parameters    that can be trained jointly
+to minimise Li with the gradientbased update rule
+
+           
+
+    yi 
+
+   hN
+ hn
+ 
+
+ hn
+ 
+  
+
+  is computed with
+
+where   is the learning rate and  Li hn
+backpropagation 
+  means that an update to layer  
+The reliance on  Li hN
+can only occur after every subsequent layer fj          
+             has been computed  the loss Li has been computed  and the error gradient    hN
+  backpropgated to get
+    An update rule such as this is update locked as
+ Li hN
+it depends on computing Li  and also backwards locked as
+it depends on backpropagation to form  Li hn
+   
+Jaderberg et al    introduces   learnt prediction of
+the error gradient  the synthetic gradient SG hn
+    yi   
+ Li hn
+
+  resulting in the update
+
+ cid 
+
+   cid   Li hn
+            SG hn
+
+    yi 
+
+ hn
+ 
+  
+
+      
+
+    yi     Li hn
+
+This approximation to the true loss gradient allows us to
+have both update and backwards unlocking   the update
+to layer   can be applied without any other network computation as soon as hn
+  has been computed  since the SG
+module is not   function of the rest of the network  unlike
+ Li hi  Furthermore  note that since the true  Li hn
+ 
+can be described completely as   function of just hn
+  and
+yi  from   mathematical perspective this approximation is
+suf ciently parameterised 
+The synthetic gradient module SG hn
+    yi  has parameters
+ SG which must themselves be trained to accurately predict the true gradient by minimising the    loss LSGi  
+ cid SG hn
+The resulting learning system consists of three decoupled
+parts   rst  the part of the network above the SG module
+which minimises   wrt  to its parameters          
+then the SG module that minimises the LSG wrt  to  SG 
+Finally the part of the network below the SG module which
+uses SG       as the learning signal to train      
+thus it is minimising the loss modeled internally by SG 
+Assumptions and notation
+Throughout the remainder of this paper  we consider the
+use of   single synthetic gradient module at   single layer
+  and for   generic data sample   and so refer to     hj  
+    unless speci ed we drop the superscript   and subscript
+hk
+   This model is shown in Figure       We also focus on
+
+   cid 
+
+Understanding Synthetic Gradients and DNIs
+
+SG modules which take the point   true label value as conditioning SG       as opposed to SG    Note that without
+label conditioning    SG module is trying to approximate
+not      but rather  
+           since   is   function
+of both input and label  In theory  the lack of label is   suf 
+ cient parametrisation but learning becomes harder  since
+the SG module has to additionally learn        
+We also focus most of our attention on models that employ linear SG modules  SG         hA   yB      Such
+modules have been shown to work well in practice  and furthermore are more tractable to analyse 
+As   shorthand  we denote    to denote the subset of the
+parameters contained in modules up to    and symmetrically          if   is the kth layer then                   
+Synthetic gradients in operation
+Consider an Nlayer feedforward network with   single
+SG module at layer    This network can be decomposed
+into two subnetworks  the  rst takes an input   and produces an output     Fh      fk fk           
+while the second network takes   as an input  produces an
+output     Fp      fN        fk    and incurs   loss
+            based on   label   
+With regular backpropagation  the learning signal for the
+ rst network Fh is       which is   signal that speci 
+ es how the input to Fp should be changed in order to reduce the loss  When we attach   linear SG between these
+two networks  the  rst subnetwork Fh no longer receives
+the exact learning signal from Fp  but an approximation
+SG       which implies that Fh will be minimising an approximation of the loss  because it is using approximate
+error gradients  Since the SG module is   linear model of
+      the approximation of the true loss that Fh is being
+optimised for will be   quadratic function of   and    Note
+that this is not what   second order method does when  
+function is locally approximated with   quadratic and used
+for optimisation   here we are approximating the current
+loss  which is   function of parameters   with   quadratic
+which is   function of    Three appealing properties of an
+approximation based on   is that   already encapsulates  
+lot of nonlinearities due to the processing of Fh    is usually vastly lower dimensional than    which makes learning more tractable  and the error only depends on quantities
+    which are local to this part of the network rather than  
+which requires knowledge of the entire network 
+With the SG module in place  the learning system decomposes into two tasks 
+the second subnetwork Fp tasked
+with minimising   given inputs    while the  rst subnetwork Fh is tasked with preprocessing   in such   way
+that the best  tted quadratic approximator of    wrt     is
+minimised  In addition  the SG module is tasked with best
+approximating   
+
+The approximations and changing of learning objectives
+ described above  that are imposed by using synthetic gradients may appear to be extremely limiting  However  in
+both the theoretical and empirical sections of this paper we
+show that SG models can  and do  learn solutions to highly
+nonlinear problems  such as memorising noise 
+The crucial mechanism that allows such rich behaviour is
+to remember that the implicit quadratic approximation to
+the loss implied by the SG module is local  per data point 
+and nonstationary   it is continually trained itself 
+It is
+not   single quadratic    to the true loss over the entire optimisation landscape  but   local quadratic approximation
+speci   to each instantaneous moment in optimisation  In
+addition  because the quadratic approximation is   function
+only of   and not   the loss approximation is still highly
+nonlinear         
+If  instead of   linear SG module  one uses   more complex function approximator of gradients such as an MLP 
+the loss is effectively approximated by the integral of the
+MLP  More formally  the loss implied by the SG module in
+hypotheses space   is of class                        
+In particular  this shows an attractive mathematical bene  
+over predicting loss directly  by modelling gradients rather
+than losses  we get to implicitly model higher order loss
+functions 
+  Critical points
+We now consider the effect SG has on critical points of the
+optimisation problem  Concretely  it seems natural to ask
+whether   model augmented with SG is capable of learning
+the same functions as the original model  We ask this question under the assumption of   locally converging training
+method  such that we always end up in   critical point  In
+the case of   SGbased model this implies   set of parameters   such that          SG              and
+ LSG SG     In other words we are trying to establish
+whether SG introduces regularisation to the model class 
+which changes the critical points  or whether it merely introduces   modi cation to learning dynamics  but retains
+the same set of critical points 
+In general  the answer is positive  SG does induce   regularisation effect  However  in the presence of additional
+assumptions  we can show families of models and losses
+for which the original critical points are not affected 
+Proposition   Every critical point of the original optimisation problem where SG can produce    hi has   corresponding critical point of the SGbased model 
+Proof  Directly from the assumption we have that there exists   set of SG parameters such that the loss is minimal 
+thus  LSG SG     and also SG              and
+
+ We mean equality for all points where      is de ned 
+
+Understanding Synthetic Gradients and DNIs
+
+SG             
+
+The assumptions of this proposition are true for example when        one attains global minimum  when
+   hi     or   network is   deep linear model trained
+with MSE and SG is linear 
+In particular  this shows that for   large enough SG module
+all the critical points of the original problem have   corresponding critical point in the SGbased model  Limiting
+the space of SG hypotheses leads to inevitable reduction
+of number of original critical points  thus acting as   regulariser  At  rst this might look like   somewhat negative result  since in practice we rarely use   SG module capable of
+exactly producing true gradients  However  there are three
+important observations to make    Our previous observation re ects having an exact representation of the gradient
+at the critical point  not in the whole parameter space   
+One does preserve all the critical points where the loss is
+zero  and given current neural network training paradigms
+these critical points are important  For such cases even if
+SG is linear the critical points are preserved    In practice one rarely optimises to absolute convergence regardless of the approach taken  rather we obtain numerical convergence meaning that  cid   cid  is small enough  Thus 
+all one needs from SGbased model is to have small enough
+ cid           cid     cid     cid cid   cid cid     cid 
+implying that the approximation error at   critical point just
+has to be small wrt to  cid     cid  and need not be  
+To recap  so far we have shown that SG can preserve critical points of the optimisation problem  However  SG can
+also introduce new critical points  leading to premature
+convergence and spurious additional solutions  As with
+our previous observation  this does not effect SG modules
+which are able to represent gradients exactly  But if the SG
+hypothesis space does not include   good approximator  of
+the true gradient  then we can get new critical points which
+end up being an equilibrium state between SG modules and
+the original network  We provide an example of such an
+equilibrium in the Supplementary Materials Section   
+  Learning dynamics
+Having demonstrated that important critical points are preserved and also that new ones might get created  we need  
+better characterisation of the basins of attraction  and to understand when  in both theory and practice  one can expect
+convergence to   good solution 
+Arti cial Data
+We conduct an empirical analysis of the learning dynamics on easily analysable arti cial data  We create   and
+  dimensional versions of four basic datasets  details in
+
+ In this case  our gradient approximation needs to be reasonable at every point through optimisation  not just the critical ones 
+
+the Supplementary Materials Section    and train four simple models    linear model and   deep linear one with  
+hidden layers  trained to minimise MSE and log loss  with
+regular backprop and with   SGbased alternative to see
+whether it  numerically  converges to the same solution 
+For MSE and both shallow and deep linear architectures the
+SGbased model converges to the global optimum  exact
+numerical results provided in Supplementary Material Table   However  this is not the case for logistic regression 
+This effect is   direct consequence of   linear SG module
+being unable to model        where     xW     is the
+output of logistic regression  which often approaches the
+step function  when data is linearly separable  and cannot
+be well approximated with   linear function SG        
+hA   yB      Once one moves towards problems without
+this characteristic       random labeling  the problem vanishes  since now      can be approximated much better 
+While this may not seem particularly signi cant  it illustrates an important characteristic of SG in the context of the
+log loss   it will struggle to over   to training data  since it
+requires modeling step function type shapes  which is not
+possible with   linear model  In particular this means that
+for best performance one should adapt the SG module architecture to the loss function used  for MSE linear SG
+is   reasonable choice  however for log loss one should use
+architectures including   sigmoid   applied pointwise to  
+linear SG  such as SG           hA    yB     
+As described in Section   using   linear SG module makes
+the implicit assumption that loss is   quadratic function
+of the activations  Furthermore  in such setting we can
+actually reconstruct the loss being used up to some additive constant since        hA   yB     implies that
+  hAhT    yB     hT   const  If we now conL       
+struct    dimensional dataset  where data points are arranged in      grid  we can visualise the loss implicitly
+predicted by the SG module and compare it with the true
+loss for each point 
+Figure   shows the results of such an experiment when
+learning   highly nonlinear model  hidden layer relu network  As one can see  the quality of the loss approximation has two main components to its dynamics  First 
+it is better in layers closer to the true loss       the topmost layers  which matches observations from Jaderberg
+et al    and the intuition that the lower layers solve  
+more complex problem  since they bootstrap their targets 
+Second  the loss is better approximated at the very beginning of the training and the quality of the approximation
+degrades slowly towards the end  This is   consequence
+of the fact that close to the end of training  the highly nonlinear model has quite complex derivatives which cannot be
+well represented in   space of linear functions  It is worth
+
+       exp xW        exp xW         
+
+Understanding Synthetic Gradients and DNIs
+
+Single SG
+
+Every layer SG
+
+Single SG
+
+Every layer SG
+
+   MSE  noisy linear data
+
+   log loss  noisy linear data
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+   MSE  randomly labeled data
+
+   log loss  randomly labeled data
+
+Figure   Visualisation of the true MSE loss and the loss approximation reconstructed from SG modules  when learning points are
+arranged in      grid  with linearly separable   of points and   with randomly assigned labels  top row  and with completely
+random labels  bottom row  The model is     layers deep relu network  Each image consists of visualisations for   model with   single
+SG  left part  and with SG between every two layers  on the right  Note  that each image has an independently scaled color range  since
+we are only interested in the shape of the surface  not particular values  which cannot be reconstructed from the SG  Linear SG tracks
+the loss well for MSE loss  while it struggles to    to log loss towards the end of the training of nearly separable data  Furthermore  the
+quality of loss estimation degrades towards the bottom of the network when multiple SGs bootstrap from each other 
+
+noting  that in these experiments  the quality of the loss approximation dropped signi cantly when the true loss was
+around   thus it created good approximations for the
+majority of the learning process  There is also an empirical
+con rmation of the previous claim  that with log loss and
+data that can be separated  linear SGs will have problems
+modeling this relation close to the end of training  Figure  
+    left  while there is no such problem for MSE loss  Figure       left 
+Convergence
+It is trivial to note that if   SG module used is globally
+convergent to the true gradient  and we only use its output
+after it converges  then the whole model behaves like the
+one trained with regular backprop  However  in practice
+we never do this  and instead train the two models in parallel without waiting for convergence of the SG module  We
+now discuss some of the consequences of this  and begin
+by showing that as long as   synthetic gradient produced is
+close enough to the true one we still get convergence to the
+true critical points  Namely  only if the error introduced by
+SG  backpropagated to all the parameters  is consistently
+smaller than the norm of true gradient multiplied by some
+positive constant smaller than one  the whole system converges  Thus  we essentially need the SG error to vanish
+around critical points 
+Proposition   Let us assume that   SG module is trained
+in each iteration in such   way that it  tracks true gradient 
+
+     that  cid SG            cid      If  cid     cid  is upper
+bounded by some   and there exists   constant        
+such that in every iteration       cid     cid   
+    then
+the whole training process converges to the solution of the
+original problem 
+Proof  Proof follows from showing that  under the assumptions  effectively we are training with noisy gradients 
+where the noise is small enough for convergence guarantees given by Zoutendijk   Gratton et al    to
+apply  Details are provided in the Supplementary Materials
+Section   
+
+As   consequence of Proposition   we can show that with
+speci cally chosen learning rates  not merely ones that are
+small enough  we obtain convergence for deep linear models 
+Corollary   For   deep linear model minimising MSE 
+trained with   linear SG module attached between two of
+its hidden layers  there exist learning rates in each iteration
+such that it converges to the critical point of the original
+problem 
+Proof  Proof follows directly from Propositions   and  
+Full proof is given in Supplementary Materials Section   
+
+For   shallow model we can guarantee convergence to the
+global solution provided we have   small enough learning
+rate  which is the main theoretical result of this paper 
+
+Understanding Synthetic Gradients and DNIs
+
+Figure    left  Representation Dissimilarity Matrices for   label ordered sample from MNIST dataset pushed through  hidden layers
+deep relu networks trained with backpropagation  top row    single SG attached between layers   and    middle row  and SG between
+every pair of layers  bottom row  Notice the disappearance of dark squares on   diagonal in each learning method  which shows when
+  clear innerclass representation has been learned  For visual con dence off block diagonal elements are semi transparent   right    
+distance between diagonal elements at   given layer and the same elements at layer   Dotted lines show where SGs are inserted 
+
+Theorem   Let us consider linear regression trained with
+  linear SG module attached between its output and the
+loss 
+If one chooses the learning rate of the SG module
+using line search  then in every iteration there exists small
+enough  positive learning rate of the main network such
+that it converges to the global solution 
+Proof  The general idea  full proof in the Supplementary
+Materials Section    is to show that with assumed learning rates the sum of norms of network error and SG error
+decreases in every iteration 
+
+Despite covering   quite limited class of models  these are
+the very  rst convergence results for SGbased learning 
+Unfortunately  they do not seem to easily generalise to the
+nonlinear cases  which we leave for future research 
+  Trained models
+We now shift our attention to more realistic data  We train
+deep relu networks of varied depth  up to   hidden layers 
+with batchnormalisation and with two different activation
+functions on MNIST and compare models trained with full
+backpropagation to variants that employ   SG module in
+the middle of the hidden stack 
+
+Figure   Learning curves for MNIST experiments with backpropagation and with   single SG in   stack of from   to   hidden
+layers using one of two activation functions  relu and sigmoid 
+
+Figure   shows  that SGbased architectures converge well
+even if there are many hidden layers both below and above
+the module  Interestingly  SGbased models actually seem
+to converge faster  compare for example   or   layer
+deep relu network  We believe this may be due to some
+
+amount of loss function smoothing since  as described in
+Section     linear SG module effectively models the loss
+function to be quadratic   thus the lower network has   simpler optimisation task and makes faster learning progress 
+Obtaining similar errors on MNIST does not necessarily
+mean that trained models are the same or even similar 
+Since the use of synthetic gradients can alter learning dynamics and introduce new critical points  they might converge to different types of models  Assessing the representational similarity between different models is dif cult 
+however  One approach is to compute and visualise Representational Dissimilarity Matrices  Kriegeskorte et al 
+  for our data  We sample   subset of   points xi
+from MNIST  order them by label  and then record activations on each hidden layer   when the network is presented with these points  We plot the matrix RDM for each
+layer  where RDMij    corr   xi    xj  as shown in
+Figure   This representation is permutation invariant  and
+thus the emergence of   blockdiagonal correlation matrix
+means that at   given layer  points from the same class already have very correlated representations 
+Under such visualisations one can notice qualitative differences between the representations developed under standard backpropagation training versus those delivered by
+  SGbased model 
+In particular  in the MNIST model
+with   hidden layers trained with standard backpropagation we see that the representation covariance after   layers
+is nearly the same as the  nal layer   representation  However  by contrast  if we consider the same architecture but
+with   SG module in the middle we see that the layers before the SG module develop   qualitatively different style
+of representation  Note  this does not mean that layers before SG do not learn anything useful  To con rm this  we
+also introduced linear classi er probes  Alain   Bengio 
+  and observed that  as with the pure backpropagation trained model  such probes can achieve   training accuracy after the  rst two hiddenlayers of the SGbased model  as shown in Supplementary Material   Figure   With   SG modules  one between every pair of
+
+Understanding Synthetic Gradients and DNIs
+
+layers  the representation is scattered even more broadly 
+we see rather different learning dynamics  with each layer
+contributing   small amount to the  nal solution  and there
+is no longer   point in the progression of layers where the
+representation is more or less static in terms of correlation
+structure  see Figure  
+Another way to investigate whether the trained models are
+qualitatively similar is to examine the norms of the weight
+matrices connecting consecutive hidden layers  and to assess whether the general shape of such norms are similar 
+While this does not de nitively say anything about how
+much of the original classi cation is being solved in each
+hidden layer  it is   reasonable surrogate for how much
+computation is being performed in each layer  According
+
+Figure   Visualisation of normalised squared norms of linear
+transformations in each hidden layer of every model considered 
+Dotted orange line denotes level at which   single SG is attached 
+SG  has   SG at every layer 
+
+to our experiments  see Figure   for visualisation of one of
+the runs  models trained with backpropagation on MNIST
+tend to have norms slowly increasing towards the output of
+the network  with some  uctuations and differences coming from activation functions  random initialisations  etc 
+If we now put   SG in between every two hidden layers 
+we get norms that start high  and then decrease towards
+the output of the network  with much more variance now 
+Finally  if we have   single SG module we can observe
+that the behaviour after the SG module resembles  at least
+to some degree  the distributions of norms obtained with
+backpropagation  while before the SG it is more chaotic 
+with some similarities to the distribution of weights with
+SGs inbetween every two layers 
+These observations match the results of the previous experiment and the qualitative differences observed  When synthetic gradients are used to deliver full unlocking we obtain
+  very basic model at the lowest layers and then see itera 
+
+ We train with   small    penalty added to weights to make
+
+norm correspond roughly to amount of computation 
+
+tive corrections in deeper layers  For   onepoint unlocked
+model with   single SG module  we have two slightly separated models where one behaves similarly to backprop  and
+the other supports it  Finally    fully locked model       traditional backprop  solves the task relatively early on  and
+later just increases its con dence 
+We note that the results of this section support our previous
+notion that we are effectively dealing with   multiagent
+system  which looks for coordination equilibrium between
+components  rather than   single model which simply has
+some small noise injected into the gradients  and this is
+especially true for more complex models 
+  SG and conspiring networks
+We now shift our attention and consider   uni ed view
+of several different learning principles that work by replacing true gradients with surrogates  We focus on three
+such approaches  Feedback Alignment  FA 
+ Lillicrap
+et al    Direct Feedback Alignment  DFA     kland 
+  and Kickback  KB   Balduzzi et al    FA effectively uses    xed random matrix during backpropagation  rather than the transpose of the weight matrix used
+in the forward pass  DFA does the same  except each
+layer directly uses the learning signal from the output layer
+rather than the subsequent local one  KB also pushes the
+output learning signal directly but through   prede ned
+matrix instead of   random one  By making appropriate
+choices for targets  losses  and model structure we can
+cast all of these methods in the SG framework  and view
+them as comprising two networks with   SG module in between them  wherein the  rst module builds   representation which makes the task of the SG predictions easier 
+We begin by noting that in the SG models described thus far
+we do not backpropagate the SG error back into the part of
+the main network preceding the SG module       we assume
+ LSG       However  if we relax this restriction  we
+can use this signal  perhaps with some scaling factor  
+and obtain what we will refer to as   SG   prop model 
+Intuitively  this additional learning signal adds capacity to
+our SG model and forces both the main network and the SG
+module to  conspire  towards   common goal of making
+better gradient predictions  From   practical perspective 
+according to our experiments  this additional signal heavily
+stabilises learning system  However  this comes at the cost
+of no longer being unlocked 
+
+  In fact  ignoring the gradients predicted by SG and only using the derivative of the SG loss        LSG    still provides
+enough learning signal to converge to   solution for the original
+task in the simple classi cation problems we considered  We posit
+  simple rationale for this  if one can predict gradients well using
+  simple transformation of network activations         linear mapping  this suggests that the loss itself can be predicted well too 
+and thus  implicitly  so can the correct outputs 
+
+Understanding Synthetic Gradients and DNIs
+
+Network
+
+Method
+ cid 
+    
+SG      
+SG trains
+SG target
+LSG      
+Update locked
+Backw  locked
+Direct error
+
+SG      
+SG      
+yes
+    
+ cid       cid 
+no
+no
+no
+
+SG            LSG
+  
+SG      
+yes
+    
+ cid       cid 
+yes 
+yes 
+no
+
+    
+ 
+no
+    
+ cid      cid 
+yes
+yes
+no
+
+     AT
+hA
+no
+    
+ cid      cid 
+yes
+no
+yes
+
+     AT
+hA
+no
+    
+ cid      cid 
+yes
+yes
+no
+
+      
+  
+no
+    
+ cid      cid 
+yes
+no
+yes
+
+Table   Uni ed view of  conspiring  gradients methods  including backpropagation  synthetic gradients are other error propagating
+methods  For each of them  one still trains with regular backpropagation  chain rule  however      is substituted with   particular
+ cid      Black lines are forward signals  blue ones are synthetic gradients  and green ones are true gradients  Dotted lines represent
+nondifferentiable operations  The grey modules are not trainable    is    xed  random matrix and   is   matrix of ones of an appropriate
+dimension    In SG Prop the network is locked if there is   single SG module  however if we have multiple ones  then propagating error
+signal only locks   module with the next one  not with the entire network  Direct error means that   model tries to solve classi cation
+problem directly at layer   
+
+Our main observation in this section is that FA  DFA  and
+KB can be expressed in the language of  conspiring  networks  see Table   of twonetwork systems that use   SG
+module  The only difference between these approaches is
+how one parametrises SG and what target we attempt to
+   it to  This comes directly from the construction of these
+systems  and the fact that if we treat our targets as constants
+ as we do in SG methods  then the backpropagated error
+from each SG module  LSG    matches the prescribed
+update rule of each of these methods    cid 
+      One direct
+result from this perspective is the fact that Kickback is essentially DFA with       For completeness  we note that
+regular backpropagation can also be expressed in this uni 
+ ed view   to do so  we construct   SG module such that the
+gradients it produces attempt to align the layer activations
+with the negation of the true learning signal       In
+addition to unifying several different approaches  our mapping also illustrates the potential utility and diversity in the
+generic idea of predicting gradients 
+  Conclusions
+This paper has presented new theory and analysis for the
+behaviour of synthetic gradients in feed forward models 
+Firstly  we showed that introducing SG does not necessarily
+
+change the critical points of the original problem  however
+at the same time it can introduce new critical points into the
+learning process  This is an important result showing that
+SG does not act like   typical regulariser despite simplifying the error signals  Secondly  we showed that  despite
+modifying learning dynamics  SGbased models converge
+to analogous solutions to the true model under some additional assumptions  We proved exact convergence for  
+simple class of models  and for more complex situations
+we demonstrated that the implicit loss model captures the
+characteristics of the true loss surface  It remains an open
+question how to characterise the learning dynamics in more
+general cases  Thirdly  we showed that despite these convergence properties the trained networks can be qualitatively different from the ones trained with backpropagation  While not necessarily   drawback  this is an important
+consequence one should be aware of when using synthetic
+gradients in practice  Finally  we provided   uni ed framework that can be used to describe alternative learning methods such as Synthetic Gradients  FA  DFA  and Kickback 
+as well as standard Backprop  The approach taken shows
+that the language of predicting gradients is suprisingly universal and provides additional intuitions and insights into
+the models 
+
+fifi fi fifi fi Mi   iMi           DifferentiableLegend xyLhSGLSGxyLhForward connection  differentiableForward connection  nondifferentiableError gradient  nondifferentiableSynthetic error  gradient  differentiableLegend Synthetic error  gradient  nondifferentiableNon differentiableForward connectionError gradientSynthetic error gradientLhSGLSGSGpLhhLSGBproppLhSGLSGSG   proppLhhADFApLhhALSGFApg hWLhh LSGKickbackpLSGUnderstanding Synthetic Gradients and DNIs
+
+References
+Alain  Guillaume and Bengio  Yoshua  Understanding intermediate layers using linear classi er probes  arXiv
+preprint arXiv   
+
+Baldi  Pierre  Sadowski  Peter  and Lu  Zhiqin  Learning in
+the machine  Random backpropagation and the learning
+channel  arXiv preprint arXiv   
+
+Balduzzi  David  Vanchinathan  Hastagiri  and Buhmann 
+Joachim  Kickback cuts backprop   redtape  Biologically plausible credit assignment in neural networks 
+arXiv preprint arXiv   
+
+Bengio  Yoshua  Lee  DongHyun  Bornschein  Jorg 
+Mesnard  Thomas  and Lin  Zhouhan  Towards biarXiv preprint
+ologically plausible deep learning 
+arXiv   
+
+Gratton  Serge  Toint  Philippe    and Tr oltzsch  Anke 
+How much gradient noise does   gradientbased linesearch method tolerate  Technical report  Citeseer   
+
+Jaderberg  Max  Czarnecki  Wojciech Marian  Osindero 
+Simon  Vinyals  Oriol  Graves  Alex  and Kavukcuoglu 
+Koray  Decoupled neural interfaces using synthetic gradients  arXiv preprint arXiv   
+
+Kriegeskorte  Nikolaus  Mur  Marieke  and Bandettini  Peter    Representational similarity analysisconnecting
+the branches of systems neuroscience  Frontiers in systems neuroscience     
+
+Lillicrap  Timothy    Cownden  Daniel  Tweed  Douglas   
+and Akerman  Colin    Random synaptic feedback
+weights support error backpropagation for deep learning 
+Nature Communications     
+
+Marblestone  Adam    Wayne  Greg  and Kording  Konrad    Toward an integration of deep learning and neuroscience  Frontiers in Computational Neuroscience   
+ 
+
+  kland  Arild  Direct feedback alignment provides learning in deep neural networks  In Lee        Sugiyama 
+   Luxburg        Guyon     and Garnett      eds 
+Advances in Neural Information Processing Systems  
+pp    Curran Associates  Inc   
+
+Williams  DRGHR and Hinton  GE  Learning representations by backpropagating errors  Nature   
+   
+
+Zoutendijk     Nonlinear programming  computational
+methods  Integer and nonlinear programming   
+   
+
+

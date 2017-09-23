@@ -1,0 +1,902 @@
+Accelerating Eulerian Fluid Simulation With Convolutional Networks
+
+Jonathan Tompson   Kristofer Schlachter   Pablo Sprechmann     Ken Perlin  
+
+Abstract
+
+Ef cient simulation of the NavierStokes equations for  uid  ow is   long standing problem
+in applied mathematics  for which stateof theart methods require large compute resources  In
+this work  we propose   datadriven approach
+that leverages the approximation power of deeplearning with the precision of standard solvers
+to obtain fast and highly realistic simulations 
+Our method solves the incompressible Euler
+equations using the standard operator splitting
+method  in which   large sparse linear system
+with many free parameters must be solved  We
+use   Convolutional Network with   highly tailored architecture  trained using   novel unsupervised learning framework to solve the linear
+system  We present realtime    and    simulations that outperform recently proposed datadriven methods  the obtained results are realistic
+and show good generalization properties 
+
+  Introduction
+Realtime simulation of  uid  ow is   long standing problem in many application domains 
+from computational
+ uid dynamics for industrial applications  to smoke and
+ uid effects for computer graphics and animation  High
+computational complexity of existing solutions has meant
+that realtime simulations have been possible under restricted conditions  In this work we propose   datadriven
+solution to the invicidEuler equations that is faster than
+traditional methods  while remaining competitive in longterm simulation stability and accuracy  This work is focused on computer graphics animation as the driving application for our architecture  however the techniques presented here can be extended to more complicated forms of
+NavierStokes  with appropriate modi cations that are outside the scope of this work 
+
+ Google Brain  Mountain View  USA  New York University 
+New York  USA  Google Deepmind  London  UK  Correspondence to  Jonathan Tompson  tompson google com 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+The dynamics of   large number of physical phenomenon
+are governed by the incompressible NavierStokes equations  which are   set of partial differential equations that
+must hold throughout    uid velocity  eld for all time steps 
+There are two main computational approaches for simulating these equations  the Lagrangian methods  that approximate continuous quantities using discrete moving particles  Gingold   Monaghan    and the Eulerian  methods that approximate quantities on    xed grid  Foster  
+Metaxas    We adopt the latter for this work 
+Eulerian methods are able to produce accurate results simulating  uids like water with high compute costs  The most
+demanding portion of this method is the  pressure projection  step  which satis es an incompressibility constraint 
+It involves solving the discrete Poisson equation and leads
+to   wellknown sparse  symmetric and positivede nite
+linear system  Exact solutions can be found via traditional convex optimization techniques  such as the Preconditioned Conjugate Gradient  PCG  algorithm or via stationary iterative methods  like the Jacobi or GaussSeidel
+methods  PCG exhibits fast asymptotic convergence  however it suffers from high timeconstants and is generally
+not suited to GPU hardware  The Jacobi method is used for
+realtime applications  however it suffers from poor asymptotic convergence  Additionally  the computational complexity of both these algorithms is strongly datadependent
+      boundary condition dependent  and these iterative
+methods are truncated in realtime to    within   computational budget 
+In this paper  we propose   machine learning based approach for accelerating this linear projection that is fast
+and whose complexity is dataindependent  We leverage
+the power of deeplearning techniques to derive an approximate linear projection  We claim that our machinelearning
+approach can take advantage of the statistics of  uid data
+and the local sparsity structure of the discrete Poisson equation to learn an approximate method that ensures longterm
+stability using    xed computational budget  The main contributions of this work are as follows 
+
+    We rephrase the learning task as an unsupervised
+learning problem  since groundtruth data is not required we can incorporate loss information from multiple timesteps and perform various forms of non 
+
+Accelerating Eulerian Fluid Simulation With Convolutional Networks
+
+trivial dataaugmentation 
+
+ ii  We propose   collection of domainspeci   ConvNet
+architectural optimizations motivated by the linear
+system structure itself  which lead to both qualitative and quantitative improvements  We incorporate
+an inline normalization scheme  we devise   multiresolution architecture to better simulate long range
+physical phenomena and we formulate the high level
+solver architecture to include    pressure bottleneck 
+to prevent trivial solutions of our unsupervised objective 
+
+ iii  Our proposed simulator is stable and is fast enough to
+permit realtime simulation  Empirical measurements
+suggest good generalization properties to unseen settings 
+
+ iv  We provide   public dataset and processing pipeline
+to procedurally generate random groundtruth  uid
+frames for evaluation of simulation methods 
+
+The paper is organized as follows  We discuss related work
+in Section  
+In Section   we brie   introduce the  uid
+simulation techniques used in this paper  In Section   we
+present the proposed model  We provide implementation
+details in Section   Experimental results are described in
+Section   and conclusion are drawn in Section  
+
+  Related Work
+Recent work has addressed the problem of computational
+performance in  uid simulations   McAdams et al   
+proposed   multigrid approach as   preprocessing step of
+the PCG method  This method can signi cantly improve
+performance in large scene settings  However  multigrid
+methods are very dif cult to implement  hard to parallelize
+on the GPU  have nontrivial  failurecases        multigrid complexity resorts to singleresolution complexity for
+simulations with highly irregular domain boundaries  and
+the method still requires   iterative optimization procedure
+with datadependent complexity 
+Some methods propose inexact  but ef cient  approximate
+solutions to the Poisson equation  such as iterated orthogonal projections  Molemaker et al    or coarseGrid
+corrections  Lentine et al    While these approaches
+can be competitive in low resolution settings  they are data
+agnostic  they do not exploit the statistics of the data to be
+processed    natural approach is to tackle the problem in  
+datadriven manner   by adapting the solver to the statistics
+of the data of interest  The main idea of datadriven methods is to reduce computation by operating on   representation of the simulation space of signi cantly lower dimensionality  The Galerkin projection transforms the dynamics
+of the  uid simulation to operations on linear combinations
+of preprocessed snapshots  Treuille et al    De Witt
+et al    In  Raveendran et al    the authors pro 
+
+pose generating complex  uid simulations by interpolating
+  relatively small number of existing preprocessed simulations  The state graph formulation  Stanton et al   
+leverages the observation that on simple simulations only  
+small number of states are visited 
+More recently   and most related to this work   some authors have regarded the  uid simulation process as   supervised regression problem  These approaches train blackbox machine learning systems to predict the output produced by an exact solver using random regression forests
+ Ladick   et al    or neural networks  Yang et al 
+  for Lagrangian and Eulerian methods respectively 
+Ladick   et al  propose an adaptation of regression forests
+for smoothed particle hydrodynamics  Given   set of handcrafted features corresponding to individual forces  the authors trained   regressor for predicting the state of each particle in the following timestep  Yang et al  train   patchbased neural network to predict the ground truth pressure
+given local previousframe pressure  voxel occupancy  and
+velocity divergence of an input frame 
+  major limitation of existing learningbased methods is
+that they require   dataset of linear system solutions provided by an exact solver  Hence  targets cannot be computed during training and models are trained to predict the
+groundtruth output always starting from an initial frame
+produced by an exact solver  while at test time this initial
+frame is actually generated by the model itself  This discrepancy between training and simulation can yield errors
+that can accumulate quickly along the generated sequence 
+This problem is analogous to that encountered when generating sequences with recurrent neural networks  see  Bengio et al    and references therein  Additionally  the
+ConvNet architecture proposed by Yang et al  is not suited
+to our more general usecase  in particular it cannot accurately simulate longrange phenomena  such as gravity or
+buoyancy  While providing encouraging results that offer  
+signi cant speedup over their PCG baseline  their work is
+limited to data closely matching the training conditions  as
+we will discuss in Section  
+Finally we point out that our work is related to the emergent
+ eld of arti cial intelligence  AI  referred as intuitive or
+naive physics  Despite the tremendous progress achieved
+in AI  agents are still far from achieving common sense
+reasoning  which is thought to play   crucial role in the development of general AI  Recent works have attempted to
+build neural models that can make predictions about stability  collisions  forces and velocities from images or videos 
+or interactions with an environment      
+ Lerer et al 
+  In this context  having accurate and ef cient models for simulating   real world environment could be crucial
+for developing new learning systems  Hamrick et al   
+Fleuret    Byravan   Fox    We believe that our
+
+Accelerating Eulerian Fluid Simulation With Convolutional Networks
+
+work could be used in this context in the more challenging
+setting of an agent interacting with  uids  see for instance
+ Kubricht et al   
+
+  Fluid Equations
+When    uid has zero viscosity and is incompressible it
+is called inviscid  and can be modeled by the Euler equations  Batchelor   
+
+  
+  
+
+           
+
+ 
+      
+         
+
+ 
+
+ 
+
+Where   is the velocity       or    vector  eld    is time   
+is the pressure    scalar  eld    is the summation of external forces applied to the  uid body  buoyancy  gravity  etc 
+and   is  uid density  Equation   is known as the momentum equation  it arrises from applying Newton   second
+law to  uid motion and describes how the  uid accelerates
+given the forces acting on it  Equation   is the incompressibility condition  which enforces the volume of the  uid to
+remain constant throughout the simulation  For readers unfamiliar with  uid mechanics and it   associated prerequisite topics  multivariable calculus   nitedifference methods  etc  we highly recommend  Bridson    as an introductory reference to this material 
+We numerically compute all spatial partial derivatives using  nite difference  FD  methods on   MAC grid  Harlow
+  Welch    The MAC grid representation samples
+velocity components on the face of voxel cells  and the
+scalar quantities       pressure or density  at the voxel center  This representation removes the nontrivial nullspace
+of central differencing on the standard uniformly sampled
+grid and it simpli es boundary condition handling  since
+solidcell boundaries are collocated with the velocity samples 
+Equations   and   can be solved via the standard operator
+splitting method  which involves an advection update and
+   pressure projection  step  Here is an overview of the
+single timestep velocity update algorithm 
+
+ optional  Advect scalar components through ut 
+Selfadvect velocity  eld ut 
+
+Set normal component of solidcell velocities 
+
+Algorithm   Euler Equation Velocity Update
+  Advection and Force Update to calculate   cid 
+   
+ 
+ 
+  Add external forces fbody
+  Add vorticity con nement force fvc
+ 
+  Pressure Projection to calculate ut 
+ 
+        cid 
+  Apply velocity update ut   ut     
+
+Solve Poisson eqn   pt    
+
+    to  nd pt
+ pt
+
+At   high level  Algorithm   step   ignores the pressure
+term    of Equation   to create an advected velocity
+ eld    cid 
+    which includes unwanted divergence  and then
+step   solves for pressure     to satisfy the incompressibility constraint  Equation   This produces   divergence free
+velocity  eld  ut  It can be shown that an exact solution
+of   in step   coupled with   semiLagrangian advection
+routine in steps   and   results in an unconditionally stable numerical solution  In our hybrid apporach we modify
+step   by replacing the exact projection for   learned one 
+For advection of scalar  elds and selfadvection of velocity  we perform   semiLagrangian backward particle trace
+using the Maccormack method  Selle et al    When
+the backward trace would otherwise sample the input  eld
+inside non uid cells  or outside the simulation domain 
+we instead clamp each line trace to the edge of the  uid
+boundary and sample the  eld at its surface 
+We use vorticity con nement  Steinhoff   Underhill 
+  to counteract unwanted numerical dissipation  which
+attempts to reintroduce smallscale detail by detecting the
+location of vortices in the  ow  eld and then introducing
+arti cial force terms to increase rotational motion around
+these vortices  This  rstly involves calculating the vorticity strength             using central difference and then
+calculating the pervoxel force  fvc              where 
+       cid   cid    controls the amplitude of vorticity con 
+ nement  and   is the grid size  typically      
+Algorithm   step   is by far the most computationally
+demanding component  It involves solving the following
+Poisson equation 
+
+ pt  
+
+ 
+        cid 
+
+ 
+
+ 
+
+Rewriting the above equation results in   large sparse linear system Apt      where   is referred to in the literature as the   or   point Laplacian matrix  for    and   
+grids respectively  Despite   being symmetric and positive semide nite  the linear system often has   large number of free parameters  which means that with standard iterative solvers   large number of iterations must be performed to produce an adequately small residual  Furthermore  this number of iterations is strongly datadependent 
+In this paper  we use an alternative machine learning  and
+datadriven  approach to solving this linear system  where
+we train   ConvNet model to infer pt  The details of this
+model will be covered in Section  
+After solving for pressure  the divergence free velocity is
+calculated by subtracting the FD gradient of pressure  ut  
+     
+  cid 
+To satisfy slipcondition boundaries at  uid to solidcell interfaces  we set the velocity of MAC cells so that the com 
+
+ pt 
+
+Accelerating Eulerian Fluid Simulation With Convolutional Networks
+
+ponent along the normal of the boundary face is equal to the
+normal component of the object velocity              uid  
+     usolid  The MAC grid representation makes this trivial 
+as each solid cell boundary is at the sampling location of
+the velocity grid 
+
+  Pressure Model
+In traditional formulations  incompressibility is obtained
+only when the pressure is   solution of the linear system
+of equations given in Equation   However  in realtime
+applications  PCG or Jacobi iterations are truncated before reaching convergence  Therefore the obtained velocity  elds are divergent  which may lead to bad solutions
+      volume change of smoke or  uid and other visual artifacts  and even instability  As such  truncation forgoes
+treating the incompressibility condition as   hard constraint
+even if this is not the intention  and few guarantees can be
+given for quality of the divergence residual at termination 
+This is especially true in degenerate cases when the matrix in the sparse linear system   has   large number of
+freeparameters  for example with highly irregular geometry boundaries 
+At the heart of this problem is the ability to predict the runtime of PCG iterations as   function of the required accuracy and the speci   data in which it is applied  While
+there is   vast amount of literature in convex optimization 
+how data complexity impacts convergence rate of convex
+solvers is still not well understood  Oymak et al   
+Recent works have attempted to shed some light on these
+questions  Oymak et al    Giryes et al    These
+results show that  given    xed computational budget  allowing for only   small number of iterations  in projected
+gradient approaches  it is worthwhile using very inaccurate
+projections that may lead to   worse solution in the longterm  but are better to use with the given computational
+constraints  While this line of work is promising  current
+results only apply to random systems  such as Gaussian
+maps  and speci   types of input data  with local low dimensional structure  in order to characterize the form of the
+inaccurate projections for   given problem  In the general
+case  given    xed computational budget  there is currently
+no way of guaranteeing   pre xed tolerance with respect
+to the optimality conditions for all possible inputs 
+The fundamental observation is that  while there is no
+closed form solution and   numerical solution might be
+dif cult to compute  the function mapping input data to
+the optimum of an optimization problem is deterministic 
+Therefore one can attempt to approximate it using   powerful regressor such as deep neural network  Building upon
+
+ Advection should only be done in   divergencefree velocity
+ eld and typically there are no longterm  or multiframe  mechanisms to ensure divergence is not accumulated 
+
+this observation  another key contribution of this work is
+that the learning task can be phrased as   completely unsupervised learning problem  if an appropriate ConvNet architecture is used  Instead of using supervised training to
+directly infer and score the next frame velocity  or pressure    where the loss would be some distance measure to
+groundtruth data   we measure the squared    norm of
+the divergence of the predicted velocity and minimize it directly 
+
+ cid 
+ cid 
+
+ 
+
+ 
+
+fobj  
+
+ 
+
+ cid 
+ cid 
+wi      ut 
+
+ 
+
+wi
+
+   
+
+  cid 
+   
+
+ cid cid 
+
+ 
+
+ 
+ pt
+
+ 
+
+Where  ut and  pt are the predicted divergence free velocity and pressure  elds respectively and wi is   pervertex
+weighting term which emphasizes the divergence of voxels
+on geometry boundaries 
+
+wi   max       di 
+
+where di is   distance  eld with value   for solid cells  and
+for  uid cells is the minimum Euclidean distance of each
+ uidcell to the nearest solid cell         signed distance
+ eld encoding of the occupancy grid  Since the  uidsolid
+border represents   small fraction of the domain  due to
+the sparse nature of the occupancy grid  without importance weighting it contributes   small fraction of the overall
+lossfunction  and might be ignored by our limited capacity
+ConvNet  However the effect of this term is not signi cant
+and has   minor contribution to the simulation quality 
+The Equation   formulation has two signi cant bene ts 
+Firstly  since obtaining groundtruth velocity from expensive iterative methods is no longer necessary  we can perform nontrivial dataaugmentation to the input velocity
+ elds  Secondly  we can incorporate loss information from
+  composition of multiple timesteps without the need of
+running exact solvers for each frame  With this  we can
+further improve our ConvNet prediction and longterm stability by adding an additional term to our objective function
+that minimizes  longterm  divergence  We do so by stepping forward the simulation state from    for each training
+sample  to   small number of timesteps   in the future      
+we calculate  un  Then we calculate the scalar value of
+Equation   using this future frame and we add this to the
+global objective  to be minimized by SGD  This process is
+depicted in Figure  
+To infer  pt we use   Convolutional Network architecture
+ fconv  parameterized by its weights and biases     and
+ When training our model we step forward either       steps 
+with probability   or       with probability   Furthermore
+we use   random timestep   to promote timestep invariance  
+according to                     where      
+is   random sample from   Normal Gaussian distribution 
+
+Accelerating Eulerian Fluid Simulation With Convolutional Networks
+
+Figure    Longterm  Velocity Divergence Minimization
+
+Figure   VelocityUpdate Architecture
+
+   
+whose input is the divergence of the velocity  eld        cid 
+and   geometry  eld gt     Boolean occupancy grid that
+delineates the cell type for each voxel in our grid   uid cell
+or solid cell 
+
+ pt   fconv         cid 
+
+    gt 
+
+ 
+
+We then optimize the parameters of this network     to
+minimize the objective fobj using standard deeplearning
+optimization approaches  namely we use Back Propagation  BPROP  to calculate all partial derivatives and the
+ADAM  Kingma   Ba    optimization algorithm to
+minimize the loss 
+  block diagram of our highlevel model architecture is
+shown in Figure   and shows the computational blocks required to calculate the output  ut for   single timestep  The
+advect block is    xed function unit that encompasses the
+advection step of Algorithm   After advection  we add the
+body and vorticity con nement forces  We then calculate
+  which  along with
+the divergence of the velocity  eld    cid 
+geometry  is fed through   multistage ConvNet to produce
+ pt  We then calculate the pressure divergence  and subtract
+it from the divergent velocity to produce  ut  Note that the
+bottleneck architecture avoids obtaining trivial solutions 
+the perturbation applied by the CNN to the divergent velocity is restricted to be   conservative vector  eld       the
+gradient  eld with potential  pt  Note that the only block
+with trainable parameters is the ConvNet model and that all
+blocks are differentiable 
+Since the ConvNet  fconv  solves   linear system Apt     
+we are free to scale the left and right hand sides by some
+constant    we calculate the standard deviation of the input velocity  eld      STD    cid 
+    and normalize the input
+divergence by this scale value  We then undo the output
+pressure scale by multiplying by the scale reciprocal  By
+scale normalizing the input the learned network is made
+
+Figure   Convolutional Network for Pressure Solve
+
+globally scale invariant  which helps generalization performance  Recall that while the network is learning   linear
+projection  the network itself is highly nonlinear and so
+would otherwise be sensitive to input scale 
+The internal structure of the ConvNet architecture is shown
+in Figure  
+It consists of   stages of convolution  spatial or volumetric for    and    respectively  and Rectifying Linear layers  ReLU  The convolutional operator itself
+mimics the local sparsity structure of our linear system  at
+each layer  features are generated from local interactions
+and these local interactions have higherlevel global behavior in the deeper layers of the network  However   single
+resolution network would have limited context which limits the network   ability to model longrange external forces
+ for example the presence of gravity in   closed simulation
+domain results in   low frequency pressure gradient  As
+such  we add multiresolution features to enable modeling
+long range physical phenomenon by downsampling the  rst
+hidden layer twice  average pooling  processing each resolution in parallel then upsampling  bilinear  the resultant
+low resolution features before accumulating them 
+Note that since our network is fullyconvolutional  the size
+of the domain can be modi ed at inference time  while we
+train at   and   resolutions for the    and    models
+respectively  the network can perform inference on any size
+domain 
+Further improvements can be made to the architecture
+of Figure   We have experimented with residual connections  He et al    gated convolutions  Dauphin
+et al    and signi cantly deeper network architectures 
+These techniques do improve accuracy but at the cost of
+added runtime and latency  Alternatively  runtime can
+be reduced by replacing fullrank convolution kernels with
+learned separable convolution stages       compositions of
+lowrank convolutions  or by using recent model compression techniques  Lin et al    Hinton et al    for
+moderate increases in output divergence 
+Why not to use   ConvNet to learn an endto end mapping that predicts the velocity  eld at each timestep  The
+chaotic change of velocity between frames is highly unstable and easily affected by external forces and other factors 
+
+           Advect   Project Advect   Project Advect   Project min     uuuuu    Advect fconvutut gt pt utfbody fvc   ss       velocity divergencepressure geom        ConvReLU          ConvReLU          ConvReLU          ConvReLU        ConvReLU                     Pooling      Pooling UpscalingAccelerating Eulerian Fluid Simulation With Convolutional Networks
+
+We argue that our proposed hybrid approach restricts the
+learning task to   stable projection step relieving the need
+of modeling the well understood advection and external
+body forces  The proposed method takes advantage of the
+understanding and modeling power of classic approaches 
+supporting enhancing tools such as vorticity con nement 
+Having said this  endto end models are conceptually simpler and  combined with adversarial training  Goodfellow
+et al    have shown promising results for dif cult
+tasks such as video prediction  Mathieu et al    In
+that setting   uid simulation is   very challenging test case
+and our proposed method represents an important baseline
+in terms of both accuracy and speed 
+
+  Dataset Creation and Model Training
+Note that while we do not need label information to train
+our ConvNet  our network   generalization performance
+improves when using   dataset that approximately samples
+the manifold of realworld  uid states  To this end  we propose   procedural method to generate   corpus of initial
+frames for use in training 
+
+In lieu of realworld  uid data  we use synthetic data
+generated using an of ine    solver  manta ow  Pfaff  
+Thuerey  We then seed this solver with initial condition
+states generated via   random procedure using   combination of      pseudorandom turbulent  eld to initialize the
+velocity ii    random placement of geometry within this
+ eld  and iii  procedurally adding localized input perturbations  We will now describe this procedure in detail 
+Firstly  we use the wavelet turbulent noise of  Kim et al 
+  to initialize   pseudorandom  divergence free velocity  eld  At the beginning of each simulation we randomly
+sample   set of noise parameters       wavelet spatial scale
+and amplitude  and we generate   random seed  which we
+then use to generate the velocity  eld 
+Next we generate an occupancy grid by selecting objects
+from   database of models and randomly scaling  rotating and translating these objects in the simulation domain 
+We use   subset of   objects from the NTU    Model
+Database  Pu   Ramani      models are used only
+when generating training set initial conditions and   for
+test samples  Figure   shows   selection of these models 
+For generating    simulation data  we simply take     
+slice of the    voxel grid  Finally  we simulate small divergent input perturbations by modeling in ow moving across
+the velocity  eld using   collection of emitter particles of
+random time duration  position  velocity and size 
+With the above initial conditions  we use Manta to calculate
+  by advecting the velocity  eld and adding forces  We
+  cid 
+also step the simulator forward   frames  using Manta  
+PCGbased solver  recording the velocity every   steps 
+
+Figure     selection of    Models used in our dataset
+
+We generate   training set of    scenes   each with  
+random initial condition  and   test set of an additional  
+scenes  Each  scene  contains   frames   seconds apart 
+We use   disjoint set of geometry for the test and training
+sets to test generalization performance  The dataset is public  as well as the code for generating it 
+During training  we further increase dataset coverage by
+performing dataaugmentation  When stepping forward the
+simulator to calculate longterm divergence  we randomly
+add gravity  density and vorticity con nement of varying
+strengths and with   random gravity vector 
+
+  Results and Analysis
+The model of Section   was implemented in Torch   Collobert et al    with two CUDA baseline methods
+for comparison    Jacobibased iterative solver and  
+PCGbased solver  with incomplete Cholesky    preconditioner  For sparse linear system operations  we used primitives from NVIDIA   cuSPARSE and cuBLAS libraries 
+To implement the model of  Yang et al    for comparison  we rephrase their patchbased architecture as an equivalent sliding window model comprised of         conv and
+sigmoid stage followed by   stages of       convolutions
+and sigmoid with appropriate feature sizing  Note that this
+equivalent reimplementation as   ConvNet is signi cantly
+faster  as we can make use of the highly optimized convolution implementations from NVIDIA   cudnn library  Yang
+et al 
+report  ms per frame on             grid 
+while our implementation of their model takes only  ms
+per frame at this resolution 
+The supervised loss speci ed by Yang et al  measures the
+distance to   groundtruth output pressure      
+they train
+  network in isolation to perform the pressure projection
+only  For our dataset  this loss does not result in accurate
+results  When  uid cells are surrounded by solid cells  each
+connected component of  uid represents and independent
+linear system  each with an arbitrary pressure offset  As
+such  we modi ed the learning procedure of Yang et al  to
+include    pressurenormalization  routine which subtracts
+the mean pressure in each connectedcomponent of  uid
+cells in the groundtruth pressure frames  This modi cation enabled SGD to converge when training their model on
+
+Accelerating Eulerian Fluid Simulation With Convolutional Networks
+
+our dataset  However despite this correction  the model of
+Yang et al  does not learn an accurate linear projection on
+our data  our initial condition divergent velocity frames include large gradient and buoyancy terms  which results in  
+high amplitude  low frequency gradient in the groundtruth
+pressure  The small       input context of their model is
+not able to infer such low frequency outputs  Since these
+loss terms dominate the Yang et al  objective  the network
+overtrains to minimize it  Likely  this phenomena wasn  
+evident in Yang et al   original results due to the low diversity of their training set  and the high correlation between
+their evaluation and training conditions  perhaps their intended usecase  The results of their model trained on their
+objective function can be seen in Figure  
+By contrast  our unsupervised objective minimizes divergence after the pressure gradient operator  whose FD calculation acts as   highpass  lter  This is   signi cant advantage  our objective function is  softer  on the divergence
+contribution for phenomena that the network cannot easily
+infer  For the remaining experimental results  we will evaluate an improved version of the Yang et al  model  which
+we call our  smallmodel 
+Figure   shows the computation time of the Jacobi method 
+the smallmodel  sizing of Yang et al  and this work 
+Note that for fair quantitative comparison of output residual  we choose the number of Jacobi iterations   to approximately match the FPROP time of our network       to
+compare divergence with  xed compute  Since the asymptotic complexity as   function of resolution is the same for
+Jacobi and our ConvNet  the FPROP times are equivalent 
+PCG is orders of magnitude slower at all resolutions and
+has been omitted for clarity  The smallmodel provides  
+signi cant speedup over other methods  The runtime for
+the PCG  Jacobi  this work  and the smallmodel at  
+grid resolution are  ms   ms   ms and  ms
+respectively 
+Note that with custom hardware  Movidius  Google Inc 
+separable convolutions and other architectural enhancements  we believe the runtime of our ConvNet could be reduced signi cantly  However  we leave this to future work 
+We simulated      smoke plume using both our system and
+baseline methods  The simulation data was created using
+our realtime system  which supports basic realtime visu 
+
+ The  smallmodel  is   single resolution pressure network
+with only       context and trained using the loss function  toplevel architectural improvements and dataaugmentation strategies from this work  We include these experiments as   proxy
+comparison for the original model of Yang et al 
+
+ This runtime includes the pressure projection steps only  the
+velocity divergence calculation  the linear system solve and the
+velocity update  We use an NVIDIA Titan   GPU with  GB of
+ram and an Intel Xeon    CPU 
+
+Figure   Pressure projection time  ms  versus resolution  PCG
+not shown for clarity 
+
+Figure   Plume simulation  without vorticity con nement  Top
+left  Jacobi   iterations  Top Middle Jacobi   iterations 
+Top Right  PCG  Bottom left  Yang et al  Bottom middle  smallmodel  Bottom Right  this work 
+
+alization  and the accompanying  gures and supplemental
+videos were rendered of ine using Blender  Blender Foundation  Video examples of these experiments can be found
+in the supplemental materials  Since vorticity con nement
+tends to obfuscate simulation errors  by adding high frequency detail  Figures   and   were simulated without it 
+Figure   shows   rendered frame of our plume simulation
+ without geometry  for all methods at the same simulation timestep  Note that this boundary condition is not
+present in the training set and represents an input divergent  ow   times wider than the largest impulse present
+during training  It is   dif cult test of generalization performance  Qualitatively  the PCG solver    iteration Jacobi solver and our network produce visually similar results  The smallmodel   narrow receptive  eld cannot accurately simulate the large vortex under the plume  and as
+  result the plume rises too quickly       with too much
+upward velocity  and exhibits density blurring under the
+plume itself  The Jacobi method  when truncated early at
+  iterations  introduces implausible high frequency noise
+and has an elongated shape due to inaccurate modeling
+
+ resolutionruntime ms   jacobi iterations thisworksmallmodelthisworkAccelerating Eulerian Fluid Simulation With Convolutional Networks
+
+PCG
+No geom
+   
+With geom    
+
+Jacobi
+ 
+ 
+
+smallmodel
+
+this work
+
+ 
+ 
+
+ 
+ 
+
+Table   Maximum residual norm throughout our Plume simulation with and without geometry  maxt     ut 
+
+Figure   Plume simulation with  Arch  geometry  Left  PCG 
+Middle smallmodel Right  this work 
+
+of buoyancy forces  We also repeat the above simulation
+with solid cells from two models held out of our training
+set 
+the  arc de triomphe  model  Pu   Ramani   
+and the Stanford bunny  Turk   Levoy    the single
+frame results for the arch simulation are shown in Figure  
+Since this scene exhibits lots of turbulent  ow  qualitative
+comparison is less useful  The smallmodel has dif culty
+minimizing divergence around large  at boundaries and results in highfrequency density artifacts as shown  Both
+ConvNet based methods lose some smoke density inside
+the arch due to negative divergence at the  uidgeometry
+boundary  speci cally at the large  at ceiling 
+In addition to comparing divergence using  xedcompute 
+we also performed the above experiment by  xing divergence to maxt     ut      and measuring compute  For Jacobi to match the divergence performance of
+our network  it requires   iterations and so is   slower
+than our network  Since calculating divergence at inference
+time is fast and ef cient  PCG can be used as   fallback
+method if our system fails with minimal runtime penalty or
+if the application at hand requires an exact solution 
+Table   shows the maximum norm    linear system residual for each frame over the entire simulation  The maximum residual for the Yang et al  model was greater than
+    for both simulations       it fails on this test case  Interestingly  early termination of the Jacobi method at  
+iterations results in reduced longterm accuracy and visual
+quality  Figure   however the maximum perframe residual is still relatively low  This suggests that single frame
+divergence alone is not   suf cient condition to maintain
+longterm accuracy  and that the multiframe error propagation mechanisms are an extremely important  but harder
+to quantify  factor 
+
+As   test of longterm stability  we record the mean   
+norm of velocity divergence     cid     ui cid  across all samples in our testset  The result of this experiment is shown
+in Figure   On our testset frames  our method outper 
+
+Figure      cid     ui cid  versus timestep for each frame sample in
+our dataset  PCG not shown for clarity 
+
+forms the smallmodel by   signi cant margin and is competitive with Jacobi truncated to   iterations  Figure  
+also shows the results of our model when   single timestep loss is used  Adding multiframe components not only
+improves the divergence residual over multiple time steps
+as expected  since this is what we are directly minimizing 
+but additionally the single frame divergence performance
+is also improved  We attribute this to the fact that these future frames effectively increase dataset diversity  and can
+be seen as   form of dataset augmentation to improve generalization performance 
+
+  Conclusion
+This work proposes   novel  fast and ef cient method for
+calculating numerical solutions to the inviscid Euler Equations for  uid  ow  We present   datadriven approach for
+approximate inference of the sparse linear system used to
+enforce the NavierStokes incompressibility condition   the
+ pressure projection  step  We propose an unsupervised
+trainingloss  which incorporates multiframe information
+to improve longterm stability  We also present   novel and
+tailored ConvNet architecture  which facilitates dropin replacement with existing Eulerianbased solvers  While the
+proposed approach cannot guarantee  nding an exact solution to the pressure projection step  it can empirically
+produce very stable divergence free velocity  elds whose
+runtime and accuracy is better than the Jacobi method
+   common technique used for realtime simulation  and
+whose visual results are comparable to PCG  while being orders of magnitude faster  Code  data and videos are
+made available at http cims nyu edu schlacht 
+CNNFluids htm 
+
+ TimestepE     Jacobi iterationsthiswork smallmodelthiswork multiframethiswork singleframeAccelerating Eulerian Fluid Simulation With Convolutional Networks
+
+References
+Batchelor      
+
+An Introduction to Fluid Dynamics 
+Cambridge Mathematical Library  Cambridge University Press   
+
+Bengio  Samy  Vinyals  Oriol  Jaitly  Navdeep  and
+Shazeer  Noam  Scheduled sampling for sequence prediction with recurrent neural networks  In Advances in
+Neural Information Processing Systems  pp   
+ 
+
+Blender Foundation  Bender opensource renderer     
+
+http www blender org 
+
+Bridson     Fluid Simulation for Computer Graphics 
+Ak Peters Series  Taylor   Francis   
+ISBN
+  URL https books google 
+com books id gFI   VCZ   
+
+Byravan  Arunkumar and Fox  Dieter  Se nets  Learning
+rigid body motion using deep neural networks  arXiv
+preprint arXiv   
+
+Collobert  Ronan  Kavukcuoglu  Koray  and Farabet 
+Cl ement  Torch    matlablike environment for machine learning  In BigLearn  NIPS Workshop   
+
+Dauphin  Yann    Fan  Angela  Auli  Michael  and Grangier  David  Language modeling with gated convolutional
+networks  arXiv preprint arXiv   
+
+De Witt  Tyler  Lessig  Christian  and Fiume  Eugene  Fluid
+simulation using laplacian eigenfunctions  ACM Trans 
+Graph    February   ISSN  
+  doi    URL http 
+ doi acm org 
+
+Fleuret  Franc ois  Predicting the dynamics of    objects
+
+with   deep residual network   
+
+Foster  Nick and Metaxas  Dimitri  Realistic animation
+of liquids  Graph  Models Image Process   
+  September   ISSN   doi   
+gmip  URL http dx doi org 
+ gmip 
+
+Gingold  Robert   and Monaghan  Joseph    Smoothed
+particle hydrodynamics  theory and application to nonspherical stars  Monthly notices of the royal astronomical society     
+
+Giryes  Raja  Eldar  Yonina    Bronstein  Alex    and
+Sapiro  Guillermo 
+Tradeoffs between convergence
+speed and reconstruction accuracy in inverse problems 
+arXiv preprint arXiv   
+
+Goodfellow  Ian  PougetAbadie  Jean  Mirza  Mehdi  Xu 
+Bing  WardeFarley  David  Ozair  Sherjil  Courville 
+Aaron  and Bengio  Yoshua  Generative adversarial nets 
+In Advances in neural information processing systems 
+pp     
+
+Google Inc 
+
+http 
+cloudplatform googleblog com 
+
+Tensor processing unit 
+
+Hamrick  Jessica    Pascanu  Razvan  Vinyals  Oriol 
+Ballard  Andy  Heess  Nicolas  and Battaglia  Peter 
+Imaginationbased decision making with physical models in deep neural networks   
+
+Harlow  Francis    and Welch     Eddie  Numerical calculation of timedependent viscous incompressible  ow of
+ uid with free surface  Physics of Fluids   
+   
+
+He  Kaiming  Zhang  Xiangyu  Ren  Shaoqing  and Sun 
+Jian  Deep residual learning for image recognition  arXiv
+preprint arXiv   
+
+Hinton  Geoffrey  Vinyals  Oriol  and Dean  Jeff  Distilling the knowledge in   neural network  arXiv preprint
+arXiv   
+
+James  Doug 
+
+Kim  Theodore  Th urey  Nils 
+
+and
+turbulence for  uid simGross  Markus  Wavelet
+ACM Trans  Graph    Auulation 
+gust  
+ISSN   doi   
+  URL http doi acm org 
+ 
+
+Kingma  Diederik and Ba 
+
+Jimmy 
+method for stochastic optimization 
+arXiv   
+
+Adam 
+
+ 
+arXiv preprint
+
+Kubricht  James  Jiang  Chenfanfu  Zhu  Yixin  Zhu  SongChun  Terzopoulos  Demetri  and Lu  Hongjing  Probabilistic simulation predicts human performance on viscous  uidpouring problem  Retrieved March   
+ 
+
+Ladick      ubor  Jeong  SoHyeon  Solenthaler  Barbara 
+Pollefeys  Marc  and Gross  Markus 
+Datadriven
+ uid simulations using regression forests  ACM Trans 
+Graph    October   ISSN  
+  doi    URL http 
+ doi acm org 
+
+Lentine  Michael  Zheng  Wen  and Fedkiw  Ronald   
+novel algorithm for incompressible  ow using only  
+coarse grid projection  In ACM Transactions on Graphics  TOG  volume   pp    ACM   
+
+Lerer  Adam  Gross  Sam  and Fergus  Rob  Learning physical intuition of block towers by example  arXiv preprint
+arXiv   
+
+Accelerating Eulerian Fluid Simulation With Convolutional Networks
+
+Treuille  Adrien  Lewis  Andrew  and Popovi    Zoran 
+ACM Trans 
+Model reduction for realtime  uids 
+Graph    July  
+ISSN  
+doi    URL http doi 
+acm org 
+
+Turk  Greg and Levoy  Marc  Zippered polygon meshes
+
+from range images  pp     
+
+Yang  Cheng  Yang  Xubo  and Xiao  Xiangyun  Datadriven projection method in  uid simulation  Computer
+Animation and Virtual Worlds     
+
+Lin  Zhouhan  Courbariaux  Matthieu  Memisevic  Roland 
+and Bengio  Yoshua  Neural networks with few multiplications  CoRR  abs    URL http 
+ arxiv org abs 
+
+Mathieu  Michael  Couprie  Camille  and LeCun  Yann 
+Deep multiscale video prediction beyond mean square
+error  arXiv preprint arXiv   
+
+McAdams  Aleka  Sifakis  Eftychios  and Teran  Joseph 
+  parallel multigrid poisson solver for  uids simulation
+In Proceedings of the   ACM SIGon large grids 
+GRAPH Eurographics Symposium on Computer Animation  pp    Eurographics Association   
+
+Molemaker  Jeroen  Cohen  Jonathan    Patel  Sanjit 
+and Noh  Jonyong  Low viscosity  ow simulations
+In Proceedings of the   ACM SIGfor animation 
+GRAPH Eurographics Symposium on Computer Animation  pp    Eurographics Association   
+
+Movidius  Myriad   visual processing unit  http 
+
+www movidius com 
+
+Oymak  Samet  Recht  Benjamin  and Soltanolkotabi 
+Mahdi  Sharp time data tradeoffs for linear inverse problems  arXiv preprint arXiv   
+
+Pfaff  Tobias and Thuerey  Nils  Manta ow  uid simulator 
+
+http mantaflow com 
+
+Pu  Jiantao and Ramani  Karthik  On visual similarity based    drawing retrieval  Comput  Aided Des 
+  March  
+ISSN   doi 
+   cad  URL http dx doi 
+org   cad 
+
+Raveendran  Karthik  Wojtan  Chris  Thuerey  Nils  and
+Turk  Greg  Blending liquids  ACM Trans  Graph   
+  July  
+ISSN   doi 
+  URL http doi acm 
+org 
+
+Selle  Andrew  Fedkiw  Ronald  Kim  Byungmoon  Liu 
+Yingjie  and Rossignac  Jarek  An unconditionally stable maccormack method     Sci  Comput    June
+ 
+
+Stanton  Matt  Humberston  Ben  Kase  Brandon    Brien 
+James    Fatahalian  Kayvon  and Treuille  Adrien  Selfre ning games using player analytics  ACM Trans 
+Graph    July   ISSN  
+doi    URL http doi 
+acm org 
+
+Steinhoff  John and Underhill  David  Modi cation of the
+euler equations for vorticity con nement  application to
+the computation of interacting vortex rings  Physics of
+Fluids  present     
+
+

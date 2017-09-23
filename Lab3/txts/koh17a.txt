@@ -1,0 +1,1031 @@
+Understanding Blackbox Predictions via In uence Functions
+
+Pang Wei Koh   Percy Liang  
+
+Abstract
+
+How can we explain the predictions of   blackbox model  In this paper  we use in uence functions     classic technique from robust statistics   to trace   model   prediction through the
+learning algorithm and back to its training data 
+thereby identifying training points most responsible for   given prediction  To scale up in uence
+functions to modern machine learning settings 
+we develop   simple  ef cient implementation
+that requires only oracle access to gradients and
+Hessianvector products  We show that even on
+nonconvex and nondifferentiable models where
+the theory breaks down  approximations to in uence functions can still provide valuable information  On linear models and convolutional neural networks  we demonstrate that in uence functions are useful for multiple purposes  understanding model behavior  debugging models  detecting dataset errors  and even creating visuallyindistinguishable trainingset attacks 
+
+  Introduction
+  key question often asked of machine learning systems
+is  Why did the system make this prediction  We want
+models that are not just highperforming but also explainable  By understanding why   model does what it does  we
+can hope to improve the model  Amershi et al    discover new science  Shrikumar et al    and provide
+endusers with explanations of actions that impact them
+ Goodman   Flaxman   
+However  the bestperforming models in many domains  
+     deep neural networks for image and speech recognition  Krizhevsky et al      are complicated  blackbox models whose predictions seem hard to explain  Work
+on interpreting these blackbox models has focused on understanding how    xed model leads to particular predictions       by locally  tting   simpler model around the test
+
+ Stanford University  Stanford  CA  Correspondence to 
+Pang Wei Koh  pangwei cs stanford edu  Percy Liang  pliang cs stanford edu 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+point  Ribeiro et al    or by perturbing the test point to
+see how the prediction changes  Simonyan et al    Li
+et al      Datta et al    Adler et al    These
+works explain the predictions in terms of the model  but
+how can we explain where the model came from 
+In this paper  we tackle this question by tracing   model  
+predictions through its learning algorithm and back to the
+training data  where the model parameters ultimately derive from  To formalize the impact of   training point on  
+prediction  we ask the counterfactual  what would happen
+if we did not have this training point  or if the values of this
+training point were changed slightly 
+Answering this question by perturbing the data and retraining the model can be prohibitively expensive  To overcome
+this problem  we use in uence functions    classic technique from robust statistics  Cook   Weisberg    that
+tells us how the model parameters change as we upweight
+  training point by an in nitesimal amount  This allows us
+to  differentiate through the training  to estimate in closedform the effect of   variety of training perturbations 
+Despite their rich history in statistics  in uence functions
+have not seen widespread use in machine learning  to the
+best of our knowledge  the work closest to ours is Wojnowicz et al    which introduced   method for approximating   quantity related to in uence in generalized
+linear models  One obstacle to adoption is that in uence functions require expensive second derivative calculations and assume model differentiability and convexity 
+which limits their applicability in modern contexts where
+models are often nondifferentiable  nonconvex  and highdimensional  We address these challenges by showing that
+we can ef ciently approximate in uence functions using
+secondorder optimization techniques  Pearlmutter   
+Martens    Agarwal et al    and that they remain
+accurate even as the underlying assumptions of differentiability and convexity degrade 
+In uence functions capture the core idea of studying models through the lens of their training data  We show that
+they are   versatile tool that can be applied to   wide variety
+of seemingly disparate tasks  understanding model behavior  debugging models  detecting dataset errors  and creating visuallyindistinguishable adversarial training examples that can  ip neural network test predictions  the training set analogue of Goodfellow et al   
+
+Understanding Blackbox Predictions via In uence Functions
+
+  Approach
+Consider   prediction problem from some input space  
+      images  to an output space         labels  We are
+given training points            zn  where zi    xi  yi   
+      
+let
+     zi    be the emL      be the loss  and let  
+ 
+pirical risk  The empirical risk minimizer is given by
+  def  arg min 
+     zi    Assume that the empirical risk is twicedifferentiable and strictly convex in  
+in Section   we explore relaxing these assumptions 
+
+For   point   and parameters      
+
+ cid  
+
+ cid  
+
+ 
+ 
+
+  Upweighting   training point
+
+ cid 
+
+Formally 
+def  arg min 
+
+Our goal is to understand the effect of training points on  
+model   predictions  We formalize this goal by asking the
+counterfactual  how would the model   predictions change
+if we did not have this training point 
+Let us begin by studying the change in model parameters due to removing   point   from the trainthis change is        where
+ing set 
+  
+zi cid     zi    However  retraining
+the model for each removed   is prohibitively slow 
+Fortunately  in uence functions give us an ef cient approximation  The idea is to compute the parameter change if  
+were upweighted by some small   giving us new parameters   
+     zi               
+classic result  Cook   Weisberg    tells us that the in 
+ uence of upweighting   on the parameters   is given by
+
+def  arg min 
+
+ 
+ 
+
+Iup params    def 
+
+     
+ 
+
+       
+
+ 
+
+ cid  
+ cid cid cid 
+
+   
+ cid  
+  
+    
+
+def   
+ 
+
+   zi    is the Hessian and is
+where   
+positive de nite  PD  by assumption  In essence  we form
+  quadratic approximation to the empirical risk around  
+and take   single Newton step  see appendix   for   derivation  Since removing   point   is the same as upweighting
+it by        
+   we can linearly approximate the parameter change due to removing   by computing         
+   
+nIup params    without retraining the model 
+Next  we apply the chain rule to measure how upweighting
+  changes functions of  
+In particular  the in uence of
+upweighting   on the loss at   test point ztest again has  
+closedform expression 
+
+Iup loss    ztest  def 
+
+dL ztest     
+
+  
+
+     ztest   cid     
+     ztest   cid   
+ 
+ We fold in any regularization terms into   
+
+  
+
+ cid cid cid 
+
+       
+
+ 
+
+ cid cid cid 
+
+  Perturbing   training input
+
+Let us develop    nergrained notion of in uence by studying   different counterfactual  how would the model   predictions change if   training input were modi ed 
+
+ 
+ 
+
+  
+
+     
+
+def           
+For   training point            de ne   
+Consider the perturbation    cid     and let      be the
+empirical risk minimizer on the training points with    in
+ cid  
+place of    To approximate its effects  de ne the parameters
+def 
+resulting from moving   mass from   onto        
+     zi                        An
+arg min 
+ cid cid cid 
+analogous calculation to   yields 
+
+  Iup params      Iup params   
+     
+ 
+
+ cid                 cid 
+
+ 
+As before  we can make the linear approximation       
+   Iup params      Iup params    giving us   closed 
+       
+form estimate of the effect of    cid     on the model  Analogous equations also apply for changes in    While in 
+ uence functions might appear to only work for in nitesimal  therefore continuous  perturbations  it is important to
+note that this approximation holds for arbitrary   the  
+upweighting scheme allows us to smoothly interpolate between   and    This is particularly useful for working with
+discrete data       in NLP  or with discrete label changes 
+If   is continuous and   is small  we can further approximate   Assume that the input domain     Rd  the parameter space     Rp  and   is differentiable in   and   
+As  cid cid                                   
+where             Rp    Substituting into  
+         
+
+     
+ 
+We thus have               
+ferentiating          and applying the chain rule gives us
+
+ 
+          Dif 
+
+Ipert loss    ztest cid  def     ztest       cid cid cid cid 
+
+ 
+         
+Ipert loss    ztest cid  tells us the approximate effect that    cid 
+      has on the loss at ztest  By setting   in the direction of
+Ipert loss    ztest  we can construct local perturbations of  
+that maximally increase the loss at ztest  In Section   we
+will use this to construct trainingset attacks  Finally  we
+note that Ipert loss    ztest  can help us identify the features
+of   that are most responsible for the prediction on ztest 
+
+     ztest   cid   
+
+ cid cid cid 
+
+     
+
+    
+
+  
+
+ 
+
+ 
+
+  Relation to Euclidean distance
+
+To  nd the training points most relevant to   test point  it
+is common to look at its nearest neighbors in Euclidean
+
+Understanding Blackbox Predictions via In uence Functions
+
+ 
+ 
+
+terms in Iup loss  Here  we plot Iup loss against
+Figure   Components of in uence      What is the effect of the training loss and  
+variants that are missing these terms and show that they are necessary for picking up the truly in uential training points  For these
+calculations  we use logistic regression to distinguish    from    in MNIST  LeCun et al    picking an arbitrary test point ztest 
+similar trends hold across other test points  Green dots are train images of the same label as the test image   while red dots are    
+Left  Without the train loss term  we overestimate the in uence of many training points  the points near the    line should have
+Iup loss close to   but instead have high in uence when we remove the train loss term  Mid  Without  
+  all green training points are
+helpful  removing each point increases test loss  and all red points are harmful  removing each point decreases test loss  This is because
+       cid     all pixel values are positive  so    xtest     but it is incorrect  many harmful training points actually share the same label as
+ztest  See panel     Right  Without training loss or  
+testx 
+which fails to accurately capture in uence  the scatter plot deviates quite far from the diagonal      The test image and   harmful training
+image with the same label  To the model  they look very different  so the presence of the training image makes the model think that the
+test image is less likely to be     The Euclidean inner product does not pick up on these less intuitive  but important  harmful in uences 
+
+  what is left is the scaled Euclidean inner product ytesty   ytest cid xtest    cid 
+
+ 
+ 
+
+ 
+ 
+
+space       Ribeiro et al    if all points have the
+same norm  this is equivalent to choosing   with the largest
+   xtest  For intuition  we compare this to Iup loss    ztest  on
+  logistic regression model and show that in uence is much
+more accurate at accounting for the effect of training 
+Let               cid    with         and      
+ exp    We seek to maximize the probability of the
+training set  For   training point                    
+log    exp   cid                 cid   yx 
+and       
+    From  
+Iup loss    ztest  is 
+ 
+
+ cid  
+    cid xi cid xi xix cid 
+
+ 
+
+testH 
+
+ 
+
+  
+
+ ytesty    ytest cid xtest       cid        cid 
+
+We highlight two key differences from     xtest  First 
+   cid    gives points with high training loss more in uence  revealing that outliers can dominate the model parameters  Second  the weighted covariance matrix   
+ 
+measures the  resistance  of the other training points to the
+removal of    if         points in   direction of little
+variation  its in uence will be higher since moving in that
+direction will not signi cantly increase the loss on other
+training points  As we show in Fig   these differences
+mean that in uence functions capture the effect of model
+training much more accurately than nearest neighbors 
+
+are
+
+two computational
+
+  Ef ciently Calculating In uence
+to using
+There
+        First  it
+Iup loss    ztest       ztest   cid   
+   zi   
+requires forming and inverting       
+the Hessian of the empirical risk  With   training points
+and     Rp  this requires   np       operations  which
+
+ cid  
+    
+
+challenges
+
+ 
+
+ 
+
+def    
+ 
+
+is too expensive for models like deep neural networks with
+millions of parameters  Second  we often want to calculate
+Iup loss zi  ztest  across all training points zi 
+The  rst problem is wellstudied in secondorder optimization  The idea is to avoid explicitly computing   
+  in 
+ 
+stead  we use implicit Hessianvector products  HVPs  to
+   ztest    and then
+ef ciently approximate stest
+compute Iup loss    ztest     stest           This also
+solves the second problem  for each test point of interest  we can precompute stest and then ef ciently compute
+ stest      zi    for each training point zi 
+We discuss two techniques for approximating stest  both
+relying on the fact that the HVP of   single term in   
+ 
+   zi      can be computed for arbitrary   in the same
+time that    zi    would take  which is typically     
+ Pearlmutter   
+Conjugate gradients  CG  The  rst technique is   standard transformation of matrix inversion into an optimizav  
+tion problem  Since     cid    by assumption    
+arg mint   
+    cid         cid    We can solve this with CG
+approaches that only require the evaluation of      which
+takes   np  time  without explicitly forming    While an
+exact solution takes   CG iterations  in practice we can get
+  good approximation with fewer iterations  see Martens
+  for more details 
+Stochastic estimation  With large datasets  standard CG
+can be slow  each iteration still goes through all   training points  We use   method developed by Agarwal et al 
+  to get an estimator that only samples   single point
+per iteration  which results in signi cant speedups 
+
+ 
+
+Understanding Blackbox Predictions via In uence Functions
+
+def   cid  
+
+ 
+
+ 
+
+  we still have       
+
+      
+
+ 
+
+ 
+
+and recursively compute    
+
+   zsj    cid     
+
+           cid    
+
+from the training data  de ne    
+     taking    
+
+     
+Dropping the   subscript for clarity  let   
+     the  rst   terms in the Taylor expansion of   
+                 
+Rewrite this recursively as   
+  
+       as
+From the validity of the Taylor expansion    
+      The key is that at each iteration  we can substitute the full   with   draw from any unbiased  and fasterto compute  estimator of   to form  Hj  Since       
+   
+  
+In particular  we can uniformly sample zi and use
+ 
+   zi    as an unbiased estimator of    This gives
+us the following procedure  uniformly sample   points
+zs          zst
+     
+  
+ 
+    as our  nal unbiased estimate of      We pick   to be large enough such that  Ht
+stabilizes  and to reduce variance we repeat this procedure
+  times and average results  Empirically  we found this signi cantly faster than CG 
+We note that the original method of Agarwal et al   
+dealt only with generalized linear models 
+for which
+ 
+   zi     can be ef ciently computed in      time 
+In our case  we rely on Pearlmutter    more general
+algorithm for fast HVPs  described above  to achieve the
+same time complexity 
+With these techniques  we can compute Iup loss zi  ztest 
+on all training points zi in   np   rtp  time  we show in
+Section   that empirically  choosing rt        gives accurate results  Similarly  we compute Ipert loss zi  ztest cid   
+    ztest   cid   
+   
+two
+with
+then
+matrixvector products  we  rst compute stest 
+test     zi    with the same HVP trick 
+  cid 
+These
+computations are easy to implement in autograd systems
+like TensorFlow  Abadi et al    and Theano  Theano
+   Team    as users need only specify    the rest is
+automatically handled 
+
+     zi   
+
+ 
+
+  Validation and Extensions
+Recall that in uence functions are asymptotic approximations of leaveone out retraining under the assumptions that
+    the model parameters   minimize the empirical risk 
+and that  ii  the empirical risk is twicedifferentiable and
+   zi     cid     if this is not
+true  we can scale the loss down without affecting the parameters 
+In some cases  we can get an upper bound on  
+   zi          for
+linear models and bounded input  which makes this easy  Otherwise  we treat the scaling as   separate hyperparameter and tune
+it such that the Taylor expansion converges 
+
+ We assume         
+
+that    
+
+ To increase stability  especially with nonconvex models  see
+Section   we can also sample   minibatch of training points
+at each iteration  instead of relying on   single training point 
+
+For each of the   training points   with largest cid cid Iup loss    ztest cid cid 
+
+Figure   In uence matches leaveone out retraining  We arbitrarily picked   wronglyclassi ed test point ztest  but this trend
+held more broadly  These results are from  class MNIST  Left 
+we plotted    
+    Iup loss    ztest  against the actual change in test
+loss after removing that point and retraining  The inverse HVP
+was solved exactly with CG  Mid  Same  but with the stochastic
+approximation  Right  The same plot for   CNN  computed on
+the   most in uential points with CG  For the actual difference
+in loss  we removed each point and retrained from   for    steps 
+
+strictly convex  Here  we empirically show that in uence
+functions are accurate approximations  Section   that
+provide useful information even when these assumptions
+are violated  Sections    
+
+  In uence functions vs  leaveone out retraining
+
+In uence functions assume that the weight on   training
+point is changed by an in nitesimally small   To investigate the accuracy of using in uence functions to approximate the effect of removing   training point and retraining  we compared    
+nIup loss    ztest  with   ztest       
+  ztest          actually doing leaveone out retraining 
+With   logistic regression model on  class MNIST  the
+predicted and actual changes matched closely  Fig  Left 
+The stochastic approximation from Agarwal et al   
+was also accurate with       repeats and         iterations  Fig  Mid  Since each iteration only requires one
+HVP  
+in fact  we accurately estimated     without even looking at every data
+point  since           rt  Surprisingly  even      
+worked  while results were noisier  it was still able to identify the most in uential points 
+
+   zi      this runs quickly 
+
+  Nonconvexity and nonconvergence
+In Section   we took   as the global minimum  In practice 
+if we obtain our parameters   by running SGD with early
+stopping or on nonconvex objectives     cid    As   result 
+   could have negative eigenvalues  We show that in uence functions on   still give meaningful results in practice 
+Our approach is to form   convex quadratic approximation of the loss around  
+                       
+
+ We trained with LBFGS  Liu   Nocedal    with   
+regularization of           and         parameters 
+
+Understanding Blackbox Predictions via In uence Functions
+
+     
+
+ 
+
+Figure   Smooth approximations to the hinge loss      By varying    we can approximate the hinge loss with arbitrary accuracy  the
+ cid 
+green and blue lines are overlaid on top of each other      Using   random  wronglyclassi ed test point  we compared the predicted
+vs  actual differences in loss after leaveone out retraining on the   most in uential training points    similar trend held for other test
+points  The SVM objective is to minimize  cid   cid 
+  Hinge yiw cid xi  Left  In uence functions were unable to accurately
+predict the change  overestimating its magnitude considerably  Mid  Using SmoothHinge    let us accurately predict the change
+in the hinge loss after retraining  Right  Correlation remained high over   wide range of    though it degrades when   is too large  When
+      Pearson         when       Pearson        
+     cid          Here    is
+       cid     
+  damping term that we add if    has negative eigenvalues 
+this corresponds to adding    regularization on   We then
+calculate Iup loss using     If   is close to   local minimum 
+this is correlated with the result of taking   Newton step
+from   after removing   weight from    see appendix   
+We checked the behavior of Iup loss in   nonconvergent 
+nonconvex setting by training   convolutional neural network for    iterations  The model had not converged
+and    was not PD  so we added   damping term with
+      Even in this dif cult setting  the predicted and
+actual changes in loss were highly correlated  Pearson    
+    Fig  Right 
+
+imizing Hinge      max         this simple piecewise linear function is similar to ReLUs  which cause nondifferentiability in neural networks  We set the derivatives at the hinge to   and calculated Iup loss  As one
+might expect  this was inaccurate  Fig  bLeft  the second derivative carries no information about how close  
+support vector   is to the hinge  so the quadratic approximation of        is linear  up to regularization  which
+leads to Iup loss    ztest  overestimating the in uence of   
+For the purposes of calculating in uence  we approximated
+Hinge    with SmoothHinge           log exp    
+   
+which approaches the hinge loss as        Fig     Using
+the same SVM weights as before  we found that calculating Iup loss using SmoothHinge      closely matched
+the actual change due to retraining in the original Hinge   
+ Pearson         Fig  bMid  and remained accurate
+over   wide range of    Fig  bRight 
+
+  Nondifferentiable losses
+What happens when the derivatives of the loss     and
+ 
+In this section  we show that in 
+    do not exist 
+ uence functions computed on smooth approximations to
+nondifferentiable losses can predict the behavior of the
+original  nondifferentiable loss under leaveone out retraining  The robustness of this approximation suggests
+that we can train nondifferentiable models and swap out
+nondifferentiable components for smoothed versions for
+the purposes of calculating in uence 
+To see this  we trained   linear SVM on the same   
+vs     MNIST task in Section   This involves min 
+ The network had   sets of convolutional layers with tanh 
+nonlinearities  modeled after the allconvolutional network from
+ Springenberg et al    For speed  we used   of the
+MNIST training set and only   parameters  since repeatedly
+retraining the network was expensive  Training was done with
+minibatches of   examples and the Adam optimizer  Kingma
+  Ba    The model had not converged after    iterations 
+training it for another    iterations  using   full training pass
+for each iteration  reduced train loss from   to  
+
+  Use Cases of In uence Functions
+  Understanding model behavior
+
+By telling us the training points  responsible  for   given
+prediction  in uence functions reveal insights about how
+models rely on and extrapolate from the training data  In
+this section  we show that two models can make the same
+correct predictions but get there in very different ways 
+We compared     the stateof theart Inception    network
+ Szegedy et al    with all but the top layer frozen  to
+    an SVM with an RBF kernel on   dog vs   sh image
+classi cation dataset we extracted from ImageNet  Russakovsky et al    with   training examples for each
+class  Freezing neural networks in this way is not uncom 
+
+ We used pretrained weights from Keras  Chollet   
+
+Understanding Blackbox Predictions via In uence Functions
+
+mon in computer vision and is equivalent to training   logistic regression model on the bottleneck features  Donahue et al    We picked   test image both models
+got correct  Fig  Top  and used SmoothHinge   
+to compute the in uence for the SVM 
+As expected  Iup loss in the RBF SVM varied inversely with
+raw pixel distance  with training images far from the test
+image in pixel space having almost no in uence  The Inception in uences were much less correlated with distance
+in pixel space  Fig  Left  Looking at the two most helpful images  most positive  Iup loss  for each model in Fig
+ Right  we see that the Inception network picked up on the
+distinctive characteristics of clown sh  whereas the RBF
+SVM patternmatched training images super cially 
+Moreover  in the RBF SVM   sh  green points  close to
+the test image were mostly helpful  while dogs  red  were
+mostly harmful  with the RBF acting as   soft nearest
+neighbor function  Fig  Left  In contrast  in the Inception network   sh and dogs could be helpful or harmful for
+correctly classifying the test image as    sh  in fact  some
+of the most helpful training images were dogs that  to the
+model  looked very different from the test  sh  Fig  Top 
+
+vs 
+ cid     ztest cid 
+
+RBF SVM  Bottom left 
+Figure   Inception
+ Iup loss    ztest  vs 
+  Green dots are  sh and
+red dots are dogs  Bottom right  The two most helpful training
+images  for each model  on the test  Top right  An image of  
+dog in the training set that helped the Inception model correctly
+classify the test image as    sh 
+  Adversarial training examples
+
+In this section  we show that models that place   lot of in 
+ uence on   small number of points can be vulnerable to
+training input perturbations  posing   serious security risk
+in realworld ML systems where attackers can in uence the
+training data  Huang et al    Recent work has generated adversarial test images that are visually indistinguish 
+
+  zi and then iterating  zi
+
+able from real test images but completely fool   classi er
+ Goodfellow et al    MoosaviDezfooli et al   
+We demonstrate that in uence functions can be used to
+craft adversarial training images that are similarly visuallyindistinguishable and can  ip   model   prediction on   separate test image  To the best of our knowledge  this is the
+ rst proofof concept that visuallyindistinguishable training attacks can be executed on otherwise highlyaccurate
+neural networks 
+The key idea is that Ipert loss    ztest  tells us how to modify training point   to most increase the loss on ztest 
+Concretely  for   target test image ztest  we can construct
+ zi  an adversarial version of   training image zi  by initializing  zi
+   zi  
+  sign Ipert loss zi  ztest  where   is the step size and  
+projects onto the set of valid images that share the same  
+bit representation with zi  After each iteration  we retrain
+the model  This is an iterated  trainingset analogue of the
+methods used by       Goodfellow et al    MoosaviDezfooli et al    for testset attacks 
+We tested these training attacks on the same Inception network on dogs vs   sh from Section   choosing this pair
+of animals to provide   stark contrast between the classes 
+We set       and ran the attack for   iterations
+on each test image  As before  we froze all but the top
+layer for training  note that computing Ipert loss still involves
+differentiating through the entire network  Originally  the
+model correctly classi ed       test images  For each
+of these   test images  considered separately  we tried to
+ nd   visuallyindistinguishable perturbation       same  
+bit representation  to   single training image  out of  
+total training images  that would  ip the model   prediction  We were able to do this on     of the  
+test images  By perturbing   training images for each test
+image  we could  ip predictions on   of the   test images  and if we perturbed   training images  we could  ip
+all but   of the   The above results are from attacking
+each test image separately       using   different training set
+to attack each test image  We also tried to attack multiple
+test images simultaneously by increasing their average loss 
+and found that single training image perturbations could simultaneously  ip multiple test predictions as well  Fig  
+We make three observations about these attacks  First 
+though the change in pixel values is small  the change in
+the  nal Inception feature layer is signi cantly larger  using    distance in pixel space  the training values change
+by less than   of the mean distance of   training point to
+its class centroid  whereas in Inception feature space  the
+change is on the same order as the mean distance  This
+leaves open the possibility that our attacks  while visuallyimperceptible  can be detected by examining the feature
+space  Second  the attack tries to perturb the training ex 
+
+Understanding Blackbox Predictions via In uence Functions
+
+Figure   Trainingset attacks  We targeted  
+set of   test images featuring the  rst author  
+dog in   variety of poses
+and backgrounds 
+By
+maximizing the average
+loss over
+these   images  we created   visuallyimperceptible change to
+the particular training image  shown on top  that
+ ipped predictions on  
+test images 
+
+ample in   direction of low variance  causing the model to
+over   in that direction and consequently incorrectly classify the test images  we expect attacking to be harder as
+the number of training examples grows  Third  ambiguous
+or mislabeled training images are effective points to attack 
+the model has low con dence and thus high loss on them 
+making them highly in uential  recall Section   For example  the image in Fig   contains both   dog and    sh and
+is highly ambiguous  as   result  it is the training example
+that the model is least con dent on  with   con dence of
+  compared to the next lowest con dence of  
+This attack is mathematically equivalent to the gradientbased training set attacks explored by Biggio et al   
+Mei   Zhu     and others in the context of different
+models  Biggio et al    constructed   dataset poisoning attack against   linear SVM on   twoclass MNIST task 
+but had to modify the training points in an obviously distinguishable way to be effective  Measuring the magnitude of
+Ipert loss gives model developers   way of quantifying how
+vulnerable their models are to trainingset attacks 
+
+  Debugging domain mismatch
+
+Domain mismatch   where the training distribution does
+not match the test distribution   can cause models with
+high training accuracy to do poorly on test data  BenDavid
+et al    We show that in uence functions can identify
+the training examples most responsible for the errors  helping model developers identify domain mismatch 
+As   case study  we predicted whether   patient would be
+readmitted to hospital  Domain mismatches are common
+in biomedical data       different hospitals serve different
+populations  and models trained on one population can do
+poorly on another  Kansagara et al    We used logistic regression to predict readmission with   balanced training dataset of    diabetic patients from   US hospitals  each represented by   features  Strack et al   
+
+  out of the   children under age   in this dataset were
+readmitted  To induce   domain mismatch  we  ltered out
+  children who were not readmitted  leaving   out of   readmitted  This caused the model to wrongly classify many
+children in the test set  Our aim is to identify the   children
+in the training set as being  responsible  for these errors 
+As   baseline  we tried the common practice of looking at
+the learned parameters   to see if the indicator variable for
+being   child was obviously different  However  this did
+not work    features had   larger coef cient 
+Picking   random child ztest that the model got wrong  we
+calculated  Iup loss zi  ztest  for each training point zi  This
+clearly highlighted the   training children  each of whom
+were   times as in uential as the next most in uential
+examples  The   child in the training set who was not readmitted had   very positive in uence  while the other   had
+very negative in uences  Moreover  calculating Ipert loss on
+these   children showed that the  child  indicator variable
+contributed signi cantly to the magnitude of Iup loss 
+
+  Fixing mislabeled examples
+
+Labels in the real world are often noisy  especially if crowdsourced  Fr enay   Verleysen    and can even be adversarially corrupted  Even if   human expert could recognize wrongly labeled examples  it is impossible in many
+applications to manually review all of the training data  We
+show that in uence functions can help human experts prioritize their attention  allowing them to inspect only the examples that actually matter 
+The key idea is to  ag the training points that exert the
+most in uence on the model  Because we do not have access to the test set  we measure the in uence of zi with
+Iup loss zi  zi  which approximates the error incurred on zi
+if we remove zi from the training set 
+Our case study is email spam classi cation  which relies
+
+ Hospital readmission was de ned as whether   patient would
+be readmitted within the next   days  Features were demo 
+
+graphic       age  race  gender  administrative       length of
+hospital stay  or medical       test results 
+
+Understanding Blackbox Predictions via In uence Functions
+
+on userprovided labels and is also vulnerable to adversarial attack  Biggio et al    We  ipped the labels of  
+random   of the training data and then simulated manually inspecting   fraction of the training points  correcting
+them if they had been  ipped  Using in uence functions
+to prioritize the training points to inspect allowed us to repair the dataset  Fig   blue  without checking too many
+points  outperforming the baselines of checking points with
+the highest train loss  Fig   green  or at random  Fig  
+red  No method had access to the test data 
+
+Figure   Fixing mislabeled examples  Plots of how test accuracy  left  and the fraction of  ipped data detected  right  change
+with the fraction of train data checked  using different algorithms
+for picking points to check  Error bars show the std  dev  across
+  repeats of this experiment  with   different subset of labels
+ ipped in each  error bars on the right are too small to be seen 
+These results are on the Enron  spam dataset  Metsis et al   
+with   training and   test examples  we trained logistic
+regression on   bagof words representation of the emails 
+
+  Related Work
+The use of in uencebased diagnostics originated in statistics in the    and     driven by seminal papers by Cook
+and others  Cook    Cook   Weisberg     
+though similar ideas appeared even earlier in other forms 
+     the in nitesimal jackknife  Jaeckel    Earlier
+work focused on removing training points from linear models  with later work extending this to more general models
+and   wider variety of perturbations  Cook    Thomas
+  Cook    Chatterjee   Hadi    Wei et al   
+Most of this prior work focused on experiments with small
+datasets             and       in Cook   Weisberg
+  with special attention therefore paid to exact solutions  or if not possible  characterizations of the error terms 
+In uence functions have not been used much in the ML
+literature  with some exceptions  Christmann   Steinwart   Debruyne et al    Liu et al    use
+in uence functions to study model robustness and to do
+fast crossvalidation in kernel methods  Wojnowicz et al 
+  uses matrix sketching to estimate Cook   distance 
+which is closely related to in uence  they focus on prioritizing training points for human attention and derive meth 
+
+ods speci   to generalized linear models 
+As noted in Section   our trainingset attack is mathematically equivalent to an approach  rst explored by Biggio et al    in the context of SVMs  with followup
+work extending the framework and applying it to linear
+and logistic regression  Mei   Zhu      topic modeling  Mei   Zhu      and collaborative  ltering  Li
+et al      These papers derived the attack directly from
+the KKT conditions without considering in uence  though
+for continuous data  the end result is equivalent 
+In uence functions additionally let us consider attacks on discrete data  Section   but we have not tested this empirically  Our work connects the literature on trainingset attacks with work on  adversarial examples   Goodfellow et al    MoosaviDezfooli et al    visuallyimperceptible perturbations on test inputs 
+In contrast to trainingset attacks  Cadamuro et al   
+consider the task of taking an incorrect test prediction and
+ nding   small subset of training data such that changing
+the labels on this subset makes the prediction correct  They
+provide   solution for OLS and Gaussian process models
+when the labels are continuous  Our work with in uence
+functions allow us to solve this problem in   much larger
+range of models and in datasets with discrete labels 
+
+  Discussion
+We have discussed   variety of applications  from creating trainingset attacks to debugging models and  xing
+datasets  Underlying each of these applications is   common tool  the in uence function  which is based on   simple idea   we can better understand model behavior by
+looking at how it was derived from its training data 
+At their core  in uence functions measure the effect of local changes  what happens when we upweight   point by
+an in nitesimallysmall   This locality allows us to derive ef cient closedform estimates  and as we show  they
+can be surprisingly effective  However  we might want to
+ask about more global changes       how does   subpopulation of patients from this hospital affect the model  Since
+in uence functions depend on the model not changing too
+much  how to tackle this is an open question 
+It seems inevitable that highperforming  complex  blackbox models will become increasingly prevalent and important  We hope that the approach presented here   of looking at the model through the lens of the training data  
+will become   standard part of the toolkit of developing 
+understanding  and diagnosing machine learning 
+The code and data for replicating our experiments is available on GitHub http bit ly gtinfluence
+and Codalab http bit ly clinfluence 
+
+Understanding Blackbox Predictions via In uence Functions
+
+Acknowledgements
+We thank Jacob Steinhardt  Zhenghao Chen  and Hongseok
+Namkoong for helpful discussions and comments  This
+work was supported by   Future of Life Research Award
+and   Microsoft Research Faculty Fellowship 
+
+References
+Abadi     Agarwal     Barham     Brevdo     Chen    
+Citro     Corrado        Davis     Dean     Devin    
+Ghemawat     Goodfellow        Harp     Irving    
+Isard     Jia       ozefowicz     Kaiser     Kudlur    
+Levenberg     Man       Monga     Moore     Murray        Olah     Schuster     Shlens     Steiner 
+   Sutskever     Talwar     Tucker        Vanhoucke 
+   Vasudevan     Vi egas        Vinyals     Warden    
+Wattenberg     Wicke     Yu     and Zheng     Tensor ow  Largescale machine learning on heterogeneous
+distributed systems  arXiv preprint arXiv 
+ 
+
+Adler     Falk     Friedler        Rybeck     Scheidegger     Smith     and Venkatasubramanian     Auditing
+blackbox models for indirect in uence  arXiv preprint
+arXiv   
+
+Agarwal     Bullins     and Hazan     Second order
+stochastic optimization in linear time  arXiv preprint
+arXiv   
+
+Chollet     Keras   
+
+Christmann     and Steinwart     On robustness properties
+of convex risk minimization methods for pattern recognition  Journal of Machine Learning Research  JMLR 
+   
+
+Cook        Detection of in uential observation in linear
+
+regression  Technometrics     
+
+Cook        Assessment of local in uence  Journal of the
+Royal Statistical Society  Series    Methodological  pp 
+   
+
+Cook        and Weisberg     Characterizations of an empirical in uence function for detecting in uential cases
+in regression  Technometrics     
+
+Cook        and Weisberg     Residuals and in uence in
+
+regression  New York  Chapman and Hall   
+
+Datta     Sen     and Zick     Algorithmic transparency
+via quantitative input in uence  Theory and experiments
+In Security and Privacy  SP 
+with learning systems 
+  IEEE Symposium on  pp     
+
+Debruyne     Hubert     and Suykens        Model selection in kernel based regression using the in uence function  Journal of Machine Learning Research  JMLR   
+   
+
+Amershi     Chickering     Drucker        Lee    
+Simard     and Suh     Modeltracker  Redesigning performance analysis tools for machine learning  In Conference on Human Factors in Computing Systems  CHI 
+pp     
+
+Donahue     Jia     Vinyals     Hoffman     Zhang    
+Tzeng     and Darrell     Decaf    deep convolutional
+activation feature for generic visual recognition  In International Conference on Machine Learning  ICML  volume   pp     
+
+BenDavid     Blitzer     Crammer     Kulesza    
+Pereira     and Vaughan          theory of learning
+from different domains  Machine Learning   
+   
+
+Biggio     Nelson     and Laskov     Support vector machines under adversarial label noise  ACML   
+ 
+
+Biggio     Nelson     and Laskov     Poisoning attacks
+against support vector machines  In International Conference on Machine Learning  ICML  pp   
+ 
+
+Cadamuro     GiladBachrach     and Zhu     Debugging machine learning models  In ICML Workshop on
+Reliable Machine Learning in the Wild   
+
+Fr enay     and Verleysen     Classi cation in the presence
+of label noise    survey  IEEE Transactions on Neural
+Networks and Learning Systems     
+
+Goodfellow        Shlens     and Szegedy     Explaining
+In International
+and harnessing adversarial examples 
+Conference on Learning Representations  ICLR   
+
+Goodman     and Flaxman     European union regulations
+on algorithmic decisionmaking and    right to explanation  arXiv preprint arXiv   
+
+Huang     Joseph        Nelson     Rubinstein        and
+Tygar     Adversarial machine learning  In Proceedings
+of the  th ACM workshop on Security and arti cial intelligence  pp     
+
+Chatterjee     and Hadi        In uential observations  high
+leverage points  and outliers in linear regression  Statistical Science  pp     
+
+Jaeckel       
+
+The in nitesimal jackknife  Unpublished memorandum  Bell Telephone Laboratories  Murray Hill  NJ   
+
+Understanding Blackbox Predictions via In uence Functions
+
+Kansagara     Englander     Salanitro     Kagen    
+Theobald     Freeman     and Kripalani     Risk prediction models for hospital readmission    systematic review  JAMA     
+
+Ribeiro        Singh     and Guestrin      why should
+  trust you  Explaining the predictions of any classi 
+ er  In International Conference on Knowledge Discovery and Data Mining  KDD   
+
+Kingma     and Ba     Adam    method for stochastic
+
+optimization  arXiv preprint arXiv   
+
+Krizhevsky     Sutskever     and Hinton        Imagenet
+classi cation with deep convolutional neural networks 
+In Advances in Neural Information Processing Systems
+ NIPS  pp     
+
+LeCun     Bottou     Bengio     and Haffner     Gradientbased learning applied to document recognition  Proceedings of the IEEE     
+
+Li     Wang     Singh     and Vorobeychik     Data poisoning attacks on factorizationbased collaborative  ltering  In Advances in Neural Information Processing Systems  NIPS     
+
+Li     Monroe     and Jurafsky     Understanding neural
+networks through representation erasure  arXiv preprint
+arXiv     
+
+Liu        and Nocedal     On the limited memory BFGS
+method for large scale optimization  Mathematical Programming     
+
+Liu     Jiang     and Liao     Ef cient approximation
+of crossvalidation for kernel methods using Bouligand
+in uence function  In International Conference on Machine Learning  ICML  pp     
+
+Martens     Deep learning via hessianfree optimization  In
+International Conference on Machine Learning  ICML 
+pp     
+
+Mei     and Zhu     The security of latent Dirichlet allocation  In Arti cial Intelligence and Statistics  AISTATS 
+   
+
+Mei     and Zhu     Using machine teaching to identify
+optimal trainingset attacks on machine learners  In Association for the Advancement of Arti cial Intelligence
+ AAAI     
+
+Metsis     Androutsopoulos     and Paliouras     Spam  ltering with naive Bayes   which naive Bayes  In CEAS 
+volume   pp     
+
+MoosaviDezfooli     Fawzi     and Frossard     Deepfool    simple and accurate method to fool deep neural
+networks  In Computer Vision and Pattern Recognition
+ CVPR  pp     
+
+Pearlmutter        Fast exact multiplication by the hessian 
+
+Neural Computation     
+
+Russakovsky     Deng     Su     Krause     Satheesh    
+Ma     Huang     Karpathy     Khosla     Bernstein 
+   et al  ImageNet large scale visual recognition challenge  International Journal of Computer Vision   
+   
+
+Shrikumar     Greenside     Shcherbina     and Kundaje     Not just   black box  Learning important features through propagating activation differences  arXiv
+preprint arXiv   
+
+Simonyan     Vedaldi     and Zisserman     Deep inside convolutional networks  Visualising image clasarXiv preprint
+si cation models and saliency maps 
+arXiv   
+
+Springenberg        Dosovitskiy     Brox     and Riedmiller     Striving for simplicity  The all convolutional
+net  arXiv preprint arXiv   
+
+Strack     DeShazo        Gennings     Olmo        Ventura     Cios        and Clore        Impact of HbA  
+measurement on hospital readmission rates  analysis of
+  clinical database patient records  BioMed Research International     
+
+Szegedy     Vanhoucke     Ioffe     Shlens     and Wojna     Rethinking the Inception architecture for computer vision  In Computer Vision and Pattern Recognition  CVPR  pp     
+
+Theano    Team 
+
+Theano    Python framework for
+fast computation of mathematical expressions  arXiv
+preprint arXiv   
+
+Thomas     and Cook        Assessing in uence on predictions from generalized linear models  Technometrics 
+   
+
+Wei     Hu     and Fung     Generalized leverage and
+its applications  Scandinavian Journal of Statistics   
+   
+
+Wojnowicz     Cruz     Zhao     Wallace     Wolff    
+Luan     and Crable      In uence sketching  Finding in uential samples in largescale regressions  arXiv
+preprint arXiv   
+
+

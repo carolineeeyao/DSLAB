@@ -1,0 +1,863 @@
+Conditional Image Synthesis with Auxiliary Classi er GANs
+
+Augustus Odena   Christopher Olah   Jonathon Shlens  
+
+Abstract
+
+In this paper we introduce new methods for the
+improved training of generative adversarial networks  GANs  for image synthesis  We construct   variant of GANs employing label conditioning that results in       resolution image samples exhibiting global coherence  We
+expand on previous work for image quality assessment to provide two new analyses for assessing the discriminability and diversity of samples
+from classconditional image synthesis models 
+These analyses demonstrate that high resolution
+samples provide class information not present in
+low resolution samples  Across   ImageNet
+classes        samples are more than twice
+as discriminable as arti cially resized      
+samples  In addition    of the classes have
+samples exhibiting diversity comparable to real
+ImageNet data 
+
+  Introduction
+Characterizing the structure of natural images has been  
+rich research endeavor  Natural images obey intrinsic invariances and exhibit multiscale statistical structures that
+have historically been dif cult to quantify  Simoncelli  
+Olshausen    Recent advances in machine learning
+offer an opportunity to substantially improve the quality of
+image models  Improved image models advance the stateof theart in image denoising  Ball   et al    compression  Toderici et al    inpainting  van den Oord et al 
+    and superresolution  Ledig et al    Better models of natural images also improve performance in
+semisupervised learning tasks  Kingma et al    Springenberg    Odena    Salimans et al    and reinforcement learning problems  Blundell et al   
+One method for understanding natural image statistics is to
+build   system that synthesizes images de novo  There are
+
+ Google Brain  Correspondence to  Augustus Odena  augus 
+
+tusodena google com 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+several promising approaches for building image synthesis models  Variational autoencoders  VAEs  maximize  
+variational lower bound on the loglikelihood of the training data  Kingma   Welling    Rezende et al   
+VAEs are straightforward to train but introduce potentially
+restrictive assumptions about the approximate posterior
+distribution  but see  Rezende   Mohamed    Kingma
+et al    Autoregressive models dispense with latent
+variables and directly model the conditional distribution
+over pixels  van den Oord et al        These models
+produce convincing samples but are costly to sample from
+and do not provide   latent representation  Invertible density estimators transform latent variables directly using  
+series of parameterized functions constrained to be invertible  Dinh et al    This technique allows for exact
+loglikelihood computation and exact inference  but the invertibility constraint is restrictive 
+Generative adversarial networks  GANs  offer   distinct
+and promising approach that focuses on   gametheoretic
+formulation for training an image synthesis model  Goodfellow et al    Recent work has shown that GANs can
+produce convincing image samples on datasets with low
+variability and low resolution  Denton et al    Radford
+et al    However  GANs struggle to generate globally coherent  high resolution samples   particularly from
+datasets with high variability  Moreover    theoretical understanding of GANs is an ongoing research topic  Uehara
+et al    Mohamed   Lakshminarayanan   
+In this work we demonstrate that that adding more structure
+to the GAN latent space along with   specialized cost function results in higher quality samples  We exhibit  
+pixel samples from all classes of the ImageNet dataset
+ Russakovsky et al    with increased global coherence
+ Figure   Importantly  we demonstrate quantitatively that
+our high resolution samples are not just naive resizings of
+low resolution samples  In particular  downsampling our
+      samples to       leads to     decrease in
+visual discriminability  We also introduce   new metric for
+assessing the variability across image samples and employ
+this metric to demonstrate that our synthesized images exhibit diversity comparable to training data for   large fraction   of ImageNet classes  In more detail  this work
+is the  rst to 
+
+Conditional Image Synthesis with Auxiliary Classi er GANs
+
+monarch butterfly
+
+goldfinch
+
+daisy
+
+redshank
+
+grey whale
+
+Figure         resolution samples from   classes taken from an ACGAN trained on the ImageNet dataset  Note that the classes
+shown have been selected to highlight the success of the model and are not representative  Samples from all ImageNet classes are linked
+later in the text 
+
+  Demonstrate an image synthesis model for all  
+ImageNet classes at       spatial resolution  or
+any spatial resolution   see Section  
+
+  Measure how much an image synthesis model actually
+
+uses its output resolution  Section  
+
+  Measure perceptual variability and  collapsing  behavior in   GAN with   fast  easyto compute metric
+ Section  
+
+  Highlight that   high number of classes is what makes
+ImageNet synthesis dif cult for GANs and provide an
+explicit solution  Section  
+
+  Demonstrate experimentally that GANs that perform
+well perceptually are not those that memorize   small
+number of examples  Section  
+
+  Achieve state of the art on the Inception score metric
+when trained on CIFAR  without using any of the
+techniques from  Salimans et al     Section  
+
+  Background
+  generative adversarial network  GAN  consists of two
+neural networks trained in opposition to one another  The
+generator   takes as input   random noise vector   and
+outputs an image Xf ake        The discriminator  
+receives as input either   training image or   synthesized
+image from the generator and outputs   probability distribution                  over possible image sources 
+The discriminator is trained to maximize the loglikelihood
+it assigns to the correct source 
+
+      log        real   Xreal 
+
+  log          ake   Xf ake 
+
+ 
+
+The generator is trained to minimize the second term in
+Equation  
+The basic GAN framework can be augmented using side
+information  One strategy is to supply both the generator
+and discriminator with class labels in order to produce class
+conditional samples  Mirza   Osindero    Class conditional synthesis can signi cantly improve the quality of
+generated samples  van den Oord et al      Richer side
+information such as image captions and bounding box localizations may improve sample quality further  Reed et al 
+     
+Instead of feeding side information to the discriminator 
+one can task the discriminator with reconstructing side information  This is done by modifying the discriminator to
+contain an auxiliary decoder network  that outputs the class
+label for the training data  Odena    Salimans et al 
+  or   subset of the latent variables from which the
+samples are generated  Chen et al    Forcing   model
+to perform additional tasks is known to improve performance on the original task      
+ Sutskever et al   
+Szegedy et al    Ramsundar et al    In addition  an auxiliary decoder could leverage pretrained discriminators      
+image classi ers  for further improving
+the synthesized images  Nguyen et al    Motivated
+by these considerations  we introduce   model that combines both strategies for leveraging side information  That
+is  the model proposed below is class conditional  but with
+an auxiliary decoder that is tasked with reconstructing class
+labels 
+
+  Alternatively  one can force the discriminator to work with
+the joint distribution        and train   separate inference network
+that computes         Dumoulin et al    Donahue et al 
+ 
+
+Conditional Image Synthesis with Auxiliary Classi er GANs
+
+  ACGANs
+We propose   variant of the GAN architecture which we
+call an auxiliary classi er GAN  or ACGAN  In the ACGAN  every generated sample has   corresponding class label      pc in addition to the noise      uses both to generate images Xf ake           The discriminator gives both
+  probability distribution over sources and   probability distribution over the class labels                       
+     The objective function has two parts 
+the loglikelihood of the correct source  LS  and the loglikelihood
+of the correct class  LC 
+
+LS     log        real   Xreal 
+
+  log          ake   Xf ake 
+
+LC     log            Xreal 
+
+  log            Xf ake 
+
+ 
+
+ 
+
+  is trained to maximize LS   LC while   is trained to
+maximize LC   LS  ACGANs learn   representation for
+  that is independent of class label        Kingma et al 
+ 
+Structurally  this model is not tremendously different from
+existing models  However  this modi cation to the standard GAN formulation produces excellent results and appears to stabilize training  Moreover  we consider the ACGAN model to be only part of the technical contributions of
+this work  along with our proposed methods for measuring
+the extent to which   model makes use of its given output
+resolution  methods for measuring perceptual variability of
+samples from the model  and   thorough experimental analyis of   generative model of images that creates    
+samples from all   ImageNet classes 
+Early experiments demonstrated that increasing the number of classes trained on while holding the model  xed decreased the quality of the model outputs  The structure of
+the ACGAN model permits separating large datasets into
+subsets by class and training   generator and discriminator
+for each subset  All ImageNet experiments are conducted
+using an ensemble of   ACGANs  each trained on    
+class split 
+
+  Results
+We train several ACGAN models on the ImageNet data
+set  Russakovsky et al    Broadly speaking  the architecture of the generator   is   series of  deconvolution 
+layers that transform the noise   and class   into an image
+ Odena et al    We train two variants of the model architecture for generating images at       and      
+
+spatial resolutions  The discriminator   is   deep convolutional neural network with   Leaky ReLU nonlinearity
+ Maas et al    As mentioned earlier  we  nd that reducing the variability introduced by all   classes of ImageNet signi cantly improves the quality of training  We
+train   ACGAN models   each on images from just  
+classes   for   minibatches of size  
+Evaluating the quality of image synthesis models is challenging due to the variety of probabilistic criteria  Theis
+et al    and the lack of   perceptually meaningful image similarity metric  Nonetheless  in later sections we attempt to measure the quality of the ACGAN by building
+several adhoc measures for image sample discriminability and diversity  Our hope is that this work might provide
+quantitative measures that may be used to aid training and
+subsequent development of image synthesis models 
+
+  Generating High Resolution Images Improves
+
+Discriminability
+
+Building   classconditional image synthesis model necessitates measuring the extent to which synthesized images
+appear to belong to the intended class  In particular  we
+would like to know that   high resolution sample is not just
+  naive resizing of   low resolution sample  Consider  
+simple experiment  pretend there exists   model that synthesizes       images  One can trivially increase the
+resolution of synthesized images by performing bilinear interpolation  This would yield higher resolution images  but
+these images would just be blurry versions of the low resolution images that are not discriminable  Hence  the goal
+of an image synthesis model is not simply to produce high
+resolution images  but to produce high resolution images
+that are more discriminable than low resolution images 
+To measure discriminability  we feed synthesized images
+to   pretrained Inception network  Szegedy et al   
+and report the fraction of the samples for which the Inception network assigned the correct label  We calculate
+this accuracy measure on   series of real and synthesized
+images which have had their spatial resolution arti cially
+decreased by bilinear interpolation  Figure   top panels 
+Note that as the spatial resolution is decreased  the accuracy
+decreases   indicating that resulting images contain less
+class information  Figure   scores below top panels  We
+summarized this  nding across all   ImageNet classes
+for the ImageNet training data  black          reso 
+  One could also use the Inception score  Salimans et al 
+  but our method has several advantages  accuracy  gures are easier to interpret than exponentiated KLdivergences 
+accuracy may be assessed for individual classes  accuracy
+measures whether   classconditional model generated samples from the intended class  To compute the Inception accuracy  we modi ed   version of Inceptionv  supplied in
+https github com openai improvedgan 
+
+Conditional Image Synthesis with Auxiliary Classi er GANs
+
+     
+
+     
+
+      
+
+     
+
+     
+
+Real
+
+Fake
+
+ 
+
+ 
+
+  
+
+ 
+
+ 
+
+ 
+
+ 
+
+  
+
+ 
+
+ 
+
+Figure   Generating high resolution images improves discriminability  Top  Training data and synthesized images from the zebra
+class resized to   lower spatial resolution  indicated above  and subsequently arti cially resized to the original resolution     for
+the red and black lines      for the blue line  Inception accuracy is shown below the corresponding images  Bottom Left  Summary
+of accuracies across varying spatial resolutions for training data and image samples from       and       models  Error bar
+measures standard deviation across   subsets of images  Dashed lines highlight the accuracy at the output spatial resolution of the
+model  The training data  clipped  achieves accuracies of       and   at resolutions of       and   respectively 
+Bottom Right  Comparison of accuracy scores at       and       spatial resolutions    and   axis  respectively  Each point
+represents an ImageNet class    of the classes are below the line of equality  The green dot corresponds to the zebra class  We
+also arti cially resized       and       images to       as   sanity check to demonstrate that simply increasing the number
+of pixels will not increase discriminability 
+
+lution ACGAN  red  and         resolution ACGAN
+ blue  in Figure    bottom  left  The black curve  clipped 
+provides an upperbound on the discriminability of real images 
+The goal of this analysis is to show that synthesizing higher
+resolution images leads to increased discriminability  The
+      model achieves an accuracy of      
+versus       with samples resized to       and
+      with samples resized to       In other
+words  downsizing the outputs of the ACGAN to      
+and       decreases visual discriminability by   and
+  respectively  Furthermore    of the ImageNet
+classes have higher accuracy at       than at      
+ Figure   bottom left 
+We performed the same analysis on an ACGAN trained
+to     spatial resolution  This model achieved less discriminability than     ACGAN model  Accuracies
+from the       model plateau at         spatial resolution consistent with previous results  Finally  the      
+
+resolution model achieves less discriminability at   spatial
+resolution than the       model 
+To the best of our knowledge  this work is the  rst that attempts to measure the extent to which an image synthesis
+model is  making use of its given output resolution  and in
+fact is the  rst work to consider the issue at all  We consider this an important contribution  on par with proposing   model that synthesizes images from all   ImageNet classes  We note that the proposed method can be
+applied to any image synthesis model for which   measure
+of  sample quality  can be constructed  In fact  this method
+ broadly de ned  can be applied to any type of synthesis
+model  as long as there is an easily computable notion of
+sample quality and some method for  reducing resolution 
+In particular  we expect that   similar procecure can be carried out for audio synthesis 
+
+Conditional Image Synthesis with Auxiliary Classi er GANs
+
+  Measuring the Diversity of Generated Images
+
+hot dog
+
+MSSSIM    
+
+promontory
+MSSSIM    
+
+green apple
+MSSSIM    
+
+artichoke
+
+MSSSIM    
+
+An image synthesis model is not very interesting if it only
+outputs one image  Indeed    wellknown failure mode of
+GANs is that the generator will collapse and output   single
+prototype that maximally fools the discriminator  Goodfellow et al    Salimans et al      classconditional
+model of images is not very interesting if it only outputs
+one image per class  The Inception accuracy can not measure whether   model has collapsed    model that simply
+memorized one example from each ImageNet class would
+do very well by this metric  Thus  we seek   complementary metric to explicitly evaluate the intraclass perceptual
+diversity of samples generated by the ACGAN 
+Several methods exist for quantitatively evaluating image
+similarity by attempting to predict human perceptual similarity judgements  The most successful of these is multiscale structural similarity  MSSSIM   Wang et al     
+Ma et al    MSSSIM is   multiscale variant of
+  wellcharacterized perceptual similarity metric that attempts to discount aspects of an image that are not important for human perception  Wang et al      MSSSIM
+values range between   and   higher MSSSIM values
+correspond to perceptually more similar images 
+As   proxy for image diversity  we measure the MSSSIM scores between   randomly chosen pairs of images
+within   given class  Samples from classes that have higher
+diversity result in lower mean MSSSIM scores  Figure
+  left columns  samples from classes with lower diversity have higher mean MSSSIM scores  Figure   right
+columns  Training images from the ImageNet training
+data contain   variety of mean MSSSIM scores across the
+classes indicating the variability of image diversity in ImageNet classes  Figure   xaxis  Note that the highest mean
+MSSSIM score  indicating the least variability  is   for
+the training data 
+We calculate the mean MSSSIM score for all   ImageNet classes generated by the ACGAN model  We track
+this value during training to identify whether the generator
+has collapsed  Figure   red curve  We also employ this
+metric to compare the diversity of the training images to
+the samples from the GAN model after training has completed  Figure   plots the mean MSSSIM values for image
+samples and training data broken up by class  The blue line
+is the line of equality  Out of the   classes  we  nd that
+  have mean sample MSSSIM scores below that of the
+maximum MSSSIM for the training data  In other words 
+  of classes have sample variability that exceeds that
+of the least variable class from the ImageNet training data 
+There are two points related to the MSSSIM metric and
+our use of it that merit extra attention  The  rst point is
+that we are  abusing  the metric  it was originally intended
+
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+
+MSSSIM    
+
+MSSSIM    
+
+MSSSIM    
+
+MSSSIM    
+
+ 
+
+ 
+ 
+ 
+
+Figure   Examples of different MSSSIM scores  The top and
+bottom rows contain ACGAN samples and training data  respectively 
+
+to be used for measuring the quality of image compression algorithms using   reference  original image  We instead use it on two potentially unrelated images  We believe that this is acceptable for the following reasons  First 
+visual inspection seems to indicate that the metric makes
+sense   pairs with higher MSSSIM do seem more similar
+than pairs with lower MSSSIM  Second  we restrict comparisons to images synthesized using the same class label 
+This restricts use of MSSSIM to situations more similar to
+those in which it is typically used  it is not important which
+image is the reference  Third  the metric is not  saturated 
+for our usecase  If most scores were around   then we
+would be more concerned about the applicability of MSSSIM  Finally  The fact that training data achieves more
+variability by this metric  as expected  is itself evidence
+that the metric is working as intended 
+The second point is that the MSSSIM metric is not intended as   proxy for the entropy of the generator distribution in pixel space  but as   measure of perceptual diversity
+of the outputs  The entropy of the generator output distribution is hard to compute and pairwise MSSSIM scores
+would not be   good proxy  Even if it were easy to compute  we argue that it would still be useful to have   separate
+measure of perceptual diversity  To see why  consider that
+the generator entropy will be sensitive to trivial changes
+in contrast as well as changes in the semantic content of
+the outputs  In many applications  we don   care about this
+contribution to the entropy  and it is useful to consider measures that attempt to ignore changes to an image that we
+consider  perceptually meaningless  hence the use of MSSSIM 
+
+  Generated Images are both Diverse and
+
+Discriminable
+
+We have presented quantitative metrics demonstrating that
+ACGAN samples may be diverse and discriminable but
+we have yet to examine how these metrics interact  Figure   shows the joint distribution of Inception accuracies
+
+Conditional Image Synthesis with Auxiliary Classi er GANs
+
+Figure   Comparison of the mean MSSSIM scores between
+pairs of images within   given class for ImageNet training data
+and samples from the GAN  blue line is equality  The horizontal
+red line marks the maximum MSSSIM value  for training data 
+across all ImageNet classes  Each point is an individual class  The
+mean score across the training data and the samples was   and
+  respectively  The mean standard deviation of scores across
+the training data and the samples was   and   respectively 
+Scores below the red line   of classes  arise from classes
+where GAN training largely succeeded 
+
+and MSSSIM scores across all classes  Inception accuracy
+and MSSSIM are anticorrelated         In fact 
+  of the classes with low diversity  MSSSIM    
+contain Inception accuracies     Conversely    of
+classes with high diversity  MSSSIM     have Inception accuracies that exceed  
+In comparison  the
+Inceptionv  model achieves   accuracy on average
+across all   classes  Szegedy et al      fraction
+of the classes ACGAN samples reach this level of accuracy  This indicates opportunity for future image synthesis
+models 
+These results suggest that GANs that drop modes are most
+likely to produce low quality images  This stands in contrast to   popular hypothesis about GANs  which is that
+they achieve high sample quality at the expense of variability  We hope that these  ndings can help structure further
+investigation into the reasons for differing sample quality
+between GANs and other image synthesis models 
+
+  Comparison to Previous Results
+
+Previous quantitative results for image synthesis models trained on ImageNet are reported in terms of loglikelihood  van den Oord et al        Loglikelihood is
+  coarse and potentially inaccurate measure of sample quality  Theis et al    Instead we compare with previous
+stateof theart results on CIFAR  using   lower spatial
+resolution     Following the procedure in  Salimans
+
+Figure   Intraclass MSSSIM for selected ImageNet classes
+throughout   training run  Classes that successfully train  black
+lines  tend to have decreasing mean MSSSIM scores  Classes
+for which the generator  collapses   red line  will have increasing
+mean MSSSIM scores 
+
+et al    we compute the Inception score  for  
+samples from an ACGAN with resolution       split
+into   groups at random  We also compute the Inception
+score for   extra samples  split into   groups at random  We select the best model based on the  rst score and
+report the second score  Performing   grid search across
+  hyperparameter con gurations  we are able to achieve  
+score of       compared to state of the art    
+   Salimans et al    Moreover  we accomplish this
+without employing any of the new techniques introduced
+in that work       virtual batch normalization  minibatch
+discrimination  and label smoothing 
+This provides additional evidence that ACGANs are effective even without the bene   of class splitting  See Figure  
+for   qualitative comparison of samples from an ACGAN
+and samples from the model in  Salimans et al   
+
+  Searching for Signatures of Over tting
+
+One possibility that must be investigated is that the ACGAN has over   on the training data  As    rst check that
+the network does not memorize the training data  we identify the nearest neighbors of image samples in the training
+data measured by    distance in pixel space  Figure  
+The nearest neighbors from the training data do not resemble the corresponding samples  This provides evidence that
+the ACGAN is not merely memorizing the training data 
+
+ 
+
+The
+
+Inception
+
+by
+exp  Ex DKL               where   is   particular image         is the conditional output distribution over the classes
+in   pretrained Inception network  Szegedy et al    given   
+and      is the marginal distribution over the classes 
+
+given
+
+score
+
+is
+
+Conditional Image Synthesis with Auxiliary Classi er GANs
+
+Figure   Inception accuracy vs MSSSIM for all   ImageNet
+classes         Each data point represents the mean MSSSIM value for samples from one class  As in Figure   the
+red line marks the maximum MSSSIM value  for training data 
+across all ImageNet classes  Samples from ACGAN models do
+not achieve variability at the expense of discriminability 
+
+Figure   Nearest neighbor analysis   Top  Samples from   single
+ImageNet class 
+ Bottom  Corresponding nearest neighbor    
+distance  in training data for each sample 
+
+the ACGAN with    xed but altering the class label corresponds to generating samples with the same  style  across
+multiple classes  Kingma et al    Figure    Bottom 
+shows samples from   bird classes  Elements of the same
+row have the same    Although the class changes for each
+column  elements of the global structure       position  layout  background  are preserved  indicating that ACGAN
+can represent certain types of  compositionality 
+
+Figure   Samples generated from the ImageNet dataset   Left 
+Samples generated from the model in  Salimans et al   
+ Right  Randomly chosen samples generated from an ACGAN 
+ACGAN samples possess global coherence absent from the samples of the earlier model 
+
+  more sophisticated method for understanding the degree
+of over tting in   model is to explore that model   latent
+space by interpolation  In an over   model one might observe discrete transitions in the interpolated images and regions in latent space that do not correspond to meaningful images  Bengio et al    Radford et al    Dinh
+et al    Figure    Top  highlights interpolations in the
+latent space between several image samples  Notably  the
+generator learned that certain combinations of dimensions
+correspond to semantically meaningful features       size
+of the arch  length of   bird   beak  and there are no discrete
+transitions or  holes  in the latent space 
+  second method for exploring the latent space of the ACGAN is to exploit the structure of the model  The ACGAN factorizes its representation into class information
+and   classindependent latent representation    Sampling
+
+Figure    Top  Latent space interpolations for selected ImageNet
+classes  Leftmost and rightcolumns show three pairs of image
+samples   each pair from   distinct class  Intermediate columns
+highlight linear interpolations in the latent space between these
+three pairs of images   Bottom  Classindependent information
+contains global structure about the synthesized image  Each column is   distinct bird class while each row corresponds to    xed
+latent code   
+
+Conditional Image Synthesis with Auxiliary Classi er GANs
+
+  Measuring the Effect of Class Splits on Image
+
+Sample Quality 
+
+Class conditional image synthesis affords the opportunity
+to divide up   dataset based on image label  In our  nal
+model we divide   ImageNet classes across   ACGAN models  In this section we describe experiments that
+highlight the bene   of cutting down the diversity of classes
+for training an ACGAN  We employed an ordering of the
+labels and divided it into contiguous groups of   This
+ordering can be seen in the following section  where we
+display samples from all   classes  Two aspects of the
+split merit discussion  the number of classes per split and
+the intrasplit diversity  We  nd that training    xed model
+on more classes harms the model   ability to produce compelling samples  Figure   Performance on larger splits
+can be improved by giving the model more parameters 
+However  using   small split is not suf cient to achieve
+good performance  We were unable to train   GAN  Goodfellow et al    to converge reliably even for   split size
+of   This raises the question of whether it is easier to train
+  model on   diverse set of classes than on   similar set of
+classes  We were unable to  nd conclusive evidence that
+the selection of classes in   split signi cantly affects sample quality 
+
+Figure   Mean pairwise MSSSIM values for   ImageNet
+classes plotted against the number of ImageNet classes used during training  We    everything except the number of classes
+trained on  using values from   to   We only report the MSSSIM values for the  rst   classes to keep the scores comparable 
+MSSSIM quickly goes above    the red line  as the class count
+increases  These scores were computed using   random restarts
+per class count  using the same number of training steps for each
+model  Since we have observed that generators do not recover
+from the collapse phase  the use of    xed number of training
+steps seems justi ed in this case 
+
+We don   have   hypothesis about what causes this sensi 
+
+tivity to class count that is wellsupported experimentally 
+We can only note that  since the failure case that occurs
+when the class count is increased is  generator collapse  it
+seems plausible that general methods for addressing  generator collapse  could also address this sensitivity 
+
+  Samples from all   ImageNet Classes
+
+We also generate   samples from each of the   ImageNet classes  hosted here  As far as we are aware  no other
+image synthesis work has included   similar analysis 
+
+  Discussion
+This work introduced the ACGAN architecture and
+demonstrated that ACGANs can generate globally coherent ImageNet samples  We provided   new quantitative
+metric for image discriminability as   function of spatial
+resolution  Using this metric we demonstrated that our
+samples are more discriminable than those from   model
+that generates lower resolution images and performs  
+naive resize operation  We also analyzed the diversity of
+our samples with respect to the training data and provided
+some evidence that the image samples from the majority of
+classes are comparable in diversity to ImageNet data 
+Several directions exist for building upon this work  Much
+work needs to be done to improve the visual discriminability of the       resolution model  Although some
+synthesized image classes exhibit high Inception accuracies  the average Inception accuracy of the model  
+  is still far below real training data at   One immediate opportunity for addressing this is to augment the
+discriminator with   pretrained model to perform additional supervised tasks      
+image segmentation   Ronneberger et al   
+Improving the reliability of GAN training is an ongoing
+research topic  Only   of the ImageNet classes exhibited diversity comparable to real training data  Training
+stability was vastly aided by dividing up   ImageNet
+classes across   ACGAN models  Building   single
+model that could generate samples from all   classes
+would be an important step forward 
+Image synthesis models provide   unique opportunity for
+performing semisupervised learning  these models build
+  rich prior over natural image statistics that can be leveraged by classi ers to improve predictions on datasets for
+which few labels exist  The ACGAN model can perform
+semisupervised learning by ignoring the component of the
+loss arising from class labels when   label is unavailable
+for   given training image  Interestingly  prior work suggests that achieving good sample quality might be independent of success in semisupervised learning  Salimans
+et al   
+
+Conditional Image Synthesis with Auxiliary Classi er GANs
+
+References
+Ball    Johannes  Laparra  Valero  and Simoncelli  Eero   
+Density modeling of images using   generalized normalization transformation  CoRR  abs   
+URL http arxiv org abs 
+
+Bengio  Yoshua  Mesnil  Gr egoire  Dauphin  Yann  and
+Rifai  Salah  Better mixing via deep representations 
+CoRR  abs    URL http arxiv 
+org abs 
+
+Blundell     Uria     Pritzel     Li     Ruderman 
+   Leibo        Rae     Wierstra     and Hassabis 
+   ModelFree Episodic Control  ArXiv eprints  June
+ 
+
+Chen     Duan     Houthooft     Schulman 
+
+  
+Sutskever     and Abbeel    
+InfoGAN  Interpretable
+Representation Learning by Information Maximizing
+Generative Adversarial Nets  ArXiv eprints  June  
+
+Denton  Emily    Chintala  Soumith  Szlam  Arthur  and
+Fergus  Robert  Deep generative image models using
+  laplacian pyramid of adversarial networks  CoRR 
+abs    URL http arxiv org 
+abs 
+
+Dinh  Laurent  SohlDickstein 
+
+Jascha  and Bengio 
+Samy  Density estimation using real NVP  CoRR 
+abs    URL http arxiv org 
+abs 
+
+Donahue     Kr ahenb uhl     and Darrell     Adversarial
+
+Feature Learning  ArXiv eprints  May  
+
+Dumoulin     Belghazi     Poole     Lamb     Arjovsky 
+   Mastropietro     and Courville     Adversarially
+Learned Inference  ArXiv eprints  June  
+
+Goodfellow        PougetAbadie     Mirza     Xu    
+WardeFarley     Ozair     Courville     and Bengio 
+   Generative Adversarial Networks  ArXiv eprints 
+June  
+
+Kingma       and Welling     AutoEncoding Variational
+
+Bayes  ArXiv eprints  December  
+
+Kingma  Diederik    Rezende  Danilo Jimenez  Mohamed 
+Shakir  and Welling  Max  Semisupervised learning
+with deep generative models  CoRR  abs 
+ 
+URL http arxiv org abs 
+ 
+
+Ledig     Theis     Huszar     Caballero     Aitken 
+   Tejani     Totz     Wang     and Shi     PhotoRealistic Single Image SuperResolution Using   Generative Adversarial Network  ArXiv eprints  September
+ 
+
+Ma  Kede  Wu  Qingbo  Wang  Zhou  Duanmu  Zhengfang 
+Yong  Hongwei  Li  Hongliang  and Zhang  Lei  Group
+mad competition     new methodology to compare objective image quality models  In The IEEE Conference on
+Computer Vision and Pattern Recognition  CVPR  June
+ 
+
+Maas  Andrew  Hannun  Awni  and Ng  Andrew  Recti er
+nonlinearities improve neural network acoustic models 
+In Proceedings of The  rd International Conference on
+Machine Learning   
+
+Mirza  Mehdi and Osindero  Simon  Conditional generative adversarial nets  CoRR  abs    URL
+http arxiv org abs 
+
+Mohamed  Shakir and Lakshminarayanan  Balaji  LearnarXiv preprint
+
+ing in implicit generative models 
+arXiv   
+
+Nguyen  Anh Mai  Dosovitskiy  Alexey  Yosinski  Jason 
+Brox  Thomas  and Clune  Jeff  Synthesizing the preferred inputs for neurons in neural networks via deep
+generator networks  CoRR  abs    URL
+http arxiv org abs 
+
+Odena     SemiSupervised Learning with Generative Ad 
+
+versarial Networks  ArXiv eprints  June  
+
+Odena  Augustus  Dumoulin  Vincent 
+
+and Olah 
+Deconvolution and checkerboard artifacts 
+
+Chris 
+http distill pub deconvcheckerboard   
+
+Radford  Alec  Metz  Luke  and Chintala  Soumith 
+Unsupervised representation learning with deep conCoRR 
+volutional generative adversarial networks 
+abs    URL http arxiv org 
+abs 
+
+Ramsundar  Bharath  Kearnes  Steven  Riley  Patrick  Webster  Dale  Konerding  David  and Pande  Vijay  MasIn Prosively multitask networks for drug discovery 
+ceedings of The  rd International Conference on Machine Learning   
+
+Kingma  Diederik    Salimans  Tim  and Welling  Max 
+Improving variational inference with inverse autoregressive  ow  CoRR  abs    URL http 
+ arxiv org abs 
+
+Reed  Scott  Akata  Zeynep  Mohan  Santosh  Tenka 
+Samuel  Schiele  Bernt  and Lee  Honglak  LearnarXiv preprint
+ing what and where to draw 
+arXiv     
+
+Conditional Image Synthesis with Auxiliary Classi er GANs
+
+Reed  Scott  Akata  Zeynep  Yan  Xinchen  Logeswaran 
+Lajanugen  Schiele  Bernt  and Lee  Honglak  GenerIn Proceedative adversarial textto image synthesis 
+ings of The  rd International Conference on Machine
+Learning     
+
+Toderici  George  Vincent  Damien 
+
+Johnston  Nick 
+Hwang  Sung Jin  Minnen  David  Shor  Joel  and Covell  Michele  Full resolution image compression with recurrent neural networks  CoRR  abs   
+URL http arxiv org abs 
+
+Uehara     Sato     Suzuki     Nakayama     and Matsuo     Generative Adversarial Nets from   Density
+Ratio Estimation Perspective  ArXiv eprints  October
+ 
+
+van
+
+den Oord    aron  Kalchbrenner  Nal 
+
+Kavukcuoglu  Koray 
+CoRR  abs     
+works 
+http arxiv org abs 
+
+Pixel
+
+and
+recurrent neural netURL
+
+van den Oord    aron  Kalchbrenner  Nal  Vinyals  Oriol 
+Espeholt  Lasse  Graves  Alex  and Kavukcuoglu  Koray  Conditional image generation with pixelcnn decoders  CoRR  abs      URL http 
+ arxiv org abs 
+
+Wang  Zhou  Bovik  Alan    Sheikh  Hamid    and Simoncelli  Eero    Image quality assessment  from error
+visibility to structural similarity  IEEE transactions on
+image processing       
+
+Wang  Zhou  Simoncelli  Eero    and Bovik  Alan    Multiscale structural similarity for image quality assessment 
+In Signals  Systems and Computers    Conference
+Record of the ThirtySeventh Asilomar Conference on 
+volume   pp    Ieee     
+
+Rezende     and Mohamed     Variational Inference with
+
+Normalizing Flows  ArXiv eprints  May  
+
+Rezende     Mohamed     and Wierstra     Stochastic Backpropagation and Approximate Inference in Deep
+Generative Models  ArXiv eprints  January  
+
+Ronneberger  Olaf  Fischer  Philipp  and Brox  Thomas  Unet  Convolutional networks for biomedical image segmentation  CoRR  abs    URL http 
+ arxiv org abs 
+
+Russakovsky  Olga  Deng  Jia  Su  Hao  Krause  Jonathan 
+Satheesh  Sanjeev  Ma  Sean  Huang  Zhiheng  Karpathy  Andrej  Khosla  Aditya  Bernstein  Michael  Berg 
+Alexander    and FeiFei  Li 
+ImageNet Large Scale
+Visual Recognition Challenge  International Journal of
+Computer Vision  IJCV      doi 
+     
+
+Salimans     Goodfellow     Zaremba     Cheung    
+Improved Techniques for
+
+Radford     and Chen    
+Training GANs  ArXiv eprints  June  
+
+Simoncelli  Eero and Olshausen  Bruno  Natural image
+statistics and neural representation  Annual Review of
+Neuroscience     
+
+Springenberg        Unsupervised and Semisupervised
+Learning with Categorical Generative Adversarial Networks  ArXiv eprints  November  
+
+Sutskever  Ilya  Vinyals  Oriol  and    Le Quoc  Sequence
+In Neural
+
+to sequence learning with neural networks 
+Information Processing Systems   
+
+Szegedy  Christian  Liu  Wei  Jia  Yangqing  Sermanet 
+Pierre  Reed  Scott    Anguelov  Dragomir  Erhan 
+Dumitru  Vanhoucke  Vincent  and Rabinovich  AnCoRR 
+drew 
+abs    URL http arxiv org 
+abs 
+
+Going deeper with convolutions 
+
+Szegedy  Christian  Vanhoucke  Vincent  Ioffe  Sergey 
+Shlens  Jonathon  and Wojna  Zbigniew  Rethinking
+the inception architecture for computer vision  CoRR 
+abs    URL http arxiv org 
+abs 
+
+Theis     van den Oord     and Bethge       note on the
+evaluation of generative models  ArXiv eprints  November  
+
+

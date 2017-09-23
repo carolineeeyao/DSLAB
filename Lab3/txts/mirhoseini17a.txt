@@ -1,0 +1,859 @@
+Device Placement Optimization with Reinforcement Learning
+
+Azalia Mirhoseini       Hieu Pham       Quoc    Le   Benoit Steiner   Rasmus Larsen   Yuefeng Zhou  
+
+Naveen Kumar   Mohammad Norouzi   Samy Bengio   Jeff Dean  
+
+Abstract
+
+The past few years have witnessed   growth in
+size and computational requirements for training
+and inference with neural networks  Currently   
+common approach to address these requirements
+is to use   heterogeneous distributed environment with   mixture of hardware devices such
+as CPUs and GPUs 
+Importantly  the decision
+of placing parts of the neural models on devices
+is often made by human experts based on simple
+heuristics and intuitions  In this paper  we propose   method which learns to optimize device
+placement for TensorFlow computational graphs 
+Key to our method is the use of   sequenceto 
+sequence model to predict which subsets of operations in   TensorFlow graph should run on
+which of the available devices  The execution
+time of the predicted placements is then used as
+the reward signal to optimize the parameters of
+the sequenceto sequence model  Our main result is that on InceptionV  for ImageNet classi 
+ cation  and on RNN LSTM  for language modeling and neural machine translation  our model
+ nds nontrivial device placements that outperform handcrafted heuristics and traditional algorithmic methods 
+
+  Introduction
+Over the past few years  neural networks have proven to
+be   general and effective tool for many practical problems  such as image classi cation  Krizhevsky et al   
+Szegedy et al    He et al    speech recognition  Hinton et al    Graves   Jaitly    Hannun et al    Chan et al    machine translation  Sutskever et al    Cho et al    Bahdanau
+
+ Equal contribution
+
+the
+Google Brain Residency Program    co brainresidency 
+ Google 
+Correspondence to  Azalia Mirhoseini  azalia google com  Hieu Pham  hyhieu google com 
+
+ Google Brain  Members of
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+et al    Wu et al    and speech synthesis  Oord
+et al    Arik et al    Wang et al    Together
+with their success is the growth in size and computational
+requirements of training and inference  Currently    typical
+approach to address these requirements is to use   heterogeneous distributed environment with   mixture of many
+CPUs and GPUs  In this environment  it is   common practice for   machine learning practitioner to specify the device placement for certain operations in the neural network 
+For example  in   neural translation network  each layer  including all LSTM layers  the attention layer  and the softmax layer  is computed by   GPU  Sutskever et al   
+Wu et al   
+Although such decisions can be made by machine learning practitioners  they can be challenging  especially when
+the network has many branches  Szegedy et al   
+or when the minibatches get larger  Existing algorithmic
+solvers  Pellegrini    Karypis   Kumar      on the
+other hand  are not  exible enough to work with   dynamic
+environment with many interferences 
+
+Figure   An overview of the RL based device placement model 
+
+In this paper  we propose   method which learns to optimize device placement for training and inference with neural networks  The method  illustrated in Figure   takes into
+account information of the environment by performing series of experiments to understand which parts of the model
+should be placed on which device  and how to arrange the
+computations so that the communication is optimized  Key
+to our method is the use of   sequenceto sequence model
+to read input information about the operations as well as
+the dependencies between them  and then propose   placement for each operation  Each proposal is executed in the
+hardware environment to measure the execution time  The
+execution time is then used as   reward signal to train the
+
+PlacementEnvironmentRuntimeUpdatePlacementDevice Placement Optimization with Reinforcement Learning
+
+recurrent model so that it gives better proposals over time 
+Our main result is that our method  nds nontrivial placements on multiple devices for InceptionV   Szegedy et al 
+  Recurrent Neural Language Model  Zaremba et al 
+  Jozefowicz et al    and Neural Machine Translation  Sutskever et al    Wu et al    Singlestep
+measurements show that Scotch  Pellegrini    yields
+disappointing results on all three benchmarks  suggesting
+that their graphbased heuristics are not  exible enough for
+them  Our method can  nd nontrivial placements that are
+up to   times faster  When applied to train the three models in real time  the placements found by our method are up
+to   faster than human experts  placements 
+
+  Related Work
+Our work is closely related to the idea of using neural networks and reinforcement learning for combinatorial optimization  Vinyals et al    Bello et al    The
+space of possible placements for   computational graph is
+discrete  and we model the placements using   sequenceto sequence approach  trained with policy gradients  However  experiments in early work were only concerned with
+toy datasets  whereas this work applies the framework to  
+largescale practical application with noisy rewards 
+Reinforcement learning has also been applied to optimize
+system performance  For example  Mao et al    propose to train   resource management algorithm with policy
+gradients  However  they optimize the expected value of  
+handcrafted objective function based on the reward  unlike
+this work  where we optimize directly for the running time
+of the con gurations  hence relieving the need to design
+intermediate cost models 
+Graph partitioning is an intensively studied subject in computer science  Early work such as Kernighan   Lin  
+Kirkpatrick et al    Fiduccia   Mattheyses  
+Johnson et al    employ several iterative re nement
+procedures that start from   partition and continue to explore similar partitions to improve  Alternative methods such as Hagen   Kahng   Karypis   Kumar
+    perform spectral analyses on matrix representations of graphs to partition them  Despite their extensive
+literature  graph partitioning algorithms remain heuristics
+for computational graphs  The reason is that in order to apply these algorithms  one has to construct cost models for
+the graphs of concern  Since such models are expensive to
+even estimate and in virtually all cases  are not accurate 
+graph partitioning algorithms applied on them can lead to
+unsatisfying results  as we show in Section   of this paper 
+  wellknown graph partitioning algorithm with an open
+source software library is the Scotch optimizer  Pellegrini 
+  which we use as   baseline in our experiments 
+
+The Scotch mapper attempts to balance the computational
+load of   collection of tasks among   set of connected
+processing nodes  while reducing the cost of communication by keeping intensively communicating tasks on nearby
+nodes  Scotch relies on   collection of graph partitioning
+techniques such as kway FiducciaMattheyses  Fiduccia
+  Mattheyses    multilevel method  Barnard   Simon    Hendrickson   Leland    Karypis   Kumar      band method  Chevalier   Pellegrini   
+diffusion method  Pellegrini    and dual recursive bipartitioning mapping  Pellegrini   Roman   
+Scotch models the problem with   graphs  The  rst graph
+is called the target architecture graph  whose vertices represent hardware resources such as CPUs or GPUs and
+whose edges represent the communication paths available
+between them  such as   PCIe bus or   network link  The
+second graph is called the source graph  which models
+the computation to be mapped onto the target architecture
+graph  In the case of TensorFlow  Abadi et al    the
+computations of programs are modeled as   graph whose
+vertices represent operations  while the graph edges represent the multidimensional data arrays  tensors  communicated between them  Scotch users have to choose how and
+when given partitioning should be applied to graphs  However  in our experiment  we rely on the software   default
+strategies implemented in Scotch  which have already been
+extensively tuned 
+
+  Method
+Consider   TensorFlow computational graph    which consists of   operations          oM  and   list of   available devices    placement              pM  is an
+assignment of an operation oi     to   device pi  where
+pi          Let      denote the time that it takes to
+perform   complete execution of   under the placement   
+The goal of device placement optimization is to  nd   such
+that the execution time      is minimized 
+
+  Training with Policy Gradients
+While we seek to minimize the execution time      direct optimization of      results in two major issues  First 
+in the beginning of the training process  due to the bad
+placements sampled  the measurements of      can be
+noisy  leading to inappropriate learning signals  Second 
+as the RL model gradually converges  the placements that
+are sampled become more similar to each other  leading
+to small differences between the corresponding running
+times  which results in less distinguishable training signals  We empirically  nd that the square root of running
+
+time          cid      makes the learning process more
+
+robust  Accordingly  we propose to train   stochastic pol 
+
+Device Placement Optimization with Reinforcement Learning
+
+Figure   Device placement model architecture 
+
+icy         to minimize the objective
+
+  Architecture Details
+
+     EP              
+
+ 
+In our work          is de ned by an attentional
+sequenceto sequence model  which we will describe in
+Section   We learn the network parameters using
+Adam  Kingma   Ba    optimizer based on policy gradients computed via the REINFORCE equation  Williams 
+ 
+      EP                 log          
+ 
+We estimate     by drawing   placement samples using Pi         We reduce the variance of policy gradients by using   baseline term    leading to
+
+  cid 
+
+  
+
+       
+ 
+
+    Pi           log    Pi       
+
+We  nd that   simple moving average baseline   works
+well in our experiments 
+In practice  on computational
+graphs with large memory footprints  some placements can
+fail to execute       putting all of the operations of   huge
+LSTM on   single GPU will exceed the device   memory
+limit  For such cases  we set the square root of running
+time      to   large constant  which we call the failing
+signal  We specify the failing signal manually depending
+on the input graph  We observe that throughout our training process  some placements sporadically and unexpectedly fail  perhaps due to factors such as the state of the machine  we train our model on   shared cluster  This phenomenon is particularly undesirable towards the end of the
+training process  since   large difference between   Pi 
+and the baseline   leads to   large update of the parameters  which potentially perturbs parameters   out of   good
+minimum  We thus hardcode the training process so that
+after     steps  one performs   parameter update with  
+sampled placement   only if the placement executes  In
+our experiments  we also  nd that initializing the baseline
+  with the failing signal results in more exploration 
+
+We use   sequenceto sequence model  Sutskever et al 
+  with LSTM  Hochreiter   Schmidhuber    and
+  contentbased attention mechanism  Bahdanau et al 
+  to predict the placements  Figure   shows the overall
+architecture of our model  which can be divided into two
+parts  encoder RNN and decoder RNN 
+The input to the encoder RNN is the sequence of operations
+of the input graph  We embed the operations by concatenating their information  Speci cally  for each input graph
+   we  rst collect the types of its operations  An operation   type describes the underlying computation  such as
+MatMul or conv    For each type  we store   tunable
+embedding vector  We then record the size of each operation   list of output tensors and concatenate them into  
+ xedsize zeropadded list called the output shape  We also
+take the onehot encoding vector that represents the operations that are direct inputs and outputs to each operation 
+Finally  the embedding of each operation is the concatenation of its type  its output shape  and its onehot encoded
+adjacency information 
+The decoder is an attentional LSTM  Bahdanau et al 
+  with    xed number of time steps that is equal to
+the number of operations in   graph    At each step  the
+decoder outputs the device for the operation at the same
+encoder time step  Each device has its own tunable embedding  which is then fed as input to the next decoder time
+step 
+
+  Colocating Operations
+
+  key challenge when applying our method to TensorFlow computational graphs is that these graphs generally
+have thousands of operations  see Table   Modeling such
+  large number of operations with sequenceto sequence
+models is dif cult due to vanishing and exploding gradient
+issues  Pascanu et al    and large memory footprints 
+We propose to reduce the number of objects to place on dif 
+
+Device Placement Optimization with Reinforcement Learning
+
+ferent devices by manually forcing several operations to be
+located on the same device  In practice  this is implemented
+by the colocate with feature of TensorFlow 
+We use several heuristics to create colocation groups 
+First  we rely on TensorFlow   default colocation groups 
+such as colocating each operation   outputs with its gradients  We further apply   simple heuristic to merge more
+operations into colocation groups  Speci cally  if the output of an operation   is consumed only by another operation     then operations   and   are colocated  Many
+initialization operations in TensorFlow can be grouped in
+this way  In our experiments  we apply this heuristic recursively  and after each iteration  we treat the colocation
+groups as operations until there are not any further groups
+that can be merged  For certain models  we apply speci  
+rules to construct colocation groups  For example  with
+ConvNets  we can treat several convolutions and pooling
+layers as   colocation group  and with RNN models  we
+treat each LSTM cell as   group 
+
+  Distributed Training
+
+We speed up the training process of our model using
+asynchronous distributed training  as shown in Figure  
+Our framework consists of several controllers  each of
+which execute the current policy de ned by the attentional
+sequenceto sequence model as described in Section  
+All of the controllers interact with   single shared parameter server  We note that the parameter server holds only the
+controllers  parameters  and not the input graph   parameters  because keeping the input graph   parameters on the
+parameter server can potentially create   latency bottleneck
+to transfer these parameters  Each controller in our framework interacts with   workers  where   is the number of
+Monte Carlo samples in Equation  
+
+Figure   Distributed and asynchronous parameter update and reward evaluation 
+
+The training process has two alternating phases  In the  rst
+phase  each worker receives   signal that indicates that it
+should wait for placements from its controller  while each
+controller receives   signal that indicates it should sample   placements  Each sampled placement comes with
+  probability  Each controller then independently sends the
+
+placements to their workers  one placement per worker  and
+sends   signal to indicate   phase change 
+In the second phase  each worker executes the placement it
+receives and measures the running time  To reduce the variance in these measurements  each placement is executed for
+  steps and the average running time of the steps but the
+ rst one is recorded  We observe that in TensorFlow  the
+ rst step can take longer to execute compared to the following steps  and hence we treat itss runing time as an outlier 
+Each controller waits for all of its workers to  nish executing their assigned placements and returning their running
+times  When all of the running times are received  the controller uses the running times to scale the corresponding
+gradients to asynchronously update the controller parameters that reside in the parameter server 
+In our experiments  we use up to   controllers  each with
+either   or   workers  Under this setting  it takes between
+  to   hours to  nd the best placement for the models in
+our experiments  Using more workers per controller yields
+more accurate estimates of the policy gradient as in Equation   but comes at the expense of possibly having to put
+more workers in idle states  We also note that due to the discrepancies between machines  it is more stable to let each
+controller have its own baseline 
+
+  Experiments
+In the following experiments  we apply our proposed
+method to assign computations to devices on three important neural networks in the deep learning literature  Recurrent Neural Language Model  RNNLM   Zaremba et al 
+  Jozefowicz et al    Attentional Neural Machine Translation  Bahdanau et al    and InceptionV   Szegedy et al    We compare the RL placements
+against strong existing baselines described in Section  
+
+  Experiment Setup
+Benchmarks  We evaluate our approach on three established deep learning models 
+
+  Recurrent Neural Network Language Model
+ RNNLM  with multiple LSTM layers  Zaremba
+et al    Jozefowicz et al    The grid structure of this model introduces tremendous potential for
+parallel executions because each LSTM cell can start
+as soon as its input and previous states are available 
+  Neural Machine Translation with attention mechanism  NMT   Bahdanau et al    Wu et al   
+While the architecture of this model is similar to that
+of RNNLM  its large number of hidden states due
+to the source and target sentences necessitates model
+parallelism  Both Sutskever et al    and Wu
+
+Device Placement Optimization with Reinforcement Learning
+
+et al    propose to place each LSTM layer  the
+attention layer  and the softmax layer  each on   separate device  While the authors observe signi cant improvements at training time  their choices are not optimal  In fact  we show in our experiments that   trained
+policy can  nd signi cantly better placements 
+
+  InceptionV   Szegedy et al    is   widelyused
+architecture for image recognition and visual feature
+extraction  Khetan   Oh    Esteva et al   
+The Inception network has multiple blocks  Each
+block has several branches of convolutional and pooling layers  which are then concatenated to make the
+inputs for the next block  While these branches can
+be executed in parallel  the network   depth restricts
+such potential since the later blocks have to wait for
+the previous ones 
+
+Model details  For InceptionV  each step is executed
+on   batch of images  each of size          
+which is the widelyused setting for the ImageNet Challenge  Szegedy et al    For RNNLM and NMT  we
+use the model with   LSTM layers  with sizes of   and
+  respectively  We set the number of unrolling steps
+for RNNLM  as well as the maximum length for the source
+and target sentences of NMT  to   Each pass on RNNLM
+and NMT consists of   minibatch of   sequences 
+
+Colocation groups  We preprocess the TensorFlow
+computational graphs of the three aforementioned models
+to manually create their colocation groups  More precisely  for RNNLM and NMT  we treat each LSTM cell 
+each embedding lookup  each attention step and each softmax prediction step as   group  for InceptionV  we treat
+each branch as   group  Table   shows the grouping statistics of these models 
+
+Model
+RNNLM
+NMT
+InceptionV 
+
+ operations
+ 
+ 
+ 
+
+ groups
+ 
+ 
+ 
+
+Table   Model statistics 
+
+Metrics  We implement training operations for RNNLM
+and NMT using Adam  Kingma   Ba    and for
+InceptionV  using RMSProp  Tieleman   Hinton   
+We evaluate   placement by the total time it takes to perform one forward pass  one backward pass and one parameter update  To reduce measurement variance  we average
+the running times over several trials  Additionally  we train
+each model from scratch using the placements found by
+our method and compare the training time to that of the
+strongest baseline placement 
+
+Devices 
+In our experiments  the available devices are  
+Intel Haswell   CPU  which has   cores  and either  
+or   Nvidia Tesla    GPUs  We allow   GB of RAM for
+all models and settings 
+
+  Baselines
+SingleCPU  This placement executes the whole neural
+network on   single CPU  Processing some large models on
+GPUs is infeasible due to memory limits  leaving SingleCPU the only choice despite being slow 
+
+SingleGPU  This placement executes the whole neural
+network on   single CPU  If an operation lacks GPU implemention  it will be placed on CPU 
+
+Scotch  We estimate the computational costs of each operation as well as the amount of data that  ows along each
+edge of the neural network model  and feed them to the
+Scotch static mapper  Pellegrini    We also annotate
+the architecture graph  see Section   with compute and
+communication capacities of the underlying devices 
+
+MinCut  We use the same Scotch optimizer  but eliminate the CPU from the list of available devices fed to the
+optimizer  Similar to the singleGPU placement  if an operation has no GPU implementation  it runs on the CPU 
+
+Expertdesigned  For RNNLM and NMT  we put each
+LSTM layer on   device  For NMT  we also put the attention mechanism and the softmax layer on the same device
+with the highest LSTM layer  and we put the embedding
+layer on the same device with the  rst LSTM layer  For
+InceptionV  the common practice for the batch size of
+  is to put the entire model on   single GPU  There is no
+implementation of InceptionV  with batch   using more
+than   GPU  To create an intuitive baseline on multiple
+GPUs  we heuristically partition the model into contiguous parts that have roughly the same number of layers  We
+compare against this approach in Section   The common practice for InceptionV  with the larger batch size
+of   is to apply data parallelism using   GPUs  Each
+GPU runs   replica of the model and processes   batch of
+size    Szegedy et al    We compare against this
+approach in Section  
+
+  SingleStep Runtime Ef ciency
+
+In Table   we present the perstep running times of the
+placements found by our method and by the baselines  We
+observe that our model is either on par with or better than
+other methods of placements  Despite being given no information other than the running times of the placements
+and the number of available devices  our model learns subtle tradeoffs between performance gain by parallelism and
+
+Device Placement Optimization with Reinforcement Learning
+
+Tasks
+RNNLM
+ batch  
+NMT
+ batch  
+InceptionV 
+ batch  
+
+SingleCPU SingleGPU  GPUs
+
+ 
+
+ 
+
+ 
+
+ 
+
+OOM
+
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+
+Scotch MinCut Expert RLbased
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+
+Speedup
+ 
+ 
+ 
+ 
+ 
+ 
+
+Table   Running times  in seconds  of placements found by RLbased method and the baselines  lower is better  For each model  the
+ rst row shows the results with   CPU and   GPUs  the second row shows the results with   CPU and   GPUs  Last column shows
+improvements in running time achieved by RLbased placement over fastest baseline  To reduce variance  running times less than  
+seconds are measured   times and the averages are recorded  OOM is Out Of Memory 
+
+Figure   RLbased placement of Neural MT graph  Top  encoder  Bottom  decoder  Devices are denoted by colors  where the transparent color represents an operation on   CPU and each other unique color represents   different GPU  This placement achieves an
+improvement of   in running time compared to the  netuned expertdesigned placement 
+
+the costs induced by interdevice communications 
+
+RNNLM  Our method detects that it is possible to    the
+whole RNNLM graph into one GPU  and decides to do so
+to save the interdevice communication latencies  The resulting placement is more than twice faster than the best
+published humandesigned baseline 
+
+Neural MT  Our method  nds   nontrivial placement
+ see Figure   that leads to   speedup of up to   for
+  GPUs  Our method also learns to put the less computational expensive operations  such as embedding lookups 
+on the CPU  We suspect that whilst being the slowest device  the CPU can handle these lookup operations  which
+are less computationally expensive than other operations 
+to reduce the load for other GPUs 
+
+InceptionV  For InceptionV  with the batch size of
+  RLbased placer learns that when there are only   GPUs
+available  the degree of freedom for model parallelism is
+limited  It thus places all the operations on   single GPU
+ although it could use   GPUs  However  when   GPUs
+are available  the RLbased placer  nds an ef cient way to
+use all of the GPUs  reducing the model   perstep running
+time from   seconds to   seconds  This result is signi cant  as neither of our baselines could  nd   placement
+
+better than assigning all the operations to   single GPU 
+We also conduct   simple extension of our experiments  by
+increasing the batch sizes of RNNLM and NMT to   and
+their LSTM sizes to     and     respectively  This
+makes the models  memory footprints so large that even
+one layer of them cannot be  tted into any single device 
+hence ruling out the humandesigned placement  Nevertheless  after several steps of  nding placements that fail
+to run  our approach manages to  nd   way to successfully
+place input models on devices The running times of the
+placements found for large RNNLM and NMT are  
+and   seconds  respectively 
+
+  Endto End Runtime Ef ciency
+
+We now investigate whether the RLbased placements can
+speedup not only the singlestep running time but also the
+entire training process 
+
+Neural MT  We train our Neural MT model on the
+WMT  EnglishGerman dataset  For these experiments 
+we preprocess the dataset into word pieces  Wu et al 
+  such that the vocabularies of both languages consist
+of     word pieces  In order to match our model   set 
+
+ http www statmt org wmt 
+
+LSTM  LSTM  EmbeddingSoftmaxAttentionLSTM  LSTM  EmbeddingDevice Placement Optimization with Reinforcement Learning
+
+Figure   RLbased placement of InceptionV  Devices are denoted by colors  where the transparent color represents an operation on  
+CPU and each other unique color represents   different GPU  RLbased placement achieves the improvement of   in running time
+compared to expertdesigned placement 
+
+tings  we consider only the translation pairs where no sentence has more than   word pieces  We train each model
+for     steps and record their train perplexities  Each
+training machine has   Nvidia Tesla    GPUs and   Intel
+Haswell   CPU  Since there are inevitable noises in the
+computer systems when measuring the running times  we
+train each model   times independently and average their
+perstep running times and perplexities 
+
+ments found by our algorithm  see Figure   against two
+such baselines 
+The  rst baseline  called Asynchronous towers  puts one
+replica of the InceptionV  network on each GPU  These
+replicas share the data reading operations  which are assigned to the CPU  Each replica independently performs
+forward and backward passes to compute the model   gradients with respect to   minibatch of   images and then updates the parameters asynchronously  The second baseline 
+called Synchronous Tower  is the same as Asynchronous
+towers  except that it waits for the gradients of all copies
+before making an update  All settings use the learning rate
+of   and are trained using RMSProp 
+
+Figure   Training curves of NMT model using RLbased placement and expertdesigned placement  The perstep running time
+as well as the perplexities are averaged over   runs 
+
+The RLbased placement runs faster than the expertdesigned placement  as shown in the training curves in
+Figure   Quantitatively  the expertdesigned placement 
+which puts each layer  LSTM  attention and softmax  on
+  different GPU  takes   hours  meanwhile the RLbased placement  see Figure   takes   hours  giving   speed up of total training time  We note that
+the measured speedup rate  and the running times  of these
+models appear different than reported in Table   because
+measuring them in our RL method has several overheads 
+
+InceptionV  We train InceptionV  on the ImageNet
+dataset  Russakovsky et al    until the model reaches
+the accuracy of   on the validation set  In practice  more
+often  inception models are trained with data parallelism
+rather than model parallelism  We thus compare the place 
+
+Figure   Training curves of InceptionV  model using RLbased
+placement and two expertdesigned placements  Synchronous
+towers and Asynchronous towers  The perstep running time as
+well as the perplexities are averaged over   runs 
+
+Figure   shows the training curves of the three settings for
+InceptionV  As can be seen from the  gure  the endto 
+end training result con rms that the RLbased placement
+indeed speedups the training process by   compared
+to the Synchronous Tower  While Asynchronous towers
+gives   better perstep time  synchronous approaches lead
+to faster convergence  The training curve of the RLbased
+placement  being slower at  rst  eventually crosses the
+training curve of Asynchronous towers 
+
+ hours train log pplNeural MT Training Curves with  CPU   GPUsRLbased PlacementHuman Expert  One layer per device hours cumulative avg train lossInception Training Curves with  CPU   GPUsRLbased PlacementSynchronous TowersAsynchronous TowersDevice Placement Optimization with Reinforcement Learning
+
+  Analysis of Found Placements
+
+In order to understand the rationale behind the RLbased
+placements  we analyze their pro ling information and
+compare them against those of expertdesigned placements 
+
+Figure   Computational load pro ling of NMT model for RLbased and expertdesigned placements  Smaller blocks of each
+color correspond to feedforward path and samecolor upper
+blocks correspond to backpropagation  RLbased placement performs   more balanced computational load assignment than the
+expertdesigned placement 
+
+Neural MT  We  rst compare the perdevice computational loads by RLbased placement and expertdesigned
+placement for the NMT model  Figure   shows such
+performance pro ling  RLbased placement balances the
+workload signi cantly better than does the expertdesigned
+placement  Interestingly  if we do not take into account the
+time for backpropagation  then expertdesigned placement
+makes sense because the workload is more balanced  whilst
+still less balanced than ours  The imbalance is much more
+signi cant when backpropagation time is considered 
+
+InceptionV  On InceptionV  however  the RLbased
+placement does not seek to balance the computations between GPUs  as illustrated in Figure  top  We suspect this
+is because InceptionV  has more dependencies than NMT 
+allowing less room for model parallelism across GPUs 
+The reduction in running time of the RLbased placement
+comes from the less time it spends copying data between
+devices  as shown in Figure  bottom 
+In particular  the
+models parameters are on the same device as the operations
+that use them  unlike in Synchronous tower  where all towers have to wait for all parameters have to be updated and
+sent to them  On the contrary  that use them to reduce the
+communication cost  leading to overall reduction in computing time 
+
+Figure   Computational load and memory copy pro ling of
+InceptionV  for RLbased and Synchronous tower placements 
+Top  gure  Operation runtime for GPUs  Smaller blocks of
+each color correspond to feedforward path and samecolor upper
+blocks correspond to backpropagation  RLbased placement produces less balanced computational load than Synchronous tower 
+Bottom  gure  Memory copy time  All memory copy activities
+in Synchronous tower are between   GPU and   CPU  which are
+in general slower than GPU to GPU copies that take place in the
+RLbased placement 
+
+  Conclusion
+In this paper  we present an adaptive method to optimize
+device placements for neural networks  Key to our approach is the use of   sequenceto sequence model to propose device placements given the operations in   neural network  The model is trained to optimize the execution time
+of the neural network  Besides the execution time  the number of available devices is the only other information about
+the hardware con guration that we feed to our model 
+Our results demonstrate that the proposed approach learns
+the properties of the environment including the complex
+tradeoff between computation and communication in hardware  On   range of tasks including image classi cation 
+language modeling  and machine translation  our method
+surpasses placements carefully designed by human experts
+and highly optimized algorithmic solvers 
+
+GPU GPU GPU GPU operation runtime    RLbased placementGPU GPU GPU GPU Expertdesigned placementencoder lstm grad decoder lstm grad attention grad softmax grad GPU GPU GPU GPU operation runtime    RLbased placementGPU GPU GPU GPU Synchronous towersconv   grad avgpool grad concat grad dropout grad GPU GPU GPU GPU operation runtime    RLbased placementGPU GPU GPU GPU Synchronous towersmemcpyDevice Placement Optimization with Reinforcement Learning
+
+Acknowledgements
+We thank Martin Abadi  Stephan Gouws  and the Google
+Brain team for their help with the project 
+
+References
+Abadi  Martn  Barham  Paul  Chen  Jianmin  Chen 
+Zhifeng  Davis  Andy  Dean  Jeffrey  Devin  Matthieu 
+Ghemawat  Sanjay  Irving  Geoffrey  Isard  Michael 
+Kudlur  Manjunath  Levenberg  Josh  Monga  Rajat 
+Moore  Sherry  Murray  Derek    Steiner  Benoit 
+Tucker  Paul  Vasudevan  Vijay  Warden  Pete  Wicke 
+Martin  Yu  Yuan  and Zheng  Xiaoqiang  Tensor ow   
+system for largescale machine learning  arXiv preprint
+arXiv   
+
+Arik  Sercan    Chrzanowski  Mike  Coates  Adam  Diamos  Gregory  Gibiansky  Andrew  Kang  Yongguo 
+Li  Xian  Miller  John  Raiman  Jonathan  Sengupta 
+Shubho  et al  Deep voice  Realtime neural textto 
+speech  arXiv preprint arXiv   
+
+Bahdanau  Dzmitry  Cho  Kyunghyun  and Bengio 
+Yoshua  Neural machine translation by jointly learning
+In International Conference on
+to align and translate 
+Learning Representations   
+
+Barnard        and Simon          fast multilevel implementation of recursive spectral bisection for partitioning
+unstructured problems  Concurrency  practice and Experience     
+
+Bello  Irwan  Pham  Hieu  Le  Quoc    Norouzi  Mohammad  and Bengio  Samy  Neural combinatorial optimization with reinforcement learning  arXiv preprint
+arXiv   
+
+Chan  William  Jaitly  Navdeep  Le  Quoc    and Vinyals 
+arXiv preprint
+
+Listen  attend and spell 
+
+Oriol 
+arXiv   
+
+Chevalier     and Pellegrini    
+
+Improvement of the ef 
+ciency of genetic algorithms for scalable parallel graph
+partitioning in   multilevel framework  EuroPar  Dresden  LNCS   pp    September  
+
+Cho  Kyunghyun  Van Merri enboer  Bart  Gulcehre 
+Caglar  Bahdanau  Dzmitry  Bougares  Fethi  Schwenk 
+Holger  and Bengio  Yoshua  Learning phrase representations using rnn encoderdecoder for statistical machine
+translation  arXiv preprint arXiv   
+
+Esteva  Andre  Kuprel  Brett  Novoa  Rob  Ko  Justin 
+Swetter  Susan  Blau  Helen    and Thrun  Sebastian 
+Dermatologistlevel classi cation of skin cancer  Nature 
+ 
+
+Fiduccia  Charles   and Mattheyses  Robert      lineartime heuristic for improving network partitions  In Papers on Twenty ve years of electronic design automation  pp    ACM   
+
+Graves  Alex and Jaitly  Navdeep  Towards endto end
+In
+
+speech recognition with recurrent neural networks 
+International Conference on Machine Learning   
+
+Hagen  Lars and Kahng  Andrew    New spectral methods for ratio cut partitioning and clustering  IEEE transactions on computeraided design of integrated circuits
+and systems     
+
+Hannun  Awni  Case  Carl  Casper  Jared  Catanzaro 
+Bryan  Diamos  Greg  Elsen  Erich  Prenger  Ryan 
+Satheesh  Sanjeev  Sengupta  Shubho  Coates  Adam 
+et al  Deep speech  Scaling up endto end speech recognition  arXiv preprint arXiv   
+
+He  Kaiming  Zhang  Xiangyu  Ren  Shaoqing  and Sun 
+Jian  Deep residual learning for image recognition  In
+Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition  pp     
+
+Hendrickson     and Leland       multilevel algorithm
+for partitioning graphs  Technical Report SAND 
+Sandia National Laboratories  June  
+
+Hinton  Geoffrey  Deng  Li  Yu  Dong  Dahl  George   
+Mohamed  Abdelrahman  Jaitly  Navdeep  Senior  Andrew  Vanhoucke  Vincent  Nguyen  Patrick  Sainath 
+Tara    et al  Deep neural networks for acoustic modeling in speech recognition  The shared views of four research groups  IEEE Signal Processing Magazine   
+
+Hochreiter  Sepp and Schmidhuber  Jurgen  Long short 
+
+term memory  Neural Computation   
+
+Johnson  David    Aragon  Cecilia    McGeoch  Lyle   
+and Schevon  Catherine  Optimization by simulated annealing  an experimental evaluation  part    graph partitioning  Operations research     
+
+Jozefowicz  Rafal  Vinyals  Oriol  Schuster  Mike  Shazeer 
+Noam  and Wu  Yonghui 
+Exploring the limits of
+language modeling  arXiv preprint arXiv 
+ 
+
+Karypis     and Kumar       fast and high quality multilevel scheme for partitioning irregular graphs  Technical
+Report   University of Minnesota  June    
+
+Karypis  George and Kumar  Vipin  Metis unstructured
+graph partitioning and sparse matrix ordering system 
+version      
+
+Device Placement Optimization with Reinforcement Learning
+
+Szegedy  Christian  Liu  Wei  Jia  Yangqing  Sermanet 
+Pierre  Reed  Scott  Anguelov  Dragomir  Erhan  Dumitru  Vanhoucke  Vincent  and Rabinovich  Andrew 
+Going deeper with convolutions  In The IEEE Conference on Computer Vision and Pattern Recognition   
+
+Szegedy  Christian  Vanhoucke  Vincent  Ioffe  Sergey 
+Shlens  Jon  and Wojna  Zbigniew  Rethinking the inception architecture for computer vision  In The IEEE
+Conference on Computer Vision and Pattern Recognition  June  
+
+Tieleman     and Hinton     Lecture  RmsProp  Divide the gradient by   running average of its recent magnitude  COURSERA  Neural Networks for Machine
+Learning   
+
+Vinyals  Oriol  Fortunato  Meire  and Jaitly  Navdeep 
+In Advances in Neural Information
+
+Pointer networks 
+Processing Systems  pp     
+
+Wang  Yuxuan  SkerryRyan        Stanton  Daisy 
+Wu  Yonghui  Weiss  Ron    Jaitly  Navdeep  Yang 
+Zongheng  Xiao  Ying  Chen  Zhifeng  Bengio  Samy 
+Le  Quoc    Agiomyrgiannakis  Yannis  Clark  Rob  and
+Saurous  Rif    Tacotron    fully endto end textto 
+speech synthesis model  In InterSpeech   
+
+Williams  Ronald  Simple statistical gradient following algorithms for connectionnist reinforcement learning  In
+Machine Learning   
+
+Wu  Yonghui  Schuster  Mike  Chen  Zhifeng  Le  Quoc   
+Norouzi  Mohammad  Macherey  Wolfgang  Krikun 
+Maxim  Cao  Yuan  Gao  Qin  Macherey  Klaus 
+Klingner  Jeff  Shah  Apurva  Johnson  Melvin  Liu  Xiaobing  ukasz Kaiser  Gouws  Stephan  Kato  Yoshikiyo 
+Kudo  Taku  Kazawa  Hideto  Stevens  Keith  Kurian 
+George  Patil  Nishant  Wang  Wei  Young  Cliff  Smith 
+Jason  Riesa  Jason  Rudnick  Alex  Vinyals  Oriol 
+Corrado  Greg  Hughes  Macduff  and Dean  Jeffrey 
+Google   neural machine translation system  Bridging
+the gap between human and machine translation  arXiv
+preprint arXiv   
+
+Zaremba  Wojciech  Sutskever  Ilya  and Vinyals  Oriol 
+Recurrent neural network regularization  arXiv preprint
+arXiv   
+
+Kernighan  Brian   and Lin  Shen  An ef cient heuristic
+procedure for partitioning graphs  The Bell system technical journal     
+
+Khetan  Ashish and Oh  Sewoong  Achieving budgetoptimality with adaptive schemes in crowdsourcing  In
+Advances in Neural Information Processing Systems  pp 
+  Curran Associates  Inc   
+
+Kingma  Diederik and Ba  Jimmy  Adam    method for
+stochastic optimization  In International Conference on
+Learning Representations   
+
+Kirkpatrick  Scott  Vecchi  Mario    et al  Optimization
+by simulated annealing  Science   
+ 
+
+Krizhevsky  Alex  Sutskever  Ilya  and Hinton  Geoffrey   
+Imagenet classi cation with deep convolutional neural
+networks  In Advances in Neural Information Processing
+Systems   
+
+Mao  Hongzi  Alizadeh  Mohammad  Menache  Ishai  and
+Kandula  Srikanth  Resource management with deep reinforcement learning  In Proceedings of the  th ACM
+Workshop on Hot Topics in Networks   
+
+Oord  Aaron van den  Dieleman  Sander  Zen  Heiga  Simonyan  Karen  Vinyals  Oriol  Graves  Alex  Kalchbrenner  Nal  Senior  Andrew  and Kavukcuoglu  Koray  Wavenet    generative model for raw audio  arXiv
+preprint arXiv   
+
+Pascanu  Razvan  Mikolov  Tomas  and Bengio  Yoshua 
+On the dif culty of training recurrent neural networks  In
+International Conference on Machine Learning   
+
+Pellegrini       parallelisable multilevel banded diffusion
+scheme for computing balanced partitions with smooth
+boundaries  EuroPar  Rennes  LNCS   pp   
+August  
+
+Pellegrini     Distillating knowledge about scotch   
+
+Pellegrini     and Roman     Experimental analysis of the
+dual recursive bipartitioning algorithm for static mapping  Research Report  LaBRI  Universite Bordeaux   
+August  
+
+Russakovsky  Olga  Deng  Jia  Su  Hao  Krause  Jonathan 
+Satheesh  Sanjeev  Ma  Sean  Huang  Zhiheng  Karpathy  Andrej  Khosla  Aditya  Bernstein  Michael  Berg 
+Alexander    and FeiFei  Li 
+ImageNet Large Scale
+Visual Recognition Challenge  International Journal of
+Computer Vision   
+
+Sutskever  Ilya  Vinyals  Oriol  and Le  Quoc    Sequence
+to sequence learning with neural networks  In Advances
+in Neural Information Processing Systems   
+
+

@@ -1,0 +1,1345 @@
+ChoiceRank  Identifying Preferences from Node Traf   in Networks
+
+Lucas Maystre   Matthias Grossglauser  
+
+Abstract
+
+Understanding how users navigate in   network
+is of high interest in many applications  We consider   setting where only aggregate nodelevel
+traf   is observed and tackle the task of learning edge transition probabilities  We cast it as
+  preference learning problem  and we study  
+model where choices follow Luce   axiom  In
+this case  the      marginal counts of node visits
+are   suf cient statistic for the      transition
+probabilities  We show how to make the inference
+problem wellposed regardless of the network  
+structure  and we present ChoiceRank  an iterative
+algorithm that scales to networks that contains billions of nodes and edges  We apply the model to
+two clickstream datasets and show that it successfully recovers the transition probabilities using
+only the network structure and marginal  nodelevel  traf   data  Finally  we also consider an
+application to mobility networks and apply the
+model to one year of rides on New York City  
+bicyclesharing system 
+
+ 
+
+Introduction
+
+Consider the problem of estimating click probabilities for
+links between pages of   website  given   hyperlink graph
+and aggregate statistics on the number of times each page
+has been visited  Naively  one might expect that the probability of clicking on   particular link should be roughly
+proportional to the traf   of the link   target  However  this
+neglects important structural effects    page   traf   is in uenced by    the number of incoming links     the traf   at
+the pages that link to it  and    the traf   absorbed by competing links  In order to successfully infer click probabilities 
+it is therefore necessary to disentangle the preference for
+  page       the intrinsic propensity of   user to click on  
+link pointing to it  from the page   visibility  the exposure
+
+ School of Computer and Communication Sciences  EPFL 
+Lausanne  Switzerland  Correspondence to  Lucas Maystre  lucas maystre ep ch 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright   by
+the author   
+
+it gets from pages linking to it  Building upon recent work
+by Kumar et al    we present   statistical framework
+that tackles   general formulation of the problem  given  
+network  representing possible transitions between nodes 
+and the marginal traf   at each node  recover the transition
+probabilities  This problem is relevant to   number of scenarios  in social  information or transportation networks 
+where transition data is not available due to       privacy
+concerns or monitoring costs 
+
+We begin by postulating the following model of traf    Users
+navigate from node to node along the edges of the network
+by making   choice between adjacent nodes at each step 
+reminiscent of the randomsurfer model introduced by Brin
+  Page   Choices are assumed to be independent and
+generated according to Luce   model  Luce    each
+node in the network is chararacterized by   latent strength
+parameter  and  stochastic  choice outcomes tend to favor
+nodes with greater strengths  In this model  estimating the
+transition probabilities amounts to estimating the strength
+parameters  Unlike the setting in which choice models are
+traditionally studied  Train    Maystre   Grossglauser 
+  Vojnovic   Yun    we do not observe distinct
+choices among wellidenti ed sets of alternatives  Instead 
+we only have access to aggregate  marginal statistics about
+the traf   at each node in the network  In this setting  we
+make the following contributions 
+
+  We observe that marginal pernode traf   is   suf cient
+statistic for the strength parameters  That is  the parameters can be inferred from marginal traf   data without
+any loss of information 
+
+  We show that if the parameters are endowed with  
+prior distribution  the inference problem becomes wellposed regardless of the network structure  This is  
+crucial step in making the framework applicable to
+realworld datasets 
+
+  We show that model inference can scale to very
+large datasets  We present an iterative EMtype inference algorithm that enables   remarkably ef cient
+implementation each iteration requires the computational equivalent of two iterations of PageRank 
+
+We evaluate two aspects of our framework using realworld
+networks  We begin by demonstrating that local preferences
+
+Identifying Preferences from Node Traf   in Networks
+
+can indeed be inferred from global traf    we investigate
+the accuracy of the transition probabilities recovered by our
+model on three datasets for which we have groundtruth
+transition data  First  we consider two hyperlink graphs 
+representing the English Wikipedia  over two million nodes 
+and   Hungarian news portal  approximately     nodes 
+respectively  We model clickstream data as   sequence of
+independent choices over the links available at each page 
+Given only the structure of the graph and the marginal traf  
+at every node  we estimate the number of transitions between
+nodes  and we  nd that our estimate matches groundtruth
+edgelevel transitions accurately in both instances  Second 
+we consider the network of New York City   bicyclesharing
+service  For   given ride  given   pickup station  we model
+the dropoff station as   choice out of   set of locations 
+Our model yields promising results  suggesting that our
+method can be useful beyond clickstream data  Next  we
+test the scalability of the inference algorithm  We show that
+the algorithm is able to process   snapshot of the WWW
+hyperlink graph containing over   hundred billion edges
+using   single machine 
+
+Organization of the paper  In Section   we formalize the
+network choice model  In Section   we brie   review related literature  In Section   we present salient statistical
+properties of the model and its maximumlikelihood estimator  and we propose   prior distribution that makes the
+inference problem wellposed  In Section   we describe
+an inference algorithm that enables an ef cient implementation  We evaluate the model and the inference algorithm
+in Section   before concluding in Section   In the supplementary material  we provide   more indepth discussion of
+our model and algorithm  and we present proofs for all the
+theorems stated in the main text 
+
+  Network Choice Model
+
+  and its inneighborhood by    
+
+Let            be   directed graph on   nodes  corresponding to items  and   edges  We denote the outneighborhood
+of node   by    
+    We consider the following choice process on      user starts at  
+node   and is faced with alternatives    
+    The user chooses
+item   and moves to the corresponding node  At node    the
+user is faced with alternatives    
+  and chooses    and so on 
+At any time  the user can stop  Figure   gives an example of
+  graph and the alternatives available at   step of the process 
+
+To de ne the transition probabilities  we posit Luce   wellknown choice axiom that states that the odds of choosing
+item   over item     do not depend on the rest of the alternatives  Luce    This axiom leads to   unique probabilistic model of choice  For every node   and every        
+   
+the probability that   is selected among alternatives    
+  can
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+Figure   An illustration of one step of the process  The user is at
+node   and can reach nodes    
+
+         
+
+ 
+
+be written as
+
+pij  
+
+ 
+
+  
+
+  
+
+ 
+
+  Rn
+
+         cid 
+
+Pk    
+for some parameter vector      cid 
+
+ 
+Intuitively  the parameter    can be interpreted as the
+strength  or utility  of item    Note that pij depends only on
+the outneighborhood of node    As such  the choice process satis es the Markov property  and we can think of the
+sequence of choices as   trajectory in   Markov chain  In
+the context of this model  we can formulate the inference
+problem as follows  Given   directed graph            and
+data on the aggregate traf   at each node   nd   parameter
+vector   that  ts the data 
+
+  Related Work
+
+  variant of the network choice model was recently introduced by Kumar et al    in an article that lays much
+of the groundwork for the present paper  Their generative
+model of traf   and the parametrization of transition probabilities based on Luce   axiom form the basis of our work 
+Kumar et al  de ne the steadystate inversion problem as
+follows  Given   graph   and   target stationary distribution 
+ nd transition probabilities that lead to the desired stationary
+distribution  This problem formulation assumes that   satis 
+ es restrictive structural properties  strongconnectedness 
+aperiodicity  and is valid only asymptotically  when the
+sequences of choices made by users are very long  Our
+formulation is  in contrast  more general  In particular  we
+eliminate any assumptions about the structure of   and cope
+with  nite data in   principled way in fact  our derivations
+are valid for choice sequences of any length  One of our
+contributions is to explain the steadystate inversion problem in terms of  asymptotic  maximumlikelihood inference
+in the network choice model  Furthermore  the statistical
+viewpoint that we develop also leads to      robust regularization scheme  and      simple and ef cient EMtype
+
+Identifying Preferences from Node Traf   in Networks
+
+inference algorithm  These important extensions make the
+model easier to apply to realworld data 
+
+Luce   choice axiom  The general problem of estimating
+parameters of models based on Luce   axiom has received
+considerable attention  Several decades before Luce   seminal book  Luce    Zermelo   proposed   model
+and an algorithm that estimates the strengths of chess players
+based on pairwise comparison outcomes  his model would
+later be rediscovered by Bradley   Terry   More
+recently  Hunter   explained Zermelo   algorithm from
+the perspective of the minorizationmaximization  MM 
+method  This method is easily generalized to other models that are based on Luce   axiom  and it yields simple 
+provably convergent algorithms for maximumlikelihood
+ ML  or maximuma posteriori point estimates  Caron  
+Doucet   observe that these MM algorithms can be
+further recast as expectationmaximization  EM  algorithms
+by introducing suitable latent variables  They use this observation to derive Gibbs samplers for   wide family of models 
+We take advantage of this long line of work in Section  
+when developing an inference algorithm for the network
+choice model  In recent years  several authors have also analyzed the sample complexity of the ML estimate in Luce  
+choice model  Hajek et al    Vojnovic   Yun   
+and investigated alternative spectral inference methods  Negahban et al    Azari Sou ani et al    Maystre
+  Grossglauser    Some of these results could be applied to our setting  but in general they require observing
+choices among wellidenti ed sets of alternatives  Finally 
+we note that models based on Luce   axiom have been successfully applied to problems ranging from ranking players
+based on game outcomes  Zermelo    Elo    to
+understanding consumer behavior based on discrete choices
+ McFadden    and to discriminating among multiple
+classes based on the output of pairwise classi ers  Hastie  
+Tibshirani   
+
+Network analysis  Understanding the preferences of users
+in networks is of signi cant interest in many domains  For
+brevity  we focus on literature related to hyperlink graphs 
+  method that has undoubtedly had   tremendous impact
+in this context is PageRank  Brin   Page    PageRank
+computes   set of scores that are proportional to the amount
+of time   surfer  who clicks on links randomly and uniformly 
+spends at each node  These scores are based only on the
+structure of the graph  The network choice model presented
+in this paper appears similar at  rst  but tackles   different
+problem  In addition to the structure of the graph  it uses
+the traf   at each page  and computes   set of scores that re 
+ ect the  nonuniform  probability of clicking on each link 
+Nevertheless  there are striking similarities in the implementation of the respective inference algorithms  see Section  
+The HOTness method proposed by Tomlin   is somewhat related  but tries to tackle   harder problem  It attempts
+
+to estimate jointly the traf   and the probability of clicking
+on each link  by using   maximumentropy approach  At the
+other end of the spectrum  BrowseRank  Liu et al   
+uses detailed data collected in users  browsers to improve
+on PageRank  Our method uses only marginal traf   data
+that can be obtained without tracking users 
+
+  Statistical Properties
+
+In this section  we describe some important statistical properties of the network choice model  We begin by observing
+that      values summarizing the traf   at each node is  
+suf cient statistic for the      entries of the Markovchain
+transition matrix  We then connect our statistical model to
+the steadystate inversion problem de ned by Kumar et al 
+  Guided by this connection  we study the maximumlikelihood  ML  estimate of model parameters  but  nd that
+the estimate is likely to be illde ned in many scenarios of
+practical interest  Lastly  we study how to overcome this
+issue by introducing   prior distribution on the parameters
+  the prior guarantees that the inference problem is wellposed 
+
+For simplicity of exposition  we present our results for
+Luce   standard choice model de ned in   Our developments extend to the model variant proposed by Kumar
+et al    where choice probabilities can be modulated
+by edge weights  In the supplementary material  we describe
+this variant and give the necessary adjustments to our developments 
+
+  Aggregate Traf   Is   Suf cient Statistic
+
+Let cij denote the number of transitions that occurred along
+edge             Starting from the transition probability
+de ned in   we can write the loglikelihood of   given
+data      cij               as
+
+              
+
+ 
+
+   cid 
+
+cij cid  log      log Xk    
+Xi  Xj    
+
+cij log     
+
+ 
+
+ 
+
+ 
+
+ 
+
+Xj  Xi    
+ cid   
+  log        
+
+ 
+
+ 
+
+Xi 
+
+ 
+
+cij log Xk    
+   cid 
+
+ 
+
+  
+
+ 
+
+  log Xk    
+    Pj    
+
+ 
+
+ 
+
+ 
+
+cji and   
+
+    Pj    
+
+where   
+cij is the aggregate number of transitions arriving in and originating
+from    respectively  This formulation of the loglikelihood
+exhibits   key feature of the model  the set of    counts
+   
+              is   suf cient statistic of the     
+counts  cij               for the parameters    In the supplementary material  we show that it is in fact minimally
+suf cient  In other words  it is enough to observe marginal
+
+      
+
+Identifying Preferences from Node Traf   in Networks
+
+information about the number of arrivals and departures
+at each node we collectively call this data the traf   at
+  node and no additional information can be gained by
+observing the full choice process  This makes the model particularly attractive  because it means that it is unnecessary to
+track users across nodes  In several applications of practical
+interest  tracking users is undesirable  dif cult  or outright
+impossible  due to    privacy reasons     monitoring costs 
+or    lack of data in existing datasets 
+
+Note that if we make the additional assumption that the
+ ow in the network is conserved  then   
+    If users 
+typical trajectories consist of many hops  it is reasonable to
+approximate   
+  using that assumption  should one of
+the two quantities be missing 
+
+      
+
+  or   
+
+Let   be   maximizer of the average loglikelihood  When
+      the optimality condition       implies
+
+   
+
+ 
+
+  
+ 
+ 
+
+    cid cid cid cid 
+       Xj    
+
+ 
+
+   
+
+ 
+ 
+
+      
+
+ 
+
+  Xj    
+
+ 
+
+  
+
+Pk    
+
+ 
+
+ 
+ 
+
+ 
+ 
+
+Pk    
+
+ 
+
+Comparing   to   it is clear that   is   solution of
+the steadystate inversion problem  As such  the network
+choice model presented in this paper can be viewed as  
+principled extension of the steadystate inversion problem
+to the  nitedata case 
+
+  Connection to the SteadyState Inversion
+
+  MaximumLikelihood Estimate
+
+Problem
+
+In recent work  Kumar et al    de ne the problem
+of steadystate inversion as follows  Given   stronglyconnected directed graph            and   target distribution over the nodes    nd   Markov chain on   with
+stationary distribution   As there are          degrees
+of freedom  the transition probabilities  for   constraints
+ the stationary distribution  the problem is in most cases
+underdetermined  Following Luce   ideas  the transition
+probabilities are constrained to be proportional to   latent
+score of the destination node as per   thus reducing the
+number of parameters from   to    Denote by       the
+Markovchain transition matrix parametrized with scores   
+The score vector   is   solution for the steadystate inversion
+problem if and only if            or equivalently
+
+     Xj    
+
+ 
+
+si
+
+sk
+
+Pk    
+
+ 
+
+      
+
+ 
+
+In order to formalize the connection between Kumar et al  
+work and ours  we now express the steadystate inversion
+problem as that of asymptotic maximumlikelihood estimation in the network choice model  Suppose that we observe
+nodelevel traf   data        
+              about
+  trajectory of length   starting at an arbitrary node  We
+want to obtain an estimate of the parameters   by maximizing the average loglikelihood      
+       From
+standard convergence results for Markov chains  Kemeny
+  Snell    it follows that as   is strongly connected 
+limT     
+
+       limT     
+
+           Therefore 
+
+      
+
+   
+
+ 
+
+Xi 
+
+ cid    
+
+ 
+ 
+
+   
+ 
+
+ 
+
+Xi 
+
+  
+ 
+ 
+
+log     
+
+log Xk    
+   cid  log      log Xk    
+
+ 
+
+ 
+
+   cid 
+
+   cid 
+
+The loglikelihood   is not concave in   but it can be
+made concave using the simple reparametrization           
+Therefore  any local minimum of the likelihood is   global
+minimum  Unfortunately  it turns out that the conditions
+guaranteeing that the ML estimate is wellde ned       that
+it exists and is unique  are restrictive and impractical  We
+illustrate this by providing   necessary condition  and for
+brevity we defer the comprehensive analysis of the ML
+estimate to the supplementary material  We begin with  
+de nition that uses the notion of hypergraph    generalized
+graph where edges may be any nonempty subset of nodes 
+
+De nition  Comparison hypergraph  Given   directed
+graph            the comparison hypergraph is the hypergraph            with         
+ 
+
+         
+
+Intuitively    is the hypergraph induced by the sets of alternatives available at each node  Figure   provides an example of   graph and of its associated comparison hypergraph 
+Equipped with this de nition  we can state the following
+theorem that is   reformulation of   wellknown result for
+Luce   choice model  Hunter   
+
+Theorem   If the comparison hypergraph is not connected 
+then for any data   there are   and   such that       
+for any        and            
+
+In short  the proof shows that rescaling all the parameters
+in one of the connected components does not change the
+value of the likelihood function  The network of Figure  
+illustrates an instance where the condition fails  although the
+graph   is strongly connected  its associated comparison
+hypergraph    depicted in Figure   is disconnected  and
+no matter what the data   is  the ML estimate will never be
+uniquely de ned  In fact  in the supplementary material  we
+demonstrate that Theorem   is just the tip of the iceberg  We
+provide an example where the ML estimate does not exist
+even though the comparison hypergraph is connected  and
+we explain that verifying   necessary and suf cient condi 
+
+Identifying Preferences from Node Traf   in Networks
+
+of the observed data nor the prediction of future transitions 
+As   consequence  we may assume that       without loss
+of generality 
+
+ 
+
+Inference Algorithm
+
+The maximizer of the logposterior does not have   closedform solution  In the spirit of the algorithms of Hunter
+  for variants of Luce   choice model  we develop
+  minorizationmaximization  MM  algorithm  Simply put 
+the algorithm iteratively re nes an estimate of the maximizer
+by solving   sequence of surrogates of the logposterior  Using the inequality log     log               with equality if
+and only if         we can lowerbound the logposterior  
+by
+
+       
+
+          log   
+
+ 
+
+Xi 
+
+ cid   
+   cid  log Xk    
+
+ 
+
+    
+
+    Pk    
+   
+Pk    
+
+ 
+
+ 
+
+  
+   
+
+ 
+
+   cid       cid     
+
+with equality if and only if         Starting with an
+arbitrary     Rn
+  we repeatedly solve the optimization
+problem
+
+      arg max
+
+     
+
+ 
+
+ 
+
+Unlike the maximization of the logposterior  the surrogate
+optimization problem has   closedform solution  obtained
+by setting        to  
+
+   
+
+ 
+
+ 
+
+  
+         
+
+   
+     
+
+Pj    
+
+ 
+
+     
+
+   
+
+  
+ 
+Pk    
+
+ 
+
+ 
+
+ 
+
+   
+
+ 
+
+The iterates provably converge to the maximizer of   as
+shown by the following theorem 
+Theorem   Let   be the unique maximum aposteriori
+estimate  Then for any initial     Rn
+  the sequence of
+iterates de ned by   converges to  
+
+Figure   The comparison hypergraph associated to the network
+of Fig    The hyperedge associated to    
+  is highlighted in red 
+Note that the component     is disconnected from the rest of
+the hypergraph 
+
+tion for the existence of the ML estimate is computationally
+more expensive than solving the inference problem itself 
+
+  WellPosed Inference
+
+Following the ideas of Caron   Doucet   we introduce
+an independent Gamma prior on each parameter             
+               Gamma    Adding the logprior to the
+loglikelihood  we can write the logposterior as
+
+log          
+
+ 
+
+Xi 
+
+ cid   
+
+          log   
+
+    
+
+  log Xk    
+
+ 
+
+        cid     
+
+where   is   constant that is independent of   The Gamma
+prior translates into   form of regularization that makes the
+inference problem wellposed  as shown by the following
+theorem 
+
+Theorem   If                       Gamma    with    
+  then the logposterior   always has   unique maximizer
+    Rn
+
+ 
+
+The condition       ensures that the prior has   nonzero
+mode  In short  the proof of Theorem   shows that as   result
+of the Gamma prior  the logposterior can be reparametrized
+into   strictly concave function with bounded superlevel
+sets  if       This guarantees that the logposterior will
+always have exactly one maximizer  Unlike the results that
+we derive for the ML estimate  Theorem   does not impose
+any condition on the graph   for the estimate to be wellde ned 
+
+Remark  Note that varying the rate   in the Gamma prior
+simply rescales the parameters   Furthermore  it is clear
+from   that such   rescaling affects neither the likelihood
+
+Theorem   follows from   standard result on the convergence of MM algorithms and uses the fact that the logposterior increases after each iteration  Furthermore  it is
+known that MM algorithms exhibit geometric convergence
+in   neighborhood of the maximizer  Lange et al     
+thorough investigation of the convergence properties is left
+for future work 
+
+The structure of the updates in   leads to an extremely
+simple and ef cient implementation  given in Algorithm  
+we call it ChoiceRank    graphical representation of an
+iteration from the perspective of   single node is given in
+Figure   Each iteration consists of two phases of message
+
+ Identifying Preferences from Node Traf   in Networks
+
+Algorithm   ChoiceRank
+Require  graph            counts    
+                 
+  repeat
+ 
+ 
+ 
+ 
+ 
+ 
+  until   has converged
+
+      
+for            do zi   zi     
+for       do        
+      
+for            do zj   zj     
+for       do         
+
+   zi
+
+         zi    
+
+      
+
+   
+
+  Recompute  
+
+  Recompute  
+
+Figure   One iteration of ChoiceRank from the perspective of
+node   Messages  ow in both directions along the edges of the
+graph     rst in the reverse direction  in dotted  then in the forward
+direction  in solid 
+
+passing  with     owing towards inneighbors    
+    then   
+ owing towards outneighbors    
+    The updates to   node  
+state are   function of the sum of the messages  As the algorithm does two passes over the edges and two passes over the
+vertices  an iteration takes          time  The edges can be
+processed in any order  and the algorithm maintains   state
+over only      values associated with the vertices  Furthermore  the algorithm can be conveniently expressed in the
+wellknown vertexcentric programming model  Malewicz
+et al    This makes it easy to implement ChoiceRank
+inside scalable  optimized graphprocessing systems such
+as Apache Spark  Gonzalez et al   
+
+EM viewpoint  The update   can also be explained from
+an expectationmaximization  EM  viewpoint  by introducing suitable latent variables  Caron   Doucet    This
+viewpoint enables   Gibbs sampler that can be used for
+Bayesian inference  We present the EM derivation in the
+supplementary material  but leave   study of fully Bayesian
+inference in the network choice model for future work 
+
+  Experimental Evaluation
+
+In this section  we investigate    the ability of the network
+choice model to accurately recover transitions in realworld
+
+scenarios  and    the potential of ChoiceRank to scale to
+very large networks 
+
+  Accuracy on RealWorld Data
+
+      
+
+We evaluate the network choice model on three datasets that
+are representative of two distinct application domains  Each
+dataset can be represented as   set of transition counts  cij 
+on   directed graph            We aggregate the transition counts into marginal traf   data    
+             
+and      network choice model by using ChoiceRank  We
+set       and        these small values simply guarantee the convergence of the algorithm  and declare convergence when                   Given   we
+estimate transition probabilities using pij      as given by
+  To the best of our knowledge  there is no other published
+method tackling the problem of estimating transition probabilities from marginal traf   data  Therefore  we compare
+our method to three baselines based on simple heuristics 
+
+Traf   Transitions probabilities are proportional to the traf 
+
+   of the target node  qT
+
+ij     
+   
+
+PageRank Transition probabilities are proportional to the
+
+PageRank score of the target node  qP
+
+Uniform Any transition is equiprobable  qU
+
+ij   PRj  
+ij    
+
+The four estimates are compared against groundtruth transition probabilities derived from the edge traf   data    
+ij  
+cij   We emphasize that although peredge transition counts
+ cij  are needed to evaluate the accuracy of the network
+choice model  and the baselines  these counts are not necessary for learning the model pernode marginal counts
+are suf cient 
+
+Given   node    we measure the accuracy of   distribution
+qi over outgoing transitions using two error metrics  the
+KLdivergence and the  normalized  rank displacement 
+
+DKL   
+
+    qi    Xj    
+
+ 
+
+  
+ij log
+
+  
+ij
+qij
+
+ 
+
+DFR   
+
+    qi   
+
+ 
+    
+
+    Xj    
+
+ 
+
+ 
+
+             
+
+   respectively     is the ranking of elements in    
+where  
+ 
+by decreasing order of   
+ij  respectively qij   We report the
+distribution of errors  over choices       the error at each
+node   is weighted by the number of outgoing transitions
+  
+   
+
+  CLICKSTREAM DATA
+
+Wikipedia The Wikimedia Foundation has   long history
+of publicly sharing aggregate  pagelevel web traf   data 
+
+ See  https stats wikimedia org 
+
+                 Identifying Preferences from Node Traf   in Networks
+
+Recently  it also released clickstream data from the English
+version of Wikipedia  Wulczyn   Taraborelli    providing us with essential groundtruth transitionlevel data  We
+consider   dataset that contains information  extracted from
+the server logs  about the traf   each page of the English
+Wikipedia received during the month of March   Each
+page   incoming traf   is grouped by HTTP referrer       by
+the page visited prior to the request  We ignore the traf  
+generated by external Web sites such as search engines and
+keep only the internal traf     of the total traf   in the
+dataset  In summary  we obtain counts of transitions on the
+hyperlink graph of English Wikipedia articles  The graph
+contains           nodes and           edges 
+and we consider slightly over   billion transitions over
+the edges  On this dataset  ChoiceRank converges after  
+iterations 
+
+Kosarak We also consider   second clickstream dataset
+from   Hungarian online news portal  The data consists
+of       transitions on   graph containing      
+nodes and         edges  ChoiceRank converges after
+  iterations 
+
+The four leftmost plots of Figure   show the error distributions  ChoiceRank signi cantly improves on the baselines  both in terms of KLdivergence and rank displacement 
+These results give compelling evidence that transitions do
+not occur proportionally with the target   page traf    in
+terms of KLdivergence  ChoiceRank improves on Traf 
+   by   factor   and   respectively  PageRank scores 
+while re ecting some notion of importance of   page  are
+not designed to estimate transitions  and understandably the
+corresponding baseline performs poorly  Uniform  perhaps
+the simplest of our baselines  is  by design  unable to distinguish among transitions  resulting in   large displacement
+error  We believe that its comparatively better performance
+in terms of KLdivergence  for Wikipedia  is mostly an artifact of the metric  which encourages  prudent  estimates 
+Finally  in Figure   we observe that ChoiceRank seems
+to perform comparatively better as the number of possible
+transition increases 
+
+  NYC BICYCLESHARING DATA
+
+Next  we consider trip data from Citi Bike  New York City  
+bicyclesharing system  For each ride on the system made
+during the year   we extract the pickup and dropoff
+stations and the duration of the ride  Because we want to focus on direct trips  we exclude rides that last more than one
+hour  We also exclude sourcedestinations pairs which have
+less than   ride per day on average    majority of source 
+
+ The data is publicly available at http fimi ua ac 
+
+be data 
+
+ The data is available at https www citibikenyc 
+
+com systemdata 
+
+destination pairs appears at least once in the dataset  The
+resulting data consists of   million rides on   graph containing       nodes and       edges  ChoiceRank
+converges after   iterations  We compute the error distribution in the same way as for the clickstream datasets 
+
+The two rightmost plots of Figure   display the results  The
+observations made on the clickstream datasets carry over to
+this mobility dataset  albeit to   lesser degree    signi cant
+difference between clicking   link and taking   bicycle trip
+is that in the latter case  there is   nonuniform  cost  of  
+transition due to the distance between source and target  In
+future work  one might consider incorporating edge weights
+and using the weighted network choice model presented in
+the supplementary material 
+
+  Scaling ChoiceRank to Billions of Nodes
+
+To demonstrate ChoiceRank   scalability  we develop  
+simple implementation in the Rust programming language 
+based on the ideas of COST  McSherry et al    Our
+code is publicly available online  The implementation repeatedly streams edges from disk and keeps four  oatingpoint values per node in memory  the counts   
+    the
+sum of messages zi  and either    or     depending on the
+stage in the iteration  As edges can be processed in any
+order  it can be bene cial to reorder the edges in   way that
+accelerates the computation  For this reason  our implementation preprocesses the list of edges and reorders them in
+Hilbert curve order  This results in better cache locality
+and yields   signi cant speedup 
+
+  and   
+
+We test our implementation on   hyperlink graph extracted
+from the   Common Crawl web corpus  that contains
+over   billion nodes and   billion edges  Meusel et al 
+  The edge list alone requires about   TB of uncompressed storage  There is no publicly available information
+on the traf   at each page  therefore we generate   value
+ci for every node   randomly and uniformly between  
+and   and set both   
+to ci  As such  this experiment does not attempt to measure the validity of the model
+ unlike the experiments of Section   Instead  it focuses
+on testing the algorithm   potential to scale to to very large
+networks 
+
+  and   
+
+ 
+
+Results  We run   iterations of ChoiceRank on   dual Intel
+Xeon       machine  with   GB of RAM and  
+HDDs con gured in RAID   We arbitrarily set      
+and        but this choice has no impact on the results 
+Only about   GB of memory is used  all to store the nodes 
+
+ See  http lucas maystre ch choicerank 
+   Hilbert space lling curve visits all the entries of the adjacency matrix of the graph  in   way that preserves locality of both
+source and destination of the edges 
+
+  The data is available at http webdatacommons 
+
+org hyperlinkgraph 
+
+Wikipedia
+
+Identifying Preferences from Node Traf   in Networks
+
+Kosarak
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+Citi Bike
+
+CRank Traf   PRank Uniform
+
+CRank Traf   PRank Uniform
+
+CRank Traf   PRank Uniform
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+CRank Traf   PRank Uniform
+
+CRank Traf   PRank Uniform
+
+CRank Traf   PRank Uniform
+
+Figure   Error distributions of the network choice model and three baselines for the Wikipedia  WP  and Citi Bike  CB  datasets  The
+boxes show the interquartile range  the whiskers show the  th and  th percentiles  the red horizontal bars show the median and the red
+squares show the mean 
+
+ChoiceRank
+
+Traf  
+
+PageRank
+
+Uniform
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  we run   iterations of PageRank on the same hardware and data  PageRank uses slightly less memory  about
+  GB  or one less  oatingpoint number per node  and
+takes about half of the time per iteration    little over  
+minutes  This is consistent with the fact that ChoiceRank
+requires two passes over the edges per iteration  whereas
+PageRank requires one  The similarities between the two
+algorithms lead us to believe that in general  ChoiceRank
+can bene   from any new system optimizations developed
+for PageRank 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+Node outdegree
+
+  Conclusion
+
+Figure   Average KLdivergence as   function of the number of
+possible transitions for the Wikipedia dataset  ChoiceRank performs comparatively better in the case where   node   outdegree
+is large 
+
+state       bytes per node  The algorithm takes   little less
+than   minutes per iteration on average  Collectively  these
+results validate the feasibility of model inference for very
+large datasets 
+
+It is worth noting that despite tackling different problems 
+the ChoiceRank algorithm exhibits interesting similarities
+with   messagepassing implementation of PageRank commonly used in scalable graphparallel systems such as Pregel
+ Malewicz et al    and Spark  Gonzalez et al   
+For comparison  using the COST code  McSherry et al 
+
+In this paper  we present   method that tackles the problem
+of  nding the transition probabilities along the edges of  
+network  given only the network   structure and aggregate
+nodelevel traf   data  This method generalizes and extends
+ideas recently presented by Kumar et al    We demonstrate that in spite of the strong model assumptions needed
+to learn      probabilities from      observations  the
+method still manages to recover the transition probabilities
+to   good level of accuracy on two clickstream datasets  and
+shows promise for applications beyond clickstream data  To
+sum up  we believe that our method will be useful to pracitioners interested in understanding patterns of navigation in
+networks from aggregate traf   data  commonly available 
+     in public datasets 
+
+Identifying Preferences from Node Traf   in Networks
+
+Malewicz     Austern        Bik           Dehnert       
+Horn     Leiser     and Czajkowski     Pregel    System
+for LargeScale Graph Processing  In SIGMOD  pp 
+  ACM   
+
+Maystre     and Grossglauser     Fast and Accurate Inference of Plackett Luce Models  In NIPS   Montreal 
+Canada   
+
+McFadden     Conditional logit analysis of qualitative
+In Zarembka      ed  Frontiers in
+
+choice behavior 
+Econometrics  pp    Academic Press   
+
+McSherry     Isard     and Murray        Scalability  But
+
+at what COST  In HotOS XV   
+
+Meusel  Robert  Vigna  Sebastiano  Lehmberg  Oliver  and
+Bizer  Christian  Graph Structure in the Web Revisited 
+  Trick of the Heavy Tail  In WWW  Companion  pp 
+   
+
+Negahban     Oh     and Shah     Iterative Ranking from
+Pairwise Comparisons  In NIPS   Lake Tahoe  CA 
+ 
+
+Tomlin          New Paradigm for Ranking Pages on the
+World Wide Web  In WWW  pp    ACM   
+
+Train        Discrete Choice Methods with Simulation 
+
+Cambridge University Press  second edition   
+
+Vojnovic     and Yun       Parameter Estimation for Generalized Thurstone Choice Models  In ICML   pp 
+   
+
+Wulczyn     and Taraborelli     Wikipedia Clickstream  April   URL https dx doi org 
+   figshare   
+
+Zermelo     Die Berechnung der TurnierErgebnisse als
+ein Maximumproblem der Wahrscheinlichkeitsrechnung 
+Mathematische Zeitschrift     
+
+Acknowledgments
+
+We thank Holly CogliatiBauereis  Ksenia Konyushkova 
+Brunella Spinelli and the anonymous reviewers for careful
+proofreading and helpful comments 
+
+References
+
+Azari Sou ani     Chen        Parkes        and Xia    
+Generalized Methodof Moments for Rank Aggregation 
+In NIPS   Lake Tahoe  CA   
+
+Bradley        and Terry        Rank Analysis of Incomplete
+Block Designs     The Method of Paired Comparisons 
+Biometrika     
+
+Brin     and Page     The Anatomy of   LargeScale Hypertextual Web Search Engine  In WWW  Brisbane 
+Australia   
+
+Caron     and Doucet     Ef cient Bayesian Inference for
+Generalized Bradley Terry models  Journal of Computational and Graphical Statistics     
+
+Elo     The Rating Of Chess Players  Past   Present  Arco 
+
+ 
+
+Gonzalez        Xin        Dave     Crankshaw    
+Franklin        and Stoica     Graphx  Graph Processing
+in   Distributed Data ow Framework  In OSDI  pp 
+   
+
+Hajek     Oh     and Xu     Minimaxoptimal Inference
+In NIPS   Montreal  QC 
+
+from Partial Rankings 
+Canada   
+
+Hastie     and Tibshirani     Classi cation by pairwise
+coupling  The Annals of Statistics     
+
+Hunter        MM algorithms for generalized Bradley Terry
+models  The Annals of Statistics     
+
+Kemeny        and Snell        Finite Markov Chains 
+
+SpringerVerlag   
+
+Kumar  Ravi  Tomkins  Andrew  Vassilvitskii  Sergei  and
+Vee  Erik  Inverting   SteadyState  In WSDM  pp 
+  ACM   
+
+Lange     Hunter        and Yang     Optimization Transfer
+Using Surrogate Objective Functions  Journal of Computational and Graphical Statistics     
+
+Liu     Gao     Liu       Zhang     Ma     He     and
+Li     BrowseRank  Letting Web Users Vote For Page
+Importance  In SIGIR  pp    ACM   
+
+Luce       
+
+Individual Choice behavior    Theoretical
+
+Analysis  Wiley   
+
+

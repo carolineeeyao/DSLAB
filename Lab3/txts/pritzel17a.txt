@@ -1,0 +1,936 @@
+Neural Episodic Control
+
+Alexander Pritzel  
+Demis Hassabis   Daan Wierstra   Charles Blundell  
+
+Benigno Uria  
+
+Sriram Srinivasan  
+
+Adri   Puigdom enech Badia  
+
+Oriol Vinyals  
+
+Abstract
+
+Deep reinforcement
+learning methods attain
+superhuman performance in   wide range of environments  Such methods are grossly inef cient 
+often taking orders of magnitudes more data than
+humans to achieve reasonable performance  We
+propose Neural Episodic Control    deep reinforcement learning agent that is able to rapidly
+assimilate new experiences and act upon them 
+Our agent uses   semitabular representation of
+the value function    buffer of past experience containing slowly changing state representations and
+rapidly updated estimates of the value function 
+We show across   wide range of environments
+that our agent learns signi cantly faster than other
+stateof theart  general purpose deep reinforcement learning agents 
+
+  Introduction
+Deep reinforcement learning agents have achieved stateof 
+theart results in   variety of complex environments  Mnih
+et al      often surpassing human performance  Silver et al    Although the  nal performance
+of these agents is impressive  these techniques usually require several orders of magnitude more interactions with
+their environment than   human in order to reach an equivalent level of expected performance  For example  in the
+Atari   set of environments  Bellemare et al   
+deep Qnetworks  Mnih et al    require more than  
+hours of gameplay in order to achieve scores similar to those
+  human player achieves after two hours  Lake et al   
+The glacial learning speed of deep reinforcement learning
+has several plausible explanations and in this work we focus
+on addressing these 
+  Stochastic gradient descent optimisation requires the use
+of small learning rates  Due to the global approximation
+nature of neural networks  high learning rates cause catastrophic interference  McCloskey   Cohen    Low
+
+ Deepmind  London  UK  Correspondence to  Alexander
+
+Pritzel  apritzel google com 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright   by
+the author   
+
+learning rates mean that experience can only be incorporated into   neural network slowly 
+  Environments with   sparse reward signal can be dif cult
+for   neural network to model as there may be very few
+instances where the reward is nonzero  This can be viewed
+as   form of class imbalance where lowreward samples
+outnumber highreward samples by an unknown number 
+Consequently  the neural network disproportionately underperforms at predicting larger rewards  making it dif cult for
+an agent to take the most rewarding actions 
+  Reward signal propagation by valuebootstrapping techniques  such as Qlearning  results in reward information
+being propagated one step at   time through the history of
+previous interactions with the environment  This can be
+fairly ef cient if updates happen in reverse order in which
+the transitions occur  However  in order to train on uncorrelated minibatches DQNstyle  algorithms train on randomly
+selected transitions  and  in order to further stabilise training 
+require the use of   slowly updating target network further
+slowing down reward propagation 
+In this work we shall focus on addressing the three concerns listed above  we must note  however  that other recent
+advances in exploration  Osband et al    hierarchical
+reinforcement learning  Vezhnevets et al    and transfer learning  Rusu et al    Fernando et al    also
+make substantial contributions to improving data ef ciency
+in deep reinforcement learning over baseline agents 
+In this paper we propose Neural Episodic Control  NEC 
+  method which tackles the limitations of deep reinforcement learning listed above and demonstrates dramatic improvements on the speed of learning for   wide range of
+environments  Critically  our agent is able to rapidly latch
+onto highly successful strategies as soon as they are experienced  instead of waiting for many steps of optimisation
+      stochastic gradient descent  as is the case with DQN
+ Mnih et al    and      Mnih et al   
+Our work is in part inspired by the hypothesised role of the
+Hippocampus in decision making  Lengyel   Dayan   
+Blundell et al    and also by recent work on oneshot
+learning  Vinyals et al    and learning to remember
+rare events with neural networks  Kaiser et al    Our
+agent uses   semitabular representation of its experience
+of the environment possessing several of the features of
+episodic memory such as long term memory  sequentiality 
+
+Neural Episodic Control
+
+and contextbased lookups  The semitabular representation
+is an appendonly memory that binds slowchanging keys
+to fast updating values and uses   contextbased lookup on
+the keys to retrieve useful values during action selection
+by the agent  Thus the agent   memory operates in much
+the same way that traditional tablebased RL methods map
+from state and action to value estimates    unique aspect
+of the memory in contrast to other neural memory architectures for reinforcement learning  explained in more detail in
+Section   is that the values retrieved from the memory can
+be updated much faster than the rest of the deep neural network  This helps alleviate the typically slow weight updates
+of stochastic gradient descent applied to the whole network
+and is reminiscent of work on fast weights  Ba et al   
+Hinton   Plaut    although the architecture we present
+is quite different  Another unique aspect of the memory
+is that unlike other memory architectures such as LSTM
+and the differentiable neural computer  DNC  Graves et al 
+  our architecture does not try to learn when to write to
+memory  as this can be slow to learn and take   signi cant
+amount of time  Instead  we elect to write all experiences to
+the memory  and allow it to grow very large compared to existing memory architectures  in contrast to Oh et al   
+Graves et al    where the memory is wiped at the end
+of each episode  Reading from this large memory is made
+ef cient using kdtree based nearest neighbour algorithm
+ Bentley   
+The remainder of the paper is organised as follows  in Section   we review deep reinforcement learning  in Section  
+the Neural Episodic Control algorithm is described  in Section   we report experimental results in the Atari Learning
+Environment  in Section   we discuss other methods that use
+memory for reinforcement learning  and  nally in Section  
+we outline future work and summarise the main advantages
+of the NEC algorithm 
+  Deep Reinforcement Learning
+The actionvalue function of   reinforcement learning
+agent  Sutton   Barto    is de ned as          
+   trt         where   is the initial action taken by
+the agent in the initial state   and the expectation denotes
+that the policy   is followed thereafter  The discount factor         trades off favouring short vs 
+long term
+rewards 
+Deep QNetwork agents  DQN  Mnih et al    use Qlearning  Watkins   Dayan    to learn   value function
+  st  at  to rank which action at is best to take in each
+state st at step    The agent then executes an  greedy policy
+based upon this value function to tradeoff exploration and
+exploitation  with probability   the agent picks an action
+uniformly at random  otherwise it picks the action at  
+arg maxa   st    
+In DQN  the actionvalue function   st  at  is parameterised by   convolutional neural network that takes     
+
+    cid 
+
+pixel representation of the state st as input  and outputs
+  vector containing the value of each action at that state 
+When the agent observes   transition  DQN stores the
+ st  at  rt  st  tuple in   replay buffer  the contents of
+which are used for training  This neural network is trained
+by minimizing the squared error between the network   output and the Qlearning target yt   rt     maxa    st    
+for   subset of transitions sampled at random from the replay
+buffer  The target network    st     is an older version of
+the value network that is updated periodically  The use of
+  target network and uncorrelated samples from the replay
+buffer are critical for stable training 
+  number of extensions have been proposed that improve
+DQN  Double DQN  Van Hasselt et al    reduces bias
+on the target calculation  Prioritised Replay  Schaul et al 
+    further improves Double DQN by optimising the
+replay strategy  Several authors have proposed methods of
+improving reward propagation and the back up mechanism
+of   learning  Harutyunyan et al    Munos et al   
+He et al    by incorporating onpolicy rewards or by
+adding constraints to the optimisation      Harutyunyan
+et al    and Retrace   Munos et al    change
+the form of the Qlearning target to incorporate onpolicy
+samples and  uidly switch between onpolicy learning and
+offpolicy learning  Munos et al    show that by incorporating onpolicy samples allows an agent to learn faster
+in Atari environments  indicating that reward propagation
+is indeed   bottleneck to ef ciency in deep reinforcement
+learning 
+     Mnih et al    is another well known deep reinforcement learning algorithm that is very different from
+DQN  It is based upon   policy gradient  and learns both  
+policy and its associated value function  which is learned
+entirely onpolicy  similar to the       case of    Interestingly  Mnih et al    also added an LSTM memory
+to the otherwise convolutional neural network architecture
+to give the agent   notion of memory  although this did not
+have signi cant impact on the performance on Atari games 
+  Neural Episodic Control
+Our agent consists of three components    convolutional neural network that processes pixel images      set of memory
+modules  one per action  and    nal network that converts
+readouts from the action memories into         values  For
+the convolutional neural network we use the same architecture as DQN  Mnih et al   
+  Differentiable Neural Dictionary
+For each action        NEC has   simple memory module
+Ma    Ka  Va  where Ka and Va are dynamically sized
+arrays of vectors  each containing the same number of vectors  The memory module acts as an arbitrary association
+from keys to corresponding values  much like the dictionary
+data type found in programs  Thus we refer to this kind of
+
+Neural Episodic Control
+
+   
+
+wivi 
+
+ cid 
+
+ 
+
+ cid 
+
+ 
+
+ 
+
+memory module as   differentiable neural dictionary  DND 
+There are two operations possible on   DND  lookup and
+write  as depicted in Figure   Performing   lookup on  
+DND maps   key   to an output value   
+
+where vi is the ith element of the array Va and
+
+wi        hi 
+
+     hj 
+
+ 
+
+where hi is the ith element of the array Ka and         is
+  kernel between vectors   and         Gaussian kernel 
+Thus the output of   lookup in   DND is   weighted sum
+of the values in the memory  whose weights are given by
+normalised kernels between the lookup key and the corresponding key in memory  To make queries into very large
+memories scalable we shall make two approximations in
+practice   rstly  we shall limit   to the top pnearest neighbours  typically       Secondly  we use an approximate
+nearest neighbours algorithm to perform the lookups  based
+upon kdtrees  Bentley   
+After   DND is queried    new keyvalue pair is written into
+the memory  The key written corresponds to the key that
+was looked up  The associated value is applicationspeci  
+ below we specify the update for the NEC agent  Writes to
+  DND are appendonly  keys and values are written to the
+memory by appending them onto the end of the arrays Ka
+and Va respectively  If   key already exists in the memory 
+then its corresponding value is updated  rather than being
+duplicated 
+Note that   DND is   differentiable version of the memory
+module described in Blundell et al    It is also   generalisation to the memory and lookup schemes described in
+Vinyals et al    Kaiser et al    for classi cation 
+  Agent Architecture
+Figure   shows   DND as part of the NEC agent for   single
+action  whilst Algorithm   describes the general outline of
+the NEC algorithm  The pixel state   is processed by  
+convolutional neural network to produce   key    The key
+  is then used to lookup   value from the DND  yielding
+weights wi in the process for each element of the memory
+arrays  Finally  the output is   weighted sum of the values
+in the DND  The values in the DND  in the case of an
+NEC agent  are the   values corresponding to the state that
+originally resulted in the corresponding keyvalue pair to
+be written to the memory  Thus this architecture produces
+an estimate of         for   single given action    The
+architecture is replicated once for each action   the agent
+can take  with the convolutional part of the network shared
+among each separate DND Ma  The NEC agent acts by
+taking the action with the highest Qvalue estimate at each
+time step  In practice  we use  greedy policy during training
+with   low  
+
+Algorithm   Neural Episodic Control
+
+   replay memory 
+Ma    DND for each action   
+   horizon for Nstep   estimate 
+for each episode do
+
+for                   do
+
+Receive observation st from environment with embedding   
+Estimate   st     for each action   via   from Ma
+at    greedy policy based on   st    
+Take action at  receive reward rt 
+Append          st  at  to Mat 
+Append  st  at       st  at  to   
+Train on   random minibatch from   
+
+end for
+
+end for
+
+  cid 
+
+  
+
+  Adding        pairs to memory
+As an NEC agent acts  it continually adds new keyvalue
+pairs to its memory  Keys are appended to the memory of
+the corresponding action  taking the value of the query key
+  encoded by the convolutional neural network  We now
+turn to the question of an appropriate corresponding value 
+In Blundell et al    Monte Carlo returns were written
+to memory  We found that   mixture of Monte Carlo returns
+ onpolicy  and offpolicy backups worked better and so for
+NEC we elect to use Nstep Qlearning as in Mnih et al 
+   see also Watkins    Peng   Williams   
+This adds the following   onpolicy rewards and bootstraps
+the sum of discounted rewards for the rest of the trajectory 
+offpolicy  The Nstep Qvalue estimate is then
+
+     st      
+
+ jrt        max
+
+  cid    st       cid     
+The bootstrap term of   maxa cid    st       cid  is found by
+querying all memories Ma for each action   and taking the
+highest estimated Qvalue returned  Note that the earliest
+such values can be added to memory is   steps after  
+particular        pair occurs 
+When   stateaction value is already present in   DND     
+the key   corresponding to the visited state is already in
+Ka  the corresponding value present in Va  Qi  is updated
+in the same way as the classic tabular Qlearning algorithm 
+
+Qi   Qi                 Qi   
+
+ 
+where   is the learning rate of the   update  If the state is
+not already present      st     is appended to Va and   is
+appended to Ka  Note that our agent learns the value function in much the same way that   classic tabular Qlearning
+agent does  except that the Qtable grows with time  We
+found that   could take on   high value  allowing repeatedly
+visited states with   stable representation to rapidly update
+
+Neural Episodic Control
+
+Figure   Illustration of operations on   Differentiable Neural Dictionary 
+
+their value function estimate  Additionally  batching up
+memory updates       after each episode  helps with computational performance  We overwrite the item that has least
+recently been   neighbour when we reach the memory  
+maximum capacity 
+  Learning
+Agent parameters are updated by minimising the    loss
+between the predicted   value for   given action and the
+      estimate on randomly sampled minibatches from  
+replay buffer  In particular  we store tuples  st  at  Rt  in
+the replay buffer  where   is the horizon of the Nstep  
+rule  and Rt        st     plays the role of the target network seen in DQN  our replay buffer is signi cantly smaller
+than DQN    These  st  at  Rt tuples are then sampled
+uniformly at random to form minibatches for training  Note
+that the architecture in Figure   is entirely differentiable and
+so we can minimize this loss by gradient descent  Backpropagation updates the weights and biases of the convolutional
+embedding network and the keys and values of each actionspeci   memory using gradients of this loss  using   lower
+learning rate than is used for updating pairs after queries 
+  Experiments
+We investigated whether neural episodic control allows for
+more data ef cient learning in practice in complex domains 
+As   problem domain we chose the Atari Learning Environment ALE  Bellemare et al    We tested our method
+on the   Atari games used by Schaul et al      which
+form an interesting set of tasks as they contain diverse challenges such as sparse rewards and vastly different magnitudes of scores across games  Most common algorithms
+applied in these domains  such as variants of DQN and     
+require in the thousands of hours of ingame time       they
+are data inef cient 
+We consider   variants of     and DQN as baselines
+as well as MFEC  Blundell et al    We compare
+to the basic implementations of      Mnih et al   
+and DQN  Mnih et al    We also compare to two
+
+algorithms incorporating   returns  Sutton    aiming
+at more data ef ciency by faster propagation of credit assignments  namely     Harutyunyan et al    and
+Retrace   Munos et al    We also compare to DQN
+with Prioritised Replay  which improves data ef ciency by
+replaying more salient transitions more frequently  We did
+not directly compare to DRQN  Hausknecht   Stone   
+nor FRMQN  Oh et al    as results were not available
+for all Atari games  Note that in the case of DRQN  reported
+performance is lower than that of Prioritised Replay 
+All algorithms were trained using discount rate      
+except MFEC that uses      
+In our implementation
+of MFEC we used random projections as an embedding
+function  since in the original publication it obtained better
+performance on the Atari games tested 
+In terms of hyperparameters for NEC  we chose the same
+convolutional architecture as DQN  and store up to    
+  memories per action  We used the RMSProp algorithm  Tieleman   Hinton    for gradient descent training  We apply the same preprocessing steps as  Mnih et al 
+  including repeating each action four times  For the
+Nstep   estimates we picked   horizon of       Our
+replay buffer stores the only last   states  as opposed to
+  for DQN  observed and their Nstep   estimates  We
+do one replay update for every   observed frames with  
+minibatch of size   We set the number of nearest neighbours       in all our experiments  For the kernel function
+we chose   function that interpolates between the mean
+for short distances and weighted inverse distance for large
+distances  more precisely 
+
+     hi   
+
+ 
+
+ cid     hi cid 
+
+     
+
+ 
+
+ 
+
+Intuitively  when all neighbours are far away we want to
+avoid putting all weight onto one data point    Gaussian
+kernel  for example  would exponentially suppress all neighbours except for the closest one  The kernel we chose has
+the advantage of having heavy tails  This makes the algorithm more robust and we found it to be less sensitive to
+
+WritingLookupNeural Episodic Control
+
+Figure   Architecture of episodic memory module for   single action    Pixels representing the current state enter through   convolutional
+neural network on the bottom left and an estimate of         exits top right  Gradients  ow through the entire architecture 
+
+kernel hyperparameters  We set       In order to
+determine whether an key corresponding to   given state is
+already present in the table we store   hash of the observation for each state and check whether the hash is present
+when inserting 
+In order to tune the remaining hyperparameters  SGD
+learningrate  fastupdate learningrate   in Equation   dimensionality of the embeddings        in Equation   and  
+greedy explorationrate  we ran   hyperparameter sweep on
+six games  Beam Rider  Breakout  Pong    Bert  Seaquest
+and Space Invaders  We picked the hyperparameter values
+that performed best on the median for this subset of games   
+common cross validation procedure described by Bellemare
+et al    and adhered to by Mnih et al   
+Data ef ciency results are summarised in Table   In the
+small data regime  less than   million frames  NEC clearly
+outperforms all other algorithms  The difference is especially pronounced before   million frames have been observed  Only at   million frames does DQN with Prioritised Replay outperform NEC on average  note that this
+corresponds to   hours of gameplay 
+In order to provide   more detailed picture of NEC   performance  Figures   to   show learning curves on   games
+ Alien  Bowling  Boxing  Frostbite  HERO  Ms  PacMan 
+Pong  where several stereotypical cases of NEC   performance can be observed   All learning curves show the
+average performance over   different initial random seeds 
+We evaluate MFEC and NEC every   frames  and the
+other algorithms are evaluated every million steps 
+Across most games  NEC is signi cantly faster at learning
+in the initial phase  see also Table   only comparable to
+MFEC  which also uses an episodiclike Qfunction 
+NEC also outperforms MFEC on average  see Table  
+In contrast with MFEC  NEC uses the reward signal to
+learn an embedding adequate for value interpolation  This
+difference is especially signi cant in games where   few
+pixels determine the value of each action  The simpler
+version of MFEC uses an approximation to    distances
+
+ Videos and complementary graphical material can be found
+
+at https sites google com view necicml
+
+in pixelspace by means of random projections  and cannot
+focus on the small but most relevant details  Another version
+of MFEC calculated distances on the latent representation of
+  variational autoencoder  Kingma   Welling    trained
+to model frames  This latent representation does not depend
+on rewards and will be subject to irrelevant details like  for
+example  the display of the current score 
+     DQN and related algorithms require rewards to be
+clipped to the range     for training stability Mnih
+et al    NEC and MFEC do not require reward clipping  which results in qualitative changes in behaviour and
+better performance relative to other algorithms on games
+requiring clipping  Bowling  Frostbite           Ms  PacMan  and Alien out of the seven shown 
+
+Figure   Learning curve on Bowling 
+
+Alien and Ms  PacMan both involve controlling   character  where there is an easy way to collect small rewards
+by collecting items of which there are plenty  while avoiding enemies  which are invulnerable to the agent  On the
+other hand the agent can pick up   special item making enemies vulnerable  allowing the agent to attack them and get
+signi cantly larger rewards than from collecting the small
+rewards  Agents trained using existing parametric methods
+tend to show little interest in this as clipping implies there
+
+ See Pop Art  van Hasselt et al    for   DQNlike algorithm that does not require rewardclipping  NEC also outperforms
+Pop Art 
+
+Neural Episodic Control
+
+Frames Nature DQN    Retrace 
+  
+  
+  
+  
+  
+  
+
+   
+ 
+ 
+ 
+ 
+   
+   
+   
+
+ 
+ 
+ 
+ 
+ 
+ 
+
+Prioritised Replay    
+NEC
+MFEC
+   
+ 
+ 
+   
+ 
+ 
+   
+ 
+ 
+   
+ 
+ 
+   
+ 
+ 
+ 
+     
+
+Table   Median across games of humannormalised scores for several algorithms at different points in training
+Frames Nature DQN   
+  
+  
+  
+  
+  
+  
+
+NEC
+MFEC
+Prioritised Replay    
+   
+ 
+ 
+   
+ 
+ 
+   
+ 
+ 
+   
+ 
+ 
+ 
+ 
+   
+     
+ 
+
+   
+ 
+ 
+ 
+ 
+ 
+ 
+   
+   
+
+Retrace 
+
+ 
+ 
+ 
+ 
+ 
+ 
+
+Table   Mean humannormalised scores for several algorithms at different points in training
+
+Figure   Learning curve on Frostbite 
+
+Figure   Learning curve on         
+
+is no difference between large and small rewards  Therefore  as NEC does not need reward clipping  it can strongly
+outperform other algorithms  since NEC is maximising the
+nonclipped score  the true score  This can also be seen
+when observing the agents play  parametric methods will
+tend to collect small rewards  while NEC will try to actively
+make the enemies vulnerable and attack them to get large
+rewards 
+NEC also outperforms the other algorithms on Pong and
+Boxing where reward clipping does not affect any of the
+algorithms as all original rewards are in the range    
+as can be expected  NEC does not outperform others in
+terms of maximally achieved score  but it is vastly more
+data ef cient 
+In Figure   we show   chart of humannormalised scores
+across all   Atari games at   million frames comparing to
+Prioritised Replay and MFEC  The human normalised score
+is computed as  sAgent   sRandom sHuman   sRandom 
+where sRandom denotes the score achieved by an agent
+picking actions uniformly at random  We rank the games
+
+independently for each algorithm  and on the yaxis the
+deciles are shown 
+We can see that NEC gets to   human level performance in
+about   of the games within   million frames  As we
+can see NEC outperforms MFEC and Prioritised Replay 
+  Related work
+There has been much recent work on memory architectures for neural networks  LSTM  Hochreiter   Schmidhuber    DNC  Graves et al    memory networks
+ Sukhbaatar et al    Miller et al    Recurrent neural network representations of memory  LSTMs and DNCs 
+are trained by truncated backpropagation through time  and
+are subject to the same slow learning of nonrecurrent neural
+networks 
+Some of these models have been adapted to their use in RL
+agents  LSTMs  Bakker et al    Hausknecht   Stone 
+  DNCs  Graves et al    memory networks  Oh
+et al    However  the contents of these memories is
+
+Neural Episodic Control
+
+Figure   Learning curve on Ms  PacMan 
+
+Figure   Learning curve on Pong 
+
+Figure   Learning curve on Alien 
+
+Figure   Learning curve on Boxing 
+
+typically reset at the beginning of every episode  This is appropriate when the goal of the memory is tracking previous
+observations in order to maximise rewards in partially observable or nonMarkovian environments  Therefore  these
+implementations can be thought of as   type of working
+memory  and solve   different problem than the one addressed in this work 
+RNNs can learn to quickly write highly rewarding states into
+memory and may even be able to learn entire reinforcement
+learning algorithms  Wang et al    Duan et al   
+However  doing so can take an arbitrarily long time and the
+learning time likely scales strongly with the complexity of
+the task 
+The work of Oh et al    is also reminiscent of the ideas
+presented here  They introduced  FR MQN  an adaptation
+of memory networks used in the top layers of   Qnetwork 
+Kaiser et al    introduced   differentiable layer of keyvalue pairs that can be plugged into   neural network  This
+layer uses cosine similarity to calculate   weighted average
+of the values associated with the   most similar memories 
+Their use of   moving average update rule is reminiscent of
+the one presented in Section   The authors reported results
+on   set of supervised tasks  however they did not consider
+applications to reinforcement learning  Other deep RL methods keep   history of previous experience  Indeed  DQN
+itself has an elementary form of memory  the replay buffer
+
+central to its stable training can be viewed as   memory
+that is frequently replayed to distil the contents into DQN  
+value network  Kumaran et al    suggest that training
+on replayed experiences from the replay buffer in DQN is
+similar to the replay of experiences from episodic memory during sleep in animals  DQN   replay buffer differs
+from most other work on memory for deep reinforcement
+learning in its sheer scale  it is common for DQN   replay
+buffer to hold millions of             cid  tuples  The use of local regression techniques for Qfunction approximation has
+been suggested before  Santamar   et al    proposed
+the use of knearest neighbours regression with   heuristic for adding memories based on the distance to previous
+memories  Munos   Moore   proposed barycentric
+interpolators to model the value function and proved their
+convergence to the optimal value function under mild conditions  but no empirical results were presented  Gabel  
+Riedmiller   also suggested the use of local regression 
+under the paradigm of casebased reasoning that included
+heuristics for the deletion of stored cases  Blundell et al 
+  MFEC  recently used local regression for Qfunction
+estimation using the mean of the knearest neighbours  except in the case of an exact match of the query point  in
+which case the stored value was returned  They also propose the use of the latent variable obtained from   variational
+autoencoder  Rezende et al    as an embedding space 
+
+Neural Episodic Control
+
+nitude fewer interactions with the environment than agents
+previously proposed for data ef ciency  such as Prioritised
+Replay  Schaul et al      and Retrace   Munos et al 
+  We speculate that NEC learns faster through   combination of three features of the agent  the memory architecture  DND  the use of Nstep   estimates  and   state
+representation provided by   convolutional neural network 
+The memory architecture  DND  rapidly integrates recent
+experience state representations and corresponding value
+estimates allowing this information to be quickly modify future behaviour  Such memories persist across many
+episodes  and we use   fast approximate nearest neighbour
+algorithm  kdtrees  to ensure that they can be ef ciently
+accessed  Estimating Qvalues by using the Nstep   value
+function interpolates between Monte Carlo value estimates
+and backed up offpolicy estimates  Monte Carlo value estimates re ect the rewards an agent is actually receiving 
+whilst backed up offpolicy estimates should be more representative of the value function at the optimal policy  but
+evolve much slower  By using both estimates  NEC can
+tradeoff between these two estimation procedures and their
+relative strengths and weaknesses  speed of reward propagation vs optimality  Finally  by having   slow changing 
+stable representation provided by   convolutional neural
+network  keys stored in the DND remain relative stable 
+Our work suggests that nonparametric methods are  
+promising addition to the deep reinforcement learning toolbox  especially where data ef ciency is paramount  In our
+experiments we saw that at the beginning of learning NEC
+outperforms other agents in terms of learning speed  We
+saw that later in learning Prioritised Replay has higher performance than NEC  We leave it to future work to further
+improve NEC so that its long term  nal performance is signi cantly superior to parametric agents  Another avenue of
+further research would be to apply the method discussed in
+this paper to   wider range of tasks such as visually more
+complex    worlds or real world tasks where data ef ciency
+is of great importance 
+Acknowledgements
+The authors would like to thank Daniel Zoran  Dharshan
+Kumaran  Jane Wang  Dan Belov  Ruiqi Guo  Yori Zwols 
+Jack Rae  Andreas Kirsch  Peter Dayan  David Silver and
+many others at DeepMind for insightful discussions and
+feedback  We also thank Georg Ostrovski  Tom Schaul  and
+Hubert Soyer for providing baseline learning curves 
+References
+Ba  Jimmy  Hinton  Geoffrey    Mnih  Volodymyr  Leibo 
+Joel    and Ionescu  Catalin  Using fast weights to attend
+to the recent past  In Advances In Neural Information
+Processing Systems  pp     
+
+Bakker  Bram  Zhumatiy  Viktor  Gruener  Gabriel  and
+
+Figure   Humannormalised scores of games  independently
+ranked per algorithm  labels on yaxis denote quantiles 
+
+but showed random projections often obtained better results 
+In contrast with the ideas presented here  none of the localregression work aforementioned uses the reward signal to
+learn an embedding space of covariates in which to perform
+the localregression  We learn this embedding space using
+temporaldifference learning    crucial difference  as we
+showed in the experimental comparison to MFEC 
+  Discussion
+We have proposed Neural Episodic Control  NEC    deep
+reinforcement learning agent that learns signi cantly faster
+than other baseline agents on   wide range of Atari  
+games  At the core of NEC is   memory structure    Differentiable Neural Dictionary  DND  one for each potential
+action  NEC inserts recent state representations paired with
+corresponding value functions into the appropriate DND 
+Our experiments show that NEC requires an order of mag 
+
+Neural Episodic Control
+
+Schmidhuber    urgen    robot that reinforcementlearns
+to identify and memorize important previous observations 
+In Intelligent Robots and Systems   IROS  
+Proceedings    IEEE RSJ International Conference
+on  volume   pp    IEEE   
+
+Bellemare        Naddaf     Veness     and Bowling    
+The arcade learning environment  An evaluation platform for general agents  Journal of Arti cial Intelligence
+Research       
+
+Bellemare  Marc    Naddaf  Yavar  Veness  Joel  and Bowling  Michael  The arcade learning environment  An
+evaluation platform for general agents     Artif  Intell 
+Res JAIR     
+
+Bentley  Jon Louis  Multidimensional binary search trees
+used for associative searching  Commun  ACM   
+  September  
+
+Blundell  Charles  Uria  Benigno  Pritzel  Alexander  Li 
+Yazhe  Ruderman  Avraham  Leibo  Joel    Rae  Jack 
+Wierstra  Daan  and Hassabis  Demis  Modelfree
+episodic control  arXiv preprint arXiv   
+
+Duan  Yan  Schulman  John  Chen  Xi  Bartlett  Peter   
+Sutskever  Ilya  and Abbeel  Pieter  Rl  Fast reinforcement learning via slow reinforcement learning  arXiv
+preprint arXiv   
+
+Fernando  Chrisantha  Banarse  Dylan  Blundell  Charles 
+Zwols  Yori  Ha  David  Rusu  Andrei    Pritzel  Alexander  and Wierstra  Daan  Pathnet  Evolution channels
+gradient descent in super neural networks  arXiv preprint
+arXiv   
+
+Gabel  Thomas and Riedmiller  Martin  Cbr for state value
+function approximation in reinforcement learning 
+In
+International Conference on CaseBased Reasoning  pp 
+  Springer   
+
+Graves  Alex  Wayne  Greg  Reynolds  Malcolm  Harley 
+Tim  Danihelka  Ivo  GrabskaBarwi nska  Agnieszka 
+Colmenarejo  Sergio   omez  Grefenstette  Edward  Ramalho  Tiago  Agapiou  John  et al  Hybrid computing
+using   neural network with dynamic external memory 
+Nature     
+
+Harutyunyan  Anna  Bellemare  Marc    Stepleton  Tom 
+and Munos    emi      lambda  with offpolicy corIn International Conference on Algorithmic
+rections 
+Learning Theory  pp    Springer   
+
+Hausknecht  Matthew and Stone  Peter  Deep recurrent qlearning for partially observable mdps  arXiv preprint
+arXiv   
+
+He  Frank    Liu  Yang  Schwing  Alexander    and Peng 
+Jian  Learning to play in   day  Faster deep reinforcement learning by optimality tightening  arXiv preprint
+arXiv   
+
+Hinton  Geoffrey   and Plaut  David    Using fast weights
+In Proceedings of the ninth
+to deblur old memories 
+annual conference of the Cognitive Science Society  pp 
+   
+
+Hochreiter  Sepp and Schmidhuber    urgen  Long shortterm
+memory  Neural Comput    November
+ 
+ISSN   doi   neco 
+ 
+
+Kaiser  Lukasz  Nachum       Roy  Aurko  and Bengio 
+
+Samy  Learning to remember rare events   
+
+Kingma  Diederik   and Welling  Max  Autoencoding
+variational bayes  arXiv preprint arXiv   
+
+Kumaran  Dharshan  Hassabis  Demis  and McClelland 
+James    What learning systems do intelligent agents
+need  complementary learning systems theory updated 
+Trends in Cognitive Sciences     
+
+Lake  Brenden    Ullman  Tomer    Tenenbaum  Joshua   
+and Gershman  Samuel    Building machines that learn
+and think like people  arXiv preprint arXiv 
+ 
+
+Lengyel     and Dayan     Hippocampal contributions to
+control  The third way  In NIPS  volume   pp   
+ 
+
+McCloskey  Michael and Cohen  Neal    Catastrophic interference in connectionist networks  The sequential learning problem  Psychology of learning and motivation   
+   
+
+Miller  Alexander  Fisch  Adam  Dodge  Jesse  Karimi 
+AmirHossein  Bordes  Antoine  and Weston  Jason  Keyvalue memory networks for directly reading documents 
+arXiv preprint arXiv   
+
+Mnih  Volodymyr  Kavukcuoglu  Koray  Silver  David 
+Rusu  Andrei    Veness  Joel  Bellemare  Marc    Graves 
+Alex  Riedmiller  Martin  Fidjeland  Andreas    Ostrovski  Georg  et al  Humanlevel control through deep reinforcement learning  Nature     
+
+Mnih  Volodymyr  Badia  Adria Puigdomenech  Mirza 
+Mehdi  Graves  Alex  Lillicrap  Timothy    Harley  Tim 
+Silver  David  and Kavukcuoglu  Koray  Asynchronous
+methods for deep reinforcement learning  In International
+Conference on Machine Learning   
+
+Neural Episodic Control
+
+Munos  Remi and Moore  Andrew    Barycentric interpolators for continuous space and time reinforcement learning 
+In NIPS  pp     
+
+Sukhbaatar  Sainbayar  Weston  Jason  Fergus  Rob  et al 
+Endto end memory networks  In Advances in neural
+information processing systems  pp     
+
+Sutton  Richard    Learning to predict by the methods of
+temporal differences  Machine learning     
+
+Sutton  Richard   and Barto  Andrew    Reinforcement
+
+learning  An introduction  MIT press   
+
+Tieleman  Tijmen and Hinton  Geoffrey  Lecture  
+rmsprop  Divide the gradient by   running average of
+its recent magnitude  COURSERA  Neural Networks for
+Machine Learning     
+
+van Hasselt     Guez     Hessel     and Silver     Learning functions across many orders of magnitudes  ArXiv
+eprints  February  
+
+Van Hasselt  Hado  Guez  Arthur  and Silver  David  Deep
+reinforcement learning with double qlearning  In AAAI 
+pp     
+
+Vezhnevets  Alexander  Mnih  Volodymyr  Osindero  Simon  Graves  Alex  Vinyals  Oriol  Agapiou  John  et al 
+Strategic attentive writer for learning macroactions  In
+Advances in Neural Information Processing Systems  pp 
+   
+
+Vinyals  Oriol  Blundell  Charles  Lillicrap  Tim  Wierstra 
+Daan  et al  Matching networks for one shot learning  In
+Advances in Neural Information Processing Systems  pp 
+   
+
+Wang  Jane    KurthNelson  Zeb  Tirumala  Dhruva  Soyer 
+Hubert  Leibo  Joel    Munos  Remi  Blundell  Charles 
+Kumaran  Dharshan  and Botvinick  Matt  Learning to
+reinforcement learn  arXiv preprint arXiv 
+ 
+
+Watkins  Christopher JCH and Dayan  Peter  Qlearning 
+
+Machine learning     
+
+Watkins  Christopher John Cornish Hellaby  Learning from
+delayed rewards  PhD thesis  University of Cambridge
+England   
+
+Munos    emi  Stepleton  Tom  Harutyunyan  Anna  and
+Bellemare  Marc  Safe and ef cient offpolicy reinforcement learning  In Advances in Neural Information Processing Systems  pp     
+
+Oh  Junhyuk  Guo  Xiaoxiao  Lee  Honglak  Lewis 
+Richard    and Singh  Satinder  Actionconditional video
+prediction using deep networks in atari games  In Advances in Neural Information Processing Systems  pp 
+   
+
+Oh  Junhyuk  Chockalingam  Valliappa  Lee  Honglak  et al 
+Control of memory  active perception  and action in
+In Proceedings of The  rd International
+minecraft 
+Conference on Machine Learning  pp     
+
+Osband  Ian  Blundell  Charles  Pritzel  Alexander  and
+Van Roy  Benjamin  Deep exploration via bootstrapped
+dqn  In Advances In Neural Information Processing Systems  pp     
+
+Peng  Jing and Williams  Ronald    Incremental multistep
+
+qlearning  Machine learning     
+
+Rezende  Danilo Jimenez  Mohamed  Shakir  and Wierstra 
+Daan  Stochastic backpropagation and approximate inference in deep generative models  In Proceedings of The
+ st International Conference on Machine Learning  pp 
+   
+
+Rusu  Andrei    Rabinowitz  Neil    Desjardins  Guillaume 
+Soyer  Hubert  Kirkpatrick  James  Kavukcuoglu  Koray 
+Pascanu  Razvan  and Hadsell  Raia  Progressive neural
+networks  arXiv preprint arXiv   
+
+Santamar    Juan    Sutton  Richard    and Ram  Ashwin 
+Experiments with reinforcement learning in problems
+with continuous state and action spaces  Adaptive behavior     
+
+Schaul  Tom  Quan  John  Antonoglou  Ioannis  and SilPrioritized experience replay  CoRR 
+
+ver  David 
+abs     
+
+Schaul  Tom  Quan  John  Antonoglou  Ioannis  and Silver 
+David  Prioritized experience replay  arXiv preprint
+arXiv     
+
+Silver  David  Huang  Aja  Maddison  Chris    Guez  Arthur 
+Sifre  Laurent  Van Den Driessche  George  Schrittwieser 
+Julian  Antonoglou  Ioannis  Panneershelvam  Veda 
+Lanctot  Marc  et al  Mastering the game of go with
+deep neural networks and tree search  Nature   
+   
+
+

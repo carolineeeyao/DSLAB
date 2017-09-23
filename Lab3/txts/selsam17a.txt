@@ -1,0 +1,899 @@
+Developing BugFree Machine Learning Systems With Formal Mathematics
+
+Daniel Selsam   Percy Liang   David    Dill  
+
+Abstract
+
+Standard methodology  test it empirically
+
+Noisy data  nonconvex objectives  model misspeci cation  and numerical instability can all
+cause undesired behaviors in machine learning
+systems  As   result  detecting actual implementation errors can be extremely dif cult  We
+demonstrate   methodology in which developers
+use an interactive proof assistant to both implement their system and to state   formal theorem
+de ning what it means for their system to be correct  The process of proving this theorem interactively in the proof assistant exposes all implementation errors since any error in the program
+would cause the proof to fail  As   case study 
+we implement   new system  Certigrad  for optimizing over stochastic computation graphs  and
+we generate   formal       machinecheckable 
+proof that the gradients sampled by the system
+are unbiased estimates of the true mathematical
+gradients  We train   variational autoencoder using Certigrad and  nd the performance comparable to training the same model in TensorFlow 
+
+Debug
+
+Program
+
+Test
+
+Our methodology  verify it mathematically
+
+Debug
+
+Specify
+
+Program
+
+Prove
+
+Figure     highlevel comparison of our methodology with the
+standard methodology for developing machine learning systems 
+Instead of relying on empirical testing to expose implementation
+errors  we  rst formally specify what our system is required to
+do in terms of the underlying mathematics  and then try to formally prove that our system satis es its speci cation  The process
+of proving exposes implementation errors systematically and the
+ program   prove   debug  loop eventually terminates with  
+bugfree system and   machinecheckable proof of correctness 
+
+  Introduction
+Machine learning systems are dif cult to engineer for many
+fundamental reasons  First and foremost  implementation
+errors can be extremely dif cult to detect let alone to localize and address since there are many other potential
+causes of undesired behavior in   machine learning system 
+For example  an implementation error may lead to incorrect gradients and so cause   learning algorithm to stall  but
+such   symptom may also be caused by noise in the training
+data    poor choice of model  an unfavorable optimization
+landscape  an inadequate search strategy  or numerical instability  These other issues are so common that it is often
+assumed that any undesired behavior is caused by one of
+them  As   result  actual implementation errors can persist
+
+ Stanford University  Stanford  CA  Correspondence to 
+
+Daniel Selsam  dselsam stanford edu 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+inde nitely without detection  Errors are even more dif 
+cult to detect in stochastic programs  since some errors may
+only distort the distributions of random variables and may
+require writing custom statistical tests to detect 
+Machine learning systems are also dif cult to engineer because it can require substantial expertise in mathematics
+     
+linear algebra  statistics  multivariate analysis  measure theory  differential geometry  topology  to even understand what   machine learning algorithm is supposed to do
+and why it is thought to do it correctly  Even simple algorithms such as gradient descent can have intricate justi 
+cations  and there can be   large gap between the mechanics of an implementation especially   highlyoptimized
+one and its intended mathematical semantics 
+
+ Theano  Bergstra et al    has been under development for almost   decade and yet there is   recent GitHub issue  https github com Theano Theano issues  reporting  
+model for which the loss continually diverges in the middle of
+training  Only after various experiments and comparing the behavior to other systems did the team agree that it is most likely an
+implementation error  As of this writing  neither the cause of this
+error nor the set of models it affects have been determined 
+
+Developing BugFree Machine Learning Systems With Formal Mathematics
+
+In this paper  we demonstrate   practical methodology for
+building machine learning systems that addresses these
+challenges by enabling developers to  nd and eliminate implementation errors systematically without recourse to empirical testing  Our approach makes use of   tool called
+an interactive proof assistant  Gordon    Gordon  
+Melham    Harrison    Nipkow et al    Owre
+et al    Coq Development Team    de Moura
+et al    which consists of       programming language        language to state mathematical theorems  and
+      set of tools for constructing formal proofs of such theorems  Note  we use the term formal proof to mean   proof
+that is in   formal system and so can be checked by   machine 
+In our approach  developers use the theorem language    
+to state   formal mathematical theorem that de nes what it
+means for their implementation to be errorfree in terms
+of the underlying mathematics       multivariate analysis  Upon implementing the system using the programming language     developers use the proof tools     to
+construct   formal proof of the theorem stating that their
+implementation is correct  The  rst draft of any implementation will often have errors  and the process of interactive
+proving will expose these errors systematically by yielding impossible proof obligations  Once all implementation
+errors have been  xed  the developers will be able to complete the formal proof and be certain that the implementation has no errors with respect to its speci cation  Moreover  the proof assistant can check the formal proof automatically so no human needs to understand why the proof
+is correct in order to trust that it is  Figure   illustrates this
+process 
+Proving correctness of machine learning systems requires
+building on the tools and insights from two distinct  elds 
+program veri cation  Leroy    Klein et al    Chlipala    Chen et al    which has aimed to prove
+properties of computer programs  and formal mathematics  Rudnicki    Gonthier    Gonthier et al   
+Hales et al    which has aimed to formally represent and generate machinecheckable proofs of mathematical theorems  Both of these  elds make use of interactive
+proof assistants  but the tools  libraries and design patterns
+developed by the two  elds focus on different problems and
+have remained largely incompatible  While the methodology we have outlined will be familiar to the program veri cation community  and while reasoning formally about
+the mathematics that underlies machine learning will be familiar to the formal mathematics community  proving such
+sophisticated mathematical properties of large  stochastic 
+software systems is   new goal and poses many new challenges 
+To explore these challenges and to demonstrate the prac 
+
+  
+
+ 
+
+ 
+
+softplus       
+
+  
+
+ 
+
+sigmoid
+
+cost
+
+          Ez    softplus         cost         
+
+Figure   An example stochastic computation graph representing
+  simple variational autoencoder  Stochastic nodes are indicated
+by rounded rectangles  The loss function for the graph is the expected value of the cost node over the stochastic choices  which
+in this case is   single sample from   Gaussian distribution 
+
+ticality of our approach  we implemented   new machine
+learning system  Certigrad  for optimizing over stochastic computation graphs  Schulman et al    Stochastic computation graphs extend the computation graphs that
+underly systems like TensorFlow  Abadi et al    and
+Theano  Bergstra et al    by allowing nodes to represent random variables and by de ning the loss function for
+  graph to be the expected value of the sum of the leaf nodes
+over the stochastic choices  See Figure   for an example of
+  stochastic computation graph  We implement our system
+in the Lean Theorem Prover  de Moura et al      new
+interactive proof assistant still under active development for
+which the integration of programming and mathematical
+reasoning is an ongoing design goal  We formally state and
+prove functional correctness for the stochastic backpropagation algorithm  that the sampled gradients are indeed unbiased estimates of the gradients of the loss function with
+respect to the parameters 
+We note that provable correctness need not come at the
+expense of computational ef ciency  proofs need only be
+checked once during development and they introduce no
+runtime overhead  Although the algorithms we verify in
+this work lack many optimizations  most of the running
+time when training machine learning systems is spent multiplying matrices  and we are able to achieve competitive performance simply by linking with an optimized library for matrix operations  we used Eigen  Guennebaud
+et al    To demonstrate practical feasibility empirically  we trained an AutoEncoding Variational Bayes
+ AEVB  model  Kingma   Welling    on MNIST using ADAM  Kingma   Ba    and found the performance comparable to training the same model in TensorFlow 
+
+ Note that the validity of our theorem becomes contingent on
+Eigen   matrix operations being functionally equivalent to the versions we formally proved correct 
+
+Developing BugFree Machine Learning Systems With Formal Mathematics
+
+We summarize our contributions 
+
+  We present
+
+the  rst application of
+
+     
+machinecheckable  proof techniques to developing
+machine learning systems 
+
+formal
+
+  We describe   methodology that can detect implementation errors systematically in machine learning systems 
+
+  We demonstrate that our approach is practical by developing   performant implementation of   sophisticated machine learning system along with   machinecheckable proof of correctness 
+
+  Motivation
+When developing machine learning systems  many program optimizations involve extensive algebraic derivations
+to put mathematical expressions in closedform   For example  suppose you want to compute the following quantity
+
+ef ciently cid 
+
+ 
+
+        Diag  log         In   
+
+ 
+
+You expand the density functions  grind through the algebra
+by hand and eventually derive the following closed form
+expression 
+
+ cid    cid 
+
+  
+
+   
+ 
+
+ cid 
+
+     
+
+ 
+
+ cid      log  
+
+ cid 
+
+ 
+
+You implement   procedure to compute this quantity and
+include it as part of   larger program  but when you run
+your  rst experiment  your plots are not as encouraging as
+you hoped  After ruling out many other possible explanations  you eventually decide to scrutinize this procedure
+more closely  You implement   na ve Monte Carlo estimator for the quantity above  compare it against your procedure on   few random inputs and  nd that its estimates
+are systematically biased  What do you do now  If you
+recheck your algebra carefully  you might notice that the
+sign of  
+  is wrong  but wouldn   it be easier if the compiler checked your algebra for you and found the erroneous
+step  Or better yet  if it did the algebra for you in the  rst
+place and could guarantee the result was errorfree 
+
+  Background  The Lean Theorem Prover
+To develop software systems with no implementation errors  we need   way to write computer programs  mathematical theorems  and mathematical proofs all in the same
+
+Informal
+
+ cid           dx
+ cid          
+
+ cid             
+
+Formal
+
+ 
+
+                     
+      
+
+ 
+
+Figure   Translating informal usages of the integral and gradient
+to our formal representation  Note that whereas some of the informal examples are too ambiguous to interpret without additional
+information  the Lean representation is always unambiguous 
+
+language  All three capabilities are provided by the new interactive proof assistant Lean  de Moura et al    Lean
+is an implementation of   logical system known as the Calculus of Inductive Constructions  Coquand   Huet   
+and its design is inspired by the betterknown Coq Proof
+Assistant  Coq Development Team    Our development makes use of certain features that are unique to
+Lean  but most of what we present is equally applicable
+to Coq  and to   lesser extent  other interactive theorem
+provers such as Isabelle HOL  Nipkow et al   
+To explain and motivate the relevant features of Lean  we
+will walk through applying our methodology to   toy problem  writing   program to compute the gradient of the softplus function  We can write standard functional programs
+in Lean  such as softplus 
+def splus               log     exp   
+
+We can also represent more abstract operations such as integrals and gradients 
+
+ cid                 
+Here the intended meaning of  cid    is the integral of the
+
+                        
+
+function   over all of    while the intended meaning of
+      is the gradient       the derivative  of the function  
+at the point   Figure   shows how to represent common
+idioms of informal mathematics in our formal representation  note that whereas some of the informal examples are
+too ambiguous to interpret without additional information 
+the Lean representation is always unambiguous 
+We can represent mathematical theorems in Lean as well 
+For example  we can use the following predicate to state
+that   particular function   is differentiable at   point  
+is diff                      Prop
+
+The fact that the return type of is diff is Prop indicates
+that it is not   computer program to be executed but rather
+that it represents   mathematical theorem 
+We can also state and assume basic properties about the
+gradient  such as linearity 
+                       is diff       is diff      
+                           
+
+Developing BugFree Machine Learning Systems With Formal Mathematics
+
+Returning to our running example  we can state the theorem
+that   particular function   computes the gradient of the
+softplus function 
+def gsplus spec               Prop  
+             splus  
+
+Suppose we try to write   program to compute the gradient
+of the softplus function as follows 
+def gsplus                       exp   
+
+The application gsplus spec gsplus represents the
+proposition that our implementation gsplus is correct      
+that it indeed computes the gradient of the softplus function
+for all inputs 
+We can try to formally prove theorems in Lean interactively 
+theorem gsplus correct   gsplus spec gsplus  
+lean   cid  gsplus spec gsplus
+user  expand def gsplus spec 
+lean   cid       gsplus       splus  
+user  introduce   
+lean         cid  gsplus       splus  
+user  expand defs  gsplus  splus 
+lean         cid          exp             log     exp     
+user  simplify grad 
+lean         cid          exp      exp         exp   
+
+The lines beginning with lean show the current state of
+the proof as displayed by Lean  which at any time consists of   collection of goals of the form assumptions
+ cid  conclusion  Every line beginning with user invokes  
+tactic  which is   command that modi es the proof state
+in some way such that Lean can automatically construct
+proofs of the original goals given proofs of the new ones 
+Here the simplify grad tactic rewrites exhaustively with
+known gradient rules in this case it uses the rules for log 
+exp  addition  constants  and the identity function  The  nal
+goal is clearly not provable  which means we have found an
+implementation error in gsplus  Luckily the goal tells us
+exactly what gsplus   needs to return  gsplus     exp  
+      exp    Once we    the implementation of gsplus 
+the proof script that failed before now succeeds and generates   machinecheckable proof that the revised gsplus
+is bugfree  Note that we need not have even attempted
+to implement gsplus before starting the proof  since the
+process itself revealed what the program needs to compute 
+We will revisit this phenomenon in  
+In the process of proving the theorem  Lean constructs
+  formal proof certi cate that can be automatically veri 
+ ed by   small standalone executable  whose soundness is
+based on   wellestablished metatheoretic argument embedding the core logic of Lean into set theory  and whose
+implementation has been heavily scrutinized by many developers  Thus no human needs to be able to understand
+
+why   proof is correct in order to trust that it is 
+Although we cannot execute functions such as gsplus directly in the core logic of Lean  since   real number is an
+in nite object that cannot be stored in   computer  we can
+execute the  oatingpoint approximation inside Lean   virtual machine 
+vm eval gsplus     answer   
+
+  Case Study  Certi ed Stochastic
+
+Computation Graphs
+
+Stochastic computation graphs are directed acyclic graphs
+in which each node represents   speci   computational operation that may be deterministic or stochastic  Schulman
+et al    The loss function for   graph is de ned to
+be the expected value of the sum of the leaf nodes over the
+stochastic choices  Figure   shows the stochastic computation graph for   simple variational autoencoder 
+Using our methodology  we developed   system  Certigrad 
+which allows users to construct arbitrary stochastic computation graphs out of the primitives that we provide  The
+main purpose of the system is to take   program describing
+  stochastic computation graph and to run   randomized algorithm  stochastic backpropagation  that  in expectation 
+provably generates unbiased samples of the gradients of the
+loss function with respect to the parameters 
+
+  Overview of Certigrad
+
+We now brie   describe the components of Certigrad 
+some of which have no analogues in traditional software
+systems 
+Mathematics libraries  There is   type that represents tensors of   particular shape  along with basic functions      
+exp  log  and operations      
+the gradient  the integral 
+There are assumptions about tensors       gradient rules
+for exp and log  and facts that are proved in terms of those
+assumptions      
+the gradient rule for softplus  There
+is also   type that represents probability distributions over
+vectors of tensors  that can be reasoned about mathematically and that can also be executed procedurally using  
+pseudorandom number generator 
+Implementation  There is   data structure that represents
+stochastic computation graphs  as well as an implementation of stochastic backpropagation  There are also functions that optimize stochastic computation graphs in various ways       by integrating out parts of the objective
+
+ This appealing property can be lost when an axiom is as 
+
+sumed that is not true  We discuss this issue further in  
+
+ The complete development can be found at www github com 
+
+dselsam certigrad 
+
+Developing BugFree Machine Learning Systems With Formal Mathematics
+
+function  as well as basic utilities for training models      
+stochastic gradient descent 
+Speci cation  There is   collection of theorem statements
+that collectively de ne what it means for the implementation to be correct  For Certigrad  there is one main theorem
+that states that the stochastic backpropagation procedure
+yields unbiased estimates of the true mathematical gradients  There are also other theorems that state that individual
+graph optimizations are sound 
+Proof  There are many helper lemmas to decompose the
+proofs into more manageable chunks  and there are tactic
+scripts to generate machinecheckable proofs for each of
+the lemmas and theorems appearing in the system  There
+are also tactic programs to automate certain types of reasoning  such as computing gradients or proving that functions are continuous 
+Optimized libraries  While the stochastic backpropagation
+function is written in Lean and proved correct  we execute
+the primitive tensor operations with the Eigen library for
+linear algebra  There is   small amount of    code to
+wrap Eigen operations for use inside Lean   virtual machine 
+The rest of this section describes the steps we took to develop Certigrad  which include sketching the highlevel
+architecture  designing the mathematics libraries  stating
+the main correctness theorem and constructing the formal
+proof  Though many details are speci   to Certigrad  this
+case study is designed to illustrate our methodology and we
+expect other projects will follow   similar process  Note 
+Certigrad supports arbitrarilyshaped tensors  but doing so
+introduces more notational complexity than conceptual dif 
+ culty and so we simplify the presentation that follows by
+assuming that all values are scalars 
+
+  Informal speci cation
+
+The  rst step of applying our methodology is to write down
+informally what the system is required to do  Suppose   is  
+stochastic computation graph with   nodes and  to simplify
+the notation  that it only takes   single parameter   Then
+     together de ne   distribution over the values at the  
+nodes             Xn  Let cost         be the function that
+sums the values of the leaf nodes  Our primary goal is to
+write    stochastic  backpropagation algorithm bprop such
+that for any graph   
+Eg   bprop                Eg   cost        
+ 
+
+While this equation may seem suf cient to communicate
+the speci cation to   human with   mathematical background  more precision is needed to communicate it to  
+computer  The next step is to formalize the background
+
+mathematics  such as real numbers  tensors  and probability distributions  so that we can state   formal analogue of
+Equation   that the computer can understand  Although we
+believe it will be possible to develop standard libraries of
+mathematics that future developers can use offthe shelf 
+we needed to develop the mathematics libraries for Certigrad from scratch 
+
+  Designing the mathematics libraries
+
+Whereas in traditional formal mathematics the goal is to
+construct mathematics from  rst principles  Gonthier et al 
+  Hales et al    we need not concern ourselves
+with foundational issues and can simply assume that standard mathematical properties hold  For example  we can
+assume that there is   type   of real numbers without needing to construct them       from Cauchy sequences  and
+likewise can assume there is an integration operator on the
+
+reals cid                  that satis es the wellknown proper 
+
+ties without needing to construct it either       from Riemann sums 
+Note that axioms must be chosen with great care since even
+  single false axiom  perhaps caused by   single missing
+precondition  can in principle allow proving any false theorem and so would invalidate the property that all formal
+proofs can be trusted without inspection  However  there
+are many preconditions that appear in mathematical theorems  such as integrability  that are almost always satis ed
+in machine learning contexts and which most developers
+ignore  Using axioms that omit such preconditions will
+necessarily lead to proving theorems that are themselves
+missing the corresponding preconditions  but in practice  
+nonadversarial developer is extremely unlikely to accidentally construct vacuous proofs by exploiting these axioms 
+For the  rst draft of our system  we purposely omitted integrability preconditions in our axioms to simplify the development  Only later did we make our axioms sound and
+propagate the additional preconditions throughout the system so that we could fully trust our formal proofs 
+Despite the convenience of axiomatizing the mathematics 
+designing the libraries was still challenging for two reasons  First  there were many different ways to formally represent the mathematical objects in question  and we needed
+to experiment to understand the tradeoffs between the different representations  Second  we needed to extend several traditional mathematical concepts to support reasoning
+about executable computer programs  The rest of this sub 
+ For example  the seemingly harmless axiom            
+without the precondition    cid    can be used to prove the absurdity                             If   system
+assumes this axiom  then   formal proof of correctness could not
+be trusted without inspection since the proof may exploit this contradiction 
+
+Developing BugFree Machine Learning Systems With Formal Mathematics
+
+section illustrates these challenges by considering the problem we faced of designing   representation of probability
+distributions for Certigrad 
+Representing probability distributions  Our challenge is to
+devise   suf ciently abstract representation of probability
+distributions that satis es the following desiderata  we can
+reason about the probability density functions of continuous random variables  we have   way to reason about arbitrary deterministic functions applied to random variables 
+we can execute   distribution procedurally using   pseudorandom number generator  RNG  the mathematical and
+procedural representations of   distribution are guaranteed
+to correspond  and the mathematics will be recognizable to
+somebody familiar with the informal math behind stochastic computation graphs 
+We  rst de ne types to represent the mathematical and procedural notions of probability distribution  For mathematics  we de ne   Func   to be   functional that takes   realvalued function on Rn to   scalar 
+def Func           Type          Rn       
+
+The intended semantics is that if     Func   represents  
+distribution on Rn  then     is the expected value of   over
+        Ex        
+For sampling  we de ne an Prog   to be   procedure that
+takes an RNG and returns   vector in Rn along with an
+updated RNG 
+def Prog           Type   RNG   Rn   RNG
+
+We also assume that there are primitive  continuous  distributions  PrimDist   Func     Prog   that consist of  
+probability density function and   corresponding sampling
+procedure 
+In principle  we could construct all distributions from uniform variates  but for expediency  we treat
+other wellunderstood distributions as primitive  such as the
+Gaussian  gauss       PrimDist 
+Finally  we de ne   type of distributions  Dist    that abstractly represents programs that may mix sampling from
+primitive distributions with arbitrary deterministic computations    Dist   can be denoted to   Func    with the
+function    to reason about mathematically  and to an Prog
+   with the function run  to execute with an RNG 
+For readers familiar with functional programming  our construction is similar to   monad  We allow three ways of
+constructing   Dist    corresponding to sampling from
+  primitive distribution  sample  returning   value deterministically  det  and composing two distributions
+ compose 
+sample  pdf  prog    PrimDist    Dist  
+det  xs   Rn    Dist  
+compose       Dist          Rm   Dist      Dist  
+
+Dist     Type
+               Dist         Rn         
+SCG     Type
+SCG to dist              SCG             Dist  
+cost              SCG     xs   Rn     
+
+Figure   The basic types and functions we will need to formally
+state the speci cation  Dist   represents   distribution over Rn 
+  is the expected value function  SCG   represents   computation
+graph on   nodes  SCG to dist is the function that samples
+from an SCG   and yields   distribution over the values at the
+nodes  and cost sums the values at the leaf nodes of   graph 
+Curly braces around an argument indicates that it can be inferred
+from context and need not be passed explicitly 
+
+The mathematical semantics of all three constructors are
+straightforward 
+
+   sample  pdf  prog     cid       pdf         
+
+   det xs        xs
+   compose                                 
+
+as are the procedural semantics 
+run  sample  pdf  prog  rng   prog rng
+run  det xs  rng    xs  rng 
+run  compose       rng  
+let     rng    run    rng in run        rng 
+
+We have de ned   and run to correspond  we consider  
+stochastic program correct if we can prove the relevant theorems about its Func denotation  and we sample from it by
+passing an RNG to its Prog denotation 
+
+  Formal speci cation
+
+With the background mathematics in place  the next step
+is to write down the formal speci cation itself  First  we
+design types for every other object and function appearing
+in the informal description  To start  we need   type SCG  
+to represent stochastic computation graphs on   nodes  and
+  function SCG to dist that takes an SCG   and   scalar
+parameter   to   distribution over   real numbers  Dist   
+We also need   function cost that takes   graph and the
+values at each of its nodes and sums the values at the leaf
+nodes  Figure   provides the full types of all objects that
+will appear in the speci cation 
+Now we can write down   typecorrect analogue of the informal speci cation presented in Equation  
+def bprop spec  bprop         SCG         Rn     
+               SCG          
+   SCG to dist       xs  bprop     xs 
+         SCG to dist       xs  cost   xs   
+
+  Prop  
+
+Given the mathematics libraries  implementing the other
+
+Developing BugFree Machine Learning Systems With Formal Mathematics
+
+objects and functions appearing in the speci cation such
+as SCG   and SCG to dist is straightforward functional
+programming 
+
+  Interactive proof
+
+While conventional wisdom is that one would write their
+program before trying to prove it correct  the interactive
+proof process provides so much helpful information about
+what the system needs to do that we began working on the
+proof immediately after drafting the speci cation  We split
+the proof into two steps  First  we implemented the simplest possible function that satis ed the speci cation  that
+only computed the gradient for   single parameter at   time
+and did not memoize at all  and proved that correct  Second  we implemented   more performant version  that computed the gradient for multiple parameters simultaneously
+using memoization  and proved it equivalent to the  rst
+one 
+For the  rst step  we started with   placeholder implementation that immediately returned zero and let the interactive proof process guide the implementation  Whenever
+the proof seemed to require induction on   particular data
+structure  we extended the program to recurse on that data
+structure  whenever the proof showed that   branch of the
+program needed to return   value with   given expectation  we worked backwards from that to determine what
+value to return  Proving the  rst step also exposed errors in
+our speci cation in the form of missing preconditions  For
+the speci cation to hold  we needed to make additional assumptions about the graph       that the identi er for each
+node in the graph is unique  and that each leaf node is  
+scalar  WellFormed    We also needed to assume   generalization of the differentiability requirement mentioned
+in Schulman et al    that   subset of the nodes determined by the structure of the graph must be differentiable
+no matter the result of any stochastic choices  GradsExist
+   
+For the second step  we wrote the memoizing implementation before starting the proof and used the process of proving to test and debug it  Although the code for memoizing was simple and short  we still managed to make two
+implementation errors  one conceptual and one syntactic 
+Luckily the process of proving necessarily exposes all implementation errors  and in this case made it clear how to
+   both of them 
+We completed the main proof of correctness before proving
+most of the lemmas that the proof depends on  but the lemmas turned out to be true  except for   few missing preconditions  and so proving them did not expose any additional
+implementation errors  We also completed the main proof
+while our axioms were still unsound  see   When we
+made our axioms sound and propagated the changes we
+
+  Prop  
+
+def bprop spec  bprop         SCG         Rn     
+               SCG          
+WellFormed     GradsExist    
+  IntegralsExist       CanDiffUnderInts      
+   SCG to dist       xs  bprop     xs 
+         SCG to dist       xs  cost   xs   
+
+Figure   The  nal speci cation for the simpli ed problem with
+only scalars  as opposed to tensors  and only   single parameter
+  Our actual system supports arbitrarilyshaped tensors and differentiating with respect to multiple parameters at once 
+
+found that our speci cation required two additional preconditions  that all functions that are integrated over in the theorem statement are indeed integrable  IntegralsExist
+    and that the many preconditions needed for pushing
+the gradient over each integral in the expected loss are satis ed  CanDiffUnderInts     However  tracking these
+additional preconditions did not lead to any changes in our
+actual implementation  Figure   shows the  nal speci cation 
+
+  Optimizations
+
+We can also use our methodology to verify optimizations
+that involve mathematical reasoning  When developing
+machine learning models  one often starts with an easyto understand model that induces   gradient estimator with
+unacceptably high variance  and does informal mathematics by hand to derive   new model that has the same objective function but that induces   better gradient estimator  In
+our approach  the user can write both models and use the
+process of interactive proving to con rm that they induce
+the same objective function  Common transformations can
+be written once and proved correct so that users need only
+write the  rst model and the second can be derived and
+proved equivalent automatically 
+As part of Certigrad  we wrote   program optimization
+that integrates out the KLdivergence of the multivariate
+isotropic Gaussian distribution and we proved once and
+for all that the optimization is sound  We also veri ed an
+optimization that reparameterizes   model so that random
+variables do not depend on parameters  and so need not
+be backpropagated through  Speci cally  the optimization
+replaces   node that samples from     Diag  with  
+graph of three nodes that  rst samples from     In   
+and then scales and shifts the result according to   and
+  respectively  We applied these two transformations
+in sequence to   na ve variationalautoencoder to yield
+the AutoEncoding Variational Bayes  AEVB  estimator  Kingma   Welling   
+
+Developing BugFree Machine Learning Systems With Formal Mathematics
+
+at each iteration against the same model and optimization
+procedure in TensorFlow  both running on   CPU cores 
+We  nd that our expected losses decrease at the same rate 
+and that while Certigrad takes   longer for the  rst few
+iterations  its performance is more stable over time and it
+eventually surpasses TensorFlow  Figure  
+
+  Discussion
+Our primary motivation is to develop bugfree machine
+learning systems  but our approach may provide signi cant
+bene ts even when building systems that need not be perfect  Perhaps the greatest burden software developers must
+bear is needing to fully understand how and why their system works  and we found that by formally specifying the
+system requirements we were able to relegate much of this
+burden to the computer  Not only were we able to synthesize some fragments of the system   we were able
+to achieve extremely high con dence that our system was
+bugfree without needing to think about how all the pieces
+of the system    together  In our approach  the computer 
+not the human is responsible for ensuring that all the local properties that the developer establishes imply that the
+overall system is correct  Although using our methodology
+to develop Certigrad imposed many new requirements and
+increased the overall workload substantially  we found that
+on the whole it made the development process less cognitively demanding 
+There are many ways that our methodology can be adopted
+incrementally  For example  speci cations need not cover
+functional correctness  not all theorems need to be proved 
+unsound axioms can be used that omit certain preconditions  and more traditional code can be wrapped and
+axiomatized  as we did with Eigen  When developing
+Certigrad we pursued the ideal of   complete  machinecheckable proof of functional correctness  and achieved
+an extremely high level of con dence that the system was
+correct  However  we realized many of the bene ts of
+our methodology including partial synthesis and reduced
+cognitive demand early in the process before proving
+most of the lemmas  Although we could not be certain
+that we had found all of the bugs before we made our axioms sound and  lled in the gaps in the formal proofs  in
+hindsight we had eliminated all bugs early in the process
+as well  While   pure version of our methodology may already be costeffective for highassurance applications  we
+expect that pragmatic use of our methodology could yield
+many of the bene ts for relatively little cost and could be
+useful for developing   wide range of machine learning systems to varying standards of correctness 
+
+    Expected loss vs epoch     Running time vs epoch
+
+Figure   Results of running our certi ed procedure on an AEVB
+model  compared to TensorFlow  Our system trains just as well 
+and is slightly slower at  rst but catches up over time 
+
+  Verifying speci   models
+
+Even though we proved that bprop satis es its formal
+speci cation  bprop spec  we cannot be sure that it will
+compute the correct gradients for   particular model unless we prove that the model satis es the preconditions of
+the speci cation  Although some of the preconditions are
+technically undecidable  in practice most machine learning
+models will satisfy them all for simple reasons  We wrote  
+ heuristic  tactic program to prove that speci   models satisfy all the preconditions and used it to verify that bprop
+computes the correct gradients for the AEVB model derived in  
+
+  Running the system
+
+We have proved that our system is correct in an idealized
+mathematical context with in niteprecision real numbers 
+To actually execute the system we need to replace all real
+numbers in the program with  oatingpoint numbers  Although doing so technically invalidates the speci cation
+and can introduce numerical instability in some cases  this
+class of errors is well understood  Higham    could
+be ruled out as well in principle  Harrison    Boldo
+et al    Ramananandro et al    and is conceptually distinct from the algorithmic and mathematical errors
+that our methodology is designed to eliminate  To improve
+performance  we also replace all tensors with an optimized
+tensor library  Eigen  This approximation could introduce
+errors into our system if for whatever reason the Eigen
+methods we use are not functionally equivalent to ones we
+formally reason about  of course developers could achieve
+even higher assurance by verifying their optimized tensor
+code as well 
+
+  Experiments
+
+Certigrad is ef cient  As an experiment  we trained an
+AEVB model with    layer encoding network and    
+layer decoding network on MNIST using the optimization
+procedure ADAM  Kingma   Ba    and compared
+both the expected loss and the running time of our system
+
+Developing BugFree Machine Learning Systems With Formal Mathematics
+
+Acknowledgments
+We thank Jacob Steinhardt  Alexander Ratner  Cristina
+White  William Hamilton  Nathaniel Thomas  and Vatsal
+Sharan for providing valuable feedback on early drafts 
+We also thank Leonardo de Moura  Tatsu Hashimoto  and
+Joseph Helfer for helpful discussions  This work was supported by Future of Life Institute grant  
+
+References
+Abadi  Mart    Agarwal  Ashish  Barham  Paul  Brevdo 
+Eugene  Chen  Zhifeng  Citro  Craig  Corrado  Greg   
+Davis  Andy  Dean  Jeffrey  Devin  Matthieu  Ghemawat  Sanjay  Goodfellow  Ian  Harp  Andrew  Irving  Geoffrey  Isard  Michael  Jia  Yangqing  Jozefowicz 
+Rafal  Kaiser  Lukasz  Kudlur  Manjunath  Levenberg 
+Josh  Man    Dan  Monga  Rajat  Moore  Sherry  Murray 
+Derek  Olah  Chris  Schuster  Mike  Shlens  Jonathon 
+Steiner  Benoit  Sutskever  Ilya  Talwar  Kunal  Tucker 
+Paul  Vanhoucke  Vincent  Vasudevan  Vijay  Vi egas 
+Fernanda  Vinyals  Oriol  Warden  Pete  Wattenberg 
+Martin  Wicke  Martin  Yu  Yuan  and Zheng  Xiaoqiang 
+TensorFlow  Largescale machine learning on heterogeneous systems    URL http tensorflow 
+org  Software available from tensor ow org 
+
+Bergstra     Breuleux     Bastien     Lamblin     Pascanu     Desjardins     Turian     WardeFarley    
+and Bengio     Theano    CPU and GPU math expression compiler  In Python for Scienti   Computing Conference   
+
+de Moura  Leonardo  Kong  Soonho  Avigad  Jeremy 
+Van Doorn  Floris  and von Raumer  Jakob  The Lean
+In Automated
+theorem prover  system description 
+DeductionCADE  pp    Springer   
+
+Gonthier  Georges  Formal proof the fourcolor theorem 
+
+Notices of the AMS     
+
+Gonthier  Georges  Asperti  Andrea  Avigad  Jeremy 
+Bertot  Yves  Cohen  Cyril  Garillot  Franc ois  Le Roux 
+St ephane  Mahboubi  Assia    Connor  Russell  Biha 
+Sidi Ould  et al    machinechecked proof of the odd order theorem  In Interactive Theorem Proving  pp   
+  Springer   
+
+Gordon  Michael JC  Edinburgh lcf    mechanised logic of
+
+computation   
+
+Gordon  Michael JC and Melham  Tom   
+
+Introduction
+to hol   theorem proving environment for higher order
+logic   
+
+Guennebaud  Ga el  Jacob  Beno    et al 
+
+http eigen tuxfamily org   
+
+Eigen   
+
+Hales  Thomas  Adams  Mark  Bauer  Gertrud  Dang 
+Dat Tat  Harrison  John  Hoang  Truong Le  Kaliszyk 
+Cezary  Magron  Victor  McLaughlin  Sean  Nguyen 
+Thang Tat  et al    formal proof of the kepler conjecture  arXiv preprint arXiv   
+
+Harrison  John  Hol light    tutorial introduction  In International Conference on Formal Methods in ComputerAided Design  pp    Springer   
+
+Boldo  Sylvie  Jourdan  JacquesHenri  Leroy  Xavier  and
+Melquiond  Guillaume  Veri ed compilation of  oatingpoint computations  Journal of Automated Reasoning 
+   
+
+Harrison  John  Floatingpoint veri cation using theorem
+proving  In International School on Formal Methods for
+the Design of Computer  Communication and Software
+Systems  pp    Springer   
+
+Chen  Haogang  Ziegler  Daniel  Chajed  Tej  Chlipala 
+Adam  Kaashoek    Frans  and Zeldovich  Nickolai 
+Using crash hoare logic for certifying the fscq  le system  In Proceedings of the  th Symposium on Operating Systems Principles  pp    ACM   
+
+Chlipala  Adam  The bedrock structured programming
+system  Combining generative metaprogramming and
+In ACM
+hoare logic in an extensible program veri er 
+SIGPLAN Notices  volume   pp    ACM 
+ 
+
+Coq Development Team  The Coq proof assistant reference
+
+manual  Version   INRIA   
+
+Coquand  Thierry and Huet    erard  The calculus of conInformation and computation   
+
+structions 
+   
+
+Higham  Nicholas    Accuracy and stability of numerical
+
+algorithms  SIAM   
+
+Kingma        and Welling     Autoencoding variational
+
+Bayes  arXiv   
+
+Kingma  Diederik and Ba 
+
+Jimmy 
+method for stochastic optimization 
+arXiv   
+
+Adam 
+
+ 
+arXiv preprint
+
+Klein  Gerwin  Elphinstone  Kevin  Heiser  Gernot  Andronick  June  Cock  David  Derrin  Philip  Elkaduwe 
+Dhammika  Engelhardt  Kai  Kolanski  Rafal  Norrish 
+Michael  et al  sel  Formal veri cation of an os kernel 
+In Proceedings of the ACM SIGOPS  nd symposium on
+Operating systems principles  pp    ACM   
+
+Leroy  Xavier  Formal veri cation of   realistic compiler 
+
+Communications of the ACM     
+
+Developing BugFree Machine Learning Systems With Formal Mathematics
+
+Nipkow  Tobias  Paulson  Lawrence    and Wenzel 
+Isabelle HOL    proof assistant for higher 
+
+Markus 
+order logic  volume   Springer   
+
+Owre  Sam  Rushby  John    and Shankar  Natarajan 
+In Automated
+
+Pvs    prototype veri cation system 
+Deduction CADE  pp    Springer   
+
+Ramananandro  Tahina  Mountcastle  Paul  Meister 
+Beno    and Lethin  Richard    uni ed coq framework
+for verifying   programs with  oatingpoint computaIn Proceedings of the  th ACM SIGPLAN Contions 
+ference on Certi ed Programs and Proofs  pp   
+ACM   
+
+Rudnicki  Piotr  An overview of the mizar project  In Proceedings of the   Workshop on Types for Proofs and
+Programs  pp     
+
+Schulman  John  Heess  Nicolas  Weber  Theophane  and
+Abbeel  Pieter  Gradient estimation using stochastic
+computation graphs  In Advances in Neural Information
+Processing Systems  pp     
+
+

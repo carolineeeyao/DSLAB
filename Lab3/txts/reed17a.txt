@@ -1,0 +1,818 @@
+Parallel Multiscale Autoregressive Density Estimation
+
+Scott Reed     aron van den Oord   Nal Kalchbrenner   Sergio   omez Colmenarejo   Ziyu Wang  
+
+Yutian Chen   Dan Belov   Nando de Freitas  
+
+Abstract
+
+PixelCNN achieves stateof theart results in
+density estimation for natural images  Although
+training is fast  inference is costly  requiring one
+network evaluation per pixel       for   pixels  This can be sped up by caching activations 
+but still involves generating each pixel sequentially 
+In this work  we propose   parallelized
+PixelCNN that allows more   cient inference
+by modeling certain pixel groups as conditionally independent  Our new PixelCNN model
+achieves competitive density estimation and orders of magnitude speedup     log    sampling
+instead of        enabling the practical generation of     images  We evaluate the model
+on classconditional image generation  textto 
+image synthesis  and actionconditional video
+generation  showing that our model achieves the
+best results among nonpixel autoregressive density models that allow   cient sampling 
+
+  Introduction
+Many autoregressive image models factorize the joint distribution of images into perpixel factors 
+
+         
+
+TYt 
+
+  xt     
+
+ 
+
+For example PixelCNN  van den Oord et al      uses
+  deep convolutional network with carefully designed  lter masking to preserve causal structure  so that all factors
+in equation   can be learned in parallel for   given image 
+However    remaining di culty is that due to the learned
+causal structure  inference proceeds sequentially pixelby 
+pixel in raster order 
+
+ DeepMind 
+
+scot google com 
+
+Correspondence to 
+
+Scott Reed  reed 
+
+Proceedings of the  th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+Figure   Samples from our model at resolutions from       to
+    conditioned on text and bird part locations in the CUB
+data set  See Fig    and the supplement for more examples 
+
+In the naive case  this requires   full network evaluation
+per pixel  Caching hidden unit activations can be used to
+reduce the amount of computation per pixel  as in the   
+case for WaveNet  Oord et al    Ramachandran et al 
+  However  even with this optimization  generation is
+still in serial order by pixel 
+Ideally we would generate multiple pixels in parallel 
+which could greatly accelerate sampling 
+In the autoregressive framework this only works if the pixels are modeled as independent  Thus we need   way to judiciously
+break weak dependencies among pixels  for example immediately neighboring pixels should not be modeled as independent since they tend to be highly correlated 
+Multiscale image generation provides one such way to
+break weak dependencies  In particular  we can model certain groups of pixels as conditionally independent given  
+lower resolution image and various types of context information  such as preceding frames in   video  The basic idea
+is obvious  but nontrivial design problems stand between
+the idea and   workable implementation 
+First  what is the right way to transmit global information
+from   lowresolution image to each generated pixel of the
+highresolution image  Second  which pixels can we gen 
+
+   yellow bird with   black head  orange eyes and an orange bill Parallel Multiscale Autoregressive Density Estimation
+
+erate in parallel  And given that choice  how can we avoid
+border artifacts when merging sets of pixels that were generated in parallel  blind to one another 
+In this work we show how   very substantial portion of the
+spatial dependencies in PixelCNN can be cut  with only
+modest degradation in performance  Our formulation allows sampling in   log    time for   pixels  instead of
+     as in the original PixelCNN  resulting in orders of
+magnitude speedup in practice 
+In the case of video  in
+which we have access to highresolution previous frames 
+we can even sample in    time  with much better performance than comparablyfast baselines 
+At   high level  the proposed approach can be viewed as  
+way to merge perpixel factors in equation   If we merge
+the factors for       xi and      then that dependency is  cut 
+so the model becomes slightly less expressive  However 
+we get the bene   of now being able to sample xi and     in
+parallel  If we divide the   pixels into   groups of   pixels
+each  the joint distribution can be written as   product of the
+corresponding   factors 
+
+     
+
+      
+
+GYg 
+
+      
+
+       
+
+  
+
+ 
+
+ 
+
+Above we assumed that each of the   groups contains exactly   pixels  but in practice the number can vary 
+In
+this work  we form pixel groups from successively higherresolution views of an image  arranged into   subsampling
+pyramid  such that       log   
+In section   we describe this group structure implemented
+as   deep convolutional network 
+In section   we show
+that the model excels in density estimation and can produce
+quality highresolution samples at high speed 
+
+  Related work
+Deep neural autoregressive models have been applied to
+image generation for many years  showing promise as  
+tractable yet expressive density model  Larochelle   Murray    Uria et al    Autoregressive LSTMs
+have been shown to produce stateof theart performance
+in density estimation on largescale datasets such as ImageNet  Theis   Bethge    van den Oord et al     
+Causallystructured convolutional networks such as PixelCNN  van den Oord et al      and WaveNet  Oord
+et al    improved the speed and scalability of training  These led to improved autoregressive models for video
+generation  Kalchbrenner et al      and machine translation  Kalchbrenner et al     
+Nonautoregressive convolutional generator networks have
+been successful and widely adopted for image generation
+as well  Instead of maximizing likelihood  Generative Ad 
+
+versarial Networks  GANs  train   generator network to
+fool   discriminator network adversary  Goodfellow et al 
+  These networks have been used in   wide variety of
+conditional image generation schemes such as text and spatial structure to image  Mansimov et al    Reed et al 
+      Wang   Gupta   
+The addition of multiscale structure has also been shown
+to be useful in adversarial networks 
+Denton et al 
+  used   Laplacian pyramid to generate images in  
+coarseto ne manner  Zhang et al    composed  
+lowresolution and highresolution textconditional GAN 
+yielding higher quality       bird and  ower images 
+Generator networks can be combined with   trained model 
+such as an image classi er or captioning network  to generate highresolution images via optimization and sampling procedures  Nguyen et al    Wu et al   
+state that it is di cult to quantify GAN performance  and
+propose Monte Carlo methods to approximate the loglikelihood of GANs on MNIST images 
+Both autoregressive and non autoregressive deep networks have recently been applied successfully to image
+superresolution  Shi et al    developed   subpixel
+convolutional network wellsuited to this problem  Dahl
+et al    use   PixelCNN as   prior for image superresolution with   convolutional neural network 
+Johnson
+et al    developed   perceptual loss function useful
+for both style transfer and superresolution  GAN variants
+have also been successful in this domain  Ledig et al   
+  nderby et al   
+Several other deep  tractable density models have recently
+been developed  Real NVP  Dinh et al    learns
+  mapping from images to   simple noise distribution 
+which is by construction trivially invertible 
+It is built
+from smaller invertible blocks called coupling layers whose
+Jacobian is lowertriangular  and also has   multiscale
+structure  Inverse Autoregressive Flows  Kingma   Salimans    use autoregressive structures in the latent
+space to learn more  exible posteriors for variational autoencoders  Autoregressive models have also been combined
+with VAEs as decoder models  Gulrajani et al   
+The original PixelRNN paper  van den Oord et al     
+actually included   multiscale autoregressive version  in
+which PixelRNNs or PixelCNNs were trained at multiple
+resolutions  The network producing   given resolution image was conditioned on the image at the next lower resolution  This work is similarly motivated by the usefulness
+of multiscale image structure  and the very long history of
+coarseto ne modeling 
+Our novel contributions in this work are   asymptotically
+and empirically faster inference by modeling conditional
+independence structure    scaling to much higher reso 
+
+Parallel Multiscale Autoregressive Density Estimation
+
+lution    evaluating the model on   diverse set of challenging benchmarks including class  textand structureconditional image generation and video generation 
+
+  Model
+The main design principle that we follow in building the
+model is   coarseto ne ordering of pixels  Successively
+higherresolution frames are generated conditioned on the
+previous resolution  See for example Figure   Pixels are
+grouped so as to exploit spatial locality at each resolution 
+which we describe in detail below 
+The training objective is to maximize log        Since the
+joint distribution factorizes over pixel groups and scales 
+the training can be trivially parallelized 
+
+  Network architecture
+Figure   shows how we divide an image into disjoint
+groups of pixels  with autoregressive structure among the
+groups  The key property to notice is that no two adjacent
+pixels of the highresolution image are in the same group 
+Also  pixels can depend on other pixels below and to the
+right  which would have been inaccessible in the standard
+PixelCNN  Each group of pixels corresponds to   factor in
+the joint distribution of equation  
+Concretely  to create groups we tile the image with      
+blocks  The corners of these   blocks form the four pixel
+groups at   given scale       upperleft  upperright  lowerleft  lowerright  Note that some pairs of pixels both within
+each block and also across blocks can still be dependent 
+These additional dependencies are important for capturing
+local textures and avoiding border artifacts 
+Figure   shows an instantiation of one of these factors as  
+neural network  Similar to the case of PixelCNN  at training time losses and gradients for all of the pixels within
+  group can be computed in parallel  At test time  inference proceeds sequentially over pixel groups  in parallel
+within each group  Also as in PixelCNN  we model the
+color channel dependencies        green sees red  blue sees
+red and green   using channel masking 
+In the case of typeA upscaling networks  See Figure    
+sampling each pixel group thus requires   network evaluations   In the case of typeB upscaling  the spatial feature
+map for predicting   group of pixels is divided into contiguous       patches for input to   shallow PixelCNN  See
+ gure     This entails    very small network evaluations 
+for each color channel  We used       and the shallow
+PixelCNN weights are shared across patches 
+
+ However  one could also use   discretized mixture of logistics
+as output instead of   softmax as in Salimans et al    in
+which case only one network evaluation is needed 
+
+The division into nonoverlapping patches may appear to
+risk border artifacts when merging  However  this does not
+occur for several reasons  First  each predicted pixel is directly adjacent to several context pixels fed into the upscaling network  Second  the generated patches are not directly
+adjacent in the      output image  there is always   row
+or column of pixels on the border of any pair 
+Note that the only learnable portions of the upscaling module are   the ResNet encoder of context pixels  and   the
+shallow PixelCNN weights in the case of typeB upscaling 
+The  merge  and  split  operations shown in  gure   only
+marshal data and are not associated with parameters 
+Given the  rst group of pixels  the rest of the groups at
+  given scale can be generated autoregressively  The  rst
+group of pixels can be modeled using the same approach
+as detailed above  recursively  down to   base resolution
+at which we use   standard PixelCNN  At each scale  the
+number of evaluations is    and the resolution doubles
+after each upscaling  so the overall complexity is   log   
+to produce images with   pixels 
+
+  Conditional image modeling
+Given some context information    such as   text description    segmentation  or previous video frames  we maximize the conditional likelihood log          Each factor
+in equation   simply adds   as an additional conditioning
+variable  The upscaling neural network corresponding to
+each factor takes   as an additional input 
+For encoding text we used   characterCNN GRU as in
+ Reed et al      For spatially structured data such as
+segmentation masks we used   standard convolutional network  For encoding previous frames in   video we used  
+ConvLSTM as in  Kalchbrenner et al     
+
+  Experiments
+  Datasets
+We evaluate our model on ImageNet  CaltechUCSD Birds
+ CUB  the MPII Human Pose dataset  MPII  the Microsoft Common Objects in Context dataset  MSCOCO 
+and the Google Robot Pushing dataset 
+
+  For ImageNet  Deng et al    we trained   classconditional model using the   leaf node classes 
+  CUB  Wah et al    contains     images
+across   bird species  with   captions per image 
+As conditioning information we used       spatial
+encoding of the   annotated bird part locations 
+
+  MPII  Andriluka et al    has around    images
+of   human activities  with   captions per image 
+
+Parallel Multiscale Autoregressive Density Estimation
+
+Figure   Example pixel grouping and ordering for         image  The upperleft corners form group   the upperright group   and so
+on  For clarity we only use arrows to indicate immediatelyneighboring dependencies  but note that all pixels in preceding groups can
+be used to predict all pixels in   given group  For example all pixels in group   can be used to predict pixels in group   For images  the
+pixels in group   are copied from   lowerresolution image  For video  they can also be generated given the previous frames 
+
+Figure     simple form of causal upscaling network  mapping from        image to        The same procedure can be applied in the
+vertical direction to produce           image  In reference to  gure   we use this type of network for the group       factor  For the
+        factor  we apply the same technique but in the vertical direction  and subsample the even columns  starting from zero  to get the
+group   pixels  For the           factor  we  rst build           input image with group   pixels zeroed  This is fed through   spatial
+dimensionpreserving ResNet  from which we subsample the output group   pixels      In the simplest version    deep convolutional
+network  in our case ResNet  directly produces the right image from the left image  and merges columnwise        more sophisticated
+version extracts features from   convolutional net  splits the feature map into spatially contiguous blocks  and feeds these in parallel
+through   shallow PixelCNN  The result is then merged as in     Note that the entire pathway is trained endto end in both cases 
+
+We kept only the images depicting   single person 
+and cropped the image centered around the person 
+leaving us about    images  We used         encoding of the   annotated human part locations 
+
+  MSCOCO  Lin et al    has    training images
+with   captions per image  As conditioning we used
+the  class segmentation scaled to      
+
+  Robot Pushing  Finn et al    contains sequences
+of   frames of size       showing   robotic arm
+pushing objects in   basket  There are     training
+sequences and   validation set with the same objects
+but di erent arm trajectories  One test set involves  
+subset of the objects seen during training and another
+involving novel objects  both captured on an arm and
+camera viewpoint not seen during training 
+
+All models for ImageNet  CUB  MPII and MSCOCO were
+trained using RMSprop with hyperparameter           
+with batch size   for    steps  The learning rate was
+
+set initially to        and decayed to       
+For all of the samples we show  the queries are drawn from
+the validation split of the corresponding data set  That
+is  the captions  key points  segmentation masks  and lowresolution images for superresolution have not been seen
+by the model during training 
+When we evaluate negative loglikelihood  we only quantize pixel values to       at the target resolution  not
+separately at each scale  The lower resolution images are
+then created by subsampling this quantized image 
+
+  Text and locationconditional generation
+In this section we show results for CUB  MPII and MSCOCO  For each dataset we trained typeB upscaling networks with   ResNet layers and   PixelCNN layers  with
+  hidden units per layer  The base resolution at which
+we train   standard PixelCNN was set to      
+To encode the captions we padded to   characters  then
+
+ ResNetResNet  SplitSplitMergeSplitMergeShallow PixelCNNMergeABParallel Multiscale Autoregressive Density Estimation
+
+Figure   Textto image bird synthesis  The leftmost column shows the entire sampling process starting by generating       images 
+followed by six upscaling steps  to produce         image  The right column shows the  nal sampled images for several other
+queries  For each query the associated part keypoints and caption are shown to the left of the samples 
+
+Figure   Textto image human synthesis The leftmost column again shows the sampling process  and the right column shows the  nal
+frame for several more examples  We  nd that the samples are diverse and usually match the color and position constraints 
+
+fed into   characterlevel CNN with three convolutional
+layers  followed by   GRU and average pooling over time 
+Upscaling networks to             and       shared
+  single text encoder  For higherresolution upscaling networks we trained separate text encoders  In principle all
+upscalers could share an encoder  but we trained separably
+to save memory and time 
+For CUB and MPII  we have body part keypoints for birds
+and humans  respectively  We encode these into    
+  binary feature map  where   is the number of parts   
+
+for MPII and   for CUB      indicates the part is visible 
+and   indicates the part is not visible  For MSCOCO  we
+resize the class segmentation mask to          
+For comparing and replicating quantitative results  an important detail is the type of image resizing used  For CUB 
+MPII and MSCOCO we used the default TensorFlow bilinear interpolation resizing to the  nal image size  by
+calling tf image resize images  Using other resizing
+methods such as AREA resizing will still result in quality
+samples  but di erent likelihoods 
+
+   white large bird with orange legs and gray secondaries and primaries  and   short yellow bill KeypointsCaptionsSamplesThis is   large brown bird with   bright green head  yellow bill and orange feet With long brown upper converts and giant white wings  the grey breasted bird flies through the air   grey bird with   small head and short beak with lighter grey wing bars and   bright yellow belly   woman in black work out clothes is kneeling on an exercise mat KeypointsCaptionsSamplesA fisherman sitting along the edge of   creek preparing his equipment to cast Two teams of players are competing in   game at   gym   man in blue pants and   blue tshirt  wearing brown sneakers  is working on   roof Parallel Multiscale Autoregressive Density Estimation
+
+Figure   Text and segmentationto image synthesis  The left column shows the full sampling trajectory from       to       The
+caption queries are shown beneath the samples  Beneath each image we show the image masked with the largest object in each scene 
+     only the foreground pixels in the sample are shown  More samples with all categories masked are included in the supplement 
+
+For all datasets  we then encode these spatial features using    layer ResNet  These features are then depthconcatenated with the text encoding and resized with bilinear interpolation to the spatial size of the image 
+If
+the target resolution for an upscaler network is higher than
+      these conditioning features are randomly cropped
+along with the target image to       patch  Because the
+network is fully convolutional  the network can still generate the full resolution at test time  but we can massively
+save on memory and computation during training 
+Figure   shows examples of textand keypointto bird
+image synthesis  Figure   shows examples of textand
+keypointto human image synthesis  Figure   shows examples of textand segmentationto image synthesis 
+
+CUB
+PixelCNN
+Multiscale PixelCNN
+MPII
+PixelCNN
+Multiscale PixelCNN
+MSCOCO
+PixelCNN
+Multiscale PixelCNN
+
+Train Val
+ 
+ 
+ 
+ 
+Train Val
+ 
+ 
+ 
+ 
+Train Val
+ 
+ 
+ 
+ 
+
+Test
+ 
+ 
+Test
+ 
+ 
+Test
+
+ 
+ 
+
+Table   Text and structureto image negative conditional loglikelihood in nats per subpixel 
+
+Quantitatively  the Multiscale PixelCNN results are not far
+from those obtained using the original PixelCNN  Reed
+et al      as shown in Table  
+In addition  we in 
+
+creased the sample resolution by   Qualitatively  the
+sample quality appears to be on par  but with much greater
+realism due to the higher resolution 
+Based on reviewer feedback  we performed an additional
+experiment to study how much sample diversity arises from
+the upscaling networks  as opposed to the base PixelCNN 
+In the  nal appendix  gure  we show for several      
+base images of birds  the resulting upscaled samples  Although the keypoints are  xed so the pose cannot change
+substantially  we observe   signi cant amount of variation
+in the textures  background  and support structure       tree
+branches and rocks that the bird stands on  The lowres
+sample produced by the base PixelCNN seems to strongly
+  ect the overall colour palette in the hires samples 
+
+  Actionconditional video generation
+In this section we present results on Robot Pushing videos 
+All models were trained to perform future frame prediction
+conditioned on   starting frames and also on the robot arm
+actions and state  which are each  dimensional vectors 
+We trained two versions of the model  both versions using
+typeA upscaling networks  See Fig    The  rst is designed to sample in      time  for   video frames  That
+is  the number of network evaluations per frame is constant
+with respect to the number of pixels 
+The motivation for training the      model is that previous
+frames in   video provide very detailed cues for predicting
+the next frame  so that our pixel groups could be conditionally independent even without access to   lowresolution
+
+  man sitting at   desk covered with papers   young man riding on the back of   brown horse   professional baseball player is ready to hit the ball   large passenger jet taxis on an airport tarmac Old time railroad caboose sitting on track with two people inside Parallel Multiscale Autoregressive Density Estimation
+
+Figure   Upscaling lowresolution images to     and     In each group of images  the left column is made of real images 
+and the right columns of samples from the model 
+
+image  Without the need to upscale from   lowresolution
+image  we can produce  group   pixels        the upperleft
+corner group   directly by conditioning on previous frames 
+Then   constant number of network evaluations are needed
+to sample the next three pixel groups at the  nal scale 
+The second version is our multistep upscaler used in previous experiments  conditioned on both previous frames and
+robot arm state and actions  The complexity of sampling
+from this model is     log    because at every time step
+the upscaling procedure must be run  taking   log    time 
+The models were trained for    steps with batch size  
+using the RMSprop optimizer with centering and        
+The learning rate was initialized to        and decayed by
+factor   after    steps and after    steps  For the
+     model we used   mixture of discretized logistic outputs  Salimans et al    and for the     log    model
+we used   softmax ouptut 
+Table   compares two variants of our model with the original VPN  Compared to the      baseline     convolutional
+LSTM model without spatial dependencies   our     
+model performs dramatically better  On the validation set 
+in which the model needs to generalize to novel combinations of objects and arm trajectories  the     log    model
+does much better than our      model  although not as well
+as the original        model 
+On the testing sets  we observed that the      model performed as well as on the validation set  but the     log   
+model showed   drop in performance  However  this drop
+
+does not occur due to the presence of novel objects  in fact
+this setting actually yields better results  but due to the
+novel arm and camera con guration used during testing  
+It appears that the     log    model may have over   to
+the background details and camera position of the   training arms  but not necessarily to the actual arm and object
+motions  It should be possible to overcome this   ect with
+better regularization and perhaps data augmentation such
+as mirroring and jittering frames  or simply training on data
+with more diverse camera positions 
+The supplement contains example videos generated on the
+validation set arm trajectories from our     log    model 
+We also trained       and       upscalers conditioned on lowresolution and   previous highresolution
+frame  so that we can produce       videos 
+  Classconditional generation
+To compare against other image density models  we trained
+our Multiscale PixelCNN on ImageNet  We used typeB
+upscaling networks  Seee  gure   with   ResNet  He
+et al    layers and   PixelCNN layers  with   hidden
+units per layer  For all PixelCNNs in the model  we used
+the same architecture as in  van den Oord et al     
+We generated images with   base resolution of       and
+trained four upscaling networks to produce up to    
+samples At scales       and above  during training we
+randomly cropped the image to       This accelerates
+training but does not pose   problem at test time because
+
+ From communication with the Robot Pushing dataset author 
+
+                                                 Parallel Multiscale Autoregressive Density Estimation
+
+Model
+     baseline
+  TN  VPN
+     VPN
+ 
+    log    VPN  
+
+Tr
+ 
+ 
+
+Val
+ 
+ 
+ 
+ 
+
+Tsseen Tsnovel
+
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+Table   Robot videos neg 
+loglikelihood in nats per subpixel 
+ Tr  is the training set   Tsseen  is the test set with novel arm
+and camera con guration and previously seen objects  and  Tsnovel  is the same as  Tsseen  but with novel objects 
+
+Model
+     PixelCNN
+  log    PixelCNN
+  log    PixelCNN  ingraph
+       VPN
+     VPN
+     VPN  ingraph
+    log    VPN
+    log    VPN  ingraph
+
+scale
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+time
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+speedup
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+all of the networks are fully convolutional 
+Table   shows the results  On both       and      
+ImageNet it achieves signi cantly better likelihood scores
+than have been reported for any nonpixel autoregressive
+density models  such as ConvDRAW and Real NVP  that
+also allow   cient sampling 
+Of course  performance of these approaches varies considerably depending on the implementation details  especially
+in the design and capacity of deep neural networks used 
+But it is notable that the very simple and direct approach
+developed here can surpass the stateof theart among fastsampling density models 
+
+ 
+
+Model
+   
+PixelRNN
+   
+PixelCNN
+Real NVP
+ 
+Conv  DRAW  
+ 
+Ours
+
+ 
+
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+
+ 
+
+Table   ImageNet negative loglikelihood in bits per subpixel at
+            and       resolution 
+Interestingly  the model often produced quite realistic bird
+images from scratch when trained on CUB  and these samples looked more realistic than any animal image generated
+by our ImageNet models  One plausible explanation for
+this di erence is   lack of model capacity    single network
+modeling the   very diverse ImageNet categories can
+devote only very limited capacity to each one  compared
+to   network that only needs to model birds  This suggests that  nding ways to increase capacity without slowing
+down training or sampling could be   promising direction 
+Figure   shows upscaling starting from groundtruth images of size     and   We observe the largest
+diversity of samples in terms of global structure when starting from       but less realistic results due to the more
+challenging nature of the problem  Upscaling starting from
+      results in much more realistic images  Here the
+diversity is apparent in the samples  as in the data  conditioned on lowresolution  in the local details such as the
+dog   fur patterns or the frog   eye contours 
+
+Table   Sampling speed of several models in seconds per frame
+on an Nvidia Quadro    GPU  The top three rows were measured on   ImageNet  with batch size of   The bottom  ve
+rows were measured on generating       videos of   frames
+each  averaged over   videos 
+
+  Sampling time comparison
+As expected  we observe   very large speedup of our model
+compared to sampling from   standard PixelCNN at the
+same resolution  see Table   Even at       we observe two orders of magnitude speedup  and the speedup
+is greater for higher resolution 
+Since our model only requires   log    network evaluations to sample  we can    the entire computation graph
+for sampling into memory  for reasonable batch sizes  Ingraph computation in TensorFlow can further improve the
+speed of both image and video generation  due to reduced
+overhead by avoiding repeated calls to sess run 
+Since our model has   PixelCNN at the lowest resolution 
+it can also be accelerated by caching PixelCNN hidden
+unit activations  recently implemented   by Ramachandran
+et al    This could allow one to use higherresolution
+base PixelCNNs without sacri cing speed 
+
+  Conclusions
+In this paper  we developed   parallelized  multiscale version of PixelCNN  It achieves competitive density estimation results on CUB  MPII  MSCOCO  ImageNet  and
+Robot Pushing videos  surpassing all other density models
+that admit fast sampling  Qualitatively  it can achieve compelling results in textto image synthesis and video generation  as well as diverse superresolution from very small
+images all the way to     Many more samples from
+all of our models can be found in the appendix and supplementary material 
+
+References
+Andriluka  Mykhaylo  Pishchulin  Leonid  Gehler  Peter 
+and Schiele  Bernt     human pose estimation  New
+benchmark and state of the art analysis  In CVPR  pp 
+   
+
+Parallel Multiscale Autoregressive Density Estimation
+
+Dahl  Ryan  Norouzi  Mohammad  and Shlens  Jonathon 
+arXiv preprint
+
+resolution 
+
+recursive super
+
+Pixel
+arXiv   
+
+Deng  Jia  Dong  Wei  Socher  Richard  Li  LiJia  Li  Kai 
+ImageNet    largescale hierarchical
+
+and FeiFei  Li 
+image database  In CVPR   
+
+Denton  Emily    Chintala  Soumith  Szlam  Arthur  and
+Fergus  Rob  Deep generative image models using  
+Laplacian pyramid of adversarial networks  In NIPS  pp 
+   
+
+Dinh  Laurent  SohlDickstein  Jascha  and Bengio  Samy 
+
+Density estimation using Real NVP  In NIPS   
+
+Finn  Chelsea  Goodfellow  Ian  and Levine  Sergey  Unsupervised learning for physical interaction through video
+prediction  In NIPS   
+
+Goodfellow  Ian    PougetAbadie  Jean  Mirza  Mehdi 
+Xu  Bing  WardeFarley  David  Ozair  Sherjil 
+Courville  Aaron    and Bengio  Yoshua  Generative
+adversarial nets  In NIPS   
+
+Gulrajani  Ishaan  Kumar  Kundan  Ahmed  Faruk  Taiga 
+Adrien Ali  Visin  Francesco  Vazquez  David  and
+Courville  Aaron  PixelVAE    latent variable model for
+natural images  arXiv preprint arXiv   
+He  Kaiming  Zhang  Xiangyu  Ren  Shaoqing  and Sun 
+Jian  Identity mappings in deep residual networks  In
+ECCV  pp     
+
+Johnson  Justin  Alahi  Alexandre  and FeiFei  Li  Perceptual losses for realtime style transfer and superresolution  In ECCV   
+
+Kalchbrenner  Nal  Espeholt  Lasse  Simonyan  Karen 
+Oord  Aaron van den  Graves  Alex  and Kavukcuoglu 
+Koray  Neural machine translation in linear time  arXiv
+preprint arXiv     
+
+Kalchbrenner  Nal  Oord  Aaron van den  Simonyan 
+Karen  Danihelka  Ivo  Vinyals  Oriol  Graves  Alex  and
+Kavukcuoglu  Koray  Video pixel networks  Preprint
+arXiv     
+
+Kingma  Diederik   and Salimans  Tim  Improving variIn
+
+ational inference with inverse autoregressive  ow 
+NIPS   
+
+Larochelle  Hugo and Murray  Iain  The neural autoregres 
+
+sive distribution estimator  In AISTATS   
+
+Ledig  Christian  Theis  Lucas  Huszar  Ferenc  Caballero 
+Jose  Cunningham  Andrew  Acosta  Alejandro  Aitken 
+Andrew  Tejani  Alykhan  Totz  Johannes  Wang  Zehan 
+and Shi  Wenzhe  Photorealistic single image superresolution using   generative adversarial network   
+
+Lin  TsungYi  Maire  Michael  Belongie  Serge  Hays 
+James  Perona  Pietro  Ramanan  Deva  Doll ar  Piotr 
+and Zitnick    Lawrence  Microsoft COCO  Common
+objects in context  In ECCV  pp     
+
+Mansimov  Elman  Parisotto  Emilio  Ba  Jimmy Lei  and
+Salakhutdinov  Ruslan  Generating images from captions with attention  In ICLR   
+
+Nguyen  Anh  Yosinski  Jason  Bengio  Yoshua  Dosovitskiy  Alexey  and Clune  Je  Plug   play generative
+networks  Conditional iterative generation of images in
+latent space  arXiv preprint arXiv   
+
+Oord  Aaron van den  Dieleman  Sander  Zen  Heiga  Simonyan  Karen  Vinyals  Oriol  Graves  Alex  Kalchbrenner  Nal  Senior  Andrew  and Kavukcuoglu  Koray  Wavenet    generative model for raw audio  arXiv
+preprint arXiv   
+
+Ramachandran  Prajit  Paine  Tom Le  Khorrami  Pooya 
+Babaeizadeh  Mohammad  Chang  Shiyu  Zhang  Yang 
+HasegawaJohnson  Mark  Campbell  Roy  and Huang 
+Thomas  Fast generation for convolutional autoregressive models   
+
+Reed  Scott  Akata  Zeynep  Mohan  Santosh  Tenka 
+Samuel  Schiele  Bernt  and Lee  Honglak  Learning
+what and where to draw  In NIPS     
+
+Reed  Scott  Akata  Zeynep  Yan  Xinchen  Logeswaran 
+Lajanugen  Schiele  Bernt  and Lee  Honglak  Generative adversarial textto image synthesis 
+In ICML 
+   
+
+Reed  Scott  van den Oord    aron  Kalchbrenner  Nal 
+Bapst  Victor  Botvinick  Matt  and de Freitas  Nando 
+Generating interpretable images with controllable structure  Technical report     
+
+Salimans  Tim  Karpathy  Andrej  Chen  Xi  and Kingma 
+Diederik    PixelCNN 
+Improving the PixelCNN
+with discretized logistic mixture likelihood and other
+modi cations  arXiv preprint arXiv   
+
+Shi  Wenzhe  Caballero  Jose  Husz ar  Ferenc  Totz  Johannes  Aitken  Andrew    Bishop  Rob  Rueckert 
+Daniel  and Wang  Zehan  Realtime single image and
+video superresolution using an   cient subpixel convolutional neural network  In CVPR   
+
+  nderby  Casper Kaae  Caballero  Jose  Theis  Lucas  Shi 
+Wenzhe  and Husz ar  Ferenc  Amortised MAP inference
+for image superresolution   
+
+Theis     and Bethge     Generative image modeling using
+
+spatial LSTMs  In NIPS   
+
+Parallel Multiscale Autoregressive Density Estimation
+
+Uria  Benigno  Murray 
+
+Iain  and Larochelle  Hugo 
+RNADE  The realvalued neural autoregressive densityestimator  In NIPS   
+
+van
+
+den Oord    aron  Kalchbrenner  Nal 
+
+and
+Kavukcuoglu  Koray  Pixel recurrent neural networks 
+In ICML  pp       
+
+van den Oord    aron  Kalchbrenner  Nal  Vinyals  Oriol 
+Espeholt  Lasse  Graves  Alex  and Kavukcuoglu  Koray 
+Conditional image generation with PixelCNN decoders 
+In NIPS     
+
+Wah  Catherine  Branson  Steve  Welinder  Peter  Perona 
+Pietro  and Belongie  Serge  The CaltechUCSD birds 
+  dataset   
+
+Wang  Xiaolong and Gupta  Abhinav  Generative image
+modeling using style and structure adversarial networks 
+In ECCV  pp     
+
+Wu  Yuhuai  Burda  Yuri  Salakhutdinov  Ruslan  and
+Grosse  Roger  On the quantitative analysis of decoderbased generative models   
+
+Zhang  Han  Xu  Tao  Li  Hongsheng  Zhang  Shaoting 
+Huang  Xiaolei  Wang  Xiaogang  and Metaxas  Dimitris  StackGAN  Text to photorealistic image synthesis with stacked generative adversarial networks  arXiv
+preprint arXiv   
+
+

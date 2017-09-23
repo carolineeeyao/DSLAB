@@ -1,0 +1,1560 @@
+Coresets for Vector Summarization
+with Applications to Network Graphs
+
+Dan Feldman   Sedat Ozer   Daniela Rus  
+
+Abstract
+
+ cid 
+
+We provide   deterministic data summarization
+algorithm that approximates the mean     
+      of   set   of   vectors in Rd  by  
+ 
+ 
+weighted mean    of   subset of    vectors 
+     independent of both   and    We prove that
+the squared Euclidean distance between    and   
+is at most   multiplied by the variance of     We
+use this algorithm to maintain an approximated
+sum of vectors from an unbounded stream  using memory that is independent of    and logarithmic in the   vectors seen so far  Our main
+application is to extract and represent in   compact way friend groups and activity summaries
+of users from underlying data exchanges  For example  in the case of mobile networks  we can
+use GPS traces to identify meetings  in the case
+of social networks  we can use information exchange to identify friend groups  Our algorithm
+provably identi es the Heavy Hitter entries in  
+proximity  adjacency  matrix  The Heavy Hitters
+can be used to extract and represent in   compact way friend groups and activity summaries of
+users from underlying data exchanges  We evaluate the algorithm on several large data sets 
+
+  Introduction
+The widespread use of smart phones  wearable devices 
+and social media creates   vast space of digital footprints
+for people  which include location information from GPS
+traces  phone call history  social media postings  etc  This
+is an evergrowing wealth of data that can be used to identify social structures and predict activity patterns  We wish
+to extract the underlying social network of   group of mobile users given data available about them       GPS traces 
+phone call history  news articles  etc  in order to identify
+and predict their various activities such as meetings  friend
+
+ University of Haifa  Israel   CSAIL  MIT  Correspondence
+
+to  Dan Feldman  dannyf post gmail com 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+groups  gathering places  collective activity patterns  etc 
+There are several key challenges to achieve these capabilities  First  the data is huge so we need ef cient methods
+for processing and representing the data  Second  the data
+is multimodal heterogeneous  This presents challenges in
+data processing and representation  but also opportunities
+to extract correlations that may not be visible in   single
+data source  Third  the data is often noisy 
+We propose an approach based on coresets to extract underlying connectivity information while performing data summarization for   given   large data set  We focus our intuition examples and evaluations on social networks because
+of their intuitive nature and access to data sets  although
+the method is general and applies to networks of information in general  Our approach works on streaming datasets
+to represent the data in   compact  sparse  way  Our coreset
+algorithm gets   stream of vectors and approximates their
+sum using small memory  Essentially    coreset   is   signi cantly smaller portion    scaled subset  of the original
+and large set   of vectors  Given   and the algorithm   
+where running algorithm   on   is intractable due to lack
+of memory  the taskspeci   coreset algorithm ef ciently
+reduces the data set   to   coreset   so that running the algorithm   on   requires   low amount of memory and the
+result is provable approximately the same as running the
+algorithm on    Coreset captures all the important vectors
+in   for   given algorithm    The challenges are computing   fast and proving that   is the right scaled subset      
+running the algorithm on   gives approximately the same
+result as running the algorithm on   
+More speci cally  the goal of this paper is to suggest   way
+to maintain   sparse representation of an       matrix  by
+maintaining   sparse approximation of each of its rows  For
+example  in   proximity matrix associated with   social network  instead of storing the average proximity to each of  
+users  we would like to store only the    cid    largest entries in each row  known as  Heavy Hitters  which correspond to the people seen by the user most often  Given
+an unbounded stream of movements  it is hard to tell which
+are the people the user met most  without maintaining  
+counter to each person  For example  consider the special
+case       We are given   stream of pairs     val  where
+           is an index of   counter  and val is   real
+number that represents   score for this counter  Our goal is
+
+Coresets for Vector Summarization with Applications to Network Graphs
+
+to identify which counter has the maximum average score
+till now  and approximate that score  While that is easy to
+do by maintaining the sum of   scores  our goal is to maintain only   constant set of numbers  memory words  In
+general  we wish to have   provable approximation to each
+of the   accumulated scores  row in   matrix  using  say 
+only    memory  Hence  maintaining an       matrix
+would take      instead of      memory  For millions
+of users or rows  this means   Gigabytes of memory can be
+stored in RAM for realtime updates  compared to millions
+of Gigabytes  Such data reduction will make it practical to
+keep hundreds of matrices for different types of similarities
+ sms  phone calls  locations  different types of users  and
+different time frames  average proximity in each day  year 
+etc  This paper contributes the following      compact
+representation for streaming proximity data for   group of
+many users      coreset construction algorithm for maintaining the social network with error guarantees    An
+evaluation of the algorithm on several data sets 
+Theoretical Contribution  These results are based on an
+algorithm that computes an  coreset   of size      
+   for the mean of   given set  and every error parameter         as de ned in Section   Unlike previous results  this algorithm is deterministic  maintains   weighted
+subset of the input vectors  which keeps their sparsity  can
+be applied on   set of vectors whose both cardinality   and
+dimension   is arbitrarily large or unbounded  Unlike existing randomized sketching algorithms for summing item
+frequencies  sparse binary vectors  this coreset can be
+used to approximate the sum of arbitrary real vectors  including negative entries  for decreasing counters  dense
+vectors  for fast updates  fractions  weighted counter  and
+with error that is based on the variance of the vectors  sum
+of squared distances to their mean  which might be arbitrarily smaller than existing errors  sum max of squared nonsquared distances to the origin  cid cid cid 
+
+  Solution Overview
+We implemented   system that demonstrates the use and
+performance of our suggested algorithm  The system constructs   sparse social graph from the GPS locations of real
+moving smartphone users and maintains the graph in  
+streaming fashion as follows 
+Input stream  The input
+to our system is an un 
+ realtime  GPS points  where
+bounded stream of
+each point
+format of
+ time  userID  longitude  latitude  We maintain an approximation of the average proximity of each user to all
+the other       users seen so far  by using space  memory 
+that is only logarithmic in    The overall memory would
+then be nearlinear in    in contrast to the quadratic     
+memory that is needed to store the exact average proximity vector for each of the   users  We maintain   dynamic
+array of the   user IDs seen so far and assume  without
+
+represented in the vector
+
+is
+
+loss of generality  that the user IDs are distinct and increasing integers from   to    Otherwise we use   hash table
+from user IDs to such integers  In general  the system is
+designed to handle any type of streaming records in the format  streamID     where   is   ddimensional vector of
+reals  to support the other applications  Here  the goal is to
+maintain   sparse approximation to the sum of the vectors
+  that were assigned to each stream ID 
+Proximity matrix  We also maintain an  nonsparse  array pos of length   that stores the current location of each
+of the   users seen so far  That array forms the current   
+pairs of proximities prox       between every pair of users
+and their current locations   and    These pairs correspond
+to what we call the proximity matrix at time    which is  
+symmetric adjacency      matrix of   social graph  where
+the edge weight of   pair of users  an entry in this matrix 
+is their proximity at the current time    We are interested in
+maintaining the sum of these proximity matrices over time 
+which  after division by    will give the average proximity between every two users over time  This is the average
+proximity matrix  Since the average proximity matrix and
+each proximity matrix at   given time require      memory  we cannot keep them all in memory  Our goal is to
+maintain   sparse approximation version of each of row in
+the average proximity matrix which will use only   log   
+memory  Hence  the required memory by the system will
+be     log    instead of     
+Average proximity vector  The average proximity vector is   row vector of length   in the average proximity matrix for each of the   users  We maintain only  
+sparse approximation vector for each user  thus  only the
+nonzeroes entries are kept in memory as   set of pairs
+of type  index  value  We de ne the proximity between
+the current location vectors           of two users as 
+prox           dist     
+Coreset for   streamed average  Whenever   new
+record  time  userID  longitude  latitude  is inserted to
+the stream  we update the entries for that user as his her
+current position array pos is changed  Next  we compute
+that   proximities from that user to each of the other users 
+Note that in our case  the proximity from   user to himself
+is always        Each proximity proxj where          
+is converted to   sparse vector       proxj       
+with one nonzero entry  This vector should be added to the
+average proximity vector of user    to update the jth entry 
+Since maintaining the exact average proximity vector will
+take      memory for each of the   users  we instead add
+this sparse vector to an object  coreset  that maintains an
+approximation to the average proximity vector of user   
+Our problem is then reduced to the problem of maintaining   sparse average of   stream of sparse vectors in Rn 
+using   log    memory  Maintaining such   stream for
+each of the   users seen so far  will take overall memory
+
+Coresets for Vector Summarization with Applications to Network Graphs
+
+of     log    as desired  compared to the exact solution
+that requires      memory  We generalize and formalize this problem  as well as the approximation error and its
+practical meaning  in Section  
+
+  Related Work
+As mobile applications become locationaware  the representation and analysis of locationbased data sets become
+more important and useful in various domains  Wasserman    Hogan    Carrington et al    Dinh
+et al    Nguyen et al    Lancichinetti   Fortunato    An interesting application is to extract the relationships between mobile users  in other words  their social network  from their location data  Liao    Zheng 
+  Dinh et al    Therefore  in this paper  we use
+coresets to represent and approximate  streaming  GPSbased location data for the extraction of the social graphs 
+The problem in social network extraction from GPS data
+is closely related to the frequency moment problem  Frequency approximation is considered the main motivation
+for streaming in the seminal work of  Alon et al     
+known as the  AMS paper  which introduced the streaming model 
+Coresets have been used in many related applications  The
+most relevant are coresets for kmeans  see  Barger   Feldman    and reference therein  Our result is related to
+coreset for  mean that approximates the mean of   set
+of points    coreset as de ned in this paper can be easily obtained by uniform sampling of   log   log 
+or    points from the input  where         is
+the probability of failure  However  for suf ciently large
+stream the probability of failure during the stream approaches  
+In addition  we assume that   may be arbitrarily large  In  Barger   Feldman    such   coreset
+was suggested but its size is exponential in   We aim
+for   deterministic construction of size independent of  
+and linear in  
+  special case of such coreset for the case that the mean is
+the origin  zero  was suggested in  Feldman et al   
+based on FrankWolfe  with applications to coresets for
+PCA SVD  In this paper we show that the generalization
+to any center is not trivial and requires   nontrivial embedding of the input points to   higher dimensional space 
+Each of the abovementioned prior techniques has at least
+one of the following disadvantages    It holds only for
+positive entries  Our algorithm supports any real vector 
+Negative values may be used for deletion or decreasing of
+counters  and fraction may represent weights    It is randomized  and thus will always fail on unbounded stream 
+Our algorithm is deterministic    It supports only      
+nonzero entries  Our algorithm supports arbitrary number
+of nonzeroes entries with only linear dependency of the
+required memory on      It projects the input vectors on
+
+  random subspace  which diminishes the sparsity of these
+vectors  Our algorithm maintains   small weighted subset
+of the vectors  This subset keeps the sparsity of the input
+and thus saves memory  but also allows us to learn the representative indices of points  time stamps in our systems 
+that are most important in this sense 
+The most important difference and the main contribution of
+our paper is the error guarantee  Our error function in  
+is similar to  cid        cid cid     cid   cid   for  cid      on the left hand
+side  Nevertheless  the error on the right hand side might be
+signi cantly smaller  instead of taking the sum of squared
+distances to the origin  norm of the average vector  we use
+the variance  which is the sum of squared distances to the
+mean  The later one is always smaller  since the mean of  
+set of vectors minimized their sum of squared distances 
+  Problem Statement
+The input is an unbounded stream vectors       in Rd 
+Here  we assume that each vector has one nonzero entry 
+In the social network example    is the number of users
+and each vector is in the form       proxj       
+where proxj is the proximity between the selected user and
+user    Note that for each user  we independently maintain
+an input stream of proximities to each of the other users 
+and the approximation of its average  In addition  we get
+another input  the error parameter    which is related to
+the memory used by the system  Roughly  the required
+memory for an input stream will be     log    and the
+approximation error will be         That is  our algorithms are ef cient when   is   constant that is much
+smaller than the number of vectors that were read from
+stream         cid     For example  to get roughly   percents of error  we have       and the memory is about
+    compared to    for the exact average proximity 
+The output    is an Nsparse approximation to the average
+vector in the stream over the   vectors      pn seen so
+far  That is  an approximation to the centroid  or center of
+mass        
+  pi  Here and in what follows  the sum is
+over            Note that even if       the avern
+age    might have    cid    nonzero entries  as in the case
+where pi                 is the ith row of the
+identity matrix  The sparse approximation    of the average vector    has the following properties    The vector   
+has at most   nonzero entries    The vector    approximates the vector of average proximities    in the sense that
+the  Euclidean  distance between the two vectors is var  
+where var is the variance of all the vectors seen so far in the
+stream  More formally   cid        cid     var  where       
+   pi is the average vector in Rd for
+is the error        
+ 
+the   input vectors  and the variance is the sum of squared
+distances to the average vector 
+Distributed and parallel computation  Our system supports distributed and streaming input simultaneously in  
+ embarrassingly parallel  fashion       this allows multi 
+
+ cid  
+
+ cid 
+
+Coresets for Vector Summarization with Applications to Network Graphs
+
+  New Coreset Algorithms
+In this section we  rst describe an algorithm for approximating the sum of   streaming vectors using one pass  The
+algorithm calls its offline version as   subprocedure  We
+then explain how to run the algorithm on distributed and
+unbounded streaming data using   machines or parallel
+threads  The size of the weighted subset of vectors that are
+maintained in memory  and the insertion time per new vector in the stream are logarithmic on the number   of vectors
+in the stream  Using   machines  the memory and running
+time per machine is reduced by   factor of   
+
+  Streaming and Distributed Data
+Overview  The input to Algorithm   is   stream provided
+as   pointer to   device that sends the next input vectors in
+  stream that consists of   vectors  upon request  For example    hard drive    communication socket  or   webservice
+that collects information from the users  The second parameter   de nes the approximation error  The required
+memory grows linearly with respect to  
+Algorithm   maintains   binary tree whose leaves are the
+input vectors  and each inner node is   coreset  as in the left
+or right hand side of Fig    However  at most one coreset in each level of the tree is actually stored in memory 
+In Line   we initialize the current height of this tree  Using log    vectors in memory our algorithm returns an
+  coreset  but to get exactly  coreset  we increase it in
+Line   by   constant factor   that can be  nd in the proof
+of Theorem  
+In Lines   we read batches  sets  of
+  log    vectors from the stream and compress them 
+The last batch may be smaller  Line   de nes the next batch
+    Unlike the coresets in the nodes of the tree  we assume
+that the input vectors are unweighted  so  Line   de nes  
+weight   for each input vector  Line   reduce the set   by
+half to the weighted coreset        using Algorithm    the
+offline coreset construction  Theorem   guarantees that
+such   compression is possible 
+In Lines   we add the new coreset        to the lowest
+level  cid  of the binary tree  if it is not assigned to   coreset
+already         cid  is not empty  Otherwise  we merge the new
+coreset        with the level   coreset   cid  mark the level as
+empty from coresets    cid      and continue to the next
+higher level of the tree until we reach   level  cid  that is not
+assigned to   coreset          cid      Line   handle the
+case where we reach to the root of the tree  and   new  top 
+level is created  In this case  only the new root of the tree
+contains   coreset 
+When the streaming is over  in Lines   we collect the
+active coreset in each of the   log    tree levels  if it has
+one  and return the union of these coresets 
+Parallel computation on distributed data  In this model
+each machine has its own stream of data  and computes its
+
+Figure   Coreset computation of streaming data that
+is distributed among       machines  The odd even vectors in the
+stream  leaves  are compressed by the machine on the left right 
+respectively    server  possibly one of these machine  collects the
+coreset    and    from each machine to obtain the  nal coreset
+  of the       vectors seen so far  Each level of each tree stores
+at most one coreset in memory  and overall of   log    coresets 
+
+ple users to send their streaming smartphone data to the
+cloud simultaneously in realtime  There is no assumption
+regarding the order of the data in user ID  Using   nodes 
+each node will have to use only    fraction of the memory to  log       that is used by one node for the same
+problem  and the average insertion time for   new point will
+be reduced by   factor of   to  log       
+Parallel coreset computation of unbounded streams of distributed data was suggested in  Feldman   Tassa   
+as an extension to the classic mergeand reduce framework
+in  Bentley   Saxe    HarPeled    We apply this
+framework on our offline algorithm to handle streaming
+and distributed data  see Section  
+Generalizations 
+Above we assume that each vector
+in the stream has   single nonzero entry  To generalize
+that  we now assume that each vector has at most   nonzeroes entries and that these vectors are weighted       by
+their importance  Under these assumptions  we wish to
+   uipi where
+          un  is   weight vector that represents distribution       ui     for every         Then  our problem
+is formalized as follows 
+
+approximate the weighted mean       cid  
+
+Problem   Consider an unbounded stream of real vectors         where each vector is represented only by
+its nonzero entries       pairs  entryIndex  value   
+                 Maintain   subset of    cid    input vectors  and   corresponding vector of positive reals  weights 
+   wipi approxi  pi of the   vectors seen so far
+in the stream up to   provably small error that depends on
+  Formally  for an
+
+        wN   where the sum     cid  
+imates the sum       cid  
+its variance var       cid  
+
+    cid pi      cid 
+error parameter   that may depend on   
+ cid        cid     var   
+
+ 
+
+We provide   solution for this problem mainly by proving
+Theorem   for offline data  and turn it into algorithms for
+streaming and distributed data as explained in Section  
+
+Coresets for Vector Summarization with Applications to Network Graphs
+
+coreset independently and in parallel to the other machines 
+as described above  Whenever we wish to get the coreset
+for the union of streaming vectors  we collect the current
+coreset from each machine on   single machine or   server 
+Since each machine sends only   coreset  the communication is also logarithmic in    For       machines and  
+single input stream  we send every ith point in the stream
+to the ith machine  for every   between   and    For example  if       the odd vectors will be sent to the  rst
+machine  and every second  even  vector will be sent to the
+second machine  Then  each machine will compute   coreset for its own unbounded stream  See Fig  
+
+new set of weights      sn whose mean is cid 
+
+  Offline data reduction
+Algorithm   is called by Algorithm   and its variant in the
+last subsection for compressing   given small set   of vectors in memory by computing its coreset  As in Line  
+of Algorithm   the input itself might be   coreset of another set  thus we assume that the input has   corresponding
+weight vector    Otherwise  we assign   weight   for each
+input vector                 The output of Algorithm
+  is an  coreset        of size          for   given
+        While the number   of input vectors can be of
+an arbitrary size  Algorithm   always passes an input set of
+        points to get output that is smaller by half 
+Overview of Algorithm   In Line   the desired mean
+Eu that we wish to approximate is computed  Lines  
+  are used for adding an extra dimension for each input
+vector later  In Lines   we normalize the augmented input  by constructing   set      qn of unit vectors with  
+  siqi  
+           We then translate this mean to the origin
+by de ning the new set   in Line  
+The main coreset construction is computed in Lines  
+on the normalized set   whose mean is the origin and its
+vectors are on the unit ball  This is   greedy  gradient descent method  based on the FrankWolfe framework  Feldman et al    In iteration       we begin with an arbitrary input point    in    Since    is   unit vector  its distance from the mean of    origin  is   In Line     we
+compute the farthest point    from    and approximates
+the mean using only    and the new point    This is done 
+by projecting the origin on the line segment through    and
+   to get an improved approximation    that is closer to
+the origin  We continue to add input points in this manner 
+where in the ith iteration another input point is selected for
+the coreset  and the new center is   convex combination of
+  points  In the proof of Theorem   it is shown that the distance to the origin in the ith iteration is     which yields
+an  approximation after        iterations 
+The resulting center    is spanned by   input vectors 
+In Line   we compute their new weights based on their
+distances from    Lines   are used to convert the
+
+weights of the vectors in the normalized   back to the
+original input set of vectors  The algorithm then returns the
+small subset of   input vectors with their weights vector   
+
+Input 
+
+Algorithm   STREAMINGCORESET stream   
+An input stream of   vectors in Rd 
+an error parameter        
+An  coreset        for the set of   vectors 
+see Theorem  
+
+Output 
+  Set max    
+  Set   to be   suf ciently large constant that can be
+
+derived from the proof of Theorem  
+
+  while stream is not empty do
+ 
+
+Set     next  cid  ln   cid  input vectors in
+stream
+Set           where   has     entries 
+Set          CORESET         ln   
+Set  cid     
+while   cid   cid    and  cid    max do
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+
+Set   cid          cid 
+Set          CORESET   cid    cid   
+Set   cid     
+Set  cid     cid     
+if  cid    max then
+Set max    cid 
+Set    cid    cid          
+
+   Si and              wmax 
+
+ 
+
+  Set    cid max
+
+  return       
+
+   ui      
+
+  Correctness
+In this section we show that Algorithm   computes correctly the coreset for the average vector in Theorem  
+Let Dn denote all the possible distributions over   items 
+       is the unit simplex
+
+Dn         un    Rn   ui     and  cid  
+ cid 
+vectors of     the  weighted  mean is cid  
+
+Given   set           pn  of vectors  the mean of   is
+   pi  This is also the expectation of   random vector
+ 
+ 
+that is chosen uniformly at random from     The sum of
+variances of this vector is the sum of squared distances to
+the mean  More generally  for   distribution       over the
+   uipi  which is
+the expected value of   vector chosen randomly using the
+distribution    The variance varu is the sum of weighted
+squared distances to the mean  By letting       in
+the following theorem  we conclude that there is always  
+sparse distribution   of at most   nonzeroes entries  that
+yields an approximation to its weighted mean  up to an  
+fraction of the variance 
+Theorem    Coreset for the average vector  Let    
+Dn be   distribution over   set           pn  of
+  vectors in Rd  and let       Let        denote
+the output of   call to CORESET            see Algo 
+
+Algorithm   CORESET        
+
+Input 
+
+Output 
+
+  Set Eu  cid  
+  Set    cid  
+  Set    cid  
+
+  set   of vectors in Rd 
+  positive weight vector           un 
+an error parameter        
+An  coreset        for       
+   uipi
+   uj  cid pj   Eu cid 
+   uj  cid pj   Eu    cid 
+
+  for       to   do
+ 
+
+Set qi    pi   Eu    
+ cid pi   Eu    cid 
+Set si   ui  cid pi   Eu    cid 
+
+ 
+
+ 
+
+  Set      qi                       
+  Set       suf ciently large constant that can be
+derived from the proof of Theorem  
+  Set      an arbitrary vector in  
+  for       to      cid cid  do
+ 
+ 
+
+hi    farthest point from ci in  
+ci    the projection of the origin on the
+segment ci  hi 
+  Compute   cid       cid 
+ihi 
+  for       to   do
+vw cid 
+ 
+
+    cid 
+
+       such that
+
+      cid 
+
+     cid 
+
+ pi   Eu    
+
+ 
+
+ 
+
+  cid cid    
+  cid 
+wi     cid cid 
+     cid cid 
+              
+              
+  return       
+
+ 
+
+rithm   Then     Dn consists       nonzero entries 
+   uipi deviates from the sum
+   wipi by at most       fraction of the vari 
+
+such that the sum       cid 
+      cid  
+ance varu  cid  
+
+   ui  cid pi      cid 
+
+        cid        cid 
+
+    varu
+   
+
+ cid Eu   Ew cid 
+
+By the    notation above  it suf ces to prove that there is
+  constant       such that       and
+     varu
+   
+
+ 
+where Eu      and Ew       The proof is constructive and
+thus immediately implies Algorithm   Indeed  let
+
+   cid 
+Here and in what follows   cid cid     cid cid  and all the sums are
+over              For every         let
+
+  uj  cid pj   Eu cid    and    cid 
+
+  uj  cid pj   Eu    cid 
+
+qi    pi Eu   
+
+ cid pi Eu   cid    and si   ui cid pi Eu   cid 
+
+ 
+
+ 
+
+Hence 
+
+Coresets for Vector Summarization with Applications to Network Graphs
+
+ cid 
+
+ 
+
+ 
+
+ cid 
+ cid cid 
+ cid 
+
+ 
+
+ui pi   Eu    
+
+uipi  cid 
+uipi  cid 
+
+ 
+
+siqi  
+
+ 
+
+ 
+ 
+
+ 
+ 
+
+ 
+
+ 
+ 
+
+umEu 
+
+ukx
+
+ 
+
+ cid 
+
+ cid 
+   
+
+ 
+
+ cid 
+
+ cid 
+
+ 
+
+ 
+ 
+
+ujpj   
+
+     
+
+ 
+
+ 
+
+ cid 
+Since       sn    Dn we have that the point    
+  siqi is in the convex hull of           qn  By
+applying the FrankWolfe algorithm as described in  Clarkson    for the function          cid As cid  where each row
+of   corresponds to   vector in    we conclude that there
+     Dn that has at most   nonzero
+is   cid       cid 
+ cid cid cid cid 
+  siqi  cid 
+ cid cid 
+entries such that
+For every         de ne
+
+      cid 
+  qi cid   
+
+   cid       cid     
+   
+
+  si     cid 
+
+ cid cid cid 
+
+    cid 
+
+ 
+
+jqj
+
+  cid 
+
+  cid cid 
+    cid cid 
+
+  cid cid 
+   
+
+vw cid 
+
+We thus have 
+
+ cid Eu   Ew cid   
+
+ 
+
+ 
+
+ 
+
+  wjpj
+
+ cid cid cid 
+
+and wi  
+
+ cid pi   Eu    cid 
+ cid cid cid cid 
+ cid cid cid 
+  uipi  cid 
+  ui   wi pi   Eu    cid cid 
+ cid cid cid 
+    cid cid cid cid 
+ cid  ui cid pi Eu   cid 
+    cid cid cid cid 
+ cid 
+   cid 
+si      cid cid 
+    cid cid cid cid 
+ cid 
+ cid 
+  ui  cid 
+  wi     and thus cid 
+
+    cid cid 
+   cid pi Eu   cid 
+  cid 
+si     cid 
+    cid cid 
+
+  ui   wi pi
+ cid 
+ cid 
+
+ cid cid cid 
+ cid cid cid 
+ cid cid cid 
+  uiy  cid 
+
+  wi cid pi Eu   cid 
+
+qi
+
+qi
+
+qi
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ cid cid   
+
+ 
+
+ 
+
+ 
+
+ 
+
+where   is by the de nitions of Eu and Ew    follows
+  ujy for
+every vector      follows by the de nitions of wi and qi 
+and   by the de nition of   cid 
+   Next  we bound   Since
+for every two reals      
+
+since cid 
+
+ yz          
+
+by letting      cid   cid  and      cid   cid  for        Rd 
+
+   cid   cid     cid   cid     cid   cid     cid   cid     cid   cid     cid   cid   
+
+ cid       cid     cid   cid     cid   cid     cid   cid cid   cid 
+
+By substituting      cid 
+  cid 
+  cid 
+ cid cid cid cid cid 
+ cid cid cid cid cid cid 
+ cid 
+ cid 
+    cid cid 
+  cid 
+si     cid 
+    cid cid 
+
+qi
+
+ 
+
+ 
+
+ 
+
+ qi in   we obtain
+
+   
+
+  si     cid 
+
+  qi and      cid 
+ cid cid cid cid cid 
+ cid cid cid cid cid cid 
+ cid cid cid cid cid cid 
+  cid 
+      cid 
+    cid cid 
+
+ si    
+
+ cid 
+
+ cid 
+  qi
+
+ 
+
+ cid 
+
+ 
+
+ 
+
+ 
+
+   
+
+ 
+
+ 
+
+    cid 
+
+   
+
+ cid 
+
+ 
+
+ cid cid cid cid cid 
+
+ 
+
+qi
+
+ 
+
+Coresets for Vector Summarization with Applications to Network Graphs
+
+Bound on   Observe that
+
+ cid 
+
+ cid cid cid cid cid cid 
+
+ 
+
+  cid 
+      cid 
+    cid cid 
+
+ cid 
+
+ 
+
+ 
+
+ cid 
+
+ cid cid cid cid cid 
+
+qi
+
+ cid cid cid cid cid cid 
+ cid 
+
+ 
+
+   
+
+ cid 
+ cid 
+
+ cid 
+ 
+ 
+
+   
+
+    cid cid 
+
+ 
+
+ 
+
+ 
+
+ cid cid cid cid cid cid 
+ cid 
+ cid cid cid cid cid cid 
+ cid 
+
+    cid cid 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ cid cid cid cid cid 
+
+ cid 
+iqi
+
+ 
+
+ 
+
+  uj  cid pj   Eu cid           
+
+   
+
+Let       
+
+  By the triangle inequality
+
+  uj  cid pj   Eu    cid   cid 
+
+   cid 
+By choosing       in   we have       so
+  siqi and    cid 
+Substituting      cid 
+ cid cid cid cid cid cid 
+ cid cid cid cid cid cid 
+ cid cid cid cid cid 
+
+bounds the right expression of   by
+
+ cid cid cid cid cid cid 
+
+     
+
+ cid cid cid cid cid 
+
+ si    
+
+   
+   
+
+  si    cid 
+
+   
+
+ cid 
+iqi
+
+siqi
+
+   
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ cid 
+  qj
+
+ cid cid cid cid cid 
+
+  qj in  
+
+where the last inequality follows from   and   For
+bounding the left expression of   note that
+
+ cid 
+
+   cid 
+
+ 
+
+     
+
+    
+
+ 
+ 
+
+ 
+
+       
+
+    
+
+ 
+
+ cid cid 
+     
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+
+   
+ cid 
+
+  
+  
+
+   
+ cid 
+ 
+
+ cid pj   Eu    cid 
+
+       
+ cid 
+
+     
+
+ cid 
+   cid 
+ cid cid cid cid cid         cid 
+ cid cid cid cid cid cid 
+ cid   cid 
+ cid cid cid cid cid 
+ cid cid cid cid cid cid 
+ cid       
+ cid 
+ cid 
+ cid 
+
+          and
+ cid   cid 
+     cid 
+ cid 
+    cid cid 
+    cid cid 
+    cid cid 
+ cid 
+
+ si    
+
+    
+
+ cid 
+  qi
+
+  
+  
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+    cid cid 
+ cid 
+
+ cid 
+
+   
+
+qi
+
+   
+
+ 
+
+ 
+
+    
+
+    cid cid 
+                 
+     
+ cid cid cid cid cid cid 
+ cid 
+  cid 
+si     cid 
+     cid cid cid cid cid cid cid 
+    cid cid 
+ cid 
+
+ cid 
+ cid cid cid cid cid 
+ cid 
+
+ cid cid cid cid cid cid 
+
+ cid cid cid cid cid 
+
+ si    
+
+ cid 
+
+ cid 
+  qi
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+     
+ 
+
+   
+
+       
+       
+
+     
+ 
+
+Combining   and   bounds   by
+
+ cid 
+
+ cid cid cid cid cid cid 
+
+ 
+
+ 
+
+  cid 
+      cid 
+    cid cid 
+
+ cid 
+
+ 
+
+ cid cid cid cid cid 
+
+where   follows since  cid   cid     cid      cid  for every pair
+     of vectors  and the last inequality is by   and  
+
+Hence cid 
+
+Bound on   Plugging the last inequality    and  
+in   yields
+ cid Eu   Ew cid      
+
+qi
+
+ 
+
+ 
+
+ 
+
+ 
+
+ cid cid cid cid cid 
+
+   pj   Eu    
+ cid pj   Eu    cid 
+
+ pj   Eu    
+ cid pj   Eu    cid 
+
+ cid cid cid cid cid 
+
+          
+
+     
+
+ cid cid cid cid cid cid 
+
+ 
+
+ 
+
+ cid cid cid cid cid 
+
+ cid 
+iqi
+
+ 
+
+ 
+
+       
+           
+
+  cid 
+      cid 
+    cid cid 
+
+ cid 
+
+ 
+
+ 
+
+ cid 
+
+ cid cid cid cid cid cid 
+
+qi
+
+ 
+
+ 
+
+Figure   Given   set of vectors from   standard Gaussian distribution  the graph shows the  cid  error  yaxis  between their sum and
+their approximated sum using only   samples  the xaxis  based
+on Count Sketch  Charikar et al    Count Min  Cormode  
+Muthukrishnan      Count Median  Cormode   Muthukrishnan      BJKST  BarYossef et al      Sketch  Alon
+et al      and our coreset 
+
+Figure   The overview of our designed system to extract and represent social networks is given 
+
+for   suf ciently large constant              where in the
+last inequality we used   Since        by   we have
+
+          
+
+ cid 
+   cid 
+ cid 
+
+ 
+
+ 
+
+ cid 
+ cid 
+
+ 
+
+uj  cid pj   Eu cid 
+ 
+
+ 
+
+uj  
+
+varu
+
+uj  cid pj   Eu cid 
+
+ cid 
+
+ cid 
+
+varu
+uj  cid pj   Eu cid 
+
+ 
+varu
+
+varuuj  
+
+ 
+
+ 
+varu  
+
+ 
+
+ 
+varu
+
+ cid 
+
+ 
+
+uj  cid pj   Eu cid     
+
+ 
+varu 
+
+where in the second inequality we used   Plugging this
+in   and replacing   by            in the proof
+above  yields the desired bound
+
+ cid Eu   Ew cid       
+
+     varu
+   
+
+  Experimental Results
+We implemented the coreset algorithms in   and   We also
+implemented   brute force method for determining the social network that considers the entire data  We used this
+method to derive the ground truth for the social network
+for small scale data  Our system   overview is given in Figure   and explained in Section   The coreset algorithm
+computes the heavy hitters by approximating the sum of
+
+Coresets for Vector Summarization with Applications to Network Graphs
+
+Figure   The normalized error  yaxis  of proximities for the
+GPS traces taxidrivers in the New York City Cab dataset using
+only   samples    increases along xaxis 
+
+the columns of the proximity matrix as explained in Section   In this section  we have used different data sets
+from three different sources  In our  rst experiment  we
+compared our coreset algorithm   error with other sketch
+algorithms  Charikar et al    Cormode   Muthukrishnan      The second dataset is the New York City
+Cab dataset  and the third data set is from Stanford  and
+includes six different graphbased data sets 
+In all the
+ gures shown in this section  the   axis shows the coreset size     and the   axis represents the normalized error value  Error   mean var pi mean norm pi 
+where Error    cid pi      cid  In our experiments  we ran  
+iterations and wrote down the empirical error  
+Comparison to sketch algorithms  Since the algorithms
+in  Charikar et al    Cormode   Muthukrishnan 
+    focused on selecting the entries at scalar level      
+individual entries from   vector  in this experiment  we
+generated   small scale synthetic data  standard Gaussian
+distribution  and compared the error made by our coreset implementation to four other sketch implementations 
+These sketch algorithms are  Count Sketch  Count Min 
+Count Median  BJKST and   Sketch  see Fig    For the
+sketch algorithms  we used the code available at  We plot
+the results in Fig    where our Coresets algorithm showed
+better approximation than all other well known sketch techniques for all   values 
+Application on NYC data  Here we applied our algorithm
+on the NYC data  The data contains the location information of   taxi cabs with   entries  The goal
+here is showing how the error on Coreset approximation
+would change on real data with respect to    we expect
+that the error would reduce with respect to   as the theory
+suggests  This can be seen in Fig    where   axis is the
+coreset size     and   axis is the normalized error 
+Application on Stanford Data Sets  Here we apply our algorithm on six different data sets from Stanford  Amazon 
+Youtube  DBLP  LiveJournal  Orkut and Wikitalk data sets 
+We run the Coreset algorithm to approximate the total number of connectivities each node has  We computed the error
+
+ https publish illinois edu dbwork opendata 
+ https snap stanford edu data 
+ https github com jiecchen StreamLib 
+
+    Amazon data
+
+    YouTube data
+
+    DBLP data
+
+    Wikitalk data
+
+    Orkut data
+
+    LiveJournal data
+
+Figure   The normalized error  yaxis  of the coreset for network
+structure approximation is shown for four different datasets using
+only   samples    increases along xaxis 
+
+for each of the seven different   values from    
+          for each data set  We used the
+ rst   entries from the Orkut  Live Journal  Youtube
+and Wiki data sets and the  rst   entries from Amazon
+and DBLP data set  The results are shown in Figure  
+In the  gures    axis represents the normalized error  The
+results demonstrate the utility of our proposed method for
+summarization 
+
+  Conclusion
+In this paper we proposed   new coreset algorithm for
+streaming data sets with applications to summarizing large
+networks to identify the  heavy hitters  The algorithm
+takes   stream of vectors as input and maintains their sum
+using small memory  Our presented algorithm shows better
+performance at even lower values of nonzero entries      
+at higher sparsity rates  when compared to the other existing sketch techniques  We demonstrated that our algorithm
+can catch the heavy hitters ef ciently in social networks
+from the GPSbased location data and in several graph data
+sets from the Stanford data repository 
+
+Acknowledgements
+Support for this research has been provided in part by Ping
+An Insurance and NSFSaTCBSF CNC   We are
+grateful for this support 
+
+Coresets for Vector Summarization with Applications to Network Graphs
+
+data  In Proceedings of the  th ACM SIGKDD International Conference on Knowledge Discovery and Data
+Mining  KDD  pp    ACM   
+
+Feldman  Dan  Volkov  Mikhail  and Rus  Daniela  Dimensionality reduction of massive sparse datasets using
+coresets  In NIPS    URL http arxiv org 
+abs 
+
+HarPeled  Sariel  Coresets for discrete integration and
+clustering  In FSTTCS   Foundations of Software
+Technology and Theoretical Computer Science  pp   
+  Springer   
+
+Hogan  Bernie  Analyzing social networks  The Sage hand 
+
+book of online research methods  pp     
+
+Lancichinetti  Andrea and Fortunato  Santo  Community
+detection algorithms    comparative analysis  Physical
+review       
+
+Liao  Lin  Locationbased activity recognition  PhD thesis 
+
+University of Washington   
+
+Nguyen  Nam    Dinh  Thang    Xuan  Ying  and Thai 
+My    Adaptive algorithms for detecting community
+In INFOCOM 
+structure in dynamic social networks 
+  Proceedings IEEE  pp    IEEE   
+
+Wasserman  Stanley  Analyzing social networks as stochastic processes  Journal of the American statistical association     
+
+Zheng  Yu 
+
+Locationbased social networks  Users 
+In Computing with spatial trajectories  pp   
+Springer   
+
+References
+Alon  Noga  Matias  Yossi  and Szegedy  Mario  The space
+complexity of approximating the frequency moments  In
+Proceedings of the twentyeighth annual ACM symposium on Theory of computing  pp    ACM     
+
+Alon  Noga  Matias  Yossi  and Szegedy  Mario  The space
+complexity of approximating the frequency moments  In
+Proceedings of the twentyeighth annual ACM symposium on Theory of computing  pp    ACM     
+
+BarYossef  Ziv  Jayram  TS  Kumar  Ravi  Sivakumar    
+and Trevisan  Luca  Counting distinct elements in   data
+In International Workshop on Randomization
+stream 
+and Approximation Techniques in Computer Science  pp 
+  Springer   
+
+Barger  Artem and Feldman  Dan  kmeans for streaming and distributed big sparse data  SDM  and arXiv
+preprint arXiv   
+
+Bentley  Jon Louis and Saxe  James    Decomposable
+searching problems    staticto dynamic transformation 
+Journal of Algorithms     
+
+Carrington  Peter    Scott  John  and Wasserman  Stanley 
+Models and methods in social network analysis  volume   Cambridge university press   
+
+Charikar  Moses  Chen  Kevin  and FarachColton  Martin  Finding frequent items in data streams  Theoretical
+Computer Science     
+
+Clarkson        Subgradient and sampling algorithms for
+  regression  In Proc   th Annu  ACMSIAM Symp  on
+Discrete algorithms  SODA  pp      ISBN
+ 
+
+Cormode  Graham and Muthukrishnan     An improved
+data stream summary  the countmin sketch and its applications  Journal of Algorithms       
+
+Cormode  Graham and Muthukrishnan     An improved
+data stream summary  the countmin sketch and its applications  Journal of Algorithms       
+
+Dinh  Thang    Xuan  Ying  Thai  My    Park  EK  and
+Znati  Taieb  On approximation of new optimization
+methods for assessing network vulnerability  In INFOCOM    Proceedings IEEE  pp    IEEE   
+
+Dinh  Thang    Nguyen  Nam    and Thai  My    An adaptive approximation algorithm for community detection
+In INFOCOM   
+in dynamic scalefree networks 
+Proceedings IEEE  pp    IEEE   
+
+Feldman  Dan and Tassa  Tamir  More constraints  smaller
+coresets  constrained matrix approximation of sparse big
+
+

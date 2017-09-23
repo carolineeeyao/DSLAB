@@ -1,0 +1,1264 @@
+From Patches to Images    Nonparametric Generative Model
+
+Geng Ji   Michael    Hughes   Erik    Sudderth    
+
+Abstract
+
+We propose   hierarchical generative model that
+captures the selfsimilar structure of image regions as well as how this structure is shared
+across image collections  Our model is based on
+  novel  variational interpretation of the popular
+expected patch loglikelihood  EPLL  method as
+  model for randomly positioned grids of image
+patches  While previous EPLL methods modeled
+image patches with  nite Gaussian mixtures  we
+use nonparametric Dirichlet process  DP  mixtures to create models whose complexity grows
+as additional images are observed  An extension based on the hierarchical DP then captures
+repetitive and selfsimilar structure via imagespeci   variations in cluster frequencies  We derive   structured variational inference algorithm
+that adaptively creates new patch clusters to more
+accurately model novel image textures  Our denoising performance on standard benchmarks is
+superior to EPLL and comparable to the stateof 
+theart  and we provide novel statistical justi 
+cations for common image processing heuristics 
+We also show accurate image inpainting results 
+
+  Introduction
+Models of the statistical structure of natural images play  
+key role in computer vision and image processing  Srivastava et al    Due to the high dimensionality of the images captured by modern cameras    rich research literature
+instead models the statistics of small image patches  For
+example  the KSVD method  Elad   Aharon    generalizes Kmeans clustering to learn   dictionary for sparse
+coding of image patches  The stateof theart learned simultaneous sparse coding  LSSC  Mairal et al   
+and block matching and     ltering  BM    Dabov et al 
+  methods integrate clustering  dictionary learning 
+
+ Brown University  Providence  RI  USA   Harvard University  Cambridge  MA  USA   University of California  Irvine  CA 
+USA  Correspondence to  Geng Ji  gji cs brown edu 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+and denoising to extract information directly from   single
+corrupted image  Alternatively  the accurate expected patch
+loglikelihood  EPLL  Zoran   Weiss   method
+maximizes the loglikelihood of overlapping image patches
+under    nite Gaussian mixture model learned from uncorrupted natural images 
+We show that with minor modi cations  the objective function underlying EPLL is equivalent to   variational loglikelihood bound for   novel generative model of whole
+images  Our model coherently captures overlapping image
+patches via   randomly positioned spatial grid  By deriving   rigorous variational bound  we then develop improved
+nonparametric models of natural image statistics using the
+hierarchical Dirichlet process  HDP  Teh et al    In
+particular  DP mixtures allow an appropriate model complexity to be inferred from data  while the hierarchical DP
+captures the patch selfsimilarities and repetitions that are
+ubiquitous in natural images    egou et al    Unlike
+previous wholeimage generative models such as  elds of
+experts  FoE  Roth   Black   which uses   single
+set of Markov random  eld parameters to model all images 
+our HDP model learns imagespeci   clusters to accurately
+model distinctive textures  Coupled with   scalable structured variational inference algorithm  we improve on the
+excellent denoising accuracy of the LSSC and BM   algorithms  while providing   Bayesian nonparametric model
+with   broader range of potential applications 
+
+  Expected Patch Loglikelihood
+Our approach is derived from models of small     pixel 
+patches of   large natural image    Let Pi be   binary indicator matrix that extracts the       pixels Pix   RG in
+patch    To reduce sensitivity to lighting variations    contrast normalizing transform is applied to remove the mean
+ or  DC component  of the pixel intensities in each patch 
+
+vi   Pix    
+
+     Pix   BPix 
+
+ 
+
+for    zerocentering  matrix    Zoran   Weiss  
+show that    nite mixture of   zeromean Gaussians 
+
+  vi   cid  
+
+ 
+is superior to many classic image models in terms of predictive likelihood and patch denoising performance 
+
+    kNorm vi      
+
+ 
+   
+
+From Patches to Images    Nonparametric Generative Model
+
+The widelyused EPLL image restoration framework measures the quality of   reconstruction by the expected patch
+loglikelihood   assuming   patch location in the image
+is chosen uniformly at random   Zoran   Weiss   
+Given   corrupted image    EPLL estimates   clean image
+  by minimizing the objective 
+ 
+ cid       cid   
+
+ 
+Here  the sum ranges over all overlapping  completely visible  uncropped  image patches  The constant   is determined by the noise level of the corrupted image   
+Direct optimization of Eq    is challenging  so inspired by
+half quadratic splitting  Geman   Yang    the EPLL
+objective can be reformulated as follows 
+
+  log   BPix 
+
+ cid 
+
+min
+
+ 
+
+ 
+
+min
+   
+
+ 
+ cid       cid   
+
+ 
+ cid Pix    vi cid    log     vi   
+Each patch   is allocated an auxiliary variable  vi  which
+ unlike the vi variable in Eq    includes an estimate of
+the mean patch intensity  This augmented objective leads
+to closedform coordinate descent updates 
+Gating  Assign each patch   to some cluster zi 
+
+ cid 
+
+ 
+
+   Norm cid BPix      
+       cid 
+ cid 
+ cid 
+ cid 
+ cid 
+
+ BT  zi  
+
+ cid cid 
+
+ cid 
+
+Pix 
+
+   
+
+  Pi
+
+      
+
+Filtering  Given an approximate clean image   and cluster assignments    denoise patches via least squares 
+
+ vi  
+
+     
+
+ 
+Mixing  Given    xed set of auxiliary patches    and the
+noisy image      denoised image   is estimated as
+
+zi   arg max
+
+ 
+
+ 
+
+ cid 
+
+   
+
+      
+
+   
+
+   vi
+
+ 
+
+ 
+
+ 
+
+ 
+
+Annealing  Optimal solutions of Eq    approach those
+of the EPLL objective in Eq    as       EPLL denoising algorithms slowly increase   via an annealing schedule
+that must be tuned for best performance 
+Justi cation  Empirically  the intuitive EPLL objective
+is much more effective than baselines which use only   subset of nonoverlapping patches  or average independently
+denoised patches  Zoran   Weiss    But why should
+we optimize the expected loglikelihood  instead of the expected likelihood or another function of patchspeci   likelihoods  And how can the EPLL heuristic be generalized
+to capture more complex statistics of natural images  This
+paper answers these questions by linking EPLL to   rigorous  nonparametric generative model of whole images 
+
+  Mixture Models for Grids of Image Patches
+We now develop the HDPGrid generative model summarized in Fig    which uses randomly placed patch grids
+to formalize the EPLL objective  and hierarchical DP mixtures to capture image patch selfsimilarity 
+
+Figure   Directed graphical model for our HDPGrid model of
+  natural images  Clean image xm is generated via   randomly
+placed grid wm of patches vm generated by   hierarchical Gaussian mixture model  We observe corrupted images ym 
+
+  Hierarchical Dirichlet Process Mixtures
+
+The hierarchical Dirichlet process  HDP  Teh et al   
+is   Bayesian nonparametric prior used to cluster groups of
+related data  we model natural images as groups of patches 
+The HDP shares visual structure  such as patches of grass
+or bricks  by sharing   common set of clusters  called topics
+in applications to text data  across images  In addition  the
+HDP models imagespeci   variability by allowing each
+image to use this shared set of clusters with unique frequencies  grass might be abundant in one image but absent
+in another  Via the HDP  we can learn the proper number
+of hidden clusters from data  and discover new clusters as
+we collect new images with novel visual textures 
+The HDP uses   stickbreaking construction to generate  
+corpuswide vector                           of frequencies for   countably in nite set of visual clusters 
+ cid       cid 
+
+ 
+The HDP allocates each image   its own cluster frequencies     where the vector   determines the mean of   DP
+prior on the frequencies of shared clusters 
+
+     Beta         cid    
+
+ cid   
+
+  mk       
+
+     DP 
+
+ 
+When the concentration parameter       we capture
+the  burstiness  and selfsimilarity of natural image regions    egou et al    by placing most probability mass
+in    on   sparse subset of global clusters 
+
+  Image Generation via Random Grids
+
+We sample pixels in image   via   randomly placed grid of
+patches  When each patch has   pixels  Fig    shows there
+are exactly   grid alignments for an image of arbitrary size 
+The alignment wm                has   uniform prior 
+
+wm   Cat               
+
+ 
+Modeling multiple overlapping grids is crucial to capture
+real image statistics  As the true grid alignment for each
+image is uncertain  posterior inference will favor images
+
+     mwmxmymumgnzmgnvmgngridsg Gpatchesn Nmgclustersclustersk imagesm  From Patches to Images    Nonparametric Generative Model
+
+independent of the HDP mixture model parameters 
+
+  From Patches to Corrupted Images
+
+ cid 
+
+ 
+
+Given patches vmg with offsets umg generated via grid
+wm      we sample   whole  clean image  xm as
+
+ cid 
+
+ cid Nmg
+
+  
+
+Norm
+
+xm  
+
+mgn vmgn    
+   
+
+ 
+where  vmgn  cid  Cmgnvmgn  umgn  Binary indicator matrices Pmgn  as in Sec    stitch together patches in the chosen
+grid    Image xm is then generated by adding independent
+Gaussian noise with small variance   Most patches in the
+chosen grid will be fully observed in xm  but as illustrated
+in Fig    some may be clipped by the image boundary  Indicator matrices Cmgn are de ned so Cmgnvmgn   umgn
+is   vector containing the observed pixels from patch   
+For image restoration tasks  the observed image ym is  
+corrupted version of some clean image xm that we would
+like to estimate  Models of natural image statistics are commonly validated on the problem of image denoising  where
+xm is polluted by additive white Gaussian noise 
+  ym   xm    Norm ym   xm     
+
+ 
+The variance    cid    indicates the noise level  We
+also validate our model on image inpainting problems  Bertalmio et al    where some pixels are observed without noise but others are completely missing  By
+replacing Eq    with other linear likelihood models  our
+novel generative model for natural images may be easily
+applied to other tasks including image deblurring  Zoran
+  Weiss    image super resolution  Yang   Huang 
+  and color image demosaicing  Mairal et al   
+
+  Variational Inference
+We now develop scalable learning algorithms for our nonparametric  gridbased image model  We  rst examine  
+baseline DP Grid model in which the same cluster frequencies   are shared by all images  Our full HDP Grid model
+then learns imagespeci   cluster frequencies     and instantiates new clusters to model unique visual textures 
+
+  DP Grid  Variational Inference
+
+Our goal is to infer the DP Grid model parameters that
+best explain observed images which may be clean  xm 
+or corrupted by noise  ym  The DP Grid model uses
+the same cluster probabilities   generated from stickbreaking weights   as in Eq    for all images 
+Learning from clean images  Given   training set   of
+uncorrupted images          xM   we estimate the posterior
+distribution          patch      for our global mixture
+model parameters   and   grid assignment indicators wm 
+and patchlevel latent variables  
+
+patch
+
+     um  vm  zm 
+
+Figure   Generation of   complete image via   randomly positioned grid of nonoverlapping patches  Top left          pixel
+image  where each pixel is identi ed by   distinct colored symbol  Top right  An in nite    grid of pixels  divided into      
+patches  Bottom  The four possible ways         image may be
+generated from       patches  Shaded pixels are clipped by the
+image boundary  see Sec   
+
+that are likely under all possible wm  Models based on  
+single   xed grid produce severe artifacts at patch boundaries  as shown in Fig    of Zoran   Weiss  
+
+  Patch Generation via Gaussian Mixtures
+
+Gaussian mixtures provide excellent density models for
+natural image patches  Zoran   Weiss    We associate clusters with zeromean  fullcovariance Gaussian
+distributions on patches with   pixels  We parameterize
+cluster   by   precision  inverse covariance  matrix     
+Wish      whose conjugate Wishart prior has   degrees
+of freedom and scale matrix     Given that wm      each
+of the Nmg patches vmgn in grid   is sampled from an in 
+nite mixture with imagespeci   cluster frequencies 
+
+ 
+   
+
+  
+
+ mkNorm vmgn   
+
+  vmgn wm       
+Let zmgn   wm       Cat    denote the cluster that
+generates patch    To account for the contrast normalization of Eq    the intensities in patch   are shifted by an
+independent  scalar  DC offset  umgn 
+
+ 
+
+  umgn   wm        Norm umgn        
+
+ 
+Finally  if wm  cid    so that grid   is unobserved  we sample  zmgn  vmgn  umgn  from some reference distribution
+
+ cid 
+
+                                                                                                                                                                                                                                                 cid cid cid cid cid cid cid cid cid cid cid cid cid cid cid cid cid cid cid cid cid cid cid cid cid cid cid cid cid cid From Patches to Images    Nonparametric Generative Model
+
+ cid 
+
+  
+
+  cid 
+
+  
+
+Exact posterior inference is intractable  so we instead  nd
+an approximate posterior               patch  minimizing the KL divergence  Wainwright   Jordan   
+from the true posterior      Equivalently  our variational
+method maximizes the following objective   
+              max
+max
+   
+
+  log     
+
+ 
+
+ cid 
+
+ cid 
+
+Eq
+
+log
+
+    
+  
+
+We constrain the solution of our optimization to come from
+  tractable family of structured mean eld distributions   
+parameterized by free parameters  Unlike na ve mean eld
+methods which assume complete posterior independence 
+our structured mean eld approximation is more accurate
+and includes dependencies between some latent variables 
+
+    
+
+          
+
+  wm   patch
+
+   wm 
+
+As in Hughes   Sudderth   this approximate posterior family contains in nitely many clusters  just like the
+true posterior  Rather than applying    xed truncation to
+the stickbreaking prior  Blei   Jordan    we dynamically truncate the patch assignment distributions      to
+only use the  rst   clusters to explain the   observed images  Clusters with indices       then have factors     
+set to the prior  and need not be explicitly represented 
+Global mixture model  The global cluster weights  
+and precision matrices   have standard exponential family forms  free parameters are marked by hats 
+
+       Wish cid     Wk
+form alignment posterior   wm    Cat cid   
+
+ cid         Beta cid               
+ cid 
+ cid  This
+
+Here      Eq    and    controls the variance of     
+Imagespeci   alignment  For natural images  all grid
+alignments are typically of similar quality  so we      uni 
+
+             
+
+ 
+
+ cid 
+
+simpli es many updates while still avoiding artifacts that
+would arise from   single  nonoverlapping patch grid 
+Patchspeci  
+factors  The patchspeci   variables
+ patch have structured posteriors  conditioned on the value
+of the grid indicator wm for the current image 
+
+  zmgn   wm        Categorical cid rmgn     rmgnK
+  umgn   wm        Norm cid umgn    
+  vmgn   wm     zmgn        Norm cid vmgnk    
+
+ cid 
+Below  we let Eq  denote the conditional expectation with
+respect to the variational distribution    given wm 
+Learning  Given clean images    we perform coodinate
+ascent on the objective    alternatively updating one factor
+among           patch  Most updates have closed
+forms due to the exponential families de ning    see supplement  As one intuitive example  consider the update for
+
+ cid 
+
+mgnk
+
+mgn
+
+the cluster precision matrix posterior         Wk 
+        
+
+Nk  Nk  
+
+ 
+ 
+
+  cid 
+Nmg cid 
+
+  
+
+Eq
+
+  cid 
+
+  cid 
+ cid 
+
+  
+
+  
+
+  
+
+  
+
+ rmgnk 
+
+Nmg cid 
+  cid 
+ cid   zmgn vmgnvT
+ cid cid 
+
+  
+
+Sk
+
+ 
+
+ cid   
+ cid 
+
+mgn
+
+ Wk      
+
+ 
+ 
+
+Statistic Nk    counts patches assigned to cluster    while
+Sk            aggregates second moments  These updates
+follow the standard form of prior parameter plus expected
+suf cient statistic  except the statistics are averaged  not
+simply added  across the   grid alignments 
+
+  Image Denoising and Connections to EPLL
+
+Given   corrupted image ym  we seek to compute the posterior   xm   ym    where we condition on the training
+set    Our variational posterior family   now includes an
+additional factor for the unobserved   clean  image xm 
+ 
+
+  xm    Norm cid xm    xm    
+
+ 
+The variational inference objective becomes
+
+ cid 
+
+ cid 
+
+ cid 
+
+Eq
+
+     ym  xm 
+
+log
+
+max
+   
+
+  log   ym   
+and the coordinate ascent update for   xm  equals
+
+  xm 
+
+ cid  ym
+
+ cid 
+
+ xm     
+ 
+
+   
+
+hm
+ 
+
+ 
+
+  
+   
+
+ 
+        
+
+ 
+
+ 
+
+The updated covariance is diagonal  improving computational ef ciency  The mean depends on the average image
+vector across all patches in all grids  denoted by hm 
+hm  cid   
+ 
+
+mgn CmgnEq vmgn     umgn 
+   
+
+Nmg cid 
+
+  cid 
+
+ 
+
+  
+
+  
+
+Note that the update for  xm in Eq    is similar to the
+EPLL update in Eq    except that some terms involving
+projection matrices become constants because we account
+for partially observed patches  Modeling partial patches is
+necessary to produce   valid likelihood bound in Eq   
+In fact  as we show below all three terms in the EPLL objective in Eq    are very similar to our proposed minimization objective function     up to   scale factor of   
+Of course    key difference is that our objective seeks full
+posteriors rather than point estimates  and enables the HDP
+model of multiple images detailed in Sec   
+EPLL Term   When we set    cid   
+EPLL objective in Eq    becomes
+
+    the  rst term of the
+
+     
+
+ 
+Similarly  suppressing the subscript   denoting the image
+for simplicity  Eq  log        in our    simpli es as
+
+                  
+
+ 
+
+  Eq                
+
+ 
+
+From Patches to Images    Nonparametric Generative Model
+
+ cid 
+ cid 
+
+EPLL Term   Taking the second term in Eq    and
+substituting       we have 
+
+ 
+ 
+
+Eq
+
+ 
+ 
+
+  
+
+  
+
+ 
+ 
+
+Ng cid 
+
+  cid 
+
+  Pix    vi    Pix    vi 
+
+ 
+The corresponding term Eq  log              in our objective    can be written similarly up to   scaling by   
+ 
+
+ cid 
+ Pgnx    vgn    Pgnx    vgn 
+ cid 
+
+EPLL Term   The third EPLL term assumes zerocentered patches   vi are drawn from Gaussian mixtures 
+ 
+Similarly  in our minimization objective    we draw vgn
+from   DP mixture model  Explicitly including the cluster
+assignment zgn  Eq  log           equals
+
+  log     vi      
+
+ 
+
+ 
+
+Eq log   vgn  zgn      
+
+ 
+
+  cid 
+
+Ng cid 
+
+  
+
+  
+
+ 
+ 
+
+ 
+
+EPLL is similar  but maximizes assignments  Eq   
+rather than computing posterior assignment probabilities 
+
+  HDP Grid  Variational Inference
+Imagespeci   frequencies  The DP model above  and
+the parametric EPLL objective it generalizes  assume the
+same cluster frequency vector   for each image    Our
+HDP Grid model allows imagespeci   frequencies    to
+be learned from data  via the hierarchical regularization of
+the HDP prior  Teh et al    Our approximate posterior
+family   now has the following HDPspeci   factors 
+   Beta                        
+
+    cid 
+
+          mK         Dir           mK       
+
+ 
+
+This approximate posterior represents in nitely many clusters via    nite partition of    into       terms  one for
+each of the   active clusters  and   remainder term at index
+   that aggregates the mass of all inactive clusters  The
+free parameter    is also   vector of size       whose last
+entry represents all inactive clusters  We follow Hughes
+et al    to obtain   closedform update for     and
+gradientbased updates for     see the supplement for details  We highlight that the    update naturally includes
+   
+  rescaling of count suf cient statistics as in Eq   
+Other factors remain unchanged from the DP Grid model 
+Imagespeci   clusters  Due to the heavytailed distribution of natural images  Ruderman    even with large
+training sets  test images may still contain unique textural
+patterns like the striped scarf in the Barbara image in Fig   
+Fortunately  our Bayesian nonparametric HDP Grid model
+provides   coherent way to capture such patterns by appending   cid  novel  imagespeci   clusters to the original
+  clusters learned from training images  These novel clusters lead to more accurate posterior approximations      
+that better optimize our objective   
+
+ cid 
+
+ cid 
+
+ cid cid 
+
+ cid 
+
+ 
+
+ cid 
+
+  
+
+ cid 
+   
+
+    
+
+     cid 
+
+    vi vT
+
+     cid 
+  
+
+ cid  
+
+   cid 
+
+We initialize inference by creating   cid      imagespeci   clusters with the kmeans  algorithm  Arthur
+  Vassilvitskii    which minimizes the cost function
+ 
+where the  rst sum is over the set of fullyobserved patches
+within the image  The function   is the Bregman divergence associated with our zeromean Gaussian likelihood  Banerjee et al    and  vi   BPiy is   zerocentered patch  We initialize the algorithm by sampling   cid 
+diverse patches in   distancebiased fashion  and re ne with
+  iterations of coordinate descent updates of   cid  and  cid 
+Then we expand the variational posterior    into       cid 
+clusters  The  rst   indices are kept the same as training 
+and the last   cid  indices are set via Eq    using suf cient
+statistics   cid    cid  derived from hard assignments   cid 
+
+ cid 
+
+ 
+
+ 
+
+ 
+
+  
+
+   cid  
+
+   cid  
+
+ cid 
+    
+
+ cid 
+  vi vT
+
+ cid 
+  cid   
+
+ cid 
+    Nk cid  
+  cid   
+ 
+ 
+Here  following Portilla et al    and Kivinen et al 
+    cid 
+  cid  estimates the clean data statistic Sk cid  by subtracting the expected noise covariance  The   operator
+thresholds any negative eigenvalues to zero 
+Similarly  the other global variational factor    is also
+expanded to       cid  clusters via suf cient statistics   cid 
+and counts of cluster usage from training data  Given
+      
+  each factor in   may then be updated in turn
+to maximize the variational objective    see supplement 
+Finally  while we initialize   cid  to   large number to avoid
+local optima  this may lead to extraneous clusters  We thus
+delete new clusters that our sparsitybiased variational updates do not assign to any patch  In the Barbara image in
+Fig    this leaves   imagespeci   clusters  Deletion improves model interpretability and algorithm speed  because
+costs scale linearly with the number of instantiated clusters 
+  Experiments
+Following EPLL  we train our HDPGrid model using  
+clean training and validation images from the Berkeley segmentation dataset  BSDS  Martin et al    We   
+      to account for the quantization of image intensities to  bit integers  Observed DC offsets   provide
+maximum likelihood estimates of the mean   and variance
+   in Eq    Similarly  we compute empirical covariance matrices for patches in the same image segments to
+estimate hyperparameters   and   in Eq    Using variational learning algorithms that adapt the number of clusters to the observed data  Hughes   Sudderth    we
+discover       clusters for the DPGrid model  which
+we use to initialize our HDP model  We set our annealing
+schedule for   to match that used by the public EPLL code 
+Image denoising methods are often divided into two
+external methods  like
+types  Zontak   Irani   
+
+From Patches to Images    Nonparametric Generative Model
+
+Noisy    dB
+
+iDP    dB
+
+eDP    dB
+
+HDP    dB
+
+Figure   By capturing selfsimilar patches in the  house  image 
+our HDP model reduces artifacts in smooth regions such as the
+sky  roof  and walls  Input noise level         dB 
+
+EPLL    dB
+
+eDP    dB
+
+HDP    dB
+
+HDP  new clusters
+
+Figure   For an image with noise level       the HDP improves denoising performance by leveraging both internal clusters
+      scarf and tablecloth  and external clusters        oor and table legs  The bottom right image colors the pixels assigned to
+each of   internal HDP clusters  Best viewed electronically 
+
+EPLL  that learn all parameters from   training database
+of clean images  and internal methods that denoise patches
+using other patches of the single noisy image  For example 
+the KSVD  Elad   Aharon    has an external variant
+that uses   dictionary learned from clean images  and an
+internal variant that learns its dictionary from the noisy image    major contribution of our paper is to show that the
+hierarchical DP leads to   principled hybrid of internal and
+external methods  in which cues from clean and noisy images are automatically combined in an adaptive way 
+
+  Image Denoising
+
+We test our algorithm on    classic  images used in many
+previous denoising papers  Mairal et al    Zoran  
+Weiss    as well as the   BSDS test images used by
+ Roth   Black    Zoran   Weiss    We evaluate
+
+Figure   Denoising performance of gridbased models on the
+Barbara image of Fig     left  and the house image of Fig   
+ right  as   function of the noise standard deviation  For both
+images and all noise levels  the HDP model is superior to baselines that solely use external  eDP  or internal  iDP  training  in
+terms of PSNR improvement relative to the noisy input image 
+When the image is extremely noisy       internal clusters
+are of poor quality  and the HDP and eDP models are comparable 
+
+PSNR  cid    log  MSE 
+
+the denoising performance by the peak signalto noise ratio  PSNR    logarithmic transform of the mean squared
+error  MSE  between images with normalized intensities 
+ 
+We also evaluate the structural similarity index  SSIM 
+Wang et al    which quanti es image quality degradation via changes in structure  luminance  and contrast 
+Internal vs  external clusters 
+In result  gures  we use
+eDP to refer to our DPGrid model trained solely on external clean images and HDP to refer to the HDPGrid model
+that also learns novel imagespeci   clusters  We also
+train an internal DPGrid model  referred to as iDP  using
+only information from the noisy test image  The  rst four
+columns of Table   compare their average denoising performance  where EPLL can be viewed as   simpli cation
+of eDP  For all noise levels and datasets  the HDP model
+has superior performance  As shown in Fig    HDP is more
+accurate than EPLL and eDP for every single classic  image  Also  the consistent gain in performance from EPLL
+to eDP demonstrates the bene ts of Bayesian nonparametric learning of an appropriate model complexity  for EPLL 
+the number of clusters was arbitrarily  xed at      
+Fig    further illustrates the complementary role of internal
+
+ noise level PSNRiDPEPLLeDPHDP noise level PSNRiDPEPLLeDPHDPFrom Patches to Images    Nonparametric Generative Model
+
+Table   Average PSNR and SSIM values on benchmark datasets  larger values indicate better denoising  Methods are highlighted if
+they are indistinguishable with   con dence  according to   Wilcoxon signedrank test on the fraction of images where one method
+outperforms another  For all noise levels the patch size of BM   is  xed to       and LSSC is  xed to      
+
+metric
+
+dataset
+
+PSNR
+
+SSIM
+
+classic 
+
+BSDS 
+
+classic 
+
+BSDS 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+iDP
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+EPLL
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+eDP
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+HDP
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+FoE
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+eKSVD iKSVD BM   LSSC
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Figure   Cleanimage evidence lower bound  ELBO  versus output PSNR       for    classic  images  The horizontal axis
+plots log   xtest xtrain      xtest  xtrain   xtrain  divided by the
+number of pixels  Our HDP is uniformly superior to the eDP 
+
+and external clusters for   single test image  Barbara 
+The internal iDP perfectly captures some unique textures
+like the striped clothing  but produces artifacts in smooth
+background regions  The external EPLL and eDP better
+represent smooth surfaces and contours  which are common in training data  but poorly recover striped textures 
+As shown in Fig    while the relative accuracy of the eDP
+and iDP models varies depending on image statistics  the
+HDP model adaptively combines external and internal clusters for superior performance at all noise levels  By capturing the expected selfsimilarity of image patches  the HDP
+model also reduces artifacts in large regions with regular
+textures  such as the smoothly shaded areas of Fig   
+Computational speed  To denoise       pixel image on   modern laptop  our Python code for eDP inference with       clusters takes about   min  The
+public EPLL Matlab code  Zoran   Weiss    with
+      clusters takes about   min  With equal numbers of clusters  the two methods have comparable runtimes  Our opensource Python code is available online at
+
+Original
+
+FoE
+
+EPLL
+
+HDP
+
+Figure     qualitative comparison of image inpainting algorithms  As illustrated in the three closeup views  the HDP exploits patch selfsimilarity to better recover  ne details 
+
+github com bnpy hdpgrid imagerestoration 
+Learning imagespeci   clusters for the HDP model is
+more expensive  our nonoptimized Python denoising code
+currently requires about   min  per image  Nearly all
+of the extra time is spent on the kmeans  initialization
+of Eq    We expect this can be sped up signi cantly
+by coding core routines in    parallelizing some substeps
+ possibly via GPUs  using fewer internal clusters   is
+often too many  or using faster initialization heuristics 
+
+ ELBO pixel PSNReDPHDPFrom Patches to Images    Nonparametric Generative Model
+
+Noisy
+
+BM  
+
+LSSC
+
+HDP
+
+  dB
+
+  dB
+
+  dB
+
+  dB
+
+  dB
+
+  dB
+
+  dB
+
+  dB
+
+  dB
+
+  dB
+
+  dB
+
+  dB
+
+  dB
+
+  dB
+
+  dB
+
+  dB
+
+Figure   Comparison of image denoising methods on BSDS  Unlike our HDP model  the BM   and LSSC methods learn solely
+from the noisy image and do not accurately capture some textures such as the sandy ground in Row   fallen leaves and tiger tail in Row
+  trees and grass in Row   and sky and clouds in Row   Noise level       in Row         elsewhere  Best viewed electronically 
+
+Performance  We compare our HDP model to other
+patchbased denoising methods in Table   On classic 
+where many top methods have been handtuned to perform
+well  our model is statistically indistinguishable from the
+best baselines  On the larger BSDS  our performance
+is superior to the stateof theart  showing the value of
+nonparametric learning from large image collections  See
+Fig    for examples  At higher noise levels       LSSC
+has modestly improved performance   dB in PSNR 
+when modeling     patches  Mairal et al    HDP
+models of larger patches are   promising research area 
+  Image Inpainting
+
+While many image processing systems are designed for
+just one problem  our generative model is useful for many
+tasks  For example  we can  inpaint  occluded image regions  like the red pixels in Fig    by modifying Eq    to
+
+let       for only those regions and setting       elsewhere  To process color images  we follow the approach of
+FoE and EPLL and convert to the YCbCr color space before independently inpainting each channel  While ground
+truth is unavailable for the classic image in Fig    our gridbased HDP produces fewer visual artifacts than baselines 
+  Conclusion
+We have developed   coherent Bayesian nonparametric model that  via randomly positioned grids of image
+patches  provides   novel statistical foundation for the popular EPLL method  We show that HDP mixture models of
+visual textures can grow in complexity as additional images are observed and capture the selfsimilarity of natural
+images  Our HDPgrid image denoising and inpainting algorithms are competitive with the stateof theart  and our
+model is applicable to many other computer vision tasks 
+
+From Patches to Images    Nonparametric Generative Model
+
+Acknowledgements
+This research supported in part by NSF CAREER Award
+No  IIS  MCH supported in part by Oracle Labs 
+
+References
+Arthur     and Vassilvitskii     kmeans  The advantages of careful seeding  In ACMSIAM Symposium on
+Discrete Algorithms   
+
+Banerjee     Merugu     Dhillon        and Ghosh    
+Clustering with Bregman divergences  Journal of Machine Learning Research     
+
+Bertalmio     Sapiro     Caselles     and Ballester    
+Image inpainting  In Computer Graphics and Interactive
+Techniques  pp     
+
+Blei        and Jordan        Variational inference for
+Dirichlet process mixtures  Bayesian Analysis   
+   
+
+Dabov     Foi     Katkovnik     and Egiazarian     Image restoration by sparse    transformdomain collaborative  ltering  In Electronic Imaging   
+
+Elad     and Aharon    
+
+Image denoising via sparse
+and redundant representations over learned dictionaries 
+IEEE Transactions on Image Processing   
+   
+
+Geman     and Yang     Nonlinear image recovery with
+halfquadratic regularization  IEEE Transactions on Image Processing     
+
+Hughes        and Sudderth        Memoized online variational inference for Dirichlet process mixture models 
+In Neural Information Processing Systems   
+
+Hughes        Kim        and Sudderth        Reliable
+and scalable variational inference for the hierarchical
+In Arti cial Intelligence and StatisDirichlet process 
+tics   
+
+  egou     Douze     and Schmid     On the burstiness of
+visual elements  In IEEE Conf  on Computer Vision and
+Pattern Recognition  pp     
+
+Kivinen        Sudderth        and Jordan       
+
+Image
+denoising with nonparametric hidden Markov trees  In
+International Conference on Image Processing   
+
+Mairal     Bach     Ponce     Sapiro     and Zisserman 
+In
+
+   Nonlocal sparse models for image restoration 
+International Conference on Computer Vision   
+
+Martin     Fowlkes     Tal     and Malik       database
+of human segmented natural images and its application to evaluating segmentation algorithms and measuring ecological statistics  In International Conference on
+Computer Vision   
+
+Portilla     Strela     Wainwright        and Simoncelli 
+      Image denoising using scale mixtures of Gaussians
+in the wavelet domain  IEEE Transactions on Image Processing     
+
+Roth     and Black        Fields of experts    framework
+for learning image priors  In IEEE Conf  on Computer
+Vision and Pattern Recognition  volume   pp   
+ 
+
+Ruderman        Origins of scaling in natural images  Vi 
+
+sion Research     
+
+Srivastava     Lee        Simoncelli        and Zhu    
+On advances in statistical modeling of natural images 
+Journal of Mathematical Imaging and Vision   
+   
+
+Teh        Jordan        Beal        and Blei        Hierarchical Dirichlet processes  Journal of the American
+Statistical Association     
+
+Wainwright        and Jordan        Graphical models 
+exponential families  and variational inference  Foundations and Trends in Machine Learning     
+
+Wang     Bovik        Sheikh        and Simoncelli       
+Image quality assessment  From error visibility to structural similarity  IEEE Transactions on Image Processing 
+   
+
+Yang     and Huang     Image superresolution  Historical
+overview and future challenges  Superresolution imaging  pp     
+
+Zontak     and Irani     Internal statistics of   single natural image  In IEEE Conf  on Computer Vision and Pattern Recognition  pp     
+
+Zoran     and Weiss     From learning models of natural
+In Interna 
+
+image patches to whole image restoration 
+tional Conference on Computer Vision   
+
+Zoran     and Weiss     Natural images  Gaussian mixtures and dead leaves  In Neural Information Processing
+Systems   
+
+

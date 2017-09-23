@@ -1,0 +1,1699 @@
+Learning Latent Space Models with Angular Constraints
+
+Pengtao Xie     Yuntian Deng   Yi Zhou   Abhimanu Kumar   Yaoliang Yu   James Zou   Eric    Xing  
+
+Abstract
+
+The large model capacity of latent space models  LSMs  enables them to achieve great performance on various applications  but meanwhile
+renders LSMs to be prone to over tting  Several
+recent studies investigate   new type of regularization approach  which encourages components
+in LSMs to be diverse  for the sake of alleviating
+over tting  While they have shown promising
+empirical effectiveness  in theory why larger  diversity  results in less over tting is still unclear 
+To bridge this gap  we propose   new diversitypromoting approach that is both theoretically analyzable and empirically effective  Speci cally 
+we use nearorthogonality to characterize  diversity  and impose angular constraints  ACs 
+on the components of LSMs to promote diversity    generalization error analysis shows that
+larger diversity results in smaller estimation error and larger approximation error  An ef cient
+ADMM algorithm is developed to solve the constrained LSM problems  Experiments demonstrate that ACs improve generalization performance of LSMs and outperform other diversitypromoting approaches 
+
+  Introduction
+Latent space models  LSMs  such as sparse coding  Olshausen   Field    topic models  Blei et al   
+and neural networks  are widely used in machine learning
+to extract hidden patterns and learn latent representations
+of data  An LSM consists of   set of components  Each
+component aims at capturing one latent pattern and is pa 
+
+ Machine Learning Department  Carnegie Mellon University
+ Petuum Inc   School of Engineering and Applied Sciences  Harvard University  College of Engineering and Computer Science 
+Syracuse University  Groupon Inc   School of Computer Science 
+University of Waterloo  Department of Biomedical Data Science 
+Stanford University  Correspondence to  Pengtao Xie  pengtaox cs cmu edu  Eric    Xing  eric xing petuum com 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+rameterized by   weight vector  For instance  in   topic
+model  Blei et al    the components are referred to
+as topics  aiming at discovering the semantics underlying
+documents  Each topic is associated with   weight vector 
+The modeling power of LSMs can be very large when the
+number of components is large and the dimension of weight
+vectors is high  For instance  in the LightLDA  Yuan et al 
+  topic model  the number of topics is   million and
+the dimension of topic vector is   resulting in   topic
+matrix with   billion parameters  The vast model capacity of LSMs enables them to  exibly adapt to the complex
+patterns underlying data and achieve great predictive performance therefrom 
+While highly expressive  LSMs are prone to over tting 
+because of their large amount of model parameters   
+key ingredient to successfully train LSMs is regularization 
+which imposes certain control over the model parameters
+to reduce model complexity and improve the generalization performance on unseen data  Many regularizers have
+been proposed  including  cid  regularization   cid  regularization  Tibshirani    nuclear norm  Recht et al   
+Dropout  Srivastava et al    and so on 
+Recently    new type of regularization approaches  Yu
+et al    Zou   Adams      Xie et al       
+Rodr guez et al    which aim at encouraging the
+weight vectors of components in LSMs to be  diverse 
+are emerging  Zou   Adams     apply Determinantal
+Point Process  Kulesza   Taskar    to encourage the
+topic vectors in LDA to be  diverse  Bao et al    develop   softmax regularizer to promote incoherence among
+hidden units in neural network  Xie et al    propose
+an anglebased regularizer to  diversify  the weight vectors in Restricted Boltzmann Machine  RBM  While these
+approaches have demonstrated promising effectiveness on
+  wide range of empirical studies  in theory how they reduce over tting is still unclear  One intuitive explanation
+could be  promoting diversity imposes   structural constraint on model parameters  which reduces the model capacity of LSMs and therefore alleviates over tting  However  how to make this formal is challenging  In this paper  we aim to bridge this gap  by proposing   diversitypromoting approach that is both empirically effective and
+theoretically analyzable  We use nearorthogonality to represent  diversity  and propose to learn LSMs with angular
+
+Learning Latent Space Models with Angular Constraints
+
+constraints  ACs  where the angle between components is
+    which hence encourages the
+constrained to be close to  
+components to be close to orthogonal  therefore  diverse 
+Using sparse coding and neural network as study cases  we
+analyze how ACs affect the generalization performance of
+these two LSMs  The analysis shows that the more close
+  the angles are  the smaller the estimation error is and
+to  
+the larger the approximation error is  The best tradeoffs
+of these two errors can be explored by properly tuning the
+angles  We develop an alternating direction method of multipliers  ADMM   Boyd et al    algorithm to solve
+the angleconstrained LSM  ACLSM  problems  In various experiments  we demonstrate that ACs improve the
+generalization performance of LSMs and outperform other
+diversitypromoting regularization approaches 
+The major contributions of this work are 
+
+  We propose   new approach to promote diversity
+in LSMs  by imposing angular constraints  ACs  on
+components  for the sake of alleviating over tting 
+
+  We perform theoretical analysis on how ACs affect the
+generalization error of two exemplar LSMs  sparse
+coding and neural networks 
+
+  We develop an ef cient ADMM algorithm to solve the
+
+ACLSM problems 
+
+  Empirical evaluation demonstrates that ACs are very
+effective in reducing over tting and outperforms other
+diversitypromoting approaches 
+
+The rest of the paper is organized as follows  Section
+  reviews related works  Second   introduces the angleconstrained LSMs and Section   gives the theoretical analysis  Section   presents experimental results and Section  
+concludes the paper 
+  Related Works
+Diversitypromoting learning of latent space models has
+been widely studied recently  Ramirez et al    de 
+ ne   regularizer based on squared Frobenius norm to encourage the dictionary in sparse coding to be incoherent 
+Zou   Adams     use the determinantal point process
+ DPP   Kulesza   Taskar    to encourage the location
+vectors in Gaussian mixture model  GMM  and topics in latent Dirichlet allocation  Blei et al    to be  diverse 
+Given   vectors  wj  
+   DPP is de ned as log det   
+  is   kernel matrix where Gij     wi  wj  and    is  
+kernel function  det    is the volume of the parallelepiped
+   where   denotes the reproducformed by  wj  
+ing kernel feature map associated with kernel    Vectors
+with larger volume are considered to be more diverse since
+they are more spread out  Xie   develop an anglebased regularizer to encourage the weight vectors of hidden
+units in restricted Boltzmann machine to be close to orthogonal  The nonobtuse angle between each pair of weight
+
+vectors is measured and the regularizer is de ned as the
+mean of these angles minus their variance    larger mean
+encourages the vectors to have larger angles overall and  
+smaller variance encourages the vectors to be evenly different from each other  Xie   apply this regularizer to
+encourage the projection vectors in distance metric learning
+to be diverse and show that promoting diversity can reduce
+model size without sacri cing modeling power  Besides
+frequentiststyle regularization  diversitypromoting learning is also investigated in Bayesian learning where the components are random variables  Affandi et al    apply
+DPP as   repulsive prior to encourage the location vectors
+in GMM to be far apart  Xie et al      propose   mutual angular prior that has an inductive bias towards vectors
+having larger angles 
+In the literature of neural networks  many works have studied the  diversi cation  of hidden units  Le et al   
+apply   strictorthogonality constraint over the weight parameters to make the hidden units uncorrelated  therefore
+ diverse  In practice  this hard constraint might be too
+restrictive and hurts performance  as we will con rm in experiments  Bao et al    propose   softmax regularizer to encourage the weight vectors of hidden units to have
+small cosine similarity  Cogswell et al    propose to
+decorrelate hidden activations by minimizing their covariance  In convolutional neural networks  CNNs  where the
+number of activations is much larger than that of weight
+parameters  this regularizer is computationally prohibitive
+since it is de ned over activations rather than weights 
+Henaff et al    perform   study to show that random
+orthogonal initialization of the weight matrices in recurrent neural networks improves its ability to perform longmemory tasks  Xiong et al    propose   structured
+decorrelation constraint which groups hidden units and encourages units within the same group to have strong connections during the training procedure and forces units in
+different groups to learn nonredundant representations by
+minimizing the crosscovariance between them  Rodr guez
+et al    show that regularizing negatively correlated
+features inhibits effective diversity and propose   solution
+which locally enforces feature orthogonality  Chen et al 
+  propose   group orthogonal CNN which leverages
+side information to learn diverse feature representations 
+Mao et al    impose   stochastic decorrelation constraint based on covariance to reduce the coadaptation of
+hidden units  Xie et al    de ne   kernelbased regularizer to promote diversity and analyze how it affects the
+generalize performance of neural networks  NNs  It is unclear how to generalize the analysis to other LSMs 
+Diversitypromoting learning has been investigated in nonLSM models as well  In multiclass classi cation  Malkin
+  Bilmes   encourage the coef cient vectors of different classes to be diverse by maximizing the determi 
+
+Learning Latent Space Models with Angular Constraints
+
+ cid  
+    ij     
+
+ denoted by    by minimizing the following objective
+function            
+   
+  Applying ACs to the
+ 
+basis vectors  we obtain the following ACSC problem 
+
+  cid xi  cid  
+ cid  
+ cid  
+    cid wj cid 
+
+    ijwj cid 
+
+ 
+
+nant of the covariance matrix of the coef cient vectors  In
+classi ers ensemble  Yu et al    develop   regularizer
+to encourage the coef cient vectors of support vector machines  SVMs  to have small cosine similarity and analyze
+how this regularizer affects the generalization performance 
+The analysis is speci   to SVM ensemble  It is unclear how
+to generalize it to latent space models 
+  Methods
+In this section  we propose AngleConstrained Latent
+Space Models  ACLSMs  and present an ADMM algorithm to solve them 
+  Latent Space Models with Angular Constraints
+
+An LSM consists of   components and these components
+are parameterized by vectors      wj  
+   Let     
+denote the objective function of this LSM  Similar to  Bao
+et al    Xie et al    Rodr guez et al    we use
+angle to characterize diversity  the components are considered to be more diverse if they are close to being orthogo 
+    To encourage this  we
+nal       their angles are close to  
+require the absolute value of cosine similarity between each
+pair of components to be less than   small value   which
+leads to the following angleconstrained LSM  ACLSM 
+problem
+
+minW     
+
+    
+
+              
+
+ wi wj 
+
+ cid wi cid cid wj cid 
+
+   
+
+ 
+
+The parameter   controls the level of nearorthogonality
+ or diversity    smaller   indicates that the vectors are
+more close to being orthogonality  and hence are more diverse  As will be shown later  representing diversity using
+the angular constraints facilitates theoretical analysis and is
+empirically effective as well 
+
+  Case Studies
+
+In this section  we apply the ACs to two LSMs 
+Sparse Coding Given   set of data samples  xi  
+  
+where     Rd  sparse coding  SC   Olshausen   Field 
+  aims to use   set of  basis  vectors  referred to as
+dictionary       wj  
+   to reconstruct the data samples  Each data sample   is reconstructed by taking   sparse
+    jwj
+where     
+   are the linear coef cients  referred to as
+sparse codes  and most of them are zero  The reconstruction error is measured using the squared  cid  norm
+  To achieve sparsity among the coef 
+       To avoid
+the degenerated case where most coef cients are zero and
+the basis vectors are of large magnitude   cid regularization
+is applied to the basis vectors   cid wj cid 
+  Putting these
+pieces together  we learn the basis vectors and sparse codes
+
+linear combination of the basis vectors      cid  
+ cid   cid  
+cients   cid regularization is utilized   cid  
+
+    jwj cid 
+
+minW         
+    
+
+              
+
+ wi wj 
+
+ cid wi cid cid wj cid 
+
+   
+
+ 
+
+Neural Networks
+In   neural network  NN  with   hidden layers  each hidden layer   is equipped with      units
+and each unit   is connected with all units in layer      
+Hidden unit   at layer   is parameterized by   weight vector
+    
+  These hidden units aim at capturing latent features
+ 
+underlying data  Applying ACs to the weight vectors of
+hidden units  we obtain the following ACNN problem
+minW     
+
+    
+
+                             
+
+   
+     
+     
+   cid 
+   cid cid     
+
+ 
+
+ cid     
+
+   
+
+where   denotes weight vectors in all layers and      is
+the objective function of this NN 
+
+  Algorithm
+
+    
+
+ 
+
+can be transformed into
+
+In this section  we develop an ADMMbased algorithm to
+solve the ACLSM problem  To make it amenable for optimization  we  rst factorize each weight vector   into its
+  Under such  
+
+ cid  norm      cid   cid  and direction  cid       cid   cid 
+factorization    can be reparameterized as       cid    where
+      and  cid cid   cid      Then the problem de ned in Eq 
+
+  cid     
+min cid    
+    gj    cid cid wj cid     
+    cid    cid wi  cid wj     
+where  cid      cid wj  
+new problem by alternating between  cid   and    Fixing  cid   
+   and      gj  
+Fixing    the subproblem de ned over cid   is
+  cid   
+   cid cid wj cid     
+    cid    cid wi  cid wj     
+
+   We solve this
+the problem de ned over   is  minG               gj  
+  which can be solved using projected gradient descent 
+
+which we solve using an ADMM algorithm  There are
+
+            pairwise constraints  cid wi    cid wj      For
+is  cid wp       cid wq        First  we introduce auxiliary vari 
+
+the rth constraint  let      and      be the index of the
+ rst and second vector respectively       the rth constraint
+
+min cid  
+
+ 
+
+    
+
+ables      
+
+    
+
+   and      
+
+    
+
+   to rewrite the problem in
+
+Learning Latent Space Models with Angular Constraints
+
+   
+
+ cid cid wp          
+   cid 
+
+ 
+
+Eq  into an equivalent form  For each pairwise con 
+
+    and let  cid wp          
+vectors     
+ 
+ cid     
+   cid           
+ 
+we obtain the following problem
+
+straint   cid wp       cid wq        we introduce two auxiliary
+     cid wq          
+and     
+   
+   cid       cid     
+        To this end 
+  cid   
+   cid cid wj cid     
+   cid wp          
+
+   cid wq          
+   cid         
+
+   cid     
+
+       
+
+min cid    
+
+      
+
+      
+
+    
+
+ 
+
+ 
+
+where          
+Then we de ne the
+augmented Lagrangian  with Lagrange multipliers    
+     
+
+  
+
+   cid     cid     
+    
+
+        
+
+        
+min cid      
+
+  
+
+     
+ 
+
+   and parameter  
+
+    
+  cid 
+  cid     
+   cid wp          
+   cid wq          
+ cid cid wq          
+       
+   cid 
+ 
+   cid cid wj cid     
+   cid     cid     
+
+     
+ 
+   
+
+   cid     
+
+    
+
+ 
+
+      
+
+       
+   cid         
+which can be solved by alternating between cid         
+Solve cid   The subproblem de ned over cid   is
+  cid 
+  cid     
+ cid wq   
+ cid wp          
+min cid  
+ cid cid wq          
+ cid cid wp          
+     
+ 
+   cid 
+   cid 
+ 
+   cid cid wj cid     
+
+     
+
+   
+
+    
+
+  
+
+ 
+
+For sparse coding  we solve this subproblem using coor 
+
+the other variables  Please refer to the supplements for details  For neural network  this subproblem can be solved
+using projected gradient descent which iteratively performs
+
+dinate descent  At each iteration  we update  cid wj by  xing
+the following three steps    compute the gradient of  cid wj
+date of  cid wj    project each vector onto the unit sphere 
+ cid wj    cid wj cid cid wj cid 
+
+using backpropagation    perform   gradient descent up 
+
+ 
+
+Solve     
+
+        
+
+ 
+
+min
+       
+    
+
+ 
+
+    
+
+The corresponding subproblem is
+      
+
+      
+
+   
+
+     
+
+ 
+
+ 
+
+ 
+
+        
+ cid cid wp          
+   cid 
+     
+   cid     
+   cid     cid     
+      
+      
+
+         
+
+ 
+
+ cid     
+    
+ 
+
+     
+
+ cid cid wq          
+   cid 
+
+ 
+
+Let                 be the KKT multipliers associated with the four constraints in this subproblem  According to the KKT conditions  we have
+     
+
+       
+
+       
+
+   cid wp       
+   cid wq       
+
+       
+       
+
+       
+
+     
+We solve these two equations by examining four cases 
+
+       
+
+        
+
+        
+
+and  cid     
+
+     cid wp    and          
+Case   First  we assume             then    
+ cid wq    According to the primal feasibility  cid     
+     
+   
+   cid     
+   cid      we know
+     cid wq   
+     cid wp   
+     cid wp   cid 
+     cid wq   cid 
+        is
+are the optimal solution 
+
+    
+ cid     
+Then we check whether the constraint      
+satis ed  If so  then     
+ 
+
+    
+ cid     
+
+and     
+ 
+
+    
+   
+
+      
+
+      
+
+   
+
+ 
+
+Case   We assume       and       then
+
+         
+
+         
+
+        
+
+         
+
+         
+
+        
+
+     cid wp   
+     cid wq   
+
+ 
+
+ 
+
+According to the complementary slackness condition  we
+know     
+      For the vectors on both sides of
+ 
+Eq  taking the square of their  cid  norm  we get
+
+      
+
+   
+
+       cid     
+
+Similarly  from Eq  we get
+
+   
+
+       cid     
+
+   cid wp   cid 
+   cid wq   cid 
+
+   
+
+   
+
+Taking the inner product of the two vectors on the left hand
+sides of Eq  and that on the right hand sides  we get
+
+                         
+       
+
+     cid wp   cid     
+
+     cid wq   
+
+ 
+
+ 
+Solving the system of equations consisting of Eq 
+we obtain the optimal values of     and   Plugging
+them into Eq  and Eq  we obtain   solution of     
+ 
+and     
+    Then we check whether this solution satis es
+      
+     
+In Case   we
+In Case   we discuss            
+discuss             The corresponding problems can
+be solved in   similar way as Case   Please refer to the
+supplements for details 
+
+      If so  this is an optimal solution 
+
+ 
+
+Learning Latent Space Models with Angular Constraints
+
+Solve     
+
+        
+
+  We simply perform the following 
+
+     cid wp          
+     cid wq          
+
+   
+
+   
+
+    
+        
+
+    
+        
+
+ 
+
+ 
+
+Compared with   vanilla backpropagation algorithm  the
+major extra cost in this ADMM algorithm comes from solving the             pairs of vectors      
+  
+Solving each pair incurs      cost  The   pairs bring in
+  total cost of      Such   cubic cost is also incurred in
+other decorrelation methods such as  Le et al    Bao
+et al    In practice    is typically less than   This
+     cost does not substantially bottleneck computation 
+as we will validate in experiments 
+
+        
+
+    
+
+  Analysis
+In this section  we discuss how the parameter   which controls the level of diversity affects the generalization performance of sparse coding and neural network 
+
+  Sparse Coding
+
+Following  Vainsencher et al    we assume the data
+example     Rd and basis vector     Rd are both of unit
+length  and the linear coef cient vector     Rm is at most
+  sparse        cid   cid       The estimation error of dictionary
+  is de ned as
+
+       Ex     min cid   cid    cid    cid  
+ cid  
+   min cid   cid    cid xi  cid  
+Let  cid         
+
+ajwj cid   
+   ajwj cid  be
+the empirical reconstruction error on   samples  We have
+the following theorem 
+
+  
+
+ 
+
+Theorem   Assume      
+
+    with probability at least    
+
+ cid 
+
+      cid     
+
+ 
+nk
+   
+
+dm ln  
+  
+
+ 
+
+ cid 
+
+ cid   
+
+ 
+
+ln  
+
+  
+
+ 
+
+   
+
+empirical risk minimizer  We aim to analyze the generalization error         of the empirical risk minimizer            
+can be decomposed into                                
+where                is the estimation error and      is
+the approximation error 
+For simplicity  we start with    simple  fully connected network with one hidden layer of   units  used for univariate
+regression  one output unit  with squared loss  Analysis
+for more complicated fully connected NNs with multiple
+hidden layers can be achieved in   straightforward way by
+cascading our analysis for this  simple  fully connected
+NN  Let     Rd be the input vector and   be the response
+value  For simplicity  we assume max cid   cid        Let
+wj   Rd be the weights connecting the jth hidden unit
+with input units  with  cid wj cid      
+Let   be   vector where    is the weight connecting hidden unit   to the output unit  with  cid cid       We assume the activation function      applied on the hidden
+units is Lipschitz continuous with constant    Commonly
+used activation functions such as recti ed linear       
+max     tanh         et       et        and sigmoid                 are all Lipschitz continuous with
+          respectively  Consider the hypothesis set
+
+        cid    cid 
+
+  
+
+        cid cid      cid wj cid      
+ jh   cid 
+    cid    wi   wj     cid wi cid cid wj cid 
+
+The estimation error given in Theorem   below indicates
+how well the algorithm is able to learn from the samples 
+
+Theorem   Let the activation function   be LLipschitz
+          Then  with
+continuous and the loss  cid          
+probability at least      
+ 
+
+               cid  ln       CL      
+where         BCL cid            
+
+mB   
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+Note that the right hand side is an increasing function      
+  As expected    smaller    implying more diversity 
+would induce   lower estimation error bound 
+
+  Neural Network
+
+The generalization error of   hypothesis   represented with   neural network is de ned as        
+          cid          where    is the distribution of inputoutput pair        and  cid  is the loss function  The training error is           
+    cid              where   is
+the number of training samples  Let      argminf        
+ 
+be the true risk minimizer and      argminf          be the
+
+ cid  
+
+Note that   hence the above bound on estimation error  decreases as   becomes smaller  The bound goes to zero as  
+ sample size  goes to in nite  The inverse square root dependence on   matches existing results  Bartlett   Mendelson    We note that it is straightforward to extend our
+bound to any bounded Lipschitz continuous loss  cid 
+The approximation error indicates how capable the hypothesis set   is to approximate   target function           
+where the error is measured by minf   cid       cid    and
+ cid       cid 
+ron    we assume the target function   satis es certain
+smoothness condition that is expressed in the  rst moment
+
+      cid                  dx  Following  Barof its Fourier representation   cid   cid cid          
+
+Learning Latent Space Models with Angular Constraints
+
+where     is the Fourier representation of      For such
+function the following theorem states its approximation error   In order to derive explicit constants we restrict   to be
+the sigmoid function  but other Lipschitz continuous activation function can be similarly handled 
+   
+   cid      where
+Theorem   Let            cid   
+    arccos    and                 Then  there is
+  function       such that
+
+ cid       cid          
+   
+
+      ln  
+ 
+
+ 
+
+ 
+
+mBC sin  min   
+
+ 
+
+ 
+
+ 
+
+This theorem implies that whether to use the angular constraint  AC  or not has   signi cant in uence on the approximate error bound  without using AC       the
+bound is   decreasing function of    the number of hidden units  using AC       the bound increases with
+   This striking phrasechange indicates the impact of AC 
+Given    xed    the bound decreases with   implying that
+  stronger regularization  smaller   incurs larger approximation error  When       the second term in the bound
+vanishes and the bound is reduced to the one in  Barron 
+  which is   decreasing function of    and    the upper bound on the weights  When       the second term
+   
+   cid  This
+increases with   up to the upper bound  cid   
+is because   larger number of hidden units bear   larger
+dif culty in satisfying the pairwise ACs  which causes the
+function space   to shrink rapidly  accordingly  the approximation power of   decreases quickly 
+The analysis in the two theorems shows that   incurs  
+tradeoff between the estimation error and the approximation error  decreasing   reduces the estimation error and
+enlarges the approximation error  Since the generalization
+error is the sum of the estimation error and the approximation error    has an optimal value to yield the minimal
+generalization error 
+  Experiments
+In this section  we present experimental results  Due to
+space limit  we put some results into supplements 
+  Sparse Coding
+
+Following  Yang et al    we applied sparse coding
+for image feature learning  We used three datasets in the
+experiments  Scenes   Lazebnik et al    Caltech 
+   Grif   et al    and UIUCSport  Li   FeiFei 
+  For each dataset   ve random train test splits are
+performed and the results are averaged over the  ve runs 
+We extract pixellevel dense SIFT  Lowe    features
+where the step size and patch size are   and   respectively  On top of the SIFT features  we use sparse coding methods to learn   dictionary and represent each SIFT
+
+Scene
+
+     
+SC
+DCMSC      
+     
+CSSC
+     
+DPPSC
+     
+ICSC
+     
+MASC
+     
+ACSC
+
+Caltech
+     
+     
+     
+     
+     
+     
+     
+
+Sports
+     
+     
+     
+     
+     
+     
+     
+
+Table   Classi cation accuracy   on three datasets 
+
+feature into   sparse code  To obtain imagelevel features 
+we apply maxpooling  Yang et al    and spatial pyramid matching  Lazebnik et al    Yang et al   
+over the pixellevel sparse codes  Then   linear SVM is
+applied to classify the images  We compare with other
+diversitypromoting regularizers including determinant of
+covariance matrix  DCM   Malkin   Bilmes    cosine similarity  CS   Yu et al    determinantal point
+process  DPP   Kulesza   Taskar    Zou   Adams 
+    InCoherence  IC   Bao et al    and mutual
+angles  MA   Xie et al    We use  fold cross validation to tune   in         and the number of
+basis vectors in           The parameter  
+in ADMM is set to  
+Table   shows the classi cation accuracy on three datasets 
+from which we can see that compared with unregularized
+SC  ACSC greatly improves performance  For example 
+on the Sports dataset  AC improves the accuracy from
+  to   This suggests that AC is effective in
+reducing over tting and improving generalization performance  Compared with other diversitypromoting regularizers  AC achieves better performance  demonstrating its
+better ef cacy in promoting diversity 
+  Neural Networks
+
+We evaluate AC on three types of neural networks  fullyconnected NN  FNN  for phone recognition  Hinton et al 
+  CNN for image classi cation  Krizhevsky et al 
+  and RNN for question answering  Seo et al   
+In the main paper  we report results on four datasets 
+TIMIT  CIFAR  CNN  Hermann et al    Daily
+Mail  Hermann et al    Please refer to the supplements for results on other datasets 
+FNN for Phone Recognition The TIMIT dataset contains   total of   sentences   hours  divided into
+  training set   speakers    validation set   speakers  and   core test set   speakers  We used the Kaldi
+ Povey et al    toolkit to train the monophone system
+which was utilized to do forced alignment and to get labels for speech frames  The toolkit was also utilized to
+preprocess the data into log lter banks  Among methods based on FNN  Karel   recipe in Kaldi achieves state
+
+ https catalog ldc upenn edu LDC   
+ https www cs toronto edu  kriz cifar html
+
+Learning Latent Space Models with Angular Constraints
+
+Network
+Segmental NN  AbdelHamid et al   
+MCRBM  Dahl et al   
+DSR  Tang et al   
+Recti er NN    oth   
+DBN  Srivastava et al   
+Shallow CNN  Ba   Caruana   
+Structured DNN  Yang et al   
+Posterior Modeling  Prabhavalkar et al   
+Kaldi
+CSKaldi
+ICKaldi
+MAKaldi
+DCKaldi
+ACKaldi
+CTC  Graves et al   
+RNN Transducer  Graves et al   
+Attention RNN  Chorowski et al   
+CTC SCRF  Lu et al   
+Segmental RNN  Lu et al   
+RNNDrop  Moon et al   
+CNN    oth   
+
+Error
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Table   Phone error rate   on the TIMIT test set 
+
+of the art performance  We apply AC to the FNN in this
+recipe  The inputs of the FNN are the FMLLR  Gales 
+  features of the neighboring   frames  which are
+mean centered and normalized to have unit variance  The
+number of hidden layers is   Each layer has   hidden units  Stochastic gradient descent  SGD  is used to
+train the network  The learning rate is set to   We
+compare with four diversitypromoting regularizers  CS 
+IC  MA and DeCorrelation  DC   Cogswell et al   
+The regularization parameter in these methods are tuned in
+        The   parameter in IC is set to  
+Table   shows state of the art phone error rate  PER  on the
+TIMIT core test set  Methods in the  rst panel are mostly
+based on FNN  which perform less well than Kaldi  Methods in the third panel are all based on RNNs which in general perform better than FNN since they are able to capture
+the temporal structure in speech data  In the second panel 
+we compare AC with other diversitypromoting regularizers  Without regularization  the error is   With AC 
+the error is reduced to   which is very close to  
+strong RNNbased baseline Connectionist Temporal Classi cation  CTC   Graves et al    Besides  AC outperforms other regularizers 
+CNN for Image Classi cation The CIFAR  dataset
+contains     color images from   categories  with
+  images for training and   for testing  We used
+  training images as the validation set to tune hyperparameters  The data is augmented by  rst zeropadding the
+images with   pixels on each side  then randomly cropping
+
+Network
+Maxout  Goodfellow et al   
+NiN  Lin et al   
+DSN  Lee et al   
+Highway Network  Srivastava et al   
+AllCNN  Springenberg et al   
+ResNet  He et al   
+ELUNetwork  Clevert et al   
+LSUV  Mishkin   Matas   
+Fract  MaxPooling  Graham   
+WideResNet  Huang et al   
+CSWideResNet
+ICWideResNet
+MAWideResNet
+DCWideResNet
+OPWideResNet
+ACWideResNet
+ResNeXt  Xie et al     
+PyramidNet  Huang et al   
+DenseNet  Huang et al   
+PyramidSepDrop  Yamada et al   
+
+Error
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Table   Classi cation error   on CIFAR  test set
+
+the padded images to reproduce     images  We apply
+AC to wide residual network  WideResNet   Zagoruyko
+  Komodakis    where the depth is set to   and
+the width is set to   SGD is used for training  with
+epoch number   initial learning rate   minibatch size
+  Nesterov momentum   dropout probability   and
+weight decay   The learning rate is dropped by  
+at     and   epochs  The performance is the median of   runs  We compare with CS  IC  MA  DC and
+an OrthogonalityPromoting  OP  regularizer  Rodr guez
+et al   
+Table   shows state of the art classi cation error on the test
+set  Compared with the unregularized WideResNet which
+achieves an error of   applying AC reduces the error
+to   AC achieves lower error than other regularizers 
+LSTM for Question Answering We apply AC to long
+shortterm memory  LSTM   Hochreiter   Schmidhuber 
+  network  which is   type of RNN  Given the input xt
+at timestamp    LSTM produces   hidden state ht based on
+the following transition equations 
+
+it        xt       ht        
+ft         xt        ht         
+ot        xt       ht        
+ct   it  cid  tanh     xt       ht           ft  cid  ct 
+ht   ot  cid  tanh ct 
+where Ws are Us are gatespeci   weight matrices  On
+the row vectors of each weight matrix  the AC is applied 
+The LSTM is used for   question answering  QA  task on
+two datasets  CNN and DailyMail  Hermann et al   
+
+Learning Latent Space Models with Angular Constraints
+
+Hermann et al   
+Hill et al   
+Kadlec et al   
+Kobayashi et al   
+Sordoni et al   
+Trischler et al   
+Chen et al   
+Cui et al   
+Shen et al   
+BIDAF
+CSBIDAF
+ICBIDAF
+MABIDAF
+DCBIDAF
+ACBIDAF
+Dhingra et al   
+Dhingra et al   
+
+CNN
+
+Dev
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Test
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+
+ 
+ 
+ 
+
+ 
+
+ 
+
+ 
+ 
+ 
+
+ 
+
+DailyMail
+Dev
+Test
+ 
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+
+Table   Accuracy   on the two QA datasets
+
+each containing   training  development and test set with
+       and        examples respectively  Each
+example consists of   passage    question and an answer 
+The question is   clozestyle task where an entity is replaced by   placeholder and the goal is to infer this missing entity  answer  from all the possible entities appearing in the passage  The LSTM architecture and experimental settings follow the Bidirectional Attention Flow
+ BIDAF   Seo et al    model  which consists of the
+following layers  character embedding  word embedding 
+contextual embedding  attention  ow  modeling and output  LSTM is applied in the contextual embedding and
+modeling layer  Character embedding is based on onedimensional convolutional neural network  where the number of  lters is set to   and the width of receptive  eld
+is set to   In LSTM  the size of hidden state is set to  
+Optimization is based on AdaDelta  Zeiler    where
+the minibatch size and initial learning rate are set to   and
+  The model is trained for   epochs  Dropout
+ Srivastava et al    with probability   is applied  We
+compare with four diversity promoting regularizers  CS 
+IC  MA and DC 
+Table   shows state of the art accuracy on the two datasets 
+As can be seen  after applying AC to BIDAF  the accuracy is improved from   to   on the CNN test
+set and from   to   on the DailyMail test set 
+Among the diversitypromoting regularizers  AC achieves
+the highest accuracy 
+  Sensitivity to Parameter  
+
+In the theoretical analysis presented in Section   we have
+shown that the parameter   which controls the level of near 
+
+Figure   Phone error rate on TIMIT  under varying  
+
+No regularization
+CS
+IC
+MA
+DC
+OP
+AC
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+TIMIT CIFAR  CNN
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+
+ 
+
+Table   Average runtime  hours 
+
+orthogonality  or diversity  incurs   tradeoff between estimation error and approximation error  In this section  we
+provide an empirical veri cation  using FNN on TIMIT as
+  study case  Figure   shows how the phone error rates vary
+on the TIMIT core test set  As can be seen  the lowest test
+error is achieved under   moderate       Either  
+smaller or   larger   degrades the performance  This empirical observation is aligned with the theoretical analysis
+that the best generalization performance is achieved under
+  properly chosen   When   is close to   the hidden units
+are close to orthogonality  which yields much poorer performance  This con rms that the strictorthogonality constraint proposed by  Le et al    is too restrictive and is
+less favorable than    soft  regularization approach 
+  Computational Time
+
+We compare the computational time of neural networks under different regularizers  Table   shows the total runtime
+time of FNNs on TIMIT and CNNs on CIFAR  with  
+single GTX TITAN   GPU  and the runtime of LSTM networks on the CNN dataset with   TITAN   GPUs  Compared with no regularization  AC incurs     extra time
+on TIMIT    on CIFAR  and   on CNN  The
+runtime of AC is comparable to that under other diversitypromoting regularizers 
+  Conclusions
+In this paper  we propose AngledConstrained Latent Space
+Models  ACLSMs  that aim at promoting diversity among
+components in LSMs for the sake of alleviating over tting  Compared with previous diversitypromoting methods  AC has two bene ts  First  it is theoretically analyzable  the generalization error analysis shows that larger diversity leads to smaller estimation error and larger approximation error  Second  it is empirically effective  as validated in various experiments 
+
+ Phoneerrorrate Learning Latent Space Models with Angular Constraints
+
+Acknowledgements
+We would like to thank the anonymous reviewers for
+the suggestions and comments that help to improve
+this work   lot  and thank Yajie Miao for helping
+with some of the experiments      and     are supported by National Institutes of Health   DA 
+  GM  National Science Foundation IIS 
+DARPA FA    and Pennsylvania Department of
+Health BD BH 
+
+References
+AbdelHamid  Ossama  Deng  Li  Yu  Dong  and Jiang 
+Hui  Deep segmental neural networks for speech recognition  INTERSPEECH   
+
+Affandi  Raja Ha    Fox  Emily  and Taskar  Ben  Approximate inference in continuous determinantal processes 
+In Advances in Neural Information Processing Systems 
+pp     
+
+Ba  Jimmy and Caruana  Rich  Do deep nets really need to
+be deep  In Advances in neural information processing
+systems  pp     
+
+Bao  Yebo  Jiang  Hui  Dai  Lirong  and Liu  Cong  Incoherent training of deep neural networks to decorrelate
+bottleneck features for speech recognition  In Acoustics 
+Speech and Signal Processing  ICASSP    IEEE International Conference on  pp    IEEE   
+
+Barron  Andrew    Universal approximation bounds for
+superpositions of   sigmoidal function  Information Theory  IEEE Transactions on   
+
+Bartlett  Peter   and Mendelson  Shahar  Rademacher and
+gaussian complexities  Risk bounds and structural results  Journal of Machine Learning Research   
+   
+
+Blei  David    Ng  Andrew    and Jordan  Michael    Latent dirichlet allocation  the Journal of machine Learning research   
+
+Boyd     Parikh     Chu     Peleato     and Eckstein 
+   Distributed optimization and statistical learning via
+alternating direction method of multipliers  Foundations
+and Trends   cid  in Machine Learning   
+
+Chen  Danqi  Bolton  Jason  and Manning  Christopher   
+  thorough examination of the cnn daily mail reading
+comprehension task  arXiv preprint arXiv 
+ 
+
+Chorowski  Jan    Bahdanau  Dzmitry  Serdyuk  Dmitriy 
+Cho  Kyunghyun  and Bengio  Yoshua  Attentionbased
+models for speech recognition  In Advances in Neural
+Information Processing Systems  pp     
+
+Clevert  DjorkArn    Unterthiner  Thomas  and Hochreiter  Sepp 
+Fast and accurate deep network learning by exponential linear units  elus  arXiv preprint
+arXiv   
+
+Cogswell     Ahmed     Girshick     Zitnick     and Batra     Reducing over tting in deep networks by decorrelating representations  ICLR   
+
+Cui  Yiming  Chen  Zhipeng  Wei  Si  Wang  Shijin  Liu 
+Ting  and Hu  Guoping  Attentionover attention neural networks for reading comprehension  arXiv preprint
+arXiv   
+
+Dahl  George  Mohamed  Abdelrahman  Hinton  Geoffrey    et al 
+Phone recognition with the meancovariance restricted boltzmann machine  In Advances
+in neural information processing systems  pp   
+ 
+
+Dhingra  Bhuwan  Liu  Hanxiao  Cohen  William    and
+Salakhutdinov  Ruslan  Gatedattention readers for text
+comprehension  arXiv preprint arXiv   
+
+Dhingra  Bhuwan  Yang  Zhilin  Cohen  William    and
+Salakhutdinov  Ruslan  Linguistic knowledge as memarXiv preprint
+ory for recurrent neural networks 
+arXiv   
+
+Gales  Mark JF  Maximum likelihood linear transformations for hmmbased speech recognition  Computer
+speech   language     
+
+Goodfellow  Ian    WardeFarley  David  Mirza  Mehdi 
+Courville  Aaron  and Bengio  Yoshua  Maxout networks  ICML   
+
+Graham  Benjamin 
+
+Fractional maxpooling 
+
+preprint arXiv   
+
+arXiv
+
+Graves  Alex  Mohamed  Abdelrahman  and Hinton  Geoffrey  Speech recognition with deep recurrent neural networks  In Acoustics  speech and signal processing  icassp    ieee international conference on  pp 
+  IEEE   
+
+Grif    Gregory  Holub  Alex  and Perona  Pietro  Caltech 
+
+  object category dataset   
+
+Chen  Yunpeng  Jin  Xiaojie  Feng  Jiashi  and Yan 
+Training group orthogonal neural netarXiv preprint
+
+Shuicheng 
+works with privileged information 
+arXiv   
+
+He  Kaiming  Zhang  Xiangyu  Ren  Shaoqing  and Sun 
+Jian  Deep residual learning for image recognition  In
+Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition  pp     
+
+Learning Latent Space Models with Angular Constraints
+
+Henaff  Mikael  Szlam  Arthur  and LeCun  Yann  Orthogonal rnns and longmemory tasks  arXiv preprint
+arXiv   
+
+Hermann  Karl Moritz  Kocisky  Tomas  Grefenstette  Edward  Espeholt  Lasse  Kay  Will  Suleyman  Mustafa 
+and Blunsom  Phil  Teaching machines to read and comprehend  In Advances in Neural Information Processing
+Systems  pp     
+
+Hill  Felix  Bordes  Antoine  Chopra  Sumit  and Weston 
+Jason  The goldilocks principle  Reading children  
+ICLR 
+books with explicit memory representations 
+ 
+
+Hinton  Geoffrey  Deng  Li  Yu  Dong  Dahl  George   
+Mohamed  Abdelrahman  Jaitly  Navdeep  Senior  Andrew  Vanhoucke  Vincent  Nguyen  Patrick  Sainath 
+Tara    et al  Deep neural networks for acoustic modeling in speech recognition  The shared views of four
+research groups  Signal Processing Magazine  IEEE 
+ 
+
+Hochreiter  Sepp and Schmidhuber    urgen  Long shortterm memory  Neural computation   
+ 
+
+Huang  Gao  Liu  Zhuang  Weinberger  Kilian    and
+van der Maaten  Laurens  Densely connected convolutional networks  arXiv preprint arXiv   
+
+Kadlec  Rudolf  Schmid  Martin  Bajgar  Ondrej  and
+Kleindienst  Jan  Text understanding with the attention
+sum reader network  ACL   
+
+Kobayashi  Sosuke  Tian  Ran  Okazaki  Naoaki  and
+Inui  Kentaro  Dynamic entity representation with maxIn Proceedings of
+pooling improves machine reading 
+NAACLHLT  pp     
+
+Krizhevsky  Alex  Sutskever  Ilya  and Hinton  Geoffrey   
+Imagenet classi cation with deep convolutional neural
+networks  In Advances in neural information processing
+systems   
+
+Kulesza  Alex and Taskar  Ben  Determinantal point processes for machine learning  Foundations and Trends in
+Machine Learning   
+
+Lazebnik  Svetlana  Schmid  Cordelia  and Ponce  Jean 
+Beyond bags of features  Spatial pyramid matching for
+recognizing scene categories  In CVPR   
+
+Le  Quoc    Ngiam  Jiquan  Chen  Zhenghao  Chia  Daniel 
+Koh  Pang Wei  and Ng  Andrew    Tiled convolutional neural networks  In Proceedings of the  rd International Conference on Neural Information Processing
+Systems  pp    Curran Associates Inc   
+
+Lee  ChenYu  Xie  Saining  Gallagher  Patrick  Zhang 
+Zhengyou  and Tu  Zhuowen  Deeplysupervised nets 
+In Arti cial Intelligence and Statistics  pp   
+ 
+
+Li  LiJia and FeiFei  Li  What  where and who  classify 
+
+ing events by scene recognition  In ICCV   
+
+Lin  Min  Chen  Qiang  and Yan  Shuicheng  Network in
+
+network  arXiv preprint arXiv   
+
+Lowe  David    Distinctive image features from scale 
+
+invariant keypoints  IJCV   
+
+Lu  Liang  Kong  Lingpeng  Dyer  Chris  Smith  Noah   
+and Renals  Steve 
+Segmental recurrent neural networks for endto end speech recognition  arXiv preprint
+arXiv   
+
+Lu  Liang  Kong  Lingpeng  Dyer  Chris  and Smith 
+Noah    Multitask learning with ctc and segarXiv preprint
+mental crf for speech recognition 
+arXiv   
+
+Malkin  Jonathan and Bilmes  Jeff  Ratio semide nite
+classi ers  In Acoustics  Speech and Signal Processing 
+  ICASSP   IEEE International Conference on 
+pp    IEEE   
+
+Mao  Fengling  Xiong  Wei  Du  Bo  and Zhang  Lefei 
+Stochastic decorrelation constraint regularized autoencoder for visual recognition  In International Conference on Multimedia Modeling  pp    Springer 
+ 
+
+Mishkin  Dmytro and Matas  Jiri  All you need is   good
+
+init  arXiv preprint arXiv   
+
+Moon  Taesup  Choi  Heeyoul  Lee  Hoshik  and Song 
+Inchul  Rnndrop    novel dropout for rnns in asr  In Automatic Speech Recognition and Understanding  ASRU 
+  IEEE Workshop on  pp    IEEE   
+
+Olshausen  Bruno   and Field  David    Sparse coding with
+an overcomplete basis set    strategy employed by   
+Vision research     
+
+Povey  Daniel  Ghoshal  Arnab  Boulianne  Gilles  Burget  Lukas  Glembek  Ondrej  Goel  Nagendra  Hannemann  Mirko  Motlicek  Petr  Qian  Yanmin  Schwarz 
+Petr  et al  The kaldi speech recognition toolkit  In IEEE
+  workshop on automatic speech recognition and understanding  number EPFLCONF  IEEE Signal
+Processing Society   
+
+Prabhavalkar  Rohit  Sainath  Tara    Nahamoo  David 
+Ramabhadran  Bhuvana  and Kanevsky  Dimitri  An
+evaluation of posterior modeling techniques for phonetic
+
+Learning Latent Space Models with Angular Constraints
+
+recognition  In Acoustics  Speech and Signal Processing
+ ICASSP    IEEE International Conference on  pp 
+  IEEE   
+
+Ramirez 
+
+Ignacio  Sprechmann  Pablo 
+
+and Sapiro 
+Guillermo  Classi cation and clustering via dictionary
+learning with structured incoherence and shared feaIn Computer Vision and Pattern Recognition
+tures 
+ CVPR    IEEE Conference on  pp   
+IEEE   
+
+Recht  Benjamin  Fazel  Maryam  and Parrilo  Pablo   
+Guaranteed minimumrank solutions of linear matrix
+equations via nuclear norm minimization  SIAM review 
+   
+
+Rodr guez  Pau  Gonz alez  Jordi  Cucurull  Guillem  Gonfaus  Josep    and Roca  Xavier  Regularizing cnns
+with locally constrained decorrelations  arXiv preprint
+arXiv   
+
+Seo  Minjoon  Kembhavi  Aniruddha  Farhadi  Ali  and
+Hajishirzi  Hannaneh  Bidirectional attention  ow for
+machine comprehension  ICLR   
+
+Shen  Yelong  Huang  PoSen  Gao  Jianfeng  and Chen 
+Weizhu  Reasonet  Learning to stop reading in machine
+comprehension  arXiv preprint arXiv   
+
+Sordoni  Alessandro  Bachman  Philip  Trischler  Adam 
+Iterative alternating neuarXiv preprint
+
+and Bengio  Yoshua 
+ral attention for machine reading 
+arXiv   
+
+Springenberg  Jost Tobias  Dosovitskiy  Alexey  Brox 
+Striving for simarXiv preprint
+
+Thomas  and Riedmiller  Martin 
+plicity  The all convolutional net 
+arXiv   
+
+Srivastava  Nitish  Hinton  Geoffrey    Krizhevsky  Alex 
+Sutskever  Ilya  and Salakhutdinov  Ruslan  Dropout 
+  simple way to prevent neural networks from over tJournal of Machine Learning Research   
+ting 
+   
+
+Srivastava  Rupesh Kumar  Greff  Klaus  and SchmidarXiv preprint
+
+huber    urgen  Highway networks 
+arXiv   
+
+Tang  Hao  Wang  Weiran  Gimpel  Kevin  and Livescu 
+Karen  Discriminative segmental cascades for featurerich phone recognition  In Automatic Speech Recognition and Understanding  ASRU    IEEE Workshop
+on  pp    IEEE   
+
+Tibshirani  Robert  Regression shrinkage and selection via
+the lasso  Journal of the Royal Statistical Society  Series
+   Methodological  pp     
+
+  oth    aszl    Phone recognition with deep sparse recti er
+neural networks  In Acoustics  Speech and Signal Processing  ICASSP    IEEE International Conference
+on  pp    IEEE   
+
+  oth    aszl    Combining timeand frequencydomain convolution in convolutional neural networkbased phone
+In Acoustics  Speech and Signal Processrecognition 
+ing  ICASSP    IEEE International Conference on 
+pp    IEEE   
+
+Trischler  Adam  Ye  Zheng  Yuan  Xingdi  and Suleman  Kaheer  Natural language comprehension with the
+epireader  arXiv preprint arXiv   
+
+Vainsencher  Daniel  Mannor  Shie  and Bruckstein  Alfred    The sample complexity of dictionary learning 
+Journal of Machine Learning Research   Nov 
+   
+
+Xie  Bo  Liang  Yingyu  and Song  Le  Diversity leads to
+
+generalization in neural networks  AISTATS   
+
+Xie  Pengtao  Learning compact and effective distance
+
+metrics with diversity regularization  In ECML   
+
+Xie  Pengtao  Deng  Yuntian  and Xing  Eric    Diversifying restricted boltzmann machine for document modeling  In ACM SIGKDD Conference on Knowledge Discovery and Data Mining   
+
+Xie  Pengtao  Zhu  Jun  and Xing  Eric  Diversitypromoting bayesian learning of latent variable models 
+In Proceedings of The  rd International Conference on
+Machine Learning  pp       
+
+Xie  Saining  Girshick  Ross  Doll ar  Piotr  Tu  Zhuowen 
+transforarXiv preprint
+
+and He  Kaiming 
+mations for deep neural networks 
+arXiv     
+
+Aggregated residual
+
+Xiong  Wei  Du  Bo  Zhang  Lefei  Hu  Ruimin  and Tao 
+Dacheng  Regularizing deep convolutional neural networks with   structured decorrelation constraint  In Data
+Mining  ICDM    IEEE  th International Conference on  pp    IEEE   
+
+Yamada  Yoshihiro 
+
+Iwamura  Masakazu  and Kise 
+Koichi  Deep pyramidal residual networks with separated stochastic depth  arXiv preprint arXiv 
+ 
+
+Yang     Ragni  Anton  Gales  Mark JF  and Knill  Kate   
+Loglinear system combination using structured support
+vector machines  In Proceedings of the Annual Conference of the International Speech Communication Association  INTERSPEECH  volume   pp     
+
+Learning Latent Space Models with Angular Constraints
+
+Yang  Jianchao  Yu  Kai  Gong  Yihong  and Huang 
+Thomas  Linear spatial pyramid matching using sparse
+coding for image classi cation  In CVPR   
+
+Yu  Yang  Li  YuFeng  and Zhou  ZhiHua  Diversity reg 
+
+ularized machine  In IJCAI   
+
+Yuan  Jinhui  Gao  Fei  Ho  Qirong  Dai  Wei  Wei  Jinliang  Zheng  Xun  Xing  Eric Po  Liu  TieYan  and Ma 
+WeiYing  Lightlda  Big topic models on modest computer clusters  In Proceedings of the  th International
+Conference on World Wide Web  pp    ACM 
+ 
+
+Zagoruyko  Sergey and Komodakis  Nikos  Wide residual
+
+networks  arXiv preprint arXiv   
+
+Zeiler  Matthew    Adadelta  an adaptive learning rate
+
+method  arXiv preprint arXiv   
+
+Zou  James    and Adams  Ryan    Priors for diversity in
+
+generative latent variable models  In NIPS     
+
+Zou  James   and Adams  Ryan    Priors for diversity in
+generative latent variable models  In Advances in Neural
+Information Processing Systems  pp       
+
+

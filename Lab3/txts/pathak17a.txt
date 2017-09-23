@@ -1,0 +1,1004 @@
+Curiositydriven Exploration by Selfsupervised Prediction
+
+Deepak Pathak   Pulkit Agrawal   Alexei    Efros   Trevor Darrell  
+
+Abstract
+
+In many realworld scenarios  rewards extrinsic
+to the agent are extremely sparse  or absent altogether 
+In such cases  curiosity can serve as
+an intrinsic reward signal to enable the agent
+to explore its environment and learn skills that
+might be useful later in its life  We formulate
+curiosity as the error in an agent   ability to predict the consequence of its own actions in   visual feature space learned by   selfsupervised
+inverse dynamics model  Our formulation scales
+to highdimensional continuous state spaces like
+images  bypasses the dif culties of directly predicting pixels  and  critically  ignores the aspects
+of the environment that cannot affect the agent 
+The proposed approach is evaluated in two environments  VizDoom and Super Mario Bros 
+Three broad settings are investigated    sparse
+extrinsic reward  where curiosity allows for far
+fewer interactions with the environment to reach
+the goal    exploration with no extrinsic reward 
+where curiosity pushes the agent to explore more
+ef ciently  and   generalization to unseen scenarios       new levels of the same game  where
+the knowledge gained from earlier experience
+helps the agent explore new places much faster
+than starting from scratch 
+
+  Introduction
+Reinforcement learning algorithms aim at learning policies
+for achieving target tasks by maximizing rewards provided
+by the environment  In some scenarios  these rewards are
+supplied to the agent continuously       the running score
+in an Atari game  Mnih et al    or the distance between   robot arm and an object in   reaching task  Lillicrap et al    However  in many realworld scenarios 
+rewards extrinsic to the agent are extremely sparse or miss 
+
+ University of California  Berkeley  Correspondence to 
+
+Deepak Pathak  pathak berkeley edu 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+    explore faster in Level 
+
+    learn to explore in Level 
+Figure   Discovering how to play Super Mario Bros without rewards 
+    Using only curiositydriven exploration  the agent
+makes signi cant progress in Level      The gained knowledge
+helps the agent explore subsequent levels much faster than when
+starting from scratch  Watch the video at http pathak 
+github io norewardrl 
+
+ing altogether  and it is not possible to construct   shaped
+reward function  This is   problem as the agent receives
+reinforcement for updating its policy only if it succeeds in
+reaching   prespeci ed goal state  Hoping to stumble into
+  goal state by chance       random exploration  is likely to
+be futile for all but the simplest of environments 
+As human agents  we are accustomed to operating with rewards that are so sparse that we only experience them once
+or twice in   lifetime  if at all  To   threeyear old enjoying
+  sunny Sunday afternoon on   playground  most trappings
+of modern life   college  good job    house    family   are
+so far into the future  they provide no useful reinforcement
+signal  Yet  the threeyear old has no trouble entertaining
+herself in that playground using what psychologists call intrinsic motivation  Ryan    or curiosity  Silvia   
+Motivation curiosity have been used to explain the need to
+explore the environment and discover novel states  More
+generally  curiosity is   way of learning new skills which
+might come handy for pursuing rewards in the future 
+Similarly 
+intrinsic motivation rewards become critical whenever extrinsic rewards
+are sparse  Most formulations of intrinsic reward can be
+grouped into two broad classes    encourage the agent
+to explore  novel  states  Bellemare et al    Lopes
+et al    Poupart et al    or    encourage the agent
+to perform actions that reduce the error uncertainty in the
+agent   ability to predict the consequence of its own actions       its knowledge about the environment   Houthooft
+
+in reinforcement
+
+learning 
+
+Curiositydriven Exploration by Selfsupervised Prediction
+
+et al    Mohamed   Rezende    Schmidhuber 
+    Singh et al    Stadie et al   
+Measuring  novelty  requires   statistical model of the distribution of the environmental states  whereas measuring
+prediction error uncertainty requires building   model of
+environmental dynamics that predicts the next state  st 
+given the current state  st  and the action  at  executed
+at time    Both these models are hard to build in highdimensional continuous state spaces such as images  An
+additional challenge lies in dealing with the stochasticity
+of the agentenvironment system  both due to the noise in
+the agent   actuation  and  more fundamentally  due to the
+inherent stochasticity in the environment  To give the example from  Schmidhuber    if the agent receiving
+images as state inputs is observing   television screen displaying white noise  every state will be novel as it would
+be impossible to predict the value of any pixel in the future  This means that the agent will remain curious about
+the television screen because it is unaware that some parts
+of the state space simply cannot be modeled and thus the
+agent can fall into an arti cial curiosity trap and stall its
+exploration  Other examples of such stochasticity include
+appearance changes due to shadows from other moving entities or presence of distractor objects  Somewhat different  but related  is the challenge of generalization across
+physically  and perhaps also visually  distinct but functionally similar parts of an environment  which is crucial for
+largescale problems  One proposed solution to all these
+problems is to only reward the agent when it encounters
+states that are hard to predict but are  learnable   Schmidhuber    However  estimating learnability is   nontrivial problem  Lopes et al   
+This work belongs to the broad category of methods that
+generate an intrinsic reward signal based on how hard it
+is for the agent to predict the consequences of its own
+actions  However  we manage to escape most pitfalls of
+previous prediction approaches with the following key insight  we only predict those changes in the environment
+that could possibly be due to the actions of our agent or
+affect the agent  and ignore the rest  That is  instead of
+making predictions in the raw sensory space       pixels 
+we transform the sensory input into   feature space where
+only the information relevant to the action performed by
+the agent is represented  We learn this feature space using
+selfsupervision   training   neural network on   proxy inverse dynamics task of predicting the agent   action given
+its current and next states  Since the neural network is only
+required to predict the action  it has no incentive to represent within its feature embedding space the factors of variation in the environment that do not affect the agent itself 
+We then use this feature space to train   forward dynamics
+model that predicts the feature representation of the next
+state  given the feature representation of the current state
+
+and the action  We provide the prediction error of the forward dynamics model to the agent as an intrinsic reward to
+encourage its curiosity 
+The role of curiosity has been widely studied in the context
+of solving tasks with sparse rewards  In our opinion  curiosity has two other fundamental uses  Curiosity helps an
+agent explore its environment in the quest for new knowledge    desirable characteristic of exploratory behavior is
+that it should improve as the agent gains more knowledge 
+Further  curiosity is   mechanism for an agent to learn skills
+that might be helpful in future scenarios  In this paper  we
+evaluate the effectiveness of our curiosity formulation in all
+three of these roles 
+We  rst compare the performance of an     agent  Mnih
+et al    with and without the curiosity signal on   
+navigation tasks with sparse extrinsic reward in the VizDoom environment  We show that   curiositydriven intrinsic reward is crucial in accomplishing these tasks  see
+Section   Next  we show that even in the absence of
+any extrinsic rewards    curious agent learns good exploration policies  For instance  an agent trained only with
+curiosity as its reward is able to cross   signi cant portion
+of Level  in Super Mario Bros  Similarly in VizDoom 
+the agent learns to walk intelligently along the corridors instead of bumping into walls or getting stuck in corners  see
+Section     question that naturally follows is whether
+the learned exploratory behavior is speci   to the physical
+space that the agent trained itself on  or if it enables the
+agent to perform better in unseen scenarios too  We show
+that the exploration policy learned in the  rst level of Mario
+helps the agent explore subsequent levels faster  shown in
+Figure   while the intelligent walking behavior learned by
+the curious VizDoom agent transfers to   completely new
+map with new textures  see Section   These results
+suggest that the proposed method enables an agent to learn
+generalizable skills even in the absence of an explicit goal 
+
+  CuriosityDriven Exploration
+Our agent is composed of two subsystems    reward generator that outputs   curiositydriven intrinsic reward signal
+and   policy that outputs   sequence of actions to maximize that reward signal  In addition to intrinsic rewards 
+the agent optionally may also receive some extrinsic reward
+from the environment  Let the intrinsic curiosity reward
+generated by the agent at time   be ri
+  and the extrinsic ret   The policy subsystem is trained to maximize
+ward be re
+the sum of these two rewards rt   ri
+  mostly
+ if not always  zero 
+We represent the policy  st       by   deep neural network
+with parameters      Given the agent in state st  it executes
+the action at    st       sampled from the policy     is
+
+    with re
+
+    re
+
+Curiositydriven Exploration by Selfsupervised Prediction
+
+Figure   The agent in state st interacts with the environment by executing an action at sampled from its current policy   and ends up in
+    provided by the environment   and the curiosity
+the state st  The policy   is trained to optimize the sum of the extrinsic reward  re
+based intrinsic reward signal  ri
+   generated by our proposed Intrinsic Curiosity Module  ICM  ICM encodes the states st  st  into the
+features  st   st  that are trained to predict at       inverse dynamics model  The forward model takes as inputs  st  and at
+and predicts the feature representation  st  of st  The prediction error in the feature space is used as the curiosity based intrinsic
+reward signal 
+
+optimized to maximize the expected sum of rewards 
+
+ 
+ st    trt 
+
+max
+  
+
+unaffected by   The latter is because  if there is   source
+of variation that is inconsequential for the agent  then the
+agent has no incentive to know about it 
+
+ 
+
+Unless speci ed otherwise  we use the notation     to denote the parameterized policy          Our curiosity reward model can potentially be used with   range of policy
+learning methods  in the experiments discussed here  we
+use the asynchronous advantage actor critic policy gradient
+       Mnih et al    for policy learning  Our main
+contribution is in designing an intrinsic reward signal based
+on prediction error of the agent   knowledge about its environment that scales to highdimensional continuous state
+spaces like images  bypasses the hard problem of predicting pixels and is unaffected by the unpredictable aspects of
+the environment that do not affect the agent 
+
+  Prediction error as curiosity reward
+
+Making predictions in the raw sensory space       when
+st corresponds to images  is undesirable not only because
+it is hard to predict pixels directly  but also because some
+part of the input sensory space could be unpredictable and
+inconsequential to the agent  for      the movement and
+location of tree leaves in   breeze in the environment 
+For determining   good feature space for making future
+predictions  let   divide all sources that can in uence the
+agent   observations into three cases    things that can
+be controlled by the agent    things that the agent cannot control but can affect the agent         vehicle driven
+by another agent  and   things out of the agent   control
+and not affecting the agent       moving leaves    good
+feature space for curiosity should model   and   and be
+
+  Selfsupervised prediction for exploration
+
+Instead of handdesigning features for every environment 
+we propose   general mechanism for learning features for
+prediction error based curiosity  Given the raw state st  we
+encode it using   deep neural network into   feature vector
+ st      denoted as  st  for succinctness  We propose
+to learn the parameters of this feature encoder using two
+submodules described as follows  The  rst submodule
+is the neural network   which takes the feature encoding
+ st   st  of two consequent states as input and predicts the action at taken by the agent to move from state st
+to st  de ned as 
+
+ cid 
+
+ cid 
+
+ at    
+
+ st   st    
+
+ 
+
+where   at is the predicted estimate of the action at  The
+neural network parameters         are trained to optimize 
+ 
+
+LI  at  at 
+
+min
+     
+
+where  LI measures the discrepancy between the predicted
+and actual actions  LI is modeled as softmax loss across
+all possible actions when at is discrete  The learned function   is also known as the inverse dynamics model and
+the tuple  st  at  st  required to learn   is obtained while
+the agent interacts with the environment using its current
+policy    
+Simultaneously with the inverse model    we train another
+submodule that takes as inputs at and  st  to predict the
+
+Forward Model Inverse Model features features EICM	  stst ritritst statatat st st st atICM	  ret rit ret ritCuriositydriven Exploration by Selfsupervised Prediction
+
+    Input snapshot in VizDoom
+
+    Input    noise
+
+Figure   Frames from VizDoom    environment which agent
+takes as input      Usual    navigation setup      Setup when
+uncontrollable noise is added to the input 
+
+feature encoding of the state at time step      
+
+ cid 
+
+ cid 
+
+ st     
+
+ st  at    
+
+where  st  is the predicted estimate of  st  The
+function   is also known as the forward dynamics model
+and is trained to optimize the regression loss 
+
+ cid   st   st 
+
+ cid 
+
+min
+     
+
+LF
+
+Finally  the intrinsic reward signal ri
+
+  is computed as 
+
+ri
+   
+
+ 
+ 
+
+ cid   st     st cid 
+
+ 
+
+where       is   scaling factor  The inverse and forward
+dynamics losses  described in equations   and   are
+jointly optimized with the policy  The inverse model helps
+learn   feature space that encodes information relevant for
+predicting the agent   actions only and the forward model
+makes this learned feature representation more predictable 
+We refer to this proposed curiosity formulation as Intrinsic
+Curiosity Module  ICM  As there is no incentive for this
+feature space to encode any environmental features that are
+not in uenced by the agent   actions  our agent will receive
+no rewards for reaching environmental states that are inherently unpredictable and its exploration strategy will be
+robust to nuisance sources of variation in the environment 
+See Figure   for illustration of the formulation 
+The overall optimization problem can be written as 
+
+min
+
+           
+
+  
+
+ st    trt LI  LF
+
+ 
+
+where           is   scalar that weighs the inverse model
+loss against the forward model loss and       weighs the
+importance of the policy gradient loss against the intrinsic
+reward signal  We do not backpropagate the policy gradient
+loss to the forward model to prevent degenerate solution of
+agent rewarding itself 
+Previous work has investigated inverse models to learn
+features  Agrawal et al      Jayaraman   Grau 
+
+ cid 
+
+ cid 
+
+ 
+
+ 
+
+ 
+
+    Train Map Scenario
+
+    Test Map Scenario
+
+Figure   Maps for VizDoom    environment      The map where
+the agent is pretrained only using curiosity signal without any
+reward from environment      denotes the starting position     
+Testing map for performance evaluation  Green star denotes goal
+location  Blue dots refer to   agent spawning locations in the
+map in the  dense  case  Rooms     are the  xed start locations
+of agent in  sparse  and  very sparse  reward cases respectively 
+Note train and test maps have different textures as well 
+
+man    and forward models to regularize those features  Agrawal et al    for recognition tasks  However 
+they do not learn any policy for the agent 
+
+is
+
+environment
+
+  Experimental Setup
+Environments Our  rst
+the VizDoom  Kempka et al    game where we consider the
+   navigation task with four discrete actions   forward 
+left  right  and noaction  Our testing setup in all the
+experiments is the  DoomMyWayHomev  environment
+which is available as part of OpenAI Gym  Brockman
+et al    The map consists of   rooms connected
+by corridors and the agent is tasked to reach some  xed
+goal location from its spawning location  Episodes are
+terminated either when the agent reaches the  xed goal or
+if the agent exceeds   maximum of   time steps  The
+agent is only provided   sparse terminal reward of   if
+it  nds the vest and zero otherwise  For generalization
+experiments  we pretrain on   different map with different
+random textures from  Dosovitskiy   Koltun    with
+  step long episodes as there is no goal in pretraining 
+Sample frames from VizDoom are shown in Figure     and
+maps are explained in Figure   It takes approximately  
+steps for an optimal policy to reach the vest location from
+the farthest room in this map  sparse reward 
+Our second environment is the classic Nintendo game Super Mario Bros with   reparamterized   dimensional action space following  Paquette    The actual game is
+played using   joystick allowing for multiple simultaneous
+button presses  where the duration of the press affects what
+action is being taken  This property makes the game particularly hard       to make   long jump over tall pipes or
+wide gaps  the agent needs to predict the same action up to
+  times in   row  introducing longrange dependencies 
+
+SSSRoom 	 sparse Room 	 very	sparse GoalCuriositydriven Exploration by Selfsupervised Prediction
+
+     dense reward  setting
+
+     sparse reward  setting
+
+     very sparse reward  setting
+
+Figure   Comparing the performance of the     agent with no curiosity  blue  ICMpixels        green  and the proposed ICM  
+    agent  orange  in the  dense   sparse  and  very sparse  reward scenarios of VizDoom  The curious     agents signi cantly
+outperforms baseline     agent as the sparsity of reward increases  Pixel based curiosity works in dense and sparse but fails in very
+sparse reward setting  The dark line and shaded area show mean and mean   standard error averaged over three independent runs 
+
+Baseline Methods We compare our approach  denoted
+as  ICM        against     vanilla       with  greedy
+exploration       ICMpixels        where the next observation is predicted in the pixel space instead of the inverse model feature space  see supplementary for details 
+     ICMaenc        where the curiosity is computed using the features of pixelbased forward model  This baseline is representative of previous autoencoder based methods  Schmidhuber    Stadie et al        stateof 
+theart VIME  Houthooft et al    method 
+
+  Experiments
+Three broad settings are evaluated     sparse extrinsic reward on reaching   goal  Section      exploration with
+no extrinsic reward  Section   and    generalization to
+novel scenarios  Section   Generalization is evaluated
+on   novel map with novel textures in VizDoom and on subsequent game levels in Mario 
+
+  Sparse Extrinsic Reward Setting
+
+In the  DoomMyWayHomev     navigation setup  see
+section   the agent is provided with   sparse extrinsic
+reward only when it reaches the goal located at    xed
+location  We systematically varied the dif culty of this
+task and constructed  dense   sparse  and  verysparse 
+reward  see Figure     scenarios by varying the distance
+between the initial spawning location of the agent and the
+location of the goal  In the  dense  reward case  the agent
+is randomly spawned in any of the   spawning locations
+uniformly distributed across the map  This is not   hard exploration task because sometimes the agent is randomly initialized close to the goal and therefore by random  greedy
+exploration it can reach the goal with reasonably high probability  In the  sparse  and  very sparse  reward cases  the
+agent is always spawned in Room  and Room  respec 
+
+Figure   Evaluating the robustness of ICM when   of the
+agent   visual observation was replaced white noise       uncontrollable distractor  see Figure     While ICM succeeds most of
+the times  the pixel prediction model struggles 
+
+tively which are   and   steps away from the goal under an optimal policy    long sequence of directed actions
+is required to reach the goals from these rooms  making
+these settings hard goal directed exploration problems 
+Results in Figure   show that curious agents learn much
+faster indicating that their exploration is more effective than
+ greedy exploration of the baseline agent  One possible
+explanation of the inferior performance of ICMpixels in
+comparison to ICM is that in every episode the agent is
+spawned in one out of seventeen rooms with different textures 
+It is hard to learn   pixelprediction model as the
+number of textures increases 
+In the  sparse  reward case  as expected  the baseline    
+agent fails to solve the task  while the curious     agent
+is able to learn the task quickly  Note that ICMpixels
+and ICM have similar convergence because  with    xed
+spawning location of the agent  the ICMpixels encounters the same textures at the starting of each episode which
+makes learning the pixelprediction model easier as com 
+
+ Number of training steps  in millions Extrinsic Rewards per EpisodeICM     CICM  pixels      CICM  aenc      CA   umEer RI training steps  in milliRns xtrinsic Rewards per  pisRdeIC      CIC   pixels      CIC   aenc      CA   umEer RI training steps  in milliRns xtrinsic  ewards per  pisRdeIC      CIC   pixels      CIC   aenc      CA   Number of training steps  in millions Extrinsic Rewards per EpisodeICM     CICM  pixels       Curiositydriven Exploration by Selfsupervised Prediction
+
+Figure   Each column in the  gure shows the coverage of an agent by coloring the rooms it visits during   steps of exploration 
+The red arrow shows the initial location and orientation of the agent at the start of the episode  The  rst three  in green  and the last
+two columns  in blue  show visitation of curious  ICM  and randomly exploring agents respectively  The results clearly show that the
+curious agent trained with intrinsic rewards explores   signi cantly larger number of rooms as compared to   randomly exploring agent 
+
+pared to the  dense  reward case  Finally  in the  very
+sparse  reward case  both the     agent and ICMpixels
+never succeed  while the ICM agent achieves   perfect
+score in   of the random runs  This indicates that ICM
+is better suited than ICMpixels and vanilla     for hard
+goal directed exploration tasks 
+
+Robustness to uncontrollable dynamics For testing
+this  we augmented the agent   observation with    xed
+region of white noise which made up   of the image
+ see Figure     and evaluated on  sparse  reward setup of
+VizDoom  In navigation  ideally the agent should be unaffected by this noise as the noise does not affect the agent
+in anyway and is merely   nuisance  Figure   shows that
+while the proposed ICM agent achieves   perfect score 
+ICMpixels suffers signi cantly despite having succeeded
+at the  sparse reward  task when the inputs were not augmented with any noise  see Figure     This indicates that
+in contrast to ICMpixels  ICM is insensitive to nuisance
+changes in the environment 
+
+Comparison to other baselines One possible reason for
+superior performance of the curious agent is that the intrinsic reward signal is simply acting as   regularizer by
+providing random rewards that push the agent out of the
+local minima  We systematically tested this hypothesis
+using many different random reward distributions on the
+ sparse VizDoom  task and found that with just random
+rewards the agents fail on sparse reward tasks  Please see
+supplementary materials for more details  Comparison to
+the state of the art TRPOVIME  Houthooft et al   
+agent in the table below shows that the ICM agent is superior in performance  The hyperparameters and accuracy
+for TRPO and VIME agents follow from the concurrent
+work  Fu et al   
+
+Method
+
+ sparse  reward setup 
+
+TRPO
+   
+
+VIME   TRPO
+
+ICM      
+
+Mean  Median  Score
+
+ at convergence 
+         
+     
+   
+         
+       
+
+  No Reward Setting
+
+For investigating how well does the ICM agent explore the
+environment  we trained it on VizDoom and Mario without
+any rewards from the environment  We then evaluated how
+much of the map was visited in VizDoom and how much
+progress the agent made on Mario  To our surprise  we
+have found that in both cases  the noreward agent was able
+to perform quite well  see video at http pathak 
+github io noreward rl 
+VizDoom  Coverage during Exploration  An agent
+trained with no extrinsic rewards was able to learn to navigate corridors  walk between rooms  and explore many
+rooms in the    Doom environment  On many occasions 
+the agent traversed the entire map and reached rooms that
+were farthest away from the room it was initialized in 
+Given that the episode terminates in   steps and farthest
+rooms are over   steps away  for an optimallymoving
+agent  this result is quite remarkable  demonstrating that it
+is possible to learn useful skills without the requirement of
+any external supervision of rewards  Example explorations
+are shown in Figure   The  rst   maps show our agent explores   much larger state space without any extrinsic signal  compared to   random exploration agent  last   maps 
+Mario  Learning to play with no rewards  Without any
+extrinsic reward from environment  our Mario agent can
+learn to cross over   of Level  The agent received
+no reward for killing or dodging enemies or avoiding fatal
+events  yet it automatically discovered these behaviors  see
+video  One possible reason is that getting killed by the
+enemy will result in only seeing   small part of the game
+space  making its curiosity saturate  In order to remain curious  it is in the agent   interest to learn how to kill and
+dodge enemies so that it can reach new parts of the game
+space  This suggests that curiosity provides indirect supervision for learning interesting behaviors 
+To the best of our knowledge  this is the  rst work to show
+that the agent learns to navigate      environment and discovers how to play   game directly from pixels without any
+extrinsic reward  Prior works  Mirowski et al    Mnih
+et al    have trained agents for navigation and ATARI
+games from pixels  but using rewards from environment 
+
+          Curiositydriven Exploration by Selfsupervised Prediction
+
+  Generalization to Novel Scenarios
+
+In the previous section  we showed that our agent learns to
+explore large parts of the space where its curiositydriven
+exploration policy was trained  However it remains unclear  when exploring   space  how much of the learned
+behavior is speci   to that particular space and how much
+is general enough to be useful in novel scenarios  To investigate this question  we train   no reward exploratory
+behavior in one scenario       Level  of Mario  and then
+evaluate the resulting exploration policy in three different
+ways     apply the learned policy  as is  to   new scenario 
+   adapt the policy by  netuning with curiosity reward
+only     adapt the policy to maximize some extrinsic reward  Happily  in all three cases  we observe some promising generalization results 
+
+Evaluate  as is  The distance covered by the agent on
+Levels     and   when the policy learned by maximizing curiosity on Level  of Mario is executed without any
+adaptation is reported in Table   The agent performs surprisingly well on Level   suggesting good generalization 
+despite the fact that Level  has different structures and enemies compared to Level  However  note that the running
+ as is  on Level  does not do well  At  rst  this seems to
+contradict the generalization results on Level  However 
+note that Level  has similar global visual appearance  day
+world with sunlight  to Level  whereas Level  is significantly different  night world  If this is indeed the issue 
+then it should be possible to quickly adapt the agent   exploration policy to Level  with   little bit of  netuning 
+
+Finetuning with curiosity only  From Table   we see
+that when the agent pretrained  using only curiosity as
+reward  on Level  is  netuned  using only curiosity as
+reward  on Level  it quickly overcomes the mismatch in
+global visual appearance and achieves   higher score than
+training from scratch with the same number of iterations 
+Interestingly  training  from scratch  on Level  is worse
+than the  netuned policy  even when training for more iterations than pretraining    netuning combined  One possible reason is that Level  is more dif cult than Level 
+so learning the basic skills such as moving  jumping  and
+killing enemies from scratch is harder than in the relative
+ safety  of Level  This result  therefore  might suggest
+that  rst pretraining on an earlier level and then  netuning
+on   later one produces   form of curriculum which aids
+learning and generalization  In other words  the agent is
+able to use the knowledge it acquired by playing Level  to
+better explore the subsequent levels  Of course  the game
+designers do this on purpose to allow the human players to
+gradually learn to play the game 
+However  interestingly   netuning the exploration policy
+pretrained on Level  to Level  deteriorates the perfor 
+
+Figure   Curiosity pretrained ICM       when  netuned on the
+test map with environmental rewards outperforms ICM      
+trained from scratch using both environmental and curiosity reward on the  very sparse  reward setting of VizDoom  The pixel
+prediction based ICM agent completely fails indicating that our
+curiosity formulation learns generalizable exploration policies 
+
+mance  compared to running  as is  This is because Level 
+  is very hard for the agent to cross beyond   certain point
+  the agent hits   curiosity blockade and is unable to make
+any progress  As the agent has already learned about parts
+of the environment before the hard point  it receives almost
+no curiosity reward and as   result it attempts to update
+its policy with almost zero intrinsic rewards and the policy
+slowly degenerates  This behavior is vaguely analogous to
+boredom  where if the agent is unable to make progress it
+gets bored and stops exploring 
+
+Finetuning with extrinsic rewards  We  rst pretrained an agent on VizDoom using only curiosity reward
+on the map shown in Figure     We then test on the  very
+sparse  reward setting of  DoomMyWayHomev  environment which uses   different map with novel textures
+ see Figure     Results in Figure   show that the curiosity pretrained ICM agent when  netuned with external
+rewards learns faster and achieves higher reward than an
+ICM agent trained from scratch to jointly maximize curiosity and the external rewards  This result con rms that the
+learned exploratory behavior is also useful when the agent
+is required to achieve goals in   new environment  It is also
+worth noting that ICMpixels does not generalize to the test
+environment  This indicates that the proposed mechanism
+of measuring curiosity is signi cantly better for learning
+skills that generalize as compared to measuring curiosity
+in the raw sensory space  This is further consolidated by  
+similar result in  sparse  scenario  see supplementary 
+
+  Related Work
+Curiositydriven exploration is   well studied topic in the
+reinforcement learning literature and   good summary can
+be found in  Oudeyer   Kaplan    Oudeyer et al 
+
+ Number of training steps  in millions Extrinsic Rewards per Episodefinetuned  ICM     Cscratch  ICM     Cfinetuned  ICM  pixels      Cscratch  ICM  pixels       Curiositydriven Exploration by Selfsupervised Prediction
+
+Level Ids
+Accuracy
+Iterations
+Mean   stderr
+  distance    
+  distance    
+  distance    
+
+Level 
+Scratch
+  
+
+     
+     
+     
+     
+
+Level 
+
+Run as is
+
+Finetuned
+
+     
+
+ 
+
+ 
+ 
+ 
+
+  
+
+     
+     
+     
+     
+
+Scratch
+  
+
+     
+     
+     
+     
+
+Scratch
+  
+
+     
+     
+     
+     
+
+Level 
+
+Run as is
+
+Finetuned
+
+     
+     
+     
+
+ 
+
+ 
+
+  
+
+     
+     
+
+ 
+ 
+
+Scratch
+  
+
+Scratch
+  
+
+     
+
+     
+
+ 
+ 
+ 
+
+ 
+ 
+ 
+
+Table   Quantitative evaluation of the policy learnt on Level  of Mario using only curiosity without any reward from the game when
+run  as is  or when further  netuned on subsequent levels  The performance is compared against the Mario agent trained from scratch
+in Level  using only curiosity without any extrinsic rewards  Evaluation metric is based on the distance covered by the Mario agent 
+
+  Schmidhuber
+    and Sun et al   
+use surprise and compression progress as intrinsic rewards 
+Classic work of Kearns et al    and Brafman et
+al    propose exploration algorithms polynomial in
+the number of state space parameters  Others have used
+empowerment  which is the information gain based on entropy of actions  as intrinsic rewards  Klyubin et al   
+Mohamed   Rezende    Stadie et al    use prediction error in the feature space of an autoencoder as  
+measure of interesting states to explore  State visitation
+counts have also been investigated for exploration  Bellemare et al    Oh et al    Tang et al    Osband et al    train multiple value functions and makes
+use of bootstrapping and Thompson sampling for exploration  Many approaches measure information gain for exploration  Little   Sommer    Still   Precup   
+Storck et al    Houthooft et al    use an exploration strategy that maximizes information gain about
+the agent   belief of the environment   dynamics  Our approach of jointly training forward and inverse models for
+learning   feature space has similarities to  Agrawal et al 
+  Jordan   Rumelhart    Wolpert et al    but
+these works use the learned models of dynamics for planning   sequence of actions instead of exploration  The idea
+of using   proxy task to learn   semantic feature embedding has been used in   number of works on selfsupervised
+learning in computer vision  Agrawal et al    Doersch
+et al    Goroshin et al    Jayaraman   Grauman 
+  Pathak et al    Wang   Gupta   
+Concurrent work    number of interesting related papers have appeared on Arxiv while the present work was
+in submission  Sukhbaatar et al    generates supervision for pretraining via asymmetric selfplay between two
+agents to improve data ef ciency during  netuning  Several methods propose improving data ef ciency of RL algorithms using selfsupervised prediction based auxiliary
+tasks  Jaderberg et al    Shelhamer et al    Fu
+et al    learn discriminative models  and Gregor et
+al    use empowerment based measure to tackle exploration in sparse reward setups  However  none of these
+works show learning without extrinsic rewards or generalization of policy to novel scenarios 
+
+  Discussion
+In this work  we propose   mechanism for generating
+curiositydriven intrinsic reward signal that scales to high
+dimensional visual inputs  bypasses the dif cult problem
+of predicting pixels  and ensures that the exploration strategy of the agent is unaffected by nuisance factors in the
+environment  We demonstrate that our agent signi cantly
+outperforms the baseline methods 
+In VizDoom  our agent learns the exploration behavior of
+moving along corridors and across rooms without any rewards from the environment  In Mario our agent crosses
+more than   of Level  without any rewards from the
+game  One reason why our agent is unable to go beyond
+this limit is the presence of   pit at   of the game that
+requires   very speci   sequence of   key presses in
+order to jump across it  If the agent is unable to execute
+this sequence  it falls in the pit and dies  receiving no further rewards from the environment  Therefore it receives
+no gradient information indicating that there is   world beyond the pit that could potentially be explored  This issue
+is somewhat orthogonal to developing models of curiosity 
+but presents   challenging problem for policy learning 
+It is common practice to evaluate reinforcement learning
+approaches in the same environment that was used for
+training  However  we feel that it is also important to evaluate on   separate  testing set  as well  This allows us to
+gauge how much of what has been learned is speci   to
+the training environment       memorized  and how much
+might constitute  generalizable skills  that could be applied to new settings  In this paper  we evaluate generalization in two ways    by applying the learned policy to  
+new scenario  as is   no further learning  and   by  netuning the learned policy on   new scenario  we borrow the
+pretraining netuning nomenclature from the deep feature learning literature  We believe that evaluating generalization is   valuable tool and will allow the community
+to better understand the performance of various reinforcement learning algorithms  To further aid in this effort  we
+will make the code for our algorithm  as well as testing and
+environment setups freely available online 
+
+Curiositydriven Exploration by Selfsupervised Prediction
+
+Acknowledgements
+We would like to thank Sergey Levine  Evan Shelhamer 
+Georgia Gkioxari  Saurabh Gupta  Phillip Isola and other
+members of the BAIR lab for fruitful discussions and
+comments  We thank Jacob Huh for help with Figure  
+and Alexey Dosovitskiy for VizDoom maps  This work
+was supported in part by NSF IIS  IIS 
+IIS  IIS  ONR MURI   
+  Berkeley DeepDrive  equipment grant from Nvidia 
+NVIDIA Graduate Fellowship to DP  and the Valrhona Reinforcement Learning Fellowship 
+
+References
+Agrawal  Pulkit  Carreira  Joao  and Malik  Jitendra 
+
+Learning to see by moving  In ICCV   
+
+Agrawal  Pulkit  Nair  Ashvin  Abbeel  Pieter  Malik  Jitendra  and Levine  Sergey  Learning to poke by poking 
+Experiential learning of intuitive physics  NIPS   
+
+Bellemare  Marc  Srinivasan  Sriram  Ostrovski  Georg 
+Schaul  Tom  Saxton  David  and Munos  Remi  Unifying countbased exploration and intrinsic motivation 
+In NIPS   
+
+Brafman  Ronen   and Tennenholtz  Moshe  Rmax   general polynomial time algorithm for nearoptimal reinforcement learning  JMLR   
+
+Brockman  Greg  Cheung  Vicki  Pettersson  Ludwig 
+Schneider  Jonas  Schulman  John  Tang  Jie  and
+Zaremba  Wojciech  Openai gym  arXiv 
+ 
+
+Doersch  Carl  Gupta  Abhinav  and Efros  Alexei    Unsupervised visual representation learning by context prediction  In ICCV   
+
+Dosovitskiy  Alexey and Koltun  Vladlen  Learning to act
+
+by predicting the future  ICLR   
+
+Fu  Justin  CoReyes  John    and Levine  Sergey  Ex 
+Exploration with exemplar models for deep reinforcement learning  arXiv   
+
+Goroshin  Ross  Bruna  Joan  Tompson  Jonathan  Eigen 
+David  and LeCun  Yann  Unsupervised feature learning
+from temporal data  arXiv   
+
+Gregor  Karol  Rezende  Danilo Jimenez  and Wierstra 
+ICLR Workshop 
+
+Daan  Variational intrinsic control 
+ 
+
+Houthooft  Rein  Chen  Xi  Duan  Yan  Schulman  John 
+De Turck  Filip  and Abbeel  Pieter  Vime  Variational
+information maximizing exploration  In NIPS   
+
+Jaderberg  Max  Mnih  Volodymyr  Czarnecki  Wojciech Marian  Schaul  Tom  Leibo  Joel    Silver  David 
+and Kavukcuoglu  Koray  Reinforcement learning with
+unsupervised auxiliary tasks  ICLR   
+
+Jayaraman  Dinesh and Grauman  Kristen  Learning image
+
+representations tied to egomotion  In ICCV   
+
+Jordan  Michael   and Rumelhart  David    Forward models  Supervised learning with   distal teacher  Cognitive
+science   
+
+Kearns  Michael and Koller  Daphne  Ef cient reinforce 
+
+ment learning in factored mdps  In IJCAI   
+
+Kempka  Micha  Wydmuch  Marek  Runc  Grzegorz 
+Toczek  Jakub  and Ja skowski  Wojciech  Vizdoom   
+doombased ai research platform for visual reinforcement learning  arXiv   
+
+Klyubin  Alexander    Polani  Daniel  and Nehaniv 
+Empowerment    universal agentIn Evolutionary Computa 
+
+Chrystopher   
+centric measure of control 
+tion   
+
+Lillicrap  Timothy    Hunt  Jonathan    Pritzel  Alexander 
+Heess  Nicolas  Erez  Tom  Tassa  Yuval  Silver  David 
+and Wierstra  Daan  Continuous control with deep reinforcement learning  ICLR   
+
+Little  Daniel   and Sommer  Friedrich    Learning and
+exploration in actionperception loops  Closing the Loop
+Around Neural Systems   
+
+Lopes  Manuel  Lang  Tobias  Toussaint  Marc  and
+Oudeyer  PierreYves  Exploration in modelbased reinforcement learning by empirically estimating learning
+progress  In NIPS   
+
+Mirowski  Piotr  Pascanu  Razvan  Viola  Fabio  Soyer 
+Hubert  Ballard  Andy  Banino  Andrea  Denil  Misha 
+Goroshin  Ross  Sifre  Laurent  Kavukcuoglu  Koray 
+et al  Learning to navigate in complex environments 
+ICLR   
+
+Mnih  Volodymyr  Kavukcuoglu  Koray  Silver  David 
+Rusu  Andrei    Veness  Joel  Bellemare  Marc   
+Graves  Alex  Riedmiller  Martin  Fidjeland  Andreas   
+Ostrovski  Georg  et al  Humanlevel control through
+deep reinforcement learning  Nature   
+
+Mnih  Volodymyr  Badia  Adria Puigdomenech  Mirza 
+Mehdi  Graves  Alex  Lillicrap  Timothy    Harley  Tim 
+Silver  David  and Kavukcuoglu  Koray  Asynchronous
+In ICML 
+methods for deep reinforcement learning 
+ 
+
+Curiositydriven Exploration by Selfsupervised Prediction
+
+Mohamed  Shakir and Rezende  Danilo Jimenez  Variational information maximisation for intrinsically motivated reinforcement learning  In NIPS   
+
+Still  Susanne and Precup  Doina  An informationtheoretic
+learning 
+
+approach to curiositydriven reinforcement
+Theory in Biosciences   
+
+Storck  Jan  Hochreiter  Sepp  and Schmidhuber    urgen 
+Reinforcement driven information acquisition in nondeterministic environments  In ICANN   
+
+Sukhbaatar  Sainbayar  Kostrikov  Ilya  Szlam  Arthur  and
+Fergus  Rob  Intrinsic motivation and automatic curricula via asymmetric selfplay  arXiv   
+
+Sun  Yi  Gomez  Faustino  and Schmidhuber    urgen  Planning to be surprised  Optimal bayesian exploration in
+dynamic environments  In AGI   
+
+Tang  Haoran  Houthooft  Rein  Foote  Davis  Stooke 
+Adam  Chen  Xi  Duan  Yan  Schulman  John  De Turck 
+Filip  and Abbeel  Pieter    exploration    study of
+countbased exploration for deep reinforcement learning  arXiv   
+
+Wang  Xiaolong and Gupta  Abhinav  Unsupervised learnIn ICCV 
+
+ing of visual representations using videos 
+ 
+
+Wolpert  Daniel    Ghahramani  Zoubin  and Jordan 
+Michael    An internal model for sensorimotor integration  ScienceAAAS Weekly Paper Edition   
+
+Oh  Junhyuk  Guo  Xiaoxiao  Lee  Honglak  Lewis 
+Richard    and Singh  Satinder  Actionconditional
+video prediction using deep networks in atari games  In
+NIPS   
+
+Osband  Ian  Blundell  Charles  Pritzel  Alexander  and
+Van Roy  Benjamin  Deep exploration via bootstrapped
+dqn  In NIPS   
+
+Oudeyer  PierreYves and Kaplan  Frederic  What is intrinsic motivation    typology of computational approaches 
+Frontiers in neurorobotics   
+
+Oudeyer  PierreYves  Kaplan  Frdric  and Hafner  Verena   
+Intrinsic motivation systems for autonomous
+mental development  Evolutionary Computation   
+
+Paquette  Philip 
+
+github ppaquette gymsuper mario   
+
+Super mario bros 
+
+in openai gym 
+
+Pathak  Deepak  Krahenbuhl  Philipp  Donahue  Jeff  Darrell  Trevor  and Efros  Alexei    Context encoders  Feature learning by inpainting  In CVPR   
+
+Poupart  Pascal  Vlassis  Nikos  Hoey  Jesse  and Regan 
+Kevin  An analytic solution to discrete bayesian reinforcement learning  In ICML   
+
+Ryan  Richard  Deci  Edward    Intrinsic and extrinsic motivations  Classic de nitions and new directions  Contemporary Educational Psychology   
+
+Schmidhuber  Jurgen    possibility for implementing
+curiosity and boredom in modelbuilding neural controllers  In From animals to animats  Proceedings of the
+ rst international conference on simulation of adaptive
+behavior   
+
+Schmidhuber    urgen  Formal theory of creativity  fun  and
+intrinsic motivation   IEEE Transactions on
+Autonomous Mental Development   
+
+Shelhamer  Evan  Mahmoudieh  Parsa  Argus  Max  and
+Darrell  Trevor  Loss is its own reward  Selfsupervision
+for reinforcement learning  arXiv   
+
+Silvia  Paul    Curiosity and motivation 
+Handbook of Human Motivation   
+
+In The Oxford
+
+Singh  Satinder    Barto  Andrew    and Chentanez  Nuttapong  Intrinsically motivated reinforcement learning 
+In NIPS   
+
+Stadie  Bradly    Levine  Sergey  and Abbeel  Pieter  Incentivizing exploration in reinforcement learning with
+deep predictive models  NIPS Workshop   
+
+

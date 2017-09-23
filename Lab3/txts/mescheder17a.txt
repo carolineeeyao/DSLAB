@@ -1,0 +1,1197 @@
+Unifying Variational Autoencoders and Generative Adversarial Networks
+
+Adversarial Variational Bayes 
+
+Lars Mescheder  
+
+Sebastian Nowozin  
+
+Andreas Geiger    
+
+Abstract
+
+Variational Autoencoders  VAEs  are expressive
+latent variable models that can be used to learn
+complex probability distributions from training
+data  However  the quality of the resulting model
+crucially relies on the expressiveness of the inference model  We introduce Adversarial Variational Bayes  AVB    technique for training
+Variational Autoencoders with arbitrarily expressive inference models  We achieve this by introducing an auxiliary discriminative network
+that allows to rephrase the maximumlikelihood 
+problem as   twoplayer game  hence establishing   principled connection between VAEs and
+Generative Adversarial Networks  GANs  We
+show that in the nonparametric limit our method
+yields an exact maximumlikelihood assignment
+for the parameters of the generative model  as
+well as the exact posterior distribution over the
+latent variables given an observation  Contrary
+to competing approaches which combine VAEs
+with GANs  our approach has   clear theoretical
+justi cation  retains most advantages of standard
+Variational Autoencoders and is easy to implement 
+
+  Introduction
+Generative models in machine learning are models that can
+be trained on an unlabeled dataset and are capable of generating new data points after training is completed  As generating new content requires   good understanding of the
+training data at hand  such models are often regarded as  
+key ingredient to unsupervised learning 
+In recent years  generative models have become more and
+
+ Autonomous Vision Group  MPI   ubingen  Microsoft
+Research Cambridge
+and Geometry
+Group  ETH   urich  Correspondence to  Lars Mescheder
+ lars mescheder tuebingen mpg de 
+
+ Computer Vision
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+ 
+
+Figure   We propose   method which enables neural samplers
+with intractable density for Variational Bayes and as inference
+models for learning latent variable models  This toy example demonstrates our method   ability to accurately approximate
+complex posterior distributions like the one shown on the right 
+
+more powerful  While many model classes such as PixelRNNs  van den Oord et al      PixelCNNs  van den
+Oord et al      real NVP  Dinh et al    and Plug
+  Play generative networks  Nguyen et al    have
+been introduced and studied  the two most prominent ones
+are Variational Autoencoders  VAEs   Kingma   Welling 
+  Rezende et al    and Generative Adversarial
+Networks  GANs   Goodfellow et al   
+Both VAEs and GANs come with their own advantages
+and disadvantages  while GANs generally yield visually
+sharper results when applied to learning   representation
+of natural images  VAEs are attractive because they naturally yield both   generative model and an inference model 
+Moreover  it was reported  that VAEs often lead to better
+loglikelihoods  Wu et al    The recently introduced
+BiGANs  Donahue et al    Dumoulin et al    add
+an inference model to GANs  However  it was observed
+that the reconstruction results often only vaguely resemble
+the input and often do so only semantically and not in terms
+of pixel values 
+The failure of VAEs to generate sharp images is often attributed to the fact that the inference models used during
+training are usually not expressive enough to capture the
+true posterior distribution  Indeed  recent work shows that
+using more expressive model classes can lead to substantially better results  Kingma et al    both visually
+and in terms of loglikelihood bounds  Recent work  Chen
+et al    also suggests that highly expressive inference
+models are essential in presence of   strong decoder to allow the model to make use of the latent space at all 
+
+Adversarial Variational Bayes
+
+In this paper  we present Adversarial Variational Bayes
+ AVB        technique for training Variational Autoencoders
+with arbitrarily  exible inference models parameterized by
+neural networks  We can show that in the nonparametric
+limit we obtain   maximumlikelihood assignment for the
+generative model together with the correct posterior distribution 
+While there were some attempts at combining VAEs and
+GANs  Makhzani et al    Larsen et al    most
+of these attempts are not motivated from   maximumlikelihood point of view and therefore usually do not lead
+to maximumlikelihood assignments  For example  in Adversarial Autoencoders  AAEs   Makhzani et al    the
+KullbackLeibler regularization term that appears in the
+training objective for VAEs is replaced with an adversarial
+loss that encourages the aggregated posterior to be close to
+the prior over the latent variables  Even though AAEs do
+not maximize   lower bound to the maximumlikelihood
+objective  we show in Section   that AAEs can be interpreted as an approximation to our approach  thereby establishing   connection of AAEs to maximumlikelihood
+learning 
+Outside the context of generative models  AVB yields  
+new method for performing Variational Bayes  VB  with
+neural samplers  This is illustrated in Figure   where we
+used AVB to train   neural network to sample from   nontrival unnormalized probability density  This allows to accurately approximate the posterior distribution of   probabilistic model      
+for Bayesian parameter estimation 
+The only other variational methods we are aware of that
+can deal with such expressive inference models are based
+on Stein Discrepancy  Ranganath et al    Liu   Feng 
+  However  those methods usually do not directly target the reverse KullbackLeibler Divergence and can therefore not be used to approximate the variational lower bound
+for learning   latent variable model  Our contributions are
+as follows 
+
+  We enable the usage of arbitrarily complex inference
+models for Variational Autoencoders using adversarial
+training 
+  We give theoretical insights into our method  showing that in the nonparametric limit our method recovers the true posterior distribution as well as   true
+maximumlikelihood assignment for the parameters
+of the generative model 
+
+  Concurrently to our work  several researchers have described similar ideas  Some ideas of this paper were described
+independently by Husz ar in   blog post on http www 
+inference vc and in Husz ar   The idea to use adversarial training to improve the encoder network was also suggested by
+Goodfellow in an exploratory talk he gave at NIPS   and by Li
+  Liu     similar idea was also mentioned by Karaletsos
+  in the context of message passing in graphical models 
+
+Encoder
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+Encoder
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+Decoder
+
+Decoder
+
+    Standard VAE
+
+    Our model
+
+Figure   Schematic comparison of   standard VAE and   VAE
+with blackbox inference model  where   and   denote samples
+from some noise distribution  While more complicated inference
+models for Variational Autoencoders are possible  they are usually
+not as  exible as our blackbox approach 
+
+  We empirically demonstrate that our model is able
+to learn rich posterior distributions and show that the
+model is able to generate compelling samples for complex data sets 
+
+  Background
+As our model is an extension of Variational Autoencoders
+ VAEs   Kingma   Welling    Rezende et al   
+we start with   brief review of VAEs 
+VAEs are speci ed by   parametric generative model      
+   of the visible variables given the latent variables    prior
+     over the latent variables and an approximate inference
+model          over the latent variables given the visible
+variables  It can be shown that
+
+log         KL              
+
+  Eq      log         
+
+ 
+
+The right hand side of   is called the variational lower
+bound or evidence lower bound  ELBO  If there is   such
+that                     we would have
+ KL              
+
+log        max
+
+ 
+
+  Eq      log         
+
+ 
+
+However  in general this is not true  so that we only have
+an inequality in  
+When performing maximumlikelihood training  our goal
+is to optimize the marginal loglikelihood
+
+EpD    log     
+
+ 
+
+Adversarial Variational Bayes
+
+where pD is the data distribution  Unfortunately  computing log      requires marginalizing out   in        
+which is usually intractable  Variational Bayes uses inequality   to rephrase the intractable problem of optimizing   into
+
+ cid KL              
+
+ cid 
+  Eq      log         
+
+ 
+
+ 
+
+max
+
+ 
+
+max
+
+ 
+
+EpD   
+
+Due to inequality   we still optimize   lower bound to
+the true maximumlikelihood objective  
+Naturally  the quality of this lower bound depends on the
+expressiveness of the inference model          Usually 
+         is taken to be   Gaussian distribution with diagonal covariance matrix whose mean and variance vectors are
+parameterized by neural networks with   as input  Kingma
+  Welling    Rezende et al    While this model
+is very  exible in its dependence on    its dependence on
+  is very restrictive  potentially limiting the quality of the
+resulting generative model 
+Indeed  it was observed that
+applying standard Variational Autoencoders to natural images often results in blurry images  Larsen et al   
+
+  Method
+In this work we show how we can instead use   blackbox
+inference model          and use adversarial training to
+obtain an approximate maximum likelihood assignment  
+to   and   close approximation            to the true posterior            This is visualized in Figure   on the left
+hand side the structure of   typical VAE is shown  The right
+hand side shows our  exible blackbox inference model  In
+contrast to   VAE with Gaussian inference model  we include the noise   as additional input to the inference model
+instead of adding it at the very end  thereby allowing the inference network to learn complex probability distributions 
+
+  Derivation
+
+To derive our method  we rewrite the optimization problem
+in   as
+
+max
+
+ 
+
+max
+
+ 
+
+EpD   Eq     
+
+  log            log         cid 
+
+ 
+When we have an explicit representation of          such
+as   Gaussian parameterized by   neural network    can
+be optimized using the reparameterization trick  Kingma  
+Welling    Rezende   Mohamed    and stochastic
+gradient descent  Unfortunately  this is not the case when
+we de ne          by   blackbox procedure as illustrated
+in Figure    
+
+ cid  log     
+
+The idea of our approach is to circumvent this problem by
+implicitly representing the term
+
+log        log         
+
+ 
+
+as the optimal value of an additional realvalued discriminative network          that we introduce to the problem 
+More speci cally  consider the following objective for the
+discriminator          for   given         
+
+max
+
+ 
+
+EpD   Eq      log          
+
+  EpD   Ep    log                
+
+ 
+Here                 denotes the sigmoidfunction 
+Intuitively           tries to distinguish pairs        that were
+sampled independently using the distribution pD       
+from those that were sampled using the current inference
+model       using pD           
+To simplify the theoretical analysis  we assume that the
+model          is  exible enough to represent any function of the two variables   and    This assumption is often
+referred to as the nonparametric limit  Goodfellow et al 
+  and is justi ed by the fact that deep neural networks
+are universal function approximators  Hornik et al   
+As it turns out  the optimal discriminator          according to the objective in   is given by the negative of  
+
+Proposition   For          and           xed  the optimal discriminator     according to the objective in   is
+given by
+
+           log            log     
+
+ 
+
+Proof  The proof is analogous to the proof of Proposition
+  in Goodfellow et al    See the Supplementary Material for details 
+Together with   Proposition   allows us to write the
+optimization objective in   as
+
+ cid               log         cid   
+
+max
+ 
+
+EpD   Eq     
+
+where          is de ned as the function that maximizes
+ 
+To optimize   we need to calculate the gradients of
+  with respect to   and   While taking the gradient
+with respect to   is straightforward  taking the gradient with
+respect to   is complicated by the fact that we have de ned
+         indirectly as the solution of an auxiliary optimization problem which itself depends on   However  the following Proposition shows that taking the gradient with respect to the explicit occurrence of   in          is not necessary 
+
+Adversarial Variational Bayes
+
+Algorithm   Adversarial Variational Bayes  AVB 
+       
+  while not converged do
+ 
+ 
+ 
+ 
+
+Sample                  from data distrib  pD   
+Sample                  from prior     
+Sample               from      
+Compute  gradient  eq   
+      
+Compute  gradient  eq   
+      
+
+ 
+
+ cid  
+     log   
+ cid  
+    
+ cid  
+    
+
+ cid         cid cid 
+ cid          
+ cid   
+ cid                cid 
+ cid                  cid cid 
+ cid 
+log cid                  cid 
+  log cid                cid cid 
+
+  log   
+Compute  gradient  eq     
+      
+
+ 
+
+ 
+
+Perform SGDupdates for     and  
+        hi            hi            hi   
+         
+
+ 
+  end while
+
+ 
+
+ 
+
+ 
+
+Proposition   We have
+
+Eq                   
+
+ 
+
+Proof  The proof can be found in the Supplementary Material 
+Using the reparameterization trick  Kingma   Welling 
+  Rezende et al      can be rewritten in the
+form
+
+ cid                
+
+  log             cid 
+
+ 
+
+max
+ 
+
+EpD     
+
+for   suitable function        Together with Proposition
+    allows us to take unbiased estimates of the gradients
+of   with respect to   and  
+
+  Algorithm
+
+In theory  Propositions   and   allow us to apply Stochastic
+Gradient Descent  SGD  directly to the objective in  
+However  this requires keeping          optimal which is
+computationally challenging  We therefore regard the optimization problems in   and   as   twoplayer game 
+Propositions   and   show that any Nashequilibrium of
+this game yields   stationary point of the objective in  
+In practice  we try to  nd   Nashequilibrium by applying
+SGD with step sizes hi jointly to   and   see Algorithm   Here  we parameterize the neural network   with
+  vector   Even though we have no guarantees that this
+
+algorithm converges  any    point of this algorithm yields
+  stationary point of the objective in  
+Note that optimizing   with respect to   while keeping   and    xed makes the encoder network collapse to
+  deterministic function  This is also   common problem
+for regular GANs  Radford et al   
+It is therefore
+crucial to keep the discriminative   network close to optimality while optimizing     variant of Algorithm  
+therefore performs several SGDupdates for the adversary
+for one SGDupdate of the generative model  However 
+throughout our experiments we use the simple  step version of AVB unless stated otherwise 
+
+  Theoretical results
+
+In Sections   we derived AVB as   way of performing
+stochastic gradient descent on the variational lower bound
+in   In this section  we analyze the properties of Algorithm   from   game theoretical point of view 
+As the next proposition shows  global Nashequilibria of
+Algorithm   yield global optima of the objective in  
+Proposition   Assume that   can represent any function
+of two variables  If         de nes   Nashequilibrium
+of the twoplayer game de ned by   and   then
+
+           log              log     
+
+ 
+and     is   global optimum of the variational lower
+bound in  
+
+Proof  The proof can be found in the Supplementary Material 
+Our parameterization of          as   neural network allows          to represent almost any probability density
+on the latent space  This motivates
+Corollary   Assume that   can represent any function of
+two variables and          can represent any probability
+density on the latent space  If         de nes   Nashequilibrium for the game de ned by   and   then
+
+    is   maximumlikelihood assignment
+             is equal to the true posterior           
+      is the pointwise mutual information between   and
+
+       
+
+           log
+
+         
+          
+
+ 
+
+ 
+
+Proof  This is   straightforward consequence of Proposition   as in this case     optimizes the variational
+lower bound in   if and only if   and   hold  Inserting the result from   into   yields  
+
+Adversarial Variational Bayes
+
+  Adaptive Contrast
+While in the nonparametric limit our method yields the correct results  in practice          may fail to become suf 
+ciently close to the optimal function          The reason for this problem is that AVB calculates   contrast between the two densities pD            to pD       
+which are usually very different  However  it is known that
+logistic regression works best for likelihoodratio estimation when comparing two very similar densities  Friedman
+et al   
+To improve the quality of the estimate  we therefore propose to introduce an auxiliary conditional probability distribution          with known density that approximates
+         For example           could be   Gaussian distribution with diagonal covariance matrix whose mean and
+variance matches the mean and variance of         
+Using this auxiliary distribution  we can rewrite the variational lower bound in   as
+
+ cid KL                   
+
+ cid 
+  Eq        log            log        
+
+EpD   
+
+ 
+
+ 
+As we know the density of          the second term in
+  is amenable to stochastic gradient descent with respect to   and   However  we can estimate the  rst term
+using AVB as described in Section   If          approximates          well  KL                    is usually much smaller than KL                which makes
+it easier for the adversary to learn the correct probability
+ratio 
+We call this technique Adaptive Contrast  AC  as we are
+now contrasting the current inference model          to
+an adaptive distribution          instead of the prior     
+Using Adaptive Contrast  the generative model         
+and the inference model          are trained to maximize
+
+ 
+where          is the optimal discriminator distinguishing
+samples from          and         
+Consider now the case that          is given by   Gaussian
+distribution with diagonal covariance matrix whose mean
+    and variance vector     match the mean and variance of          As the KullbackLeibler divergence is
+invariant under reparameterization  the  rst term in  
+can be rewritten as
+
+EpD   KL               
+
+ 
+where           denotes the distribution of the normalized
+vector          
+and      is   Gaussian distribution
+
+   
+
+EpD   Eq     
+
+ cid            
+  log            log        cid 
+
+Figure   Comparison of KL to ground truth posterior obtained by
+Hamiltonian Monte Carlo  HMC 
+
+with mean   and variance   This way  the adversary only
+has to account for the deviation of          from   Gaussian distribution  not its location and scale  Please see the
+Supplementary Material for pseudo code of the resulting
+algorithm 
+In practice  we estimate     and     using   MonteCarlo estimate  In the Supplementary Material we describe
+  network architecture for          that makes the computation of this estimate particularly ef cient 
+
+  Experiments
+We tested our method both as   blackbox method for variational inference and for learning generative models  The
+former application corresponds to the case where we    the
+generative model and   data point   and want to learn the
+posterior         
+An additional experiment on the celebA dataset  Liu et al 
+  can be found in the Supplementary Material 
+
+  Variational Inference
+
+When the generative model and   data point   is  xed  AVB
+gives   new technique for Variational Bayes with arbitrarily
+complex approximating distributions  We applied this to
+the  Eight School  example from Gelman et al    In
+this example  the coaching effects yi                  for eight
+schools are modeled as
+
+yi                    
+
+where     and the    are the model parameters to be inferred  We place         prior on the parameters of the
+model  We compare AVB against two variational methods
+with Gaussian inference model  Kucukelbir et al   
+as implemented in STAN  Stan Development Team   
+We used   simple two layer model for the posterior and  
+powerful  layer network with RESNETblocks  He et al 
+  for the discriminator  For every posterior update step
+we performed two steps for the adversary  The groundtruth data was obtained by running Hamiltonian Monte 
+
+Adversarial Variational Bayes
+
+     
+
+   
+
+Figure   Training examples in the synthetic dataset 
+
+    VAE
+
+    AVB
+
+Figure   Distribution of latent code for VAE and AVB trained on
+synthetic dataset 
+
+loglikelihood
+reconstruction error
+ELBO
+KL          
+
+VAE
+ 
+   
+ 
+   
+
+AVB
+ 
+   
+   
+   
+
+Table   Comparison of VAE and AVB on synthetic dataset 
+The optimal loglikelihood score on this dataset is   log   
+ 
+
+encoder network takes as input   data point   and   vector of Gaussian random noise   and produces   latent code
+   The decoder network takes as input   latent code   and
+produces the parameters for four independent Bernoullidistributions  one for each pixel of the output image  The
+adversary is parameterized by two neural networks with
+two  dimensional hidden layers each  acting on   and  
+respectively  whose  dimensional outputs are combined
+using an inner product 
+We compare our method to   Variational Autoencoder with
+  diagonal Gaussian posterior distribution  The encoder
+and decoder networks are parameterized as above  but the
+encoder does not take the noise   as input and produces  
+mean and variance vector instead of   single sample 
+We visualize the resulting division of the latent space in
+Figure   where each color corresponds to one state in the
+xspace  Whereas the Variational Autoencoder divides the
+space into   mixture of   Gaussians  the Adversarial Variational Autoencoder learns   complex posterior distribution 
+Quantitatively this can be veri ed by computing the KLdivergence between the prior      and the aggregated pos 
+
+terior         cid          pD   dx  which we estimate
+
+using the ITEpackage  Szabo    see Table   Note
+that the variations for different colors in Figure   are solely
+due to the noise   used in the inference model 
+The ability of AVB to learn more complex posterior models leads to improved performance as Table   shows  In
+particular  AVB leads to   higher likelihood score that is
+close to the optimal value of   log  compared to   standard VAE that struggles with the fact that it cannot divide
+
+AVB
+
+VB
+ fullrank 
+
+HMC
+
+Figure   Comparison of AVB to VB on the  Eight Schools  example by inspecting two marginal distributions of the approximation to the  dimensional posterior  We see that AVB accurately
+captures the multimodality of the posterior distribution  In contrast  VB only focuses on   single mode  The ground truth is
+shown in the last row and has been obtained using HMC 
+
+Carlo  HMC  for   steps using STAN  Note that
+AVB and the baseline variational methods allow to draw
+an arbitrary number of samples after training is completed
+whereas HMC only yields    xed number of samples 
+We evaluate all methods by estimating the KullbackLeibler Divergence to the groundtruth data using the ITEpackage  Szabo    applied to   samples from the
+groundtruth data and the respective approximation  The
+resulting KullbackLeibler divergence over the number of
+iterations for the different methods is plotted in Figure  
+We see that our method clearly outperforms the methods
+with Gaussian inference model  For   qualitative visualization  we also applied Kerneldensity estimation to the  
+dimensional marginals of the       and    variables
+as illustrated in Figure   In contrast to variational Bayes
+with Gaussian inference model  our approach clearly captures the multimodality of the posterior distribution  We
+also observed that Adaptive Contrast makes learning more
+robust and improves the quality of the resulting model 
+
+  Generative Models
+Synthetic Example To illustrate the application of our
+method to learning   generative model  we trained the neural networks on   simple synthetic dataset containing only
+the   data points from the space of       binary images
+shown in Figure   and    dimensional latent space  Both
+the encoder and decoder are parameterized by  layer fully
+connected neural networks with   hidden units each  The
+
+Adversarial Variational Bayes
+
+  intermediate distributions and   parallel chains on
+  test examples  The results are reported in Table  
+Using AIS  we see that AVB without AC overestimates the
+true ELBO which degrades its performance  Even though
+the results suggest that AVB with AC can also overestimate
+the true ELBO in higher dimensions  we note that the loglikelihood estimate computed by AIS is also only   lower
+bound to the true loglikelihood  Wu et al   
+Using AVB with AC  we see that we improve both on  
+standard VAE and AVB without AC  When comparing to
+other state of the art methods  we see that our method
+achieves state of the art results on binarized MNIST  For
+an additional experimental evaluation of AVB and three
+baselines for    xed decoder architecture see the Supplementary Material  Some random samples for MNIST are
+shown in Figure   We see that our model produces random samples that are perceptually close to the training set 
+
+  Related Work
+  Connection to Variational Autoencoders
+
+AVB strives to optimize the same objective as   standard
+VAE  Kingma   Welling    Rezende et al    but
+approximates the KullbackLeibler divergence using an adversary instead of relying on   closedform formula 
+Substantial work has focused on making the class of approximate inference models more expressive  Normalizing
+ ows  Rezende   Mohamed    Kingma et al   
+make the posterior more complex by composing   simple
+Gaussian posterior with an invertible smooth mapping for
+which the determinant of the Jacobian is tractable  Auxiliary Variable VAEs  Maal   et al    add auxiliary
+variables to the posterior to make it more  exible  However  no other approach that we are aware of allows to use
+blackbox inference models to optimize the ELBO 
+
+  Connection to Adversarial Autoencoders
+
+Makhzani et al   Makhzani et al    introduced the concept of Adversarial Autoencoders  The idea is to replace
+the term
+
+ 
+in   with an adversarial loss that tries to enforce that
+
+KL              
+
+upon convergence cid 
+
+        pD   dx       
+
+ 
+
+While related to our approach  the approach by Makhzani
+et al  modi es the variational objective while our approach
+
+ Note that the methods in the lower half of Table   were
+trained with different decoder architectures and therefore only
+provide limited information regarding the quality of the inference
+model 
+
+    Training data
+
+    Random samples
+
+Figure   Independent samples for   model trained on MNIST
+
+log       
+
+log       
+             
+     
+       
+       
+     
+     
+     
+     
+     
+
+AVB  dim 
+AVB   AC  dim 
+AVB   AC  dim 
+VAE  dim 
+VAE  dim 
+VAE   NF    
+VAE   HVI    
+convVAE   HVI    
+VAE   VGP  hl 
+DRAW   VGP
+VAE   IAF
+Auxiliary VAE    
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+
+ 
+
+ 
+
+ 
+ 
+ 
+
+ Rezende   Mohamed   
+ Salimans et al   
+ Salimans et al   
+ Tran et al   
+ Tran et al   
+ Kingma et al   
+ Maal   et al   
+
+Table   Loglikelihoods on binarized MNIST for AVB and other
+methods improving on VAEs  We see that our method achieves
+state of the art loglikelihoods on binarized MNIST  The approximate loglikelihoods in the lower half of the table were not obtained with AIS but with importance sampling 
+
+the latent space appropriately  Moreover  we see that the
+reconstruction error given by the mean crossentropy between an input   and its reconstruction using the encoder
+and decoder networks is much lower when using AVB instead of   VAE with diagonal Gaussian inference model 
+We also observe that the estimated variational lower bound
+is close to the true loglikelihood  indicating that the adversary has learned the correct function 
+
+MNIST In addition  we trained deep convolutional networks based on the DCGAN architecture  Radford et al 
+  on the binarized MNISTdataset  LeCun et al 
+  For the decoder network  we use    layer deep convolutional neural network  For the encoder network  we use
+  network architecture that allows for the ef cient computation of the moments of          The idea is to de ne the
+encoder as   linear combination of learned basis noise vectors  each parameterized by   small fullyconnected neural
+network  whose coef cients are parameterized by   neural
+network acting on    please see the Supplementary Material for details  For the adversary  we replace the fully
+connected neural network acting on   and   with   fully
+connected  layer neural networks with   units in each
+hidden layer  In addition  we added the result of neural networks acting on   and   alone to the end result 
+To validate our method  we ran Annealed Importance Sampling  AIS   Neal    the gold standard for evaluating
+decoder based generative models  Wu et al    with
+
+Adversarial Variational Bayes
+
+retains the objective 
+The approach by Makhzani et al  can be regarded as an
+approximation to our approach  where          is restricted
+to the class of functions that do not depend on    Indeed 
+an ideal discriminator that only depends on   maximizes
+
+ cid   cid 
+
+ cid   cid 
+
+pD            log       dxdz
+
+ 
+
+pD        log           dxdz
+
+ 
+
+which is the case if and only if
+
+ cid 
+
+        log
+
+        pD   dx   log     
+
+ 
+
+ cid 
+
+Clearly  this simpli cation is   crude approximation to our
+formulation from Section   but Makhzani et al   
+show that this method can still lead to good sampling results  In theory  restricting          in this way ensures that
+upon convergence we approximately have
+
+        pD   dx       
+
+ 
+but          need not be close to the true posterior      
+   Intuitively  while mapping pD    through         
+results in the correct marginal distribution  the contribution
+of each   to this distribution can be very inaccurate 
+In contrast to Adversarial Autoencoders  our goal is to improve the ELBO by performing better probabilistic inference  This allows our method to be used in   more general
+setting where we are only interested in the inference network itself  Section   and enables further improvements
+such as Adaptive Contrast  Section   which are not possible in the context of Adversarial Autoencoders 
+
+  Connection to fGANs
+
+Nowozin et al   Nowozin et al    proposed to generalize Generative Adversarial Networks  Goodfellow et al 
+  to fdivergences  Ali   Silvey    based on results by Nguyen et al   Nguyen et al    In this paragraph we show that fdivergences allow to represent AVB
+as   zerosum twoplayer game 
+The family of fdivergences is given by
+
+Df    cid      Epf
+
+ 
+
+    
+
+ 
+for some convex functional            with        
+Nguyen et al    show that by using the convex conjugate    of     HiriartUrruty   Lemar echal    we
+obtain
+Df    cid      sup
+
+Eq             Ep              
+
+ 
+
+ 
+
+ cid      
+
+ cid 
+
+where   is   realvalued function  In particular  this is true
+for the reverse KullbackLeibler divergence with        
+  log    We therefore obtain
+
+KL                 Df               
+
+ 
+
+  sup
+
+Eq                Ep             
+
+ 
+with      exp      the convex conjugate of        
+  log   
+All in all  this yields
+
+max
+
+ 
+
+EpD    log     
+
+ 
+
+ 
+
+EpD   Ep             
+
+  max
+  
+
+min
+ EpD   Eq     log                    
+ cid 
+By replacing the objective   for the discriminator with
+
+Ep   eT         Eq             
+
+EpD   
+
+ cid 
+
+min
+
+ 
+
+ 
+
+ 
+
+we can reformulate the maximumlikelihood problem as  
+minimax zerosum game 
+In fact  the derivations from
+Section   remain valid for any    divergence that we use
+to train the discriminator  This is similar to the approach
+taken by Poole et al   Poole et al    to improve the
+GANobjective  In practice  we observed that the objective
+  results in unstable training  We therefore used the
+standard GANobjective   which corresponds to the
+JensenShannon divergence 
+
+  Connection to BiGANs
+
+BiGANs  Donahue et al    Dumoulin et al   
+are   recent extension to Generative Adversarial Networks
+with the goal to add an inference network to the generative
+model  Similarly to our approach  the authors introduce
+an adversary that acts on pairs        of data points and latent codes  However  whereas in BiGANs the adversary
+is used to optimize the generative and inference networks
+separately  our approach optimizes the generative and inference model jointly  As   result  our approach obtains good
+reconstructions of the input data  whereas for BiGANs we
+obtain these reconstructions only indirectly 
+
+  Conclusion
+We presented   new training procedure for Variational Autoencoders based on adversarial training  This allows us to
+make the inference model much more  exible  effectively
+allowing it to represent almost any family of conditional
+distributions over the latent variables 
+We believe that further progress can be made by investigating the class of neural network architectures used for the
+adversary and the encoder and decoder networks as well as
+ nding better contrasting distributions 
+
+Adversarial Variational Bayes
+
+Acknowledgements
+This work was supported by Microsoft Research through
+its PhD Scholarship Programme 
+
+References
+Ali  Syed Mumtaz and Silvey  Samuel      general class
+of coef cients of divergence of one distribution from another  Journal of the Royal Statistical Society  Series  
+ Methodological  pp     
+
+Chen  Xi  Kingma  Diederik    Salimans  Tim  Duan  Yan 
+Dhariwal  Prafulla  Schulman  John  Sutskever  Ilya  and
+Abbeel  Pieter  Variational lossy autoencoder  arXiv
+preprint arXiv   
+
+Dinh  Laurent  Krueger  David  and Bengio  Yoshua  Nice 
+Nonlinear independent components estimation  arXiv
+preprint arXiv   
+
+Dinh  Laurent  SohlDickstein  Jascha  and Bengio  Samy 
+arXiv preprint
+
+Density estimation using real nvp 
+arXiv   
+
+Donahue 
+
+Jeff  Kr ahenb uhl  Philipp 
+
+and Darrell 
+Trevor  Adversarial feature learning  arXiv preprint
+arXiv   
+
+Dumoulin  Vincent  Belghazi  Ishmael  Poole  Ben  Lamb 
+Alex  Arjovsky  Martin  Mastropietro  Olivier  and
+Courville  Aaron  Adversarially learned inference  arXiv
+preprint arXiv   
+
+Friedman  Jerome  Hastie  Trevor  and Tibshirani  Robert 
+The elements of statistical learning  volume   Springer
+series in statistics Springer  Berlin   
+
+Gelman  Andrew  Carlin  John    Stern  Hal    and Rubin 
+Donald    Bayesian data analysis  volume   Chapman
+  Hall CRC Boca Raton  FL  USA   
+
+Goodfellow  Ian  PougetAbadie  Jean  Mirza  Mehdi  Xu 
+Bing  WardeFarley  David  Ozair  Sherjil  Courville 
+Aaron  and Bengio  Yoshua  Generative adversarial nets 
+In Advances in Neural Information Processing Systems 
+pp     
+
+He  Kaiming  Zhang  Xiangyu  Ren  Shaoqing  and Sun 
+Jian  Deep residual learning for image recognition  arXiv
+preprint arXiv   
+
+HiriartUrruty  JeanBaptiste and Lemar echal  Claude 
+Convex analysis and minimization algorithms    fundamentals  volume   Springer science   business media   
+
+Hornik  Kurt  Stinchcombe  Maxwell  and White  Halbert 
+Multilayer feedforward networks are universal approximators  Neural networks     
+
+Husz ar  Ferenc  Variational inference using implicit distri 
+
+butions  arXiv preprint arXiv   
+
+Karaletsos  Theofanis  Adversarial message passing for
+arXiv preprint arXiv 
+
+graphical models 
+ 
+
+Kingma  Diederik   and Welling  Max  Autoencoding
+arXiv preprint arXiv 
+
+variational bayes 
+ 
+
+Kingma  Diederik    Salimans  Tim  and Welling  Max  Improving variational inference with inverse autoregressive
+ ow  arXiv preprint arXiv   
+
+Kucukelbir  Alp  Ranganath  Rajesh  Gelman  Andrew  and
+Blei  David  Automatic variational inference in stan  In
+Advances in neural information processing systems  pp 
+   
+
+Larsen  Anders Boesen Lindbo    nderby    ren Kaae 
+Autoencoding beyond pixels
+arXiv preprint
+
+and Winther  Ole 
+using   learned similarity metric 
+arXiv   
+
+LeCun  Yann  Bottou    eon  Bengio  Yoshua  and Haffner 
+Patrick  Gradientbased learning applied to document
+recognition  Proceedings of the IEEE   
+   
+
+Li  Yingzhen and Liu  Qiang  Wild variational approximaIn NIPS workshop on advances in approximate
+
+tions 
+Bayesian inference   
+
+Liu  Qiang and Feng  Yihao  Two methods for wild variarXiv preprint arXiv 
+
+ational inference 
+ 
+
+Liu  Ziwei  Luo  Ping  Wang  Xiaogang  and Tang  Xiaoou 
+Deep learning face attributes in the wild  In Proceedings
+of International Conference on Computer Vision  ICCV 
+ 
+
+Maal    Lars    nderby  Casper Kaae    nderby 
+  ren Kaae  and Winther  Ole  Auxiliary deep generative models  arXiv preprint arXiv   
+
+Makhzani  Alireza  Shlens  Jonathon  Jaitly  Navdeep  and
+arXiv
+
+Goodfellow  Ian  Adversarial autoencoders 
+preprint arXiv   
+
+Neal  Radford    Annealed importance sampling  Statis 
+
+tics and Computing     
+
+Adversarial Variational Bayes
+
+Neural Information Processing Systems  pp   
+   
+
+van den Oord  Aaron van den  Kalchbrenner  Nal  and
+Kavukcuoglu  Koray  Pixel recurrent neural networks 
+arXiv preprint arXiv     
+
+Wu  Yuhuai  Burda  Yuri  Salakhutdinov  Ruslan  and
+On the quantitative analysis of
+arXiv preprint
+
+Grosse  Roger 
+decoderbased generative models 
+arXiv   
+
+Nguyen  Anh  Yosinski  Jason  Bengio  Yoshua  Dosovitskiy  Alexey  and Clune  Jeff  Plug   play generative
+networks  Conditional iterative generation of images in
+latent space  arXiv preprint arXiv   
+
+Nguyen  XuanLong  Wainwright  Martin    and Jordan 
+Michael    Estimating divergence functionals and the
+IEEE
+likelihood ratio by convex risk minimization 
+Transactions on Information Theory   
+ 
+
+Nowozin  Sebastian  Cseke  Botond  and Tomioka  Ryota 
+fgan  Training generative neural samplers using variational divergence minimization  arXiv preprint
+arXiv   
+
+Poole  Ben  Alemi  Alexander    SohlDickstein  Jascha 
+Improved generator objectives
+
+and Angelova  Anelia 
+for gans  arXiv preprint arXiv   
+
+Radford  Alec  Metz  Luke  and Chintala  Soumith  Unsupervised representation learning with deep convolutional generative adversarial networks  arXiv preprint
+arXiv   
+
+Ranganath  Rajesh  Tran  Dustin  Altosaar  Jaan  and Blei 
+David  Operator variational inference  In Advances in
+Neural Information Processing Systems  pp   
+ 
+
+Rezende  Danilo Jimenez and Mohamed  Shakir  Variational inference with normalizing  ows  arXiv preprint
+arXiv   
+
+Rezende  Danilo Jimenez  Mohamed  Shakir  and Wierstra  Daan  Stochastic backpropagation and approximate inference in deep generative models  arXiv preprint
+arXiv   
+
+Salimans  Tim  Kingma  Diederik    Welling  Max  et al 
+Markov chain monte carlo and variational inference 
+Bridging the gap  In ICML  volume   pp   
+ 
+
+Stan Development Team  Stan modeling language users
+guide and reference manual  Version     URL
+http mcstan org 
+
+Szabo  Zolt an  Information theoretical estimators  ite  tool 
+
+box   
+
+Tran  Dustin  Ranganath  Rajesh  and Blei  David   
+arXiv preprint
+
+The variational gaussian process 
+arXiv   
+
+van den Oord  Aaron  Kalchbrenner  Nal  Espeholt  Lasse 
+Vinyals  Oriol  Graves  Alex  et al  Conditional image generation with pixelcnn decoders  In Advances In
+
+

@@ -1,0 +1,811 @@
+Wasserstein Generative Adversarial Networks
+
+Martin Arjovsky   Soumith Chintala     eon Bottou    
+
+Abstract
+
+We introduce   new algorithm named WGAN 
+an alternative to traditional GAN training 
+In
+this new model  we show that we can improve
+the stability of learning  get rid of problems like
+mode collapse  and provide meaningful learning
+curves useful for debugging and hyperparameter
+searches  Furthermore  we show that the corresponding optimization problem is sound  and
+provide extensive theoretical work highlighting
+the deep connections to different distances between distributions 
+
+  Introduction
+The problem this paper is concerned with is that of unsupervised learning  Mainly  what does it mean to learn  
+probability distribution  The classical answer to this is to
+learn   probability density  This is often done by de ning
+  parametric family of densities    Rd and  nding the
+one that maximized the likelihood on our data  if we have
+real data examples       
+   we would solve the problem
+
+  cid 
+
+  
+
+max
+ Rd
+
+ 
+ 
+
+log       
+
+If the real data distribution Pr admits   density and    is the
+distribution of the parametrized density    then  asymptotically  this amounts to minimizing the KullbackLeibler
+divergence KL Pr cid   
+For this to make sense  we need the model density    to
+exist  This is not the case in the rather common situation
+where we are dealing with distributions supported by low
+dimensional manifolds  It is then unlikely that the model
+manifold and the true distribution   support have   nonnegligible intersection  see  Arjovsky   Bottou   
+and this means that the KL distance is not de ned  or simply in nite 
+
+ Courant Institute of Mathematical Sciences  NY  Facebook
+AI Research  NY  Correspondence to  Martin Arjovsky  martinarjovsky gmail com 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+The typical remedy is to add   noise term to the model distribution  This is why virtually all generative models described in the classical machine learning literature include
+  noise component 
+In the simplest case  one assumes  
+Gaussian noise with relatively high bandwidth in order to
+cover all the examples  It is well known  for instance  that
+in the case of image generation models  this noise degrades
+the quality of the samples and makes them blurry  For example  we can see in the recent paper  Wu et al   
+that the optimal standard deviation of the noise added to
+the model when maximizing likelihood is around   to
+each pixel in   generated image  when the pixels were already normalized to be in the range     This is   very
+high amount of noise  so much that when papers report the
+samples of their models  they don   add the noise term on
+which they report likelihood numbers  In other words  the
+added noise term is clearly incorrect for the problem  but is
+needed to make the maximum likelihood approach work 
+Rather than estimating the density of Pr which may not exist  we can de ne   random variable   with    xed distribution      and pass it through   parametric function
+            typically   neural network of some kind 
+that directly generates samples following   certain distribution    By varying   we can change this distribution and
+make it close to the real data distribution Pr  This is useful in two ways  First of all  unlike densities  this approach
+can represent distributions con ned to   low dimensional
+manifold  Second  the ability to easily generate samples is
+often more useful than knowing the numerical value of the
+density  for example in image superresolution or semantic
+segmentation when considering the conditional distribution
+of the output image given the input image  In general  it
+is computationally dif cult to generate samples given an
+arbitrary high dimensional density  Neal   
+Variational AutoEncoders  VAEs   Kingma   Welling 
+  and Generative Adversarial Networks  GANs 
+ Goodfellow et al    are well known examples of this
+approach  Because VAEs focus on the approximate likelihood of the examples  they share the limitation of the standard models and need to  ddle with additional noise terms 
+GANs offer much more  exibility in the de nition of the
+objective function  including JensenShannon  Goodfellow
+et al    and all fdivergences  Nowozin et al   
+as well as some exotic combinations  Huszar    On
+
+Wasserstein Generative Adversarial Networks
+
+the other hand  training GANs is well known for being delicate and unstable  for reasons theoretically investigated in
+ Arjovsky   Bottou   
+In this paper  we direct our attention on the various ways to
+measure how close the model distribution and the real distribution are  or equivalently  on the various ways to de ne
+  distance or divergence     Pr  The most fundamental difference between such distances is their impact on the
+convergence of sequences of probability distributions   
+sequence of distributions  Pt     converges if and only if
+there is   distribution    such that  Pt     tends to zero 
+something that depends on how exactly the distance   is
+de ned  Informally    distance   induces   weaker topology when it makes it easier for   sequence of distribution
+to converge  Section   clari es how popular probability
+distances differ in that respect 
+In order to optimize the parameter   it is of course desirable to de ne our model distribution    in   manner that
+makes the mapping    cid     continuous  Continuity means
+that when   sequence of parameters    converges to   the
+distributions     also converge to    However  it is essential to remember that the notion of the convergence of the
+distributions     depends on the way we compute the distance between distributions  The weaker this distance  the
+easier it is to de ne   continuous mapping from  space to
+  space  since it   easier for the distributions to converge 
+The main reason we care about the mapping    cid     to be
+continuous is as follows  If   is our notion of distance between two distributions  we would like to have   loss function    cid      Pr  that is continuous  and this is equivalent
+to having the mapping    cid     be continuous when using
+the distance between distributions  
+The contributions of this paper are 
+
+  In Section   we provide   comprehensive theoretical
+analysis of how the Earth Mover  EM  distance behaves in comparison to popular probability distances
+and divergences used in the context of learning distributions 
+
+  In Section   we de ne   form of GAN called
+WassersteinGAN that minimizes   reasonable and ef 
+ cient approximation of the EM distance  and we theoretically show that the corresponding optimization
+problem is sound 
+
+  In Section   we empirically show that WGANs cure
+the main training problems of GANs 
+In particular 
+training WGANs does not require maintaining   careful balance in training of the discriminator and the
+
+ More exactly  the topology induced by   is weaker than that
+induced by  cid  when the set of convergent sequences under   is  
+superset of that under  cid 
+
+generator  does not require   careful design of the network architecture either  and also reduces the mode
+dropping that is typical in GANs  One of the most
+compelling practical bene ts of WGANs is the ability
+to continuously estimate the EM distance by training
+the discriminator to optimality  Because they correlate
+well with the observed sample quality  plotting these
+learning curves is very useful for debugging and hyperparameter searches 
+
+  Different Distances
+We now introduce our notation  Let   be   compact metric
+set  say the space of images       and let   denote the
+set of all the Borel subsets of     Let Prob     denote the
+space of probability measures de ned on     We can now
+de ne elementary distances and divergences between two
+distributions Pr  Pg   Prob    
+
+  The Total Variation  TV  distance
+
+ Pr  Pg    sup
+  
+
+ Pr      Pg     
+
+  The KullbackLeibler  KL  divergence
+
+ cid 
+
+ cid  Pr   
+
+ cid 
+
+Pg   
+
+KL Pr cid Pg   
+
+log
+
+Pr         
+
+where both Pr and Pg are assumed to admit densities
+with respect to   same measure   de ned on     The
+KL divergence is famously assymetric and possibly
+in nite when there are points such that Pg       
+and Pr       
+
+  The JensenShannon  JS  divergence
+
+JS Pr  Pg    KL Pr cid Pm    KL Pg cid Pm   
+
+where Pm is the mixture  Pr   Pg  This divergence is symmetrical and always de ned because we
+can choose     Pm 
+
+  The EarthMover  EM  distance or Wasserstein 
+
+ cid   cid       cid cid   
+
+ 
+
+   Pr  Pg   
+
+inf
+
+ Pr Pg 
+
+      
+
+where  Pr  Pg  is the set of all joint distributions
+       whose marginals are respectively Pr and Pg 
+Intuitively         indicates how much  mass  must
+be transported from   to   in order to transform the
+distributions Pr into the distribution Pg  The EM distance then is the  cost  of the optimal transport plan 
+ Recall that   probability distribution Pr   Prob     admits
+  density Pr    with respect to   that is         Pr     
+  Pr        if and only it is absolutely continuous with respect to   that is                   Pr         
+
+ cid 
+
+Wasserstein Generative Adversarial Networks
+
+Figure   These plots show        as   function of   when   is the EM distance  left plot  or the JS divergence  right plot  The EM
+plot is continuous and provides   usable gradient everywhere  The JS plot is not continuous and does not provide   usable gradient 
+
+The following example illustrates how apparently simple
+sequences of probability distributions converge under the
+EM distance but do not converge under the other distances
+and divergences de ned above 
+Example    Learning parallel lines  Let           the
+uniform distribution on the unit interval  Let    be the distribution of                on the xaxis and the random
+variable   on the yaxis  uniform on   straight vertical line
+passing through the origin  Now let             with  
+  single real parameter  It is easy to see that in this case 
+
+              
+
+ cid 
+
+  JS        
+
+log  
+ 
+
+  and         
+
+  KL   cid      KL   cid     
+
+if    cid     
+if        
+
+ cid 
+
+if    cid     
+if        
+ 
+ 
+if    cid     
+if        
+
+ cid 
+
+ 
+ 
+
+When        the sequence          converges to    under the EM distance  but does not converge at all under
+either the JS  KL  reverse KL  or TV divergences  Figure  
+illustrates this for the case of the EM and JS distances 
+
+Example   gives   case where we can learn   probability
+distribution over   low dimensional manifold by doing gradient descent on the EM distance  This cannot be done with
+the other distances and divergences because the resulting
+loss function is not even continuous  Although this simple
+example features distributions with disjoint supports  the
+same conclusion holds when the supports have   non empty
+intersection contained in   set of measure zero  This happens to be the case when two low dimensional manifolds
+intersect in general position  Arjovsky   Bottou   
+Since the Wasserstein distance is much weaker than the JS
+
+distance  we can now ask whether    Pr     is   continuous loss function on   under mild assumptions 
+Theorem   Let Pr be    xed distribution over     Let
+  be   random variable      Gaussian  over another
+space    Let    denote the distribution of      where
+                Rd  cid             Then 
+  If   is continuous in   so is    Pr    
+  If   is locally Lipschitz and satis es regularity asthen    Pr     is continuous every 
+
+sumption  
+where  and differentiable almost everywhere 
+
+  Statements   are false for the JensenShannon di 
+
+vergence JS Pr     and all the KLs 
+
+As   consequence  learning by minimizing the EM distance
+makes sense  at least in theory  for neural networks 
+Corollary   Let    be any feedforward neural network 
+parameterized by   and        prior over   such that
+Ez     cid   cid            Gaussian  uniform  etc  Then
+assumption   is satis ed and therefore    Pr     is continuous everywhere and differentiable almost everywhere 
+
+Both proofs are given in Appendix   
+All this indicates that EM is   much more sensible cost
+function for our problem than at least the JensenShannon
+divergence  The following theorem describes the relative
+strength of the topologies induced by these distances and
+divergences  with KL the strongest  followed by JS and TV 
+and EM the weakest 
+Theorem   Let   be   distribution on   compact space  
+and  Pn     be   sequence of distributions on     Then 
+considering all limits as      
+
+ Appendix   explains to the mathematically inclined reader
+why this happens and how we arrived to the idea that Wasserstein
+is what we should really be optimizing 
+
+ By   feedforward neural network we mean   function composed of af ne transformations and componentwise Lipschitz
+nonlinearities  such as the sigmoid  tanh  elu  softplus  etc   
+similar but more technical proof is required for ReLUs 
+
+Wasserstein Generative Adversarial Networks
+
+  The following statements are equivalent
+
+   Pn         with   the total variation distance 
+  JS Pn         with JS the JensenShannon di 
+
+vergence 
+
+  The following statements are equivalent
+
+     Pn        
+     where
+  Pn
+
+   represents convergence in
+
+distribution for random variables 
+
+  KL Pn cid        or KL   cid Pn      imply the state 
+
+ments in  
+
+  The statements in   imply the statements in  
+
+Proof  See Appendix  
+
+This highlights the fact that the KL  JS  and TV distances
+are not sensible cost functions when learning distributions
+supported by low dimensional manifolds  However the EM
+distance is sensible in that setup  This leads us to the next
+section where we introduce   practical approximation of
+optimizing the EM distance 
+
+  Wasserstein GAN
+Again  Theorem   points to the fact that    Pr     might
+have nicer properties when optimized than JS Pr    
+However  the in mum in   is highly intractable  On the
+other hand  the KantorovichRubinstein duality  Villani 
+  tells us that
+
+   Pr       sup
+ cid   cid   
+
+Ex Pr          Ex          
+
+ 
+
+where the supremum is over all the  Lipschitz functions
+           Note that if we replace  cid   cid       for
+ cid   cid        consider KLipschitz for some constant   
+then we end up with        Pr  Pg  Therefore  if we have
+  parameterized family of functions  fw     that are all
+KLipschitz for some    we could consider solving the
+problem
+
+max
+   
+
+Ex Pr  fw      Ez     fw     
+
+ 
+and if the supremum in   is attained for some      
+   pretty strong assumption akin to what   assumed when
+proving consistency of an estimator  this process would
+yield   calculation of    Pr     up to   multiplicative
+constant  Furthermore  we could consider differentiating    Pr      again  up to   constant  by backproping
+through equation   via estimating Ez     fw     
+While this is all intuition  we now prove that this process is
+principled under the optimality assumption 
+
+Algorithm   WGAN  our proposed algorithm  All experiments in the paper used the default values      
+            ncritic    
+Require      the learning rate     the clipping parameter 
+   the batch size  ncritic  the number of iterations of the
+critic per generator iteration 
+
+Require       initial critic parameters    initial genera 
+
+tor   parameters 
+
+for         ncritic do
+
+  while   has not converged do
+ 
+ 
+ 
+ 
+
+Sample       
+     Pr   batch from the real data 
+ cid  
+Sample       
+            batch of priors 
+gw        
+   fw     
+   
+            RMSProp    gw 
+    clip        
+
+   fw       
+
+ cid  
+
+ 
+
+ 
+
+ cid  
+            batch of prior samples 
+
+end for
+Sample       
+      
+            RMSProp    
+
+   fw       
+
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+  end while
+
+Theorem   Let Pr be any distribution  Let    be the distribution of      with     random variable with density  
+and      function satisfying assumption   Then  there is  
+solution           to the problem
+
+Ex Pr          Ex          
+
+max
+ cid   cid   
+
+and we have
+
+    Pr        Ez            
+
+when both terms are wellde ned 
+
+Proof  See Appendix  
+
+Now comes the question of  nding the function   that
+solves the maximization problem in equation   To
+roughly approximate this  something that we can do is
+train   neural network parameterized with weights   lying in   compact space   and then backprop through
+Ez     fw      as we would do with   typical
+GAN  Note that the fact that   is compact implies that all
+the functions fw will be KLipschitz for some   that only
+depends on   and not the individual weights  therefore
+approximating   up to an irrelevant scaling factor and the
+capacity of the  critic  fw  In order to have parameters   lie
+in   compact space  something simple we can do is clamp
+the weights to    xed box  say           after
+each gradient update  The Wasserstein Generative Adversarial Network  WGAN  procedure is described in Algorithm  
+
+Wasserstein Generative Adversarial Networks
+
+Figure   Different methods learning   mixture of   gaussians spread in   circle  WGAN is able to learn the distribution without mode
+collapse  An interesting fact is that the WGAN  much like the Wasserstein distance  seems to capture  rst the low dimensional structure
+of the data  the approximate circle  before matching the speci   bumps in the density  Green  KDE plots  Blue  samples from the model 
+
+is differentiable almost everywhere  For the JS  as the discriminator gets better the gradients get more reliable but
+the true gradient is   since the JS is locally saturated and
+we get vanishing gradients  as can be seen in Figure   of
+this paper and Theorem   of  Arjovsky   Bottou   
+In Figure   we show   proof of concept of this  where we
+train   GAN discriminator and   WGAN critic till optimality  The discriminator learns very quickly to distinguish
+between fake and real  and as expected provides no reliable
+gradient information  The critic  however  can   saturate 
+and converges to   linear function that gives remarkably
+clean gradients everywhere  The fact that we constrain the
+weights limits the possible growth of the function to be at
+most linear in different parts of the space  forcing the optimal critic to have this behaviour 
+Perhaps more importantly  the fact that we can train the
+critic till optimality makes it impossible to collapse modes
+when we do  This is due to the fact that mode collapse
+comes from the fact that the optimal generator for    xed
+discriminator is   sum of deltas on the points the discriminator assigns the highest values  as observed by  Goodfellow et al    and highlighted in  Metz et al   
+In the following section we display the practical bene ts of
+our new algorithm  and we provide an indepth comparison
+of its behaviour and that of traditional GANs 
+
+Figure   Optimal discriminator and critic when learning to differentiate two Gaussians  As we can see  the traditional GAN
+discriminator saturates and results in vanishing gradients  Our
+WGAN critic provides very clean gradients on all parts of the
+space 
+
+The fact that the EM distance is continuous and differentiable      means that we can  and should  train the critic
+till optimality  The argument is simple  the more we train
+the critic  the more reliable gradient of the Wasserstein we
+get  which is actually useful by the fact that Wasserstein
+
+Wasserstein Generative Adversarial Networks
+
+Figure   Training curves and samples at different stages of training  We can see   clear correlation between lower error and better
+sample quality  Upper left  the generator is an MLP with   hidden layers and   units at each layer  The loss decreases constistently
+as training progresses and sample quality increases  Upper right  the generator is   standard DCGAN  The loss decreases quickly
+and sample quality increases as well  In both upper plots the critic is   DCGAN without the sigmoid so losses can be subjected to
+comparison  Lower half  both the generator and the discriminator are MLPs with substantially high learning rates  so training failed 
+Loss is constant and samples are constant as well  The training curves were passed through   median  lter for visualization purposes 
+
+  Empirical Results
+We run experiments on image generation using our
+WassersteinGAN algorithm and show that there are signi cant practical bene ts to using it over the formulation
+used in standard GANs  We claim two main bene ts 
+
+    meaningful loss metric that correlates with the gen 
+
+erator   convergence and sample quality
+
+  improved stability of the optimization process
+
+  Experimental Procedure for Image Generation
+
+We run experiments on image generation  The target distribution to learn is the LSUNBedrooms dataset  Yu et al 
+      collection of natural images of indoor bedrooms 
+Our baseline comparison is DCGAN  Radford et al   
+  GAN with   convolutional architecture trained with the
+standard GAN procedure using the   log   trick  Goodfellow et al    The generated samples are  channel images of     pixels in size  We use the hyperparameters
+speci ed in Algorithm   for all of our experiments 
+
+  Mixtures of Gaussians
+
+  Meaningful loss metric
+
+In  Metz et al    the authors presented   simple mixture of Gaussians experiments that served   very speci  
+purpose 
+In this mixture  the mode collapse problem of
+GANs is easy to visualize  since   normal GAN would rotate between the different modes of the mixture  and fail
+to capture the whole distribution  In   we show how our
+WGAN algorithm approximately  nds the correct distribution  without any mode collapse 
+An interesting thing is that the WGAN  rst seems to learn
+to match the lowdimensional structure of the data  the approximate circle  before zooming in on the speci   bumps
+of the true density  Similar to the Wasserstein distance  it
+looks like WGAN gives more importance to matching the
+low dimensional supports rather than the speci   ratios between the densities 
+
+Because the WGAN algorithm attempts to train the critic  
+ lines   in Algorithm   relatively well before each generator update  line   in Algorithm   the loss function at
+this point is an estimate of the EM distance  up to constant
+factors related to the way we constrain the Lipschitz constant of   
+Our  rst experiment illustrates how this estimate correlates
+well with the quality of the generated samples  Besides
+the convolutional DCGAN architecture  we also ran experiments where we replace the generator or both the generator
+and the critic by  layer ReLUMLP with   hidden units 
+Figure   plots the evolution of the WGAN estimate   of
+the EM distance during WGAN training for all three architectures  The plots clearly show that these curves correlate
+
+Wasserstein Generative Adversarial Networks
+
+Figure   JS estimates for an MLP generator  upper left  and   DCGAN generator  upper right  trained with the standard GAN
+procedure  Both had   DCGAN discriminator  Both curves have increasing error  Samples get better for the DCGAN but the JS estimate
+increases or stays constant  pointing towards no signi cant correlation between sample quality and loss  Bottom    LP with both
+generator and discriminator  The curve goes up and down regardless of sample quality  All training curves were passed through the
+same median  lter as in Figure  
+
+well with the visual quality of the generated samples 
+To our knowledge  this is the  rst time in GAN literature that such   property is shown  where the loss of the
+GAN shows properties of convergence  This property is
+extremely useful when doing research in adversarial networks as one does not need to stare at the generated samples to  gure out failure modes and to gain information on
+which models are doing better over others 
+However  we do not claim that this is   new method to
+quantitatively evaluate generative models yet  The constant scaling factor that depends on the critic   architecture
+means it   hard to compare models with different critics 
+Even more  in practice the fact that the critic doesn   have
+in nite capacity makes it hard to know just how close to
+the EM distance our estimate really is  This being said  we
+have succesfully used the loss metric to validate our experiments repeatedly and without failure  and we see this as  
+huge improvement in training GANs which previously had
+no such facility 
+In contrast  Figure   plots the evolution of the GAN estimate of the JS distance during GAN training  More precisely  during GAN training  the discriminator is trained to
+maximize
+          Ex Pr  log        Ex     log        
+which is is   lower bound of  JS Pr         log   In the
+ gure  we plot the quantity  
+            log   which is  
+lower bound of the JS distance 
+
+This quantity clearly correlates poorly the sample quality 
+Note also that the JS estimate usually stays constant or goes
+up instead of going down 
+In fact it often remains very
+close to log       which is the highest value taken by
+the JS distance  In other words  the JS distance saturates 
+the discriminator has zero loss  and the generated samples
+are in some cases meaningful  DCGAN generator  top right
+plot  and in other cases collapse to   single nonsensical image  Goodfellow et al    This last phenomenon has
+been theoretically explained in  Arjovsky   Bottou   
+and highlighted in  Metz et al   
+When using the   log   trick  Goodfellow et al   
+the discriminator loss and the generator loss are different 
+Figure   in Appendix   reports the same plots for GAN
+training  but using the generator loss instead of the discriminator loss  This does not change the conclusions 
+Finally  as   negative result  we report that WGAN training becomes unstable at times when one uses   momentum
+based optimizer such as Adam  Kingma   Ba     with
+      on the critic  or when one uses high learning rates 
+Since the loss for the critic is nonstationary  momentum
+based methods seemed to perform worse  We identi ed
+momentum as   potential cause because  as the loss blew up
+and samples got worse  the cosine between the Adam step
+and the gradient usually turned negative  The only places
+where this cosine was negative was in these situations of
+instability  We therefore switched to RMSProp  Tieleman
+  Hinton    which is known to perform well even on
+very nonstationary problems  Mnih et al   
+
+Wasserstein Generative Adversarial Networks
+
+Figure   Algorithms trained with   DCGAN generator  Left  WGAN algorithm  Right  standard GAN formulation  Both algorithms
+produce high quality samples 
+
+Figure   Algorithms trained with   generator without batch normalization and constant number of  lters at every layer  as opposed
+to duplicating them every time as in  Radford et al    Aside from taking out batch normalization  the number of parameters is
+therefore reduced by   bit more than an order of magnitude  Left  WGAN algorithm  Right  standard GAN formulation  As we can see
+the standard GAN failed to learn while the WGAN still was able to produce samples 
+
+Figure   Algorithms trained with an MLP generator with   layers and   units with ReLU nonlinearities  The number of parameters
+is similar to that of   DCGAN  but it lacks   strong inductive bias for image generation  Left  WGAN algorithm  Right  standard GAN
+formulation  The WGAN method still was able to produce samples  lower quality than the DCGAN  and of higher quality than the MLP
+of the standard GAN  Note the signi cant degree of mode collapse in the GAN MLP 
+
+  Improved stability
+
+One of the bene ts of WGAN is that it allows us to train
+the critic till optimality  When the critic is trained to completion  it simply provides   loss to the generator that we
+can train as any other neural network  This tells us that we
+no longer need to balance generator and discriminator   capacity properly  The better the critic  the higher quality the
+gradients we use to train the generator 
+We observe that WGANs are more robust than GANs when
+one varies the architectural choices for the generator in certain ways  We illustrate this by running experiments on
+three generator architectures      convolutional DCGAN
+generator      convolutional DCGAN generator without
+batch normalization and with   constant number of  lters
+ the capacity of the generator is drastically smaller than that
+of the discriminator  and      layer ReLUMLP with
+  hidden units  The last two are known to perform very
+poorly with GANs  We keep the convolutional DCGAN architecture for the WGAN critic or the GAN discriminator 
+Figures     and   show samples generated for these three
+architectures using both the WGAN and GAN algorithms 
+We refer the reader to Appendix   for full sheets of generated samples  Samples were not cherrypicked 
+In no experiment did we see evidence of mode collapse
+for the WGAN algorithm 
+
+  Related Work
+We refer the reader to Appendix   for the connections to
+the different integral probability metrics    uller   
+The recent work of  Montavon et al    has explored
+the use of Wasserstein distances in the context of learning for Restricted Boltzmann Machines for discrete spaces 
+Even though the motivations at    rst glance might seem
+quite different  at the core of it both our works want to compare distributions in   way that leverages the geometry of
+the underlying space  which Wasserstein allows us to do 
+Finally  the work of  Genevay et al    shows new algorithms for calculating Wasserstein distances between different distributions  We believe this direction is quite important  and perhaps could lead to new ways to evaluate
+generative models 
+
+  Conclusion
+We introduced an algorithm that we deemed WGAN  an
+alternative to traditional GAN training  In this new model 
+we showed that we can improve the stability of learning 
+get rid of problems like mode collapse  and provide meaningful learning curves useful for debugging and hyperparameter searches  Furthermore  we showed that the corresponding optimization problem is sound  and provided extensive theoretical work highlighting the deep connections
+to other distances between distributions 
+
+Wasserstein Generative Adversarial Networks
+
+Acknowledgments
+We would like to thank Mohamed Ishmael Belghazi  Emily
+Denton  Ian Goodfellow  Ishaan Gulrajani  Alex Lamb 
+David LopezPaz  Eric Martin  musyoku  Maxime Oquab 
+Aditya Ramesh  Ronan Riochet  Uri Shalit  Pablo Sprechmann  Arthur Szlam  Ruohan Wang  for helpful comments
+and advice 
+
+References
+Arjovsky  Martin and Bottou    eon  Towards principled
+methods for training generative adversarial networks  In
+International Conference on Learning Representations 
+ 
+
+Dziugaite  Gintare Karolina  Roy  Daniel    and Ghahramani  Zoubin 
+Training generative neural networks
+via maximum mean discrepancy optimization  CoRR 
+abs   
+
+Genevay  Aude  Cuturi  Marco  Peyr    Gabriel  and Bach 
+Francis  Stochastic optimization for largescale optimal
+transport  In Lee        Sugiyama     Luxburg       
+Guyon     and Garnett      eds  Advances in Neural Information Processing Systems   pp    Curran Associates  Inc   
+
+Goodfellow  Ian    PougetAbadie  Jean  Mirza  Mehdi 
+Xu  Bing  WardeFarley  David  Ozair  Sherjil 
+Courville  Aaron  and Bengio  Yoshua  Generative adversarial nets  In Advances in Neural Information Processing Systems   pp    Curran Associates 
+Inc   
+
+Gretton  Arthur  Borgwardt  Karsten    Rasch  Malte   
+Sch olkopf  Bernhard  and Smola  Alexander    kernel twosample test     Mach  Learn  Res   
+  ISSN  
+
+Huszar  Ferenc  How  not  to train your generative model 
+CoRR 
+
+Scheduled sampling  likelihood  adversary 
+abs   
+
+Kakutani  Shizuo  Concrete representation of abstract    
+spaces    characterization of the space of continuous
+functions  Annals of Mathematics   
+ 
+
+Kingma  Diederik    and Ba  Jimmy  Adam    method for
+
+stochastic optimization  CoRR  abs   
+
+Kingma  Diederik    and Welling  Max  Autoencoding
+
+variational bayes  CoRR  abs   
+
+Li  Yujia  Swersky  Kevin  and Zemel  Rich  Generative
+moment matching networks  In Proceedings of the  nd
+
+International Conference on Machine Learning  ICML 
+  pp    JMLR Workshop and Conference
+Proceedings   
+
+Metz  Luke  Poole  Ben  Pfau  David  and SohlDickstein 
+Jascha  Unrolled generative adversarial networks  Corr 
+abs   
+
+Milgrom  Paul and Segal  Ilya  Envelope theorems for arbitrary choice sets  Econometrica     
+ISSN  
+
+Mnih  Volodymyr  Badia  Adri   Puigdom enech  Mirza 
+Mehdi  Graves  Alex  Lillicrap  Timothy    Harley  Tim 
+Silver  David  and Kavukcuoglu  Koray  Asynchronous
+In Proceedmethods for deep reinforcement learning 
+ings of the  nd International Conference on Machine
+Learning  ICML   New York City  NY  USA  June
+    pp     
+
+Montavon  Gr egoire    uller  KlausRobert  and Cuturi 
+Marco  Wasserstein training of restricted boltzmann machines  In Lee        Sugiyama     Luxburg       
+Guyon     and Garnett      eds  Advances in Neural Information Processing Systems   pp    Curran Associates  Inc   
+
+  uller  Alfred  Integral probability metrics and their generating classes of functions  Advances in Applied Probability     
+
+Neal  Radford    Annealed importance sampling  Statistics and Computing    April   ISSN
+ 
+
+Nowozin  Sebastian  Cseke  Botond  and Tomioka  Ryota 
+fgan  Training generative neural samplers using variational divergence minimization  pp     
+
+Radford  Alec  Metz  Luke  and Chintala  Soumith  Unsupervised representation learning with deep convolutional
+generative adversarial networks  CoRR  abs 
+ 
+
+Ramdas  Aaditya  Reddi  Sashank    Poczos  Barnabas  Singh  Aarti  and Wasserman  Larry 
+On
+the highdimensional power of lineartime kernel twosample testing under meandifference alternatives  Corr 
+abs   
+
+Sutherland  Dougal    Tung  HsiaoYu  Strathmann  Heiko 
+De  Soumyajit  Ramdas  Aaditya  Smola  Alex  and
+Gretton  Arthur  Generative models and model criticism
+via optimized maximum mean discrepancy  In International Conference on Learning Representations   
+
+Wasserstein Generative Adversarial Networks
+
+Tieleman     and Hinton     Lecture  RmsProp  Divide the gradient by   running average of its recent magnitude  COURSERA  Neural Networks for Machine
+Learning   
+
+Villani    edric 
+Grundlehren
+Springer  Berlin   
+
+Optimal Transport  Old and New 
+der mathematischen Wissenschaften 
+
+Wu  Yuhuai  Burda  Yuri  Salakhutdinov  Ruslan  and
+On the quantitative analyCoRR 
+
+Grosse  Roger   
+sis of decoderbased generative models 
+abs   
+
+Yu  Fisher  Zhang  Yinda  Song  Shuran  Seff  Ari  and
+Xiao  Jianxiong  LSUN  Construction of   largescale
+image dataset using deep learning with humans in the
+loop  Corr  abs   
+
+Zhao 
+
+Junbo  Mathieu  Michael  and LeCun  Yann 
+Energybased generative adversarial network  Corr 
+abs   
+
+

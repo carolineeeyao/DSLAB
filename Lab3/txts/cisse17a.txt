@@ -1,0 +1,1193 @@
+Parseval Networks  Improving Robustness to Adversarial Examples
+
+Moustapha Cisse   Piotr Bojanowski   Edouard Grave   Yann Dauphin   Nicolas Usunier  
+
+Abstract
+
+We introduce Parseval networks    form of deep
+neural networks in which the Lipschitz constant
+of linear  convolutional and aggregation layers
+is constrained to be smaller than   Parseval
+networks are empirically and theoretically motivated by an analysis of the robustness of the
+predictions made by deep neural networks when
+their input is subject to an adversarial perturbation  The most important feature of Parseval networks is to maintain weight matrices of linear
+and convolutional layers to be  approximately 
+Parseval tight frames  which are extensions of
+orthogonal matrices to nonsquare matrices  We
+describe how these constraints can be maintained
+ef ciently during SGD  We show that Parseval networks match the stateof theart in terms
+of accuracy on CIFAR  and Street View
+House Numbers  SVHN  while being more robust than their vanilla counterpart against adversarial examples  Incidentally  Parseval networks
+also tend to train faster and make   better usage
+of the full capacity of the networks 
+
+  Introduction
+Deep neural networks achieve nearhuman accuracy on
+many perception tasks  He et al    Amodei et al 
+  However  they lack robustness to small alterations
+of the inputs at test time  Szegedy et al   
+Indeed
+when presented with   corrupted image that is barely distinguishable from   legitimate one by   human  they can
+predict incorrect labels  with highcon dence  An adversary can design such socalled adversarial examples  by
+adding   small perturbation to   legitimate input to maximize the likelihood of an incorrect class under constraints
+on the magnitude of the perturbation  Szegedy et al   
+Goodfellow et al    MoosaviDezfooli et al    Pa 
+
+ Facebook AI Research  Correspondence to  Moustapha Cisse
+
+ moustaphacisse fb com 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+pernot et al      In practice  for   signi cant portion of
+inputs    single step in the direction of the gradient sign is
+suf cient to generate an adversarial example  Goodfellow
+et al    that is even transferable from one network to
+another one trained for the same problem but with   different architecture  Liu et al    Kurakin et al   
+The existence of transferable adversarial examples has two
+undesirable corollaries  First  it creates   security threat
+for production systems by enabling blackbox attacks  Papernot et al      Second  it underlines the lack of robustness of neural networks and questions their ability to
+generalize in settings where the train and test distributions
+can be  slightly  different as is the case for the distributions
+of legitimate and adversarial examples 
+Whereas the earliest works on adversarial examples already
+suggested that their existence was related to the magnitude
+of the hidden activations gradient with respect to their inputs  Szegedy et al    they also empirically assessed
+that standard regularization schemes such as weight decay or training with random noise do not solve the problem  Goodfellow et al    Fawzi et al    The current mainstream approach to improving the robustness of
+deep networks is adversarial training  It consists in generating adversarial examples online using the current network   parameters  Goodfellow et al    Miyato et al 
+  MoosaviDezfooli et al    Szegedy et al   
+Kurakin et al    and adding them to the training data 
+This data augmentation method can be interpreted as   robust optimization procedure  Shaham et al   
+In this paper  we introduce Parseval networks    layerwise
+regularization method for reducing the network   sensitivity to small perturbations by carefully controlling its global
+Lipschitz constant  Since the network is   composition of
+functions represented by its layers  we achieve increased
+robustness by maintaining   small Lipschitz constant      
+  at every hidden layer  be it fullyconnected  convolutional or residual  In particular    critical quantity governing the local Lipschitz constant in both fully connected and
+convolutional layers is the spectral norm of the weight matrix  Our main idea is to control this norm by parameterizing the network with parseval tight frames  Kova cevi    
+Chebira      generalization of orthogonal matrices 
+The idea that regularizing the spectral norm of each weight
+
+Parseval Networks
+
+matrix could help in the context of robustness appeared as
+early as  Szegedy et al    but no experiment nor algorithm was proposed  and no clear conclusion was drawn
+on how to deal with convolutional layers  Previous work 
+such as double backpropagation  Drucker   Le Cun   
+has also explored jacobian normalization as   way to improve generalization  Our contribution is twofold  First  we
+provide   deeper analysis which applies to fully connected
+networks  convolutional networks  as well as Residual networks  He et al    Second  we propose   computationally ef cient algorithm and validate its effectiveness on
+standard benchmark datasets  We report results on MNIST 
+CIFAR  CIFAR  and Street View House Numbers
+ SVHN  in which fully connected and wide residual networks were trained  Zagoruyko   Komodakis    with
+Parseval regularization  The accuracy of Parseval networks
+on legitimate test examples matches the stateof theart 
+while the results show notable improvements on adversarial examples  Besides  Parseval networks train signi cantly
+faster than their vanilla counterpart 
+In the remainder of the paper  we  rst discuss the previous
+work on adversarial examples  Next  we give formal de nitions of the adversarial examples and provide an analysis of
+the robustness of deep neural networks  Then  we introduce
+Parseval networks and its ef cient training algorithm  Section   presents experimental results validating the model
+and providing several insights 
+
+  Related work
+Early papers on adversarial examples attributed the vulnerability of deep networks to high local variations  Szegedy
+et al    Goodfellow et al    Some authors argued that this sensitivity of deep networks to small changes
+in their inputs is because neural networks only learn the
+discriminative information suf cient to obtain good accuracy rather than capturing the true concepts de ning the
+classes  Fawzi et al    Nguyen et al   
+Strategies to improve the robustness of deep networks include defensive distillation  Papernot et al      as well
+as various regularization procedures such as contractive
+networks  Gu   Rigazio    However  the bulk of
+recent proposals relies on data augmentation  Goodfellow
+et al    Miyato et al    MoosaviDezfooli et al 
+  Shaham et al    Szegedy et al    Kurakin
+et al    It uses adversarial examples generated online
+during training  As we shall see in the experimental section  regularization can be complemented with data augmentation  in particular  Parseval networks with data augmentation appear more robust than either data augmentation or Parseval networks considered in isolation 
+
+  Robustness in Neural Networks
+We consider   multiclass prediction setting  where we have
+  classes in               multiclass classi er is  
+function           RD          cid  argmax               
+where   are the parameters to be learnt  and            is
+the score given to the  input  class  pair         by   function
+    RD       RY   We take   to be   neural network 
+represented by   computation graph            which is
+  directed acyclic graph with   single root node  and each
+node       takes values in Rd   
+out and is   function of its
+children in the graph  with learnable parameters      
+
+       cid     cid      cid   cid   cid 
+
+ cid   
+
+  cid     cid  
+
+ 
+
+The function   we want to learn is the root of    The
+              is an        samtraining data  xi  yi  
+ple of    and we assume     RD is compact    function
+ cid    RY         measures the loss of   on an example
+       in   singlelabel classi cation setting for instance   
+common choice for  cid  is the logloss 
+
+ cid cid            cid     gy          log cid cid 
+
+eg         cid   
+
+    
+
+The arguments that we develop below depend only on the
+Lipschitz constant of the loss  with respect to the norm of
+interest  Formally  we assume that given   pnorm of interest  cid cid    there is   constant    such that
+      cid    RY        cid       cid   cid           cid     cid cid    
+For the logloss of   we have      
+  and      
+In the next subsection  we de ne adversarial examples and
+the generalization performance of the classi er  Then  we
+make the relationship between robustness to adversarial examples and the lipschitz constant of the networks 
+
+  Adversarial examples
+
+Given an input  train or test  example        an adversarial
+example is   perturbation of the input pattern            
+where    is small enough so that    is nearly undistinguishable from    at least from the point of view of   human
+annotator  but has the network predict an incorrect label 
+Given the network parameters and structure        and  
+pnorm  the adversarial example is formally de ned as
+
+ cid cid            cid   
+
+ 
+
+     argmax
+   cid     cid   
+
+where   represents the strength of the adversary  Since the
+optimization problem above is nonconvex  Shaham et al 
+  propose to take the  rst order taylor expansion of
+   cid   cid             to compute    by solving
+
+ cid   cid            cid  
+
+         
+
+ 
+
+     argmax
+   cid     cid   
+
+Parseval Networks
+
+If       then           sign   cid             This is
+the fast gradient sign method  For the case       we obtain             cid               more involved method
+is the iterative fast gradient sign method  in which several
+gradient steps of   are performed with   smaller stepsize
+to obtain   local minimum of  
+
+  Generalization with adversarial examples
+
+In the context of adversarial examples  there are two different generalization errors of interest 
+
+         
+
+      
+
+Ladv            
+
+      
+
+ cid cid            cid 
+ cid  max
+
+   cid     cid   
+
+ cid            cid 
+
+By de nition          Ladv         for every   and      
+Reciprocally  denoting by    and    the Lipschitz constant
+ with respect to  cid cid    of  cid  and   respectively  we have 
+Ladv                
+   
+
+ cid                cid            cid 
+
+ cid  max
+
+      
+
+   cid     cid   
+                 
+
+This suggests that the sensitivity to adversarial examples
+can be controlled by the Lipschitz constant of the network 
+In the robustness framework of  Xu   Mannor   
+the Lipschitz constant also controls the difference between
+the average loss on the training set and the generalization
+performance  More precisely  let us denote by Cp      
+the covering number of   using  balls for  cid cid    Using
+    supx      cid             Theorem   of  Xu   Mannor    implies that for every         with probability       over the        sample  xi  yi  
+         
+ 
+
+   we have 
+
+ cid   xi      yi 
+
+  cid 
+
+  
+
+   Cp      
+
+    ln      ln 
+
+           
+
+ 
+Since covering numbers of   pnorm ball in RD increases
+exponentially with RD  the bound above suggests that it is
+critical to control the Lipschitz constant of    for both good
+generalization and robustness to adversarial examples 
+
+ 
+
+ cid 
+
+  Lipschitz constant of neural networks
+
+From the network structure we consider   for every node
+        we have  see below for the de nition of      cid 
+ 
+ cid   cid        cid   cid    
+
+ cid            cid      cid 
+
+     cid 
+
+ 
+
+ 
+
+  cid     cid  
+
+ 
+
+for any      cid 
+that is greater than the worst case variation
+of   with respect to   change in its input   cid    In particular we can take for      cid 
+any value greater than the
+
+ 
+
+supremum over        of the Lipschitz constant for  cid cid  
+of the function    cid cid      cid  is   if   cid cid      cid  and   otherwise 
+
+   cid     cid      cid   cid cid     cid cid      cid     cid 
+
+ cid   
+
+  cid cid     cid cid  
+
+The Lipschitz constant of    denoted by    
+   cid 
+
+     cid 
+
+     cid 
+
+   
+
+ 
+
+ 
+
+ 
+
+  cid     cid  
+
+satis es 
+
+ 
+
+Thus  the Lipschitz constant of the network   can grow exponentially with its depth  We now give the Lipschitz constants of standard layers as   function of their parameters 
+Linear layers  For layer               cid    where   cid  is
+the unique child of   in the graph  the Lipschitz constant
+for  cid cid   is  by de nition  the matrix norm of       induced
+by  cid cid    which is usually denoted  cid      cid   and de ned by
+
+ cid      cid     sup
+  cid   cid   
+
+ cid        cid    
+
+ 
+
+     cid      cid   cid 
+
+  where  cid      cid  called the
+Then    
+spectral norm of       is the maximum singular value
+of       We also have        cid      cid   cid    where
+ cid      cid    maxi
+  is the maximum  norm of
+the rows       
+
+        
+
+ cid 
+
+ij
+
+Convolutional layers  To simplify notation  let us consider convolutions on    inputs without striding  and we
+take the width of the convolution to be        for       
+To write convolutional layers in the same way as linear layers  we  rst de ne an unfolding operator    which prepares the input    denoted by       If the input has length
+  with din inputs channels  the unfolding operator maps
+  For   convolution of the unfolding of   considered as  
+          din matrix  its jth column is 
+
+Uj       zj      zj     
+
+where   is the concatenation along the vertical axis  each
+zi is seen as   column dindimensional vector  and zi    
+if   is out of bounds  padding    convolutional layer
+with dout output channels is then de ned as
+
+                 cid                cid     
+
+where       is   dout         din matrix  We thus have
+     cid   cid cid      cid   cid  Since   is   linear operator
+   
+that essentially repeats its input        times  we have
+ cid      cid           cid   cid 
+          cid   cid        cid   cid 
+ 
+      cid   cid   cid 
+  Also   cid      cid     
+so that    
+     cid   cid     cid   cid        cid   cid  and so for   convolutional layer         cid      cid   cid   
+
+     
+
+ 
+
+Parseval Networks
+
+Aggregation layers transfer functions  Layers that perform the sum of their inputs  as in Residual Netowrks  He
+et al    fall in the case where the values      cid 
+in  
+come into play  For   node   that sums its inputs  we have
+     cid 
+  If   is
+  tranfer function layer       an elementwise application
+  where   cid  is the
+of ReLU  we can check that    
+input node  as soon as the Lipschitz constant of the transfer
+function  as   function        is    
+
+   cid 
+
+    and thus    
+
+  cid     cid      cid 
+
+ 
+
+       cid 
+
+ 
+
+ 
+
+ 
+
+  Parseval networks
+Parseval regularization  which we introduce in this section 
+is   regularization scheme to make deep neural networks
+robust  by constraining the Lipschitz constant   of each
+hidden layer to be smaller than one  assuming the Lipschitz
+constant of children nodes is smaller than one  That way 
+we avoid the exponential growth of the Lipschitz constant 
+and   usual regularization scheme       weight decay  at
+the last layer then controls the overall Lipschitz constant
+of the network  To enforce these constraints in practice 
+Parseval networks use two ideas  maintaining orthonormal
+rows in linear convolutional layers  and performing convex
+combinations in aggregation layers  Below  we  rst explain
+the rationale of these constraints and then describe our approach to ef ciently enforce the constraints during training 
+
+  Parseval Regularization
+Orthonormality of weight matrices  For linear layers 
+we need to maintain the spectral norm of the weight matrix
+at   Computing the largest singular value of weight matrices is not practical in an SGD setting unless the rows
+of the matrix are kept orthogonal  For   weight matrix
+    Rdout din with dout   din  Parseval regularization maintains         Idout dout  where   refers to
+the identity matrix    is then approximately   Parseval
+tight frame  Kova cevi     Chebira    hence the name
+of Parseval networks  For convolutional layers  the matrix     Rdout   din is constrained to be   Parseval tight frame  with the notations of the previous section 
+and the output is rescaled by   factor        This
+maintains all singular values of   to        so that
+       cid 
+  where   cid  is the input node  More generally 
+   
+keeping the rows of weight matrices orthogonal makes it
+possible to control both the spectral norm and the  cid cid  of
+  weight matrix through the norm of its individual rows 
+Robustness for  cid cid  is achieved by rescaling the rows so
+that their  norm is smaller than   For now  we only experimented with constraints on the  norm of the rows  so
+we aim for robustness in the sense of  cid cid 
+
+Remark    Orthogonality is required  Without orthogonality  constraints on the  norm of the rows of weight ma 
+
+trices are not suf cient to control the spectral norm  Parseval networks are thus fundamentally different from weight
+normalization  Salimans   Kingma   
+
+Aggregation Layers 
+In parseval networks  aggregation
+layers do not make the sum of their inputs  but rather take
+  convex combination of them 
+
+ cid 
+
+      
+
+  cid     cid  
+
+     cid   cid   
+
+with cid 
+
+  cid     cid        cid      and      cid      The parameters      cid  are learnt  but using   these constraint
+      as soon as the children satisfy the
+guarantee that    
+inequality for the same pnorm 
+
+  Parseval Training
+Orthonormality constraints  The  rst signi cant difference between Parseval networks and its vanilla counterpart is the orthogonality constraint on the weight matrices 
+This requirement calls for an optimization algorithm on the
+manifold of orthogonal matrices  namely the Stiefel manifold  Optimization on matrix manifolds is   wellstudied
+topic  see  Absil et al    for   comprehensive survey 
+The simplest  rstorder geometry approaches consist in optimizing the unconstrained function of interest by moving
+in the direction of steepest descent  given by the gradient
+of the function  while at the same time staying on the manifold  To guarantee that we remain in the manifold after
+every parameter update  we need to de ne   retraction operator  There exist several pullback operators for embedded
+submanifolds such as the Stiefel manifold based for example on Cayley transforms  Absil et al    However 
+when learning the parameters of neural networks  these
+methods are computationally prohibitive  To overcome this
+dif culty  we use an approximate operator derived from the
+following layerwise regularizer of weight matrices to ensure their parseval tightness  Kova cevi     Chebira   
+
+  Wk   
+
+ cid    cid 
+
+  Wk     cid 
+ 
+
+ 
+ 
+
+Optimizing   Wk  to convergence after every gradient
+descent step        the main objective  guarantees us to stay
+on the desired manifold but this is an expensive procedure 
+Moreover  it may result in parameters that are far from the
+ones obtained after the main gradient update  We use two
+approximations to make the algorithm more ef cient  First 
+we only do one step of descent on the function   Wk 
+The gradient of this regularization term is  Wk   Wk   
+      Wk  Consequently  after every main update
+ WkW  cid 
+we perform the following secondary update 
+Wk        Wk    WkW  cid 
+
+  Wk 
+
+Parseval Networks
+
+Algorithm   Parseval Training
+     Wk      
+while       do
+
+        
+
+Sample   minibatch  xi  yi  
+for                  do
+
+  
+
+Compute the gradient  GWk    Wk  cid xi  yi 
+          cid xi  yi 
+Update the parameters 
+Wk   Wk       GWk
+                  
+if hidden layer then
+
+Sample   subset   of rows of Wk 
+Projection 
+WS        WS    WSW  cid 
+  WS 
+     argmin   cid      cid 
+ 
+
+         
+
+Optionally  instead of updating the whole matrix  one can
+randomly select   subset   of rows and perform the update
+from Eq    on the submatrix composed of rows indexed
+by    This sampling based approach reduces the overall
+complexity to        Provided the rows are carefully
+sampled  the procedure is an accurate Monte Carlo approximation of the regularizer loss function  Drineas et al 
+  The optimal sampling probabilities  also called statistical leverages are approximately equal if we start from
+an orthogonal matrix and  approximately  stay on the manifold throughout the optimization since they are proportional to the eigenvalues of    Mahoney et al   
+Therefore  we can sample   subset of columns uniformly
+at random when applying this projection step 
+While the full update does not result in an increased overhead for convolutional layers  the picture can be very different for large fully connected layers making the sampling
+approach computationally more appealing for such layers 
+We show in the experiments that the weight matrices resulting from this procedure are  quasi orthogonal  Also  note
+that quasiorthogonalization procedures similar to the one
+described here have been successfully used previously in
+the context of learning overcomplete representations with
+independent component analysis  Hyv rinen   Oja   
+
+Convexity constraints in aggregation layers 
+In Parseval networks  aggregation layers output   convex combination of their inputs instead of      their sum as in Residual
+networks  He et al    For an aggregation node   of
+the network  let us denote by          cid   cid     cid   the
+Ksize vector of coef cients used for the convex combination output by the layer  To ensure that the Lipschitz conp     the constraints
+stant at the node   is such that    
+of   call for   euclidean projection of   onto the positive
+simplex after   gradient update 
+    argmin
+   
+
+ cid     cid 
+   
+
+Figure   Sample images from the CIFAR  dataset  with corresponding adversarial examples  We show the original image and
+adversarial versions for SNR values of     and  
+
+where           RK cid            This is  
+well studied problem  Michelot    Pardalos   Kovoor 
+  Duchi et al    Condat   
+Its solution is
+    max           with     RK  
+of the form   
+  xi           for
+every     RK  Therefore  the solution essentially boils
+down to   soft thresholding operation  If we denote    
+             the sorted coef cients and      max    
+        the optimal thresholding
+
+  the unique function satisfying cid 
+                 cid 
+ cid 
+
+is given by  Duchi et al   
+
+            
+
+     
+
+  
+
+the complexity of
+
+Consequently 
+the projection is
+    log    since it is only dominated by the sorting
+of the coef cients and is typically cheap because aggregation nodes will only have few children in practice      
+ 
+If the number of children is large  there exist ef 
+cient linear time algorithms for  nding the optimal thresholding      Michelot    Pardalos   Kovoor   
+Condat    In this work  we use the method detailed
+above  Duchi et al    to perform the projection of the
+coef cient   after every gradient update step 
+
+  Experimental evaluation
+We evaluate the effectiveness of Parseval networks on
+wellestablished image classi cation benchmark datasets
+namely MNIST  CIFAR  CIFAR   Krizhevsky 
+  and Street View House Numbers  SVHN   Netzer
+et al  We train both fully connected networks and wide
+residual networks  The details of the datasets  the models 
+and the training routines are summarized below 
+
+Parseval Networks
+
+  Datasets
+CIFAR  Each of the CIFAR datasets is composed of   
+natural scene color images of size       split between
+   training images and    test images  CIFAR  and
+CIFAR  have respectively   and   classes  For these
+two datasets  we adopt the following standard preprocessing and data augmentation scheme  Lin et al    He
+et al    Huang et al      Zagoruyko   Komodakis 
+  Each training image is  rst zeropadded with   pixels on each side  The resulting image is randomly cropped
+to produce   new       image which is subsequently
+horizontally  ipped with probability   We also normalize every image with the mean and standard deviation of
+its channels  Following the same practice as  Huang et al 
+    we initially use    images from the training as  
+validation set  Next  we train de novo the best model on
+the full set of    images and report the results on the test
+set  SVHN The Street View House Number dataset is  
+set of       color digit images of cially split into  
+training images and   test images  Following common
+practice  Zagoruyko   Komodakis    He et al   
+Huang et al        we randomly sample   images
+from the available extra set of about    images as   validation set and combine the rest of the pictures with the
+of cial training set  We divide the pixel values by   as
+  preprocessing step and report the test set performance of
+the best performing model on the validation set 
+
+  Models and Implementation details
+ConvNet Models  For the CIFAR and SVHN datasets  we
+trained wide residual networks  Zagoruyko   Komodakis 
+  as they perform on par with standard resnets  He
+et al    while being faster to train thanks to   reduced
+depth  We used wide resnets of depth   and width   for
+both CIFAR  and CIFAR  For SVHN we used wide
+resnet of depth   and width   For each architecture  we
+compare Parseval networks with the vanilla model trained
+with standard regularization both in the adversarial and the
+nonadversarial training settings 
+ConvNet Training  We train the networks with stochastic gradient descent using   momentum of   On CIFAR
+datasets  the initial learning rate is set to   and scaled
+by   factor of   after epochs     and   for   total number of   epochs  We used minibatches of size
+  For SVHN  we trained the models with minibatches
+of size   for   epochs starting with   learning rate
+of   and decreasing it by   factor of   at epochs  
+and   For all the vanilla models  we applied by default
+weight decay regularization  with parameter      
+together with batch normalization and dropout since this
+combination resulted in better accuracy and increased robustness in preliminary experiments  The dropout rate use
+
+is   for CIFAR and   for SVHN  For Parseval regularized models  we choose the value of the retraction parameter to be       for CIFAR datasets and      
+for SVHN based on the performance on the validation set 
+In all cases  We also adversarially trained each of the models on CIFAR  and CIFAR  following the guidelines
+in  Goodfellow et al    Shaham et al    Kurakin
+et al    In particular  we replace   of the examples
+of every minibatch by their adversarially perturbed version
+generated using the onestep method to avoid label leaking  Kurakin et al    For each minibatch  the magnitude of the adversarial perturbation is obtained by sampling
+from   truncated Gaussian centered at   with standard deviation  
+Fully Connected Model  We also train feedforward networks composed of   fully connected hidden layers of size
+  and   classi cation layer  The input to these networks
+are images unrolled into         dimensional vector
+where   is the number of channels  We used these models
+on MNIST and CIFAR  mainly to demonstrate that the
+proposed approach is also useful on nonconvolutional networks  We compare   Parseval networks to vanilla models
+with and without weight decay regularization  For adversarially trained models  we follow the guidelines previously
+described for the convolutional networks 
+Fully Connected Training  We train the models with SGD
+and divide the learning rate by two every   epochs  We use
+minibatches of size   and train the model for   epochs 
+We chose the hyperparameters on the validation set and retrain the model on the union of the training and validation
+sets  The hyperparameters are   the size of the row subset
+   the learning rate and its decrease rate  Using   subset
+  of   of all the rows of each of weight matrix for the
+retraction step worked well in practice 
+
+  Results
+
+   QUASI ORTHOGONALITY 
+
+We  rst validate that Parseval training  Algorithm   indeed
+yields  near orthonormal weight matrices  To do so  we
+analyze the spectrum of the weight matrices of the different
+models by plotting the histograms of their singular values 
+and compare these histograms for Parseval networks to networks trained using standard SGD with and without weight
+decay  SGDwd and SGD 
+The histograms representing the distribution of singular
+values at layers   and   for the fully connected network  using       trained on the dataset CIFAR  are shown
+in Fig     the  gures for convolutional networks are similar  The singular values obtained with our method are
+tightly concentrated around   This experiment con rms
+that the weight matrices produced by the proposed opti 
+
+Parseval Networks
+
+Table   Classi cation accuracy of the models on CIFAR  and
+CIFAR  with the  combination of  various regularization
+scheme    represents here the value of the signal to noise ratio
+ SNR  At       an adversarially perturbed image is perceptible by   human  For each dataset  the top   rows report results for
+nonadversarial training and the bottom   rows report results for
+adversarial training 
+
+Model
+Vanilla
+Parseval OC 
+Parseval
+Vanilla
+Parseval OC 
+Parseval
+
+Vanilla
+Parseval OC 
+Parseval
+Vanilla
+Parseval OC 
+Parseval
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+  Vanilla
+
+ 
+ 
+ 
+
+Parseval OC 
+Parseval
+
+Clean
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+
+     
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+
+     
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+
+     
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+
+     
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+
+adversarial training  SGDwd da  on CIFAR  Combining Parseval Networks and adversarial training results in
+the most robust method on MNIST 
+
+ResNets  Table   summarizes the results of our experiments with wide residual Parseval and vanilla networks on
+CIFAR  CIFAR  and SVHN  In the table  we denote
+Parseval OC  the Parseval network with orthogonality constraint and without using   convex combination in aggregation layers  Parseval indicates the con guration where both
+of the orthogonality and convexity constraints are used 
+We  rst observe that Parseval networks outperform vanilla
+ones on all datasets on the clean examples and match the
+state of the art performances on CIFAR    and
+SVHN   On CIFAR  when we use Parseval wide Resnet of depth   instead of   we achieve
+an accuracy of  
+In comparison  the best performance achieved by   vanilla wide resnet  Zagoruyko   Komodakis    and   preactivation resnet  He et al   
+are respectively   and   Therefore  our proposal is   useful regularizer for legitimate examples  Also
+note that in most cases  Parseval networks combining both
+the orthogonality constraint and the convexity constraint is
+superior to use the orthogonality constraint solely 
+The results presented in the table validate our most important claim  Parseval networks signi cantly improve the robustness of vanilla models to adversarial examples  When
+no adversarial training is used  the gap in accuracy be 
+
+Figure   Histograms of the singular values of the weight matrices
+at layers   and   of our network in CIFAR 
+
+Figure   Performance of the models for various magnitudes of
+adversarial noise on MNIST  left  and CIFAR   right 
+
+mization procedure are  almost  orthonormal  The distribution of the singular values of the weight matrices obtained
+with SGD has   lot more variance  with nearly as many
+small values as large ones  Adding weight decay to standard SGD leads to   sparse spectrum for the weight matrices  especially in the higher layers of the network suggesting   lowrank structure  This observation has motivated
+recent work on compressing deep neural networks  Denton
+et al   
+
+  ROBUSTNESS TO ADVERSARIAL NOISE 
+
+We evaluate the robustness of the models to adversarial
+noise by generating adversarial examples from the test set 
+for various magnitudes of the noise vector  Following common practice  Kurakin et al    we use the fast gradient
+sign method to generate the adversarial examples  using
+ cid cid  see Section   Since these adversarial examples
+transfer from one network to the other  the fast gradient
+sign method allows to benchmark the network for reasonable settings where the opponent does not know the network  We report the accuracy of each model as   function
+of the magnitude of the noise  To make the results easier
+to interpret  we compute the corresponding Signal to Noise
+Ratio  SNR  For an input   and perturbation     the SNR
+  We show some
+is de ned as SNR            log 
+adversarial examples in Fig   
+
+ cid   cid 
+ cid   cid 
+
+Fully Connected Nets  Figure   depicts   comparison of
+Parseval and vanilla networks with and without adversarial training at various noise levels  On both MNIST and
+CIFAR  Parseval networks consistently outperforms
+weight decay regularization  In addition  it is as robust as
+
+ singularvalues frequencysgdsgdwdparseval singularvalues frequencysgdsgdwdparseval SNR accuracysgdsgdwdsgd wddaparsevalparseval da SNR accuracysgdsgdwdsgd wddaparsevalparseval daParseval Networks
+
+Table   Number of dimensions  in   of the total dimension  necessary to capture   of the covariance of the activations 
+
+SGDwd
+
+SGDwd da
+
+Parseval
+
+all
+
+ 
+ 
+ 
+ 
+
+class
+
+ 
+ 
+ 
+ 
+
+all
+
+ 
+ 
+ 
+ 
+
+class
+
+ 
+ 
+ 
+ 
+
+all
+
+ 
+ 
+ 
+ 
+
+class
+
+ 
+ 
+ 
+ 
+
+Layer  
+Layer  
+Layer  
+Layer  
+
+tween the two methods is signi cant  particularly in the
+high noise scenario  For an SNR value of   the best
+Parseval network achieves   accuracy while the best
+vanilla model is at   When the models are adversarially trained  Parseval networks remain superior to vanilla
+models in most cases 
+Interestingly  adversarial training
+only slightly improves the robustness of Parseval networks
+in low noise setting       SNR values of   and sometimes even deteriorates it       on CIFAR  In contrast 
+combining adversarial training and Parseval networks is an
+effective approach in the high noise setting  This result
+suggests that thanks to the particular form of regularizer
+ controlling the Lipschitz constant of the network  Parseval networks achieves robustness to adversarial examples
+located in the immediate vicinity of each data point  Therefore  adversarial training only helps for adversarial examples found further away from the legitimate patterns  This
+observation holds consistently across all our datasets 
+
+         cid  
+
+Better use of capacity Given the distribution of singular values observed in Figure   we want to analyze the
+intrinsic dimensionality of the representation learned by
+the different networks at every layer  To that end  we use
+the local covariance dimension  Dasgupta   Freund   
+which can be measured from the covariance matrix of the
+ cid  
+data  For each layer   of the fully connected network 
+we compute the activation   empirical covariance matrix
+            cid  and obtain its sorted eigenvalues
+the smallest integer   such that cid  
+ 
+            For each method and each layer  we select
+ 
+      
+This gives us the number of dimensions that we need to
+explain   of the covariance  We can also compute the
+same quantity for the examples of each class  by only considering in the empirical estimation of the covariance of the
+examples xi such that yi      Table   report these numbers
+for all examples and the perclass average on CIFAR 
+Table   shows that the local covariance dimension of all
+the data is consistently higher for Parseval networks than
+all the other approaches at any layer of the network  SGDwd da contracts all the data in very low dimensional spaces
+at the upper levels of the network by using only   of the
+total dimension  layer   and   while Parseval networks use
+about   and   at of the whole dimension respectively
+
+Figure   Learning curves of Parseval wide resnets and Vanilla
+wide resnets on CIFAR   right  and CIFAR   left  Parseval
+networks converge faster than their vanilla counterpart 
+
+in the same layers  This is intriguing given that SGDwd da
+also increases the robustness of the network  apparently not
+in the same way as Parseval networks  For the average local
+covariance dimension of the classes  SGDwd da contracts
+each class into the same dimensionality as it contracts all
+the data at the upper layers of the network  For Parseval 
+the data of each class is contracted in about   and  
+of the overall dimension  These results suggest that Parseval contracts the data of each class in   lower dimensional
+manifold  compared to the intrinsic dimensionality of the
+whole data  hence making classi cation easier 
+
+faster convergence Parseval networks converge signi 
+cantly faster than vanilla networks trained with batch normalization and dropout as depicted by  gure   Thanks to
+the orthogonalization step following each gradient update 
+the weight matrices are well conditioned at each step during the optimization  We hypothesize this is the main explanation of this phenomenon  For convolutional networks
+ resnets  the faster convergence is not obtained at the expense of larger walltime since the cost of the projection
+step is negligible compared to the total cost of the forward
+pass on modern GPU architecture thanks to the small size
+of the  lters 
+
+  Conclusion
+We introduced Parseval networks    new approach for
+learning neural networks that are intrinsically robust to adversarial noise  We proposed an algorithm that allows us to
+optimize the model ef ciently  Empirical results on three
+classi cation datasets with fully connected and wide residual networks illustrate the performance of our approach 
+As   byproduct of the regularization we propose  the model
+trains faster and makes   better use of its capacity  Further
+investigation of this phenomenon is left to future work 
+
+Acknowledgements
+The authors would like to thank      Ranzato     Tian    
+Bordes and    Perronnin for their valuable feedback on this
+work 
+
+ epochs errorsgdparseval epochs errorsgdparsevalParseval Networks
+
+References
+Absil  PA  Mahony  Robert  and Sepulchre  Rodolphe 
+Optimization algorithms on matrix manifolds  Princeton
+University Press   
+
+Amodei  Dario  Anubhai  Rishita  Battenberg  Eric  Case 
+Carl  Casper  Jared  Catanzaro  Bryan  Chen  Jingdong 
+Chrzanowski  Mike  Coates  Adam  Diamos  Greg  et al 
+Deep speech   Endto end speech recognition in english
+and mandarin  arXiv preprint arXiv   
+Condat  Laurent  Fast projection onto the simplex and the 
+pmb       mathbf   ball  Mathematical Programming     
+
+Dasgupta  Sanjoy and Freund  Yoav  Random projection
+trees and low dimensional manifolds  In Proceedings of
+the fortieth annual ACM symposium on Theory of computing  pp    ACM   
+
+Denton  Emily    Zaremba  Wojciech  Bruna  Joan  LeCun  Yann  and Fergus  Rob  Exploiting linear structure
+within convolutional networks for ef cient evaluation  In
+Adv  NIPS   
+
+Drineas  Petros  Kannan  Ravi  and Mahoney  Michael   
+Fast monte carlo algorithms for matrices    Approximating matrix multiplication  SIAM Journal on Computing 
+   
+
+Drucker  Harris and Le Cun  Yann  Improving generalization performance using double backpropagation  IEEE
+Transactions on Neural Networks     
+
+Duchi  John  ShalevShwartz  Shai  Singer  Yoram  and
+Chandra  Tushar  Ef cient projections onto the    ball
+for learning in high dimensions  In Proceedings of the
+ th international conference on Machine learning  pp 
+  ACM   
+
+Fawzi  Alhussein  Fawzi  Omar  and Frossard  Pascal 
+Analysis of classi ers  robustness to adversarial perturbations  arXiv preprint arXiv   
+
+Fawzi  Alhussein  MoosaviDezfooli  SeyedMohsen  and
+Frossard  Pascal  Robustness of classi ers  from adversarial to random noise  In Advances in Neural Information Processing Systems  pp     
+
+Goodfellow  Ian    Shlens  Jonathon  and Szegedy  Christian  Explaining and harnessing adversarial examples 
+In Proc  ICLR   
+
+He  Kaiming  Zhang  Xiangyu  Ren  Shaoqing  and Sun 
+Jian  Deep residual learning for image recognition  In
+Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition  pp     
+
+Huang  Gao  Liu  Zhuang  Weinberger  Kilian    and
+van der Maaten  Laurens  Densely connected convoarXiv preprint arXiv 
+lutional networks 
+   
+
+Huang  Gao  Sun  Yu  Liu  Zhuang  Sedra  Daniel  and
+Weinberger  Kilian    Deep networks with stochastic
+depth  In European Conference on Computer Vision  pp 
+  Springer     
+
+Hyv rinen  Aapo and Oja  Erkki  Independent component
+analysis  algorithms and applications  Neural networks 
+ 
+
+Kova cevi    Jelena and Chebira  Amina  An introduction to
+frames  Foundations and Trends in Signal Processing 
+ 
+
+Krizhevsky  Alex  Learning multiple layers of features
+
+from tiny images   
+
+Kurakin  Alexey  Goodfellow  Ian  and Bengio  Samy 
+Adversarial machine learning at scale  arXiv preprint
+arXiv   
+
+Lin  Min  Chen  Qiang  and Yan  Shuicheng  Network in
+
+network  arXiv preprint arXiv   
+
+Liu  Yanpei  Chen  Xinyun  Liu  Chang  and Song 
+Dawn  Delving into transferable adversarial examples
+and blackbox attacks  CoRR  abs   
+URL http arxiv org abs 
+
+Mahoney  Michael   et al  Randomized algorithms for
+matrices and data  Foundations and Trends   cid  in Machine Learning     
+
+Michelot  Christian     nite algorithm for  nding the projection of   point onto the canonical simplex of    
+Journal of Optimization Theory and Applications   
+   
+
+Miyato  Takeru  Maeda  Shinichi  Koyama  Masanori 
+Nakae  Ken  and Ishii  Shin  Distributional smoothing
+with virtual adversarial training  In Proc  ICLR   
+
+MoosaviDezfooli  SeyedMohsen  Fawzi  Alhussein  and
+Frossard  Pascal  Deepfool    simple and accurate
+method to fool deep neural networks  arXiv preprint
+arXiv   
+
+Gu  Shixiang and Rigazio  Luca  Towards deep neural netIn
+
+work architectures robust to adversarial examples 
+ICLR workshop   
+
+Netzer  Yuval  Wang  Tao  Coates  Adam  Bissacco 
+Alessandro  Wu  Bo  and Ng  Andrew    Reading digits
+in natural images with unsupervised feature learning 
+
+Parseval Networks
+
+Nguyen  Anh  Yosinski  Jason  and Clune  Jeff  Deep neural networks are easily fooled  High con dence predictions for unrecognizable images  In Proc  CVPR   
+
+Papernot  Nicolas  McDaniel  Patrick  Goodfellow  Ian 
+Jha  Somesh  Berkay Celik     and Swami  Ananthram  Practical blackbox attacks against deep learning systems using adversarial examples  arXiv preprint
+arXiv     
+
+Papernot  Nicolas  McDaniel  Patrick  Wu  Xi  Jha 
+Somesh  and Swami  Ananthram  Distillation as   defense to adversarial perturbations against deep neural
+networks  In Security and Privacy  SP    IEEE Symposium on  pp    IEEE     
+
+Pardalos  Panos   and Kovoor  Naina  An algorithm for  
+singly constrained class of quadratic programs subject to
+upper and lower bounds  Mathematical Programming 
+   
+
+Salimans  Tim and Kingma  Diederik    Weight normalization    simple reparameterization to accelerate training
+of deep neural networks  In Advances in Neural Information Processing Systems  pp     
+
+Shaham  Uri  Yamada  Yutaro  and Negahban  Sahand  Understanding adversarial training  Increasing local stability of neural nets through robust optimization  arXiv
+preprint arXiv   
+
+Szegedy  Christian  Zaremba  Wojciech  Sutskever  Ilya 
+Bruna  Joan  Erhan  Dumitru  Goodfellow  Ian  and Fergus  Rob  Intriguing properties of neural networks  In
+Proc  ICLR   
+
+Xu  Huan and Mannor  Shie  Robustness and generaliza 
+
+tion  Machine learning   
+
+Zagoruyko  Sergey and Komodakis  Nikos  Wide residual
+
+networks  arXiv preprint arXiv   
+
+

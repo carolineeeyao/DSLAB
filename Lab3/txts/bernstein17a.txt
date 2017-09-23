@@ -1,0 +1,954 @@
+Differentially Private Learning of Undirected Graphical Models Using
+
+Collective Graphical Models
+
+Garrett Bernstein   Ryan McKenna   Tao Sun   Daniel Sheldon     Michael Hay   Gerome Miklau  
+
+Abstract
+
+We investigate the problem of learning discrete 
+undirected graphical models in   differentially
+private way  We show that the approach of releasing noisy suf cient statistics using the Laplace
+mechanism achieves   good tradeoff between
+privacy  utility  and practicality    naive learning algorithm that uses the noisy suf cient statistics  as is  outperforms generalpurpose differentially private learning algorithms  However 
+it has three limitations 
+it ignores knowledge
+about the data generating process  rests on uncertain theoretical foundations  and exhibits certain pathologies  We develop   more principled
+approach that applies the formalism of collective graphical models to perform inference over
+the true suf cient statistics within an expectationmaximization framework  We show that this
+learns better models than competing approaches
+on both synthetic data and on real human mobility data used as   case study 
+
+  Introduction
+Graphical models are   central tool in probabilistic modeling and machine learning  They pair expressive probability models with algorithms that leverage the graphical
+structure for ef cient inference and learning  However 
+with data collection and modeling growing in importance
+in nearly all domains of society  there is increasing demand
+to apply graphical models in settings where the underlying
+data is sensitive and must be kept private  For example 
+consider applying graphical models to analyze electronic
+health records  with the goal of guiding public health policy  How can we derive these useful populationlevel outcomes without compromising the privacy of individuals 
+
+ University of Massachusetts Amherst  Mount Holyoke College  Colgate University  Correspondence to  Garrett Bernstein
+ gbernstein cs umass edu 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+Differential privacy is   widely studied formalism for private data analysis  Dwork et al    It provides   statistical privacy guarantee to individuals  the output of   differentially private algorithm is statistically nearly unchanged
+even if any single individual   record is added to or removed from the input data set  The general idea is to carefully randomize the algorithm so that the  random  output
+does not depend too much on any individual   data 
+Differentially private machine learning cleanly addresses
+the problem of extracting useful populationlevel models
+from data sets while protecting the privacy of individuals 
+Indeed  this is an active and important research area  see
+Section   which includes private learning algorithms
+for   variety of general frameworks and speci   machine
+learning models  This paper addresses the problem of privately learning parameters in   widely used class of probabilistic models  discrete  undirected graphical models  Although our problem can be cast in terms of general private
+learning frameworks  these do not lead to practical algorithms  Previous work also addresses private learning for
+directed graphical models     Zhang et al       Zhang
+et al    Our problem of learning in undirected models  which are not locally normalized  is more general and
+substantially harder computationally 
+To learn accurate models under differential privacy  it is
+critical to randomize the algorithm  just enough  to achieve
+the desired privacy guarantee without diminishing the quality of the learned model too much  This is usually done by
+modifying   learning algorithm to add noise to some intermediate quantity    with the noise magnitude calibrated to
+the sensitivity of      measure of how much   can depend
+on any single individual   data in the worst case  Dwork
+et al    The randomization renders the noisy estimate of   safe for release  all subsequent calculations using the noisy    but not the original data  are also safe 
+Where should noise be injected into   machine learning algorithm to achieve the best utility  We highlight two highlevel goals 
+  Noise should be added at an  information
+bottleneck  so the sensitivity is as small as possible relative to the information being sought    noise should be
+
+ Sensitivity scales with the number of measurements  all else
+
+equal    lower dimensional quantity will have lower sensitivity 
+
+Differentially Private Learning of Graphical Models
+
+added to   quantity for which the sensitivity can be bounded
+tightly  so the noise magnitude can be kept as small as possible  These two principles are often at odds  For example 
+adding noise to the  nal learned parameters    known as
+output perturbation  Dwork et al    is appealing from
+the information bottleneck standpoint  but if the learning
+algorithm is complex we may not be able to analyze the
+sensitivity and would have to rely on   coarse bound  Indeed  general private learning frameworks bound the sensitivity using quantities such as Lipschitz  strongconvexity 
+and smoothness constants  Bassily et al    Wu et al 
+  or diameter of the parameter space  Smith   
+which may be loose in practice 
+In this paper we will take the approach of adding noise
+to the suf cient statistics of   graphical model using the
+Laplace mechanism    highlevel approach that has also
+been applied recently for directed models  Zhang et al 
+  Foulds et al    This has   number of advantages  First  suf cient statistics  by de nition  are an information bottleneck  Second  it is very easy to exactly analyze the sensitivity of suf cient statistics in graphical models  which are contingency tables  Third  adding Laplace
+noise to contingency tables prior to release is very simple 
+so it is reasonable to imagine adoption in practice  say  by
+public agencies 
+However  it is not entirely clear how to learn parameters
+of   graphical model with noisy suf cient statistics  One
+option  which we will refer to as naive MLE  is to ignore
+the noise and conduct maximumlikelihood estimation as
+if we had true suf cient statistics  This works reasonably
+well in practice  and is competitive with or better than stateof theart generalpurpose methods  In fact  we will show
+that naive MLE is consistent and achieves the same asymptotic meansquared error as nonprivate MLE  However  at
+reasonable sample sizes the error due to privacy is significant  and the approach has several pathologies  see also
+Yang et al    Karwa et al      some of which
+make it dif cult to apply in practice  Therefore  we adopt
+  more principled approach of performing inference about
+the true suf cient statistics within an expectationmaximization  EM  learning framework 
+The remaining problem is how to conduct inference over
+suf cient statistics of   graphical model given noisy observations thereof  This is exactly the goal of inference
+in collective graphical models  CGMs  Sheldon   Dietterich    and we will adapt CGM inference techniques
+to solve this problem  Put together  our results signi cantly
+advance the stateof theart for privately learning discrete 
+undirected graphical models  We clarify the theory and
+practice of naive MLE  We show that it learns better models
+than existing stateof theart approaches in most scenarios
+across   broad range of synthetic tasks  and in experiments
+
+modeling human mobility from wi  access point data  We
+then show the more principled approach of conducting inference with CGMs is superior to competing approaches in
+nearly all scenarios 
+
+  Related Work
+
+Differential privacy has been applied to many areas of machine learning  including learning speci   models such as
+logistic regression  Chaudhuri   Monteleoni    support vector machines  Rubinstein et al    and deep
+neural networks  Abadi et al    privacy in general
+frameworks such as empirical risk minimization  ERM 
+Chaudhuri et al    Kifer et al    Jain   Thakurta 
+  Bassily et al    gradient descent  Wu et al 
+  and parameter estimation  Smith    and theoretical analysis of what can be learned privately       Blum
+et al    Kasiviswanathan et al   
+  key aspect of our work is conducting probabilistic inference over data or model parameters given knowledge of
+the probabilistic privacy mechanism and its output  Karwa
+et al      take   similar approach but for exponential random graph models  as do Williams   McSherry   but for the factored exponential mechanism  Because suf cient statistics of graphical models are
+contingency tables  our work connects to the wellstudied
+problem of releasing differentially private contingency tables  Barak et al    Yang et al    Hardt et al 
+  we adopt the Laplace mechanism because it is simple and  ts well within our learning framework 
+We highlight connections between CGMs and differential
+privacy and adopt existing inference techniques for CGMs 
+In general  the inference problems we wish to solve are
+NPhard  Sheldon et al    but   number of ef cient
+approximate inference algorithms are available  Liu et al 
+  Sun et al    Vilnis et al    In   paper that
+was primarily about CGM inference  Sun et al    conducted   case study using CGMs to privately learn Markov
+chains  we build on this approach  which was limited in
+scope and did not address general graph structures 
+Our work connects to an active current line of work on
+private probabilistic inference  some of which directly addresses learning in directed graphical models  but not the
+more challenging problem of learning in undirected graphical models  Several closely related approaches  which we
+refer to as One Posterior Sampling  OPS  show that   single sample drawn from   posterior distribution is differentially private  Dimitrakakis et al    Wang et al   
+Zhang et al    This can be understood as applying the
+exponential mechanism to the loglikelihood function  and
+can provide   point estimate for graphical model parameters  Zhang et al    To apply OPS  one must sample from the posterior over parameters       which is
+
+Differentially Private Learning of Graphical Models
+
+straightforward for directed graphical models with conjugate priors  but not in undirected models  where posteriors
+over parameters are usually intractable  Zhang et al   
+and Foulds et al    also developed fully Bayesian
+methods using Laplace noisecorrupted suf cient statistics
+to update posterior parameters  Similar considerations apply to this approach  which matches ours in that it uses the
+same data release mechanism  but  like OPS  requires conjugate priors and thus easily applies only to directed graphical models  Wang et al    also describe MCMC approaches to draw many private samples from   posterior
+distribution  this is another general framework that could
+apply to our problem  but  it relies on loose sensitivity
+bounds and since we only request point estimates  it would
+waste privacy budget by drawing many samples 
+
+  Background and Problem Statement
+We consider data sets consisting of   discrete attributes
+associated with each individual  Let xt     denote the
+value of the tth attribute of an individual  we assume for
+simplicity of notation that all variables take values in the
+same  nite set     Let                 xT   denote the complete vector of attributes for an individual  and let    
+                     denote   data set for an entire population of   individuals 
+
+  Differential Privacy
+
+Differential privacy offers strong privacy protection by imposing constraints on any algorithm that computes on the
+private dataset 
+Informally  it requires that an individual   data has   bounded effect on the algorithm   behavior  The formal de nition requires reasoning about all
+pairs of datasets that are otherwise identical except one
+dataset contains one additional individual   data vector  Let
+nbrs    denote the set of datasets that differ from   by at
+most one individual   vector      if   cid    nbrs    then
+  cid                                       for some   or
+  cid                       cid                    for some   and
+some   cid         
+De nition    Differential Privacy  Dwork et al     
+randomized algorithm   satis es    differential privacy
+if for any input    any   cid    nbrs    and any subset of
+outputs     Range   
+
+Pr             exp Pr     cid          
+
+When       we say that the algorithm satis es  
+differential privacy  All of the algorithms we propose satisfy  differential privacy but we compare against some
+algorithms that satisfy the weaker condition of    
+differential privacy with nonzero  
+We achieve differential privacy by injecting noise into the
+
+statistics that are computed on the data  Let   be any function that maps datasets to Rd  The amount of noise depends
+on the sensitivity of   
+De nition    Sensitivity  The sensitivity of   function  
+is de ned as      maxX LSf     where LSf denotes
+the local sensitivity of   on input   and is de ned as
+LSf       maxX cid nbrs     cid              cid cid 
+We drop the subscript   when it is clear from context 
+Our approach achieves differential privacy through the application of the Laplace mechanism 
+De nition    Laplace Mechanism  Dwork et al   
+Given function   that maps datasets to Rd  the Laplace
+mechanism is de ned as                  where    
+            zd  and each zi is an        random variable from
+Laplace    
+
+An important property of differential privacy is that any additional postprocessing on the output cannot weaken the
+privacy guarantee 
+Proposition    Postprocessing  Dwork   Roth   
+Let   be an    differentially private algorithm that
+maps datasets to Rd and let     Rd   Rd cid 
+be an arbitrary
+function  Then       is also    differentially private 
+
+  Problem Statement
+
+Our goal is to learn   probabilistic model      from the data
+set   while protecting the privacy of individuals  We will
+learn probability distributions      that are undirected discrete graphical models  also called Markov random  elds 
+Koller   Friedman    These are de ned by   set
+of local potential functions of the form    xC  where
+                 is an index set or clique  xC is   subvector of   corresponding to    and                
+assigns   potential value to each possible xC  The probC      xC  where   is the
+ability model is         
+ 
+collection of cliques that appear in the model  and    
+       xC  is the normalizing constant or partition function  The graph   with node set                 
+and edges between any two indices that cooccur in some
+      is the independence graph of the model  therefore 
+each index set   is   clique in   
+For learning  it is most convenient to express the model in
+loglinear or exponential family form as 
+
+ cid 
+
+ cid 
+
+ cid 
+
+ 
+
+ cid 
+
+ cid cid 
+
+ cid 
+
+   
+
+iC      
+
+         exp
+
+  xC   iC   iC   
+
+ 
+
+ 
+In this expression     is an indicator function  the variable iC         denotes   particular setting of the variables xC  the parameters    iC    log    iC  are logpotential values  the vector     Rd is the concatenation of
+
+Differentially Private Learning of Graphical Models
+
+all parameters  and      log    is the logpartition
+function  with the dependence of   on the parameters now
+made explicit  Note that  for any     Rd  the density is
+strictly positive             for all    This is true because the potential values    iC  are strictly positive  so
+the logpotentials are  nite 
+The goal is to learn parameters   from the data   in   way
+that is  differentially private and such that        is as accurate as possible  We will measure accuracy as KullbackLeibler divergence from an appropriate reference distribution  Kullback   Leibler    In synthetic experiments 
+
+we will measure the divergence   cid     cid     cid  where
+ cid  log       cid  where   is the
+  constant minus   cid   cid     cid 
+
+       is the true density  For real data  we will measure
+the holdout loglikelihood Eq
+empirical distribution of the holdout data  which is equal to
+
+The problem of privately selecting which cliques to include
+in the model       model selection or structure learning  is
+interesting but not considered in this paper  we assume the
+cliques   are  xed in advance by the modeler 
+
+    
+
+   
+
+iC      
+
+the entire data set can be written as
+
+  Approach
+To develop our approach to privately learn graphical model
+parameters  we  rst discuss standard concepts related to
+maximumlikelihood estimation for graphical models 
+
+LogLikelihood  Suf cient Statistics  Marginals  From
+
+     cid       cid  of
+Eq    the loglikelihood      log cid  
+ cid 
+
+ cid cid 
+ cid 
+where nC iC     cid  
+nC  cid nC iC cid  for all possible iC is the  population  con 
+
+    iC  is   count of how
+many times the con guration iC for the variables in clique
+  appears in the population  The collection of counts
+
+      
+
+  
+
+nC iC   iC 
+
+      
+
+tingency table on clique    Let   denote the vector concatenation of the contingency tables for all cliques  Then
+we can rewrite the loglikelihood more compactly as
+
+                          
+
+ 
+
+The most common approach for parameter learning in
+graphical models is maximum likelihood estimation   nd
+the parameters   that maximize    The resulting parameter vector   is   maximumlikelihood estimator  MLE  It
+is clear from Eq    that this problem depends on the data
+only through the contingency tables    Indeed  the clique
+contingency tables   are suf cient statistics of the model 
+they measure all of the information from the data set   that
+is relevant for estimating the parameter    Fisher   
+
+The algorithmic approach for maximumlikelihood estimation in graphical models is standard  Koller   Friedman 
+  and we do not repeat the details here  However 
+there are   few concepts that are important for our development  The marginals of   graphical model are the marginal
+probabilities    iC      xC   iC    for all cliques  
+and con gurations iC  Let   be the vector concatenation
+of all marginals  and note that            Similarly 
+let         be the data marginals these are marginal
+probabilities of the empirical distribution of the data 
+Marginals play   fundamental role in estimation  First  note
+that we can divide Eq    by   to see that the MLE only
+depends on the data through the data marginals   However  we leave    in the current form because it is more
+convenient for the CGM development in Section   Second  it is well known that                 so maximum likelihood estimation seeks to adjust   so that the
+data and model marginals match  Third  it can  almost  always succeed in doing so  even if the data marginals do not
+come from   graphical model  More formally  let   be the
+marginal polytope  the set of all vectors   such that there
+exists some distribution      with marginal probabilities  
+Proposition    Wainwright   Jordan    For any  
+in the interior of    there is   unique distribution       
+with marginals        such that           
+
+Applying Proposition   to the data marginals   shows that
+if these belong to the interior of    we may learn   distribution with marginals that match what we observe in the
+data  Note that  while the distribution        is unique 
+the parameters   are not  because our model is overcomplete  If   belongs to   but not the interior of    which
+occurs  for example  when some marginals are zero  the situation is more complex  there is no  nite      Rd such
+that        has marginals   Similarly  the MLE does not
+exist  meaning that its maximum is not attained for any  
+nite    Fienberg   Rinaldo    Haberman    This
+issue will end up being signi cant in our understanding of
+the naive MLE approach in the following section 
+
+  Noisy suf cient statistics
+
+From the development so far  there are two obvious possibilities for randomizing the learning process to achieve
+privacy 
+
+   Output perturbation  Find the MLE   and add Laplace
+
+noise proportional to its sensitivity 
+
+   Suf cient statistics perturbation  Add Laplace noise to
+the suf cient statistics    and then conduct maximumlikelihood estimation 
+ However  there is   sequence     where      Rd and
+ 
+
+           
+
+lim
+  
+
+Differentially Private Learning of Graphical Models
+
+The two approaches are similar from an information bottleneck standpoint the dimensionality of   and   is the
+same  However  the sensitivity of   is dif cult to analyze 
+since it requires reasoning about worstcase inputs  It also
+may be high due to pathological inputs whose local sensitivity is much higher than that of realistic data sets  On the
+other hand  the sensitivity of   is very easy to analyze and
+the analysis is tight  the local sensitivity is the same for all
+data sets 
+Proposition   Let      be the suf cient statistics of  
+graphical model with clique set   on data set    The local sensitivity of   is     for all inputs    Therefore the
+sensitivity of   is    
+
+ Proofs can be found in the supplementary material  So 
+  simple approach to achieve privacy is to release noisy
+suf cient statistics   that are obtained after applying the
+Laplace mechanism 
+
+yC iC    nC iC    Laplace cid   cid 
+
+ 
+
+Positive results  How can we learn with noisy suf cient
+statistics      naive approach is to use   in place of   in
+maximumlikelihood estimation       to  nd   to maximize
+        The validity of this approach has been debated in
+the literature  Yang et al    However  it is relatively
+easy to show that it behaves well asymptotically 
+Proposition   Assume                  are drawn iid from
+  probability distribution with marginals   The marginal
+  yC iC  obtained from the noisy
+estimate    iC     
+suf cient statistics is unbiased and consistent  with mean
+squared error 
+
+MSE cid   iC cid   
+
+   iC cid       iC cid 
+
+ 
+
+   
+   
+
+ 
+
+ 
+
+Now let     argmax          be parameters estimated using the noisy suf cient statistics    If the true distribution
+       is   graphical model with cliques    then the estimated distribution        converges to       
+
+Pathologies  Asymptotically  the noisy suf cient statistics behave as desired in terms of MSE  the       term 
+which is due to sampling error and not privacy  dominates for large    However  for practical settings of   the
+      term  which is due to privacy  is dominant until
+  becomes very large  due to the large constant    
+Figure     illustrates this issue 
+  second pathology is that the noise added for privacy
+destroys some of the structure expected in the empirical
+marginals  The true data marginals         belong to
+the marginal polytope  in particular  this means that each
+clique marginal    is nonnegative and sums to one  and
+
+that clique marginals agree on common subsets of variables  After adding noise  the pseudomarginals        
+do not belong to the marginal polytope    may have negative values  and does not satisfy consistency constraints 
+We  nd that   partial    is very helpful empirically  project
+the pseudomarginal    for each clique onto the simplex
+prior to conducting MLE  which can be done via   standard procedure  Duchi et al    Let   be the projected
+marginals  We now have that    is   valid marginal for
+each clique    but consistency constraints are not satis ed
+among cliques  and it is still the case that        Figure     illustrates the bene ts of projection on the quality
+of the model learned by Naive MLE 
+  more signi cant pathology has to do with zeros in the
+projected marginals   which are more prevalent than in
+true data marginals   This is because the addition of
+Laplace noise creates negative values  which are then truncated to zero during projection  As discussed following
+Proposition   zero values in the marginals lead to nonexistence of the MLE  Fienberg   Rinaldo    Haberman   
+If    iC      the likelihood increases
+monotonically as    iC  goes to negative in nity  in other
+words  the model attempts to drive the learned marginal
+probability to zero  Numerically  we can address this by
+regularization       adding  cid cid  to the objective function for arbitrarily small       However  we may still
+learn vanishingly small marginal probabilities  which can
+lead to   very large KLdivergence between the true and
+learned models  Figure     illustrates the effect of   on
+KLdivergence with both noisy suf cient statistics and true
+suf cient statistics  At high    strong regularization  both
+methods under   and yield poor KL divergence  Learning with true suf cient statistics has no tendency to over   
+it achieves good performance for   broad range of   approaching zero  Naive MLE with noisy suf cient statistics
+over ts badly  to zeros  for small   and must be tuned  just
+right  to achieve reasonable performance 
+
+  Collective Graphical Models
+
+Since learning with noisy suf cient statistics  asis  has
+several pathologies and is less robust than maximumlikelihood estimation in the absence of privacy  we investigate   more principled approach  which matches the data
+generating process  We treat the true suf cient statistics  
+as latent variables  and learn   to maximize the marginal
+            In this section  we
+
+likelihood           cid 
+
+will develop an EM approach to accomplish this 
+In EM  we need to conduct inference to compute          
+for    xed value of   This is the central problem of
+collective graphical models  CGMs   Sheldon   Dietterich    Consider the joint distribution            
+               which we use to compute           The
+
+Differentially Private Learning of Graphical Models
+
+   
+
+   
+
+   
+
+Figure   Sample results on synthetic data illustrating behavior of naive MLE  see Section   for experiment details      MSE of learned
+marginals vs population size   on   chain model with               reference lines indicate predicted slope for       and
+      error terms  respectively  the function       has slope    on   loglog plot      effect of projecting marginals on performance
+of naive MLE for an Erd osR eyni graph with                         effect of regularization on KLdivergence for learning
+with and without privacy  chain model with                    
+
+noise mechanism          arises directly from the Laplace
+mechanism  see Eq    The distribution of the suf cient
+statistics         is known as the CGM distribution 
+It
+can be written in closed form when the model is decomposable       the cliques   correspond to the nodes of some
+junction tree     Although decomposability is   signi cant
+restriction  let us assume that such   tree   exists  we will
+use the exact results derived for this case to develop an approximation for the general case  Let   be the set of separators of     and let     be the multiplicity of       
+     the number of distinct edges  Ci  Cj      for which
+    Ci   Cj  Under these assumptions  the CGM distribution has the form  Liu et al   
+
+                exp cid        cid 
+ cid 
+ cid nS iS cid   
+ cid 
+
+ cid 
+ cid 
+
+            
+
+iS      
+
+   
+
+        MZ
+  
+
+nC iC 
+
+The term exp cid        cid  is the probability of an ordered
+
+iC      
+
+   
+
+data set   with suf cient statistics    as discussed previously  The term      is   base measure that counts the
+number of ordered data sets with suf cient statistics equal
+to    and enforces constraints on    The integervalued
+marginal polytope MZ
+  is the set of all vectors   that are
+suf cient statistics of some data set   of size   
+Exact inference in CGMs is intractable  Sheldon et al 
+  Therefore 
+it is typical to relax the integrality
+log     
+constraint and apply Stirling   approximation 
+  log        Let MN be the feasible set with the integrality constraint removed  which is now just the standard
+marginal polytope scaled so that each marginal sums to  
+instead of one 
+Proposition    Sun et al  Nguyen et al      For
+  decomposable CGM with junction tree     the following
+
+approximation of the CGM logdensity for any     MN is
+obtained by applying Stirling   approximation 
+log                          log         
+       log      is the entropy of the
+unique distribution               in the graphical model
+family with marginals equal to     
+
+Here            cid 
+
+Proposition   is the basis for approximate MAP inference
+problem in CGMs   nd   to maximize Eq    and obtain
+an approximate mode of           Even though our goal
+is to compute the mean           it has been shown that
+the approximate mode  which is also   realvalued vector 
+is an excellent approximation to the mean for use within
+the EM algorithm  Sheldon et al    Note that for
+nondecomposable models  we will simply apply the same
+approximation as in Proposition   even though an exact
+expression for the counting measure      and therefore
+the correspondence of log      to an entropy      is not
+known in this case  Then  after dropping the term     
+from Proposition   which is constant with respect to    the
+approximate MAP problem can be rewritten as 
+
+     argmax
+  MN
+
+              log         
+
+ 
+
+This equation reveals   close connection to variational principles for graphical models  Wainwright   Jordan   
+It is identical to the variational optimization problem for
+marginal inference in standard graphical models  except the
+objective has an additional term log        which is nonlinear in    Several messagepassing based algorithms have
+been developed to ef ciently solve the approximate MAP
+problem  For trees or junction trees  Problem   is convex
+as long as log        is concave in    which is true in most
+cases of interest  such as Laplace noise  so it can be solved
+exactly  Sun et al    Vilnis et al    For loopy
+models  both the entropy      and the feasible set MN
+must be approximated  Nguyen et al   
+
+Differentially Private Learning of Graphical Models
+
+Algorithm   NonLinear Belief Propagation  NLBP 
+Input       damping parameter      
+
+ cid cid   Normalized to sum to   
+
+while   converged do
+
+ cid           log         
+
+  cid    STANDARDBP cid 
+
+ 
+
+                cid 
+
+end while
+
+Algorithm   EM for CGMs
+Input  Noisy suf cient statistics  
+
+Initialize   arbitrarily
+while   converged do
+nt   NLBP      
+      argmax     nt       
+
+end while
+
+Algorithm   shows pseudocode nonlinear belief propagation  NLBP  Sun et al    which we select as our primary inference approach due to its simplicity  It is   thin
+wrapper around standard BP  and can be applied to trees 
+in which case it exactly solves Problem   or it can be
+applied to loopy graphs by using loopy BP  LBP  as the
+subroutine  in which case it is approximate 
+Our  nal EM learning procedure is shown in Algorithm  
+It alternates between inference steps that solve the approximate MAP problem to  nd nt               and optimization steps to reestimate parameters given the inferred
+suf cient statistics nt  See also  Sheldon et al    Liu
+et al    Sun et al   
+
+  Experiments
+We conduct   number of experiments on synthetic and
+real data to evaluate the quality of models learned by both
+Naive MLE and CGM 
+Methods  We compare three algorithms  Naive MLE 
+CGM  and   version of private stochastic gradient descent
+ PSGD  due to Abadi et al    PSGD belongs to  
+class of generalpurpose private learning algorithms that
+can be adapted to our problem  including gradient descent
+or stochastic gradient descent algorithms for empirical risk
+minimization  Chaudhuri et al    Kifer et al   
+Jain   Thakurta    Bassily et al    Abadi et al 
+  and the subsampleand aggregate approach for parameter estimation  Smith    We chose PSGD because it is   stateof theart method and it signi cantly outperformed other approaches in preliminary experiments 
+However  note that PSGD satis es only    differential
+privacy for       which is   weaker privacy guarantee than
+ differential privacy  We tune PSGD using   grid search
+over all relevant parameters to ensure it performs as well as
+
+possible 
+
+  Synthetic data
+
+We evaluate two types of pairwise graphical models  thirdorder chains with edges between two nodes   and   if
+                and  connected  Erd osR eyni  ER  random graphs  We report results for graphs of   nodes 
+where potentials on each edge are drawn from   Dirichlet distribution with concentration parameter of one  results
+are similar for smaller and larger models  models with different structures  and for different types of potentials  We
+vary data size   and privacy parameter   For each setting
+of model type     and   we conduct   trials  The trials
+are nested  with  ve random populations and  ve replications per population       ni        yi           ni  for
+                                We measure the quality
+of learned models using KL divergence from the true distribution  and include for comparison two reference models    random estimator and   nonprivate MLE estimator 
+The random estimator is obtained by randomly generating
+marginals   and then learning potentials via MLE 
+Results  Figure   shows the results for the two models
+ top  thirdorder chain  bottom  ER  for different values of
+  and   CGM improves upon Naive MLE for all models  privacy levels  and population sizes  Recall that PSGD
+promises only    differential privacy  While   is often
+assumed to be  cryptographically small             we
+set   to   relatively large value of         Increasing  
+weakens the privacy guarantee but enables PGSD to run on
+  wider range of   However  even with this setting for  
+some of the smaller values of   are not attainable by PGSD
+and are omitted from those plots 
+Figure     shows   qualitative comparison of edge
+marginals of   single graph learned by the different methods  compared with the true model marginals  it is evident
+that CGM learns marginals that are much closer to both
+the true marginals and those learned by the nonprivate estimator than Naive MLE is able to learn  Naive MLE is
+the fastest method  CGM is approximately      slower on
+thirdorder chains and ER graphs  respectively  and PSGD
+is approximately      slower 
+
+  Wi  data
+
+We study human mobility data in the form of connections
+to wi  access points throughout   highlytraf cked academic building over   twentyone day period  We treat
+each  user ID  day  combination as an  individual  leading to   unique individuals  with this data preparation scheme  the unit of protection is one day   worth of  
+user   data  We discretize time by recording the location
+every   minutes  and assign null if the user is not connected to the network  Our probability model      is  
+
+Differentially Private Learning of Graphical Models
+
+         
+
+         
+
+         
+
+         
+
+         
+
+         
+
+         
+
+         
+
+Figure   Results on synthetic data generated from thirdorder chains        and connected Erd osR eyni random graphs       Each
+column represents   different privacy level  Lower   signi es stricter privacy guarantees  The xaxis measures population size  The
+yaxis is KL divergence from the true distribution 
+
+shows
+
+this technique is that we bias the model towards individuals
+with fewer transitions  but we reduce the amount of noise
+by limiting sensitivity caused by null null transitions 
+We reserve data from   of the individuals for testing 
+To compare different approaches  we apply Naive MLE 
+CGM  and PSGD to privately learn parameters of   graphical model from the training set   of the data  with
+varying privacy levels  We then calculate holdout loglikelihood of the learned parameters on the test set  We
+again include   nonprivate method for reference  but in
+this case  all methods perform better than the random estimator  so we do not show it 
+Figure    
+for  tting   timehomogeneous chain model  edges between adjacent time
+steps  every potential  xt  xt  is the same  and the
+model includes   node potential     so it can learn  
+timestationary model  As in the synthetic data experiments  CGM improves upon naive MLE across all parameter regimes  and performance improves with population size   and with weakening of privacy  larger  
+Both methods outperform PSGD  Naive MLE is the fastest
+method  CGM is approximately    slower  and PSGD is
+approximately    slower 
+Acknowledgments
+This material is based upon work supported by the National
+Science Foundation under Grant Nos     
+  and  
+
+the results
+
+   
+
+   
+
+Figure       Scatter plots for true vs  inferred values of all edge
+marginals in an ER graph of   nodes with   states each     
+Results for  tting    rstorder chain on wi  data  The xaxis is
+privacy level  lower   signi es stronger privacy guarantees  The
+yaxis is holdout loglikelihood 
+
+pairwise graphical model over hourlong segments  Therefore  we break each individual   data into   onehour long
+segments 
+An individual now contributes   records to each contingency table for the model      Therefore  the sensitivity
+is now   times the number of edges  cliques  However 
+real data is typically sparse      an individual is typically
+observed only   small number of times over the observation
+period  Therefore  to reduce the sensitivity  the data is normalized prior to calculating suf cient statistics  in   fashion
+similar to  He et al    Each user contributes   value
+of    to each contingency table  where   is the number of edges  xs  xt  for which the user   values are not
+both null  With this preprocessing in place  the sensitivity equals the number of edges in the model    tradeoff of
+
+ Number of individuals KL from True Distn RandomNonPrivateNaive MLECGM Number of individuals KL from True Distn RandomNonPrivateNaive MLECGM Number of individuals KL from True Distn RandomNonPrivateNaive MLECGMPSGD Number of individuals KL from True Distn RandomNonPrivateNaive MLECGMPSGD Number of individuals KL from True Distn RandomNonPrivateNaive MLECGM Number of individuals KL from True Distn RandomNonPrivateNaive MLECGM Number of individuals KL from True Distn RandomNonPrivateNaive MLECGMPSGD Number of individuals KL from True Distn RandomNonPrivateNaive MLECGMPSGD True marginals Inferred marginalsNaive MLECGMNonPrivateDifferentially Private Learning of Graphical Models
+
+References
+Abadi  Mart    Chu  Andy  Goodfellow  Ian  McMahan 
+   Brendan  Mironov  Ilya  Talwar  Kunal  and Zhang 
+In ProLi  Deep learning with differential privacy 
+the   ACM SIGSAC Conference on
+ceedings of
+Computer and Communications Security  pp   
+ACM   
+
+Barak  Boaz  Chaudhuri  Kamalika  Dwork  Cynthia  Kale 
+Satyen  McSherry  Frank  and Talwar  Kunal  Privacy 
+accuracy  and consistency too    holistic solution to contingency table release  In Proceedings of the twentysixth
+ACM SIGMODSIGACT SIGART symposium on Principles of database systems  pp    ACM   
+
+Bassily  Raef  Smith  Adam  and Thakurta  Abhradeep  Private empirical risk minimization  Ef cient algorithms
+and tight error bounds  In Foundations of Computer Science  FOCS    IEEE  th Annual Symposium on 
+pp    IEEE   
+
+Blum  Avrim  Dwork  Cynthia  McSherry  Frank  and Nissim  Kobbi  Practical privacy 
+the SuLQ framework 
+In Proceedings of the TwentyFourth ACM SIGMODSIGACT SIGART Symposium on Principles of Database
+Systems  PODS  pp    ACM   
+
+Chaudhuri  Kamalika and Monteleoni  Claire  PrivacyIn Advances in Neural
+
+preserving logistic regression 
+Information Processing Systems  pp     
+
+Chaudhuri  Kamalika  Monteleoni  Claire  and Sarwate 
+Anand    Differentially private empirical risk minimization  Journal of Machine Learning Research   Mar 
+   
+
+Dimitrakakis  Christos  Nelson  Blaine  Mitrokotsa  Aikaterini  and Rubinstein  Benjamin      Robust and priIn International Conference
+vate Bayesian inference 
+on Algorithmic Learning Theory  pp    Springer 
+ 
+
+Duchi  John  ShalevShwartz  Shai  Singer  Yoram  and
+Chandra  Tushar  Ef cient projections onto the    ball
+for learning in high dimensions  In Proceedings of the
+ th international conference on Machine learning  pp 
+  ACM   
+
+Dwork  Cynthia and Roth  Aaron  The Algorithmic Foundations of Differential Privacy  Found  and Trends in
+Theoretical Computer Science   
+
+Dwork  Cynthia  McSherry  Frank  Nissim  Kobbi  and
+Smith  Adam  Calibrating noise to sensitivity in private
+In Theory of Cryptography Conference 
+data analysis 
+pp    Springer   
+
+Fienberg  Stephen    and Rinaldo  Alessandro  Maximum
+likelihood estimation in loglinear models  The Annals
+of Statistics  pp     
+
+Fisher  Ronald Aylmer  On the mathematical foundations
+of theoretical statistics  Philosophical Transactions of
+the Royal Society of London  Series    Containing Papers of   Mathematical or Physical Character   
+   
+
+Foulds  James  Geumlek  Joseph  Welling  Max  and
+Chaudhuri  Kamalika  On the theory and practice of
+privacypreserving Bayesian data analysis  In Proceedings of the ThirtySecond Conference on Uncertainty in
+Arti cial Intelligence  UAI  pp     
+
+Haberman  Shelby    Loglinear models for frequency data 
+Suf cient statistics and likelihood equations  The Annals
+of Statistics      ISSN   URL
+http www jstor org stable 
+
+Hardt  Moritz  Ligett  Katrina  and McSherry  Frank   
+simple and practical algorithm for differentially private
+In Advances in Neural Information Prodata release 
+cessing Systems  pp     
+
+He  Xi  Cormode  Graham  Machanavajjhala  Ashwin  Procopiuc  Cecilia    and Srivastava  Divesh  DPT  differentially private trajectory synthesis using hierarchical
+reference systems  Proceedings of the VLDB Endowment     
+
+Jain  Prateek and Thakurta  Abhradeep  Differentially private learning with kernels  ICML      
+
+Karwa  Vishesh  Slavkovi    Aleksandra    and Krivitsky 
+Pavel  Differentially private exponential random graphs 
+In International Conference on Privacy in Statistical
+Databases  pp    Springer   
+
+Karwa  Vishesh  Slavkovi    Aleksandra  et al 
+
+Inference
+using noisy degrees  Differentially private betamodel
+and synthetic graphs  The Annals of Statistics   
+   
+
+Kasiviswanathan  Shiva Prasad  Lee  Homin    Nissim 
+Kobbi  Raskhodnikova  Sofya  and Smith  Adam  What
+can we learn privately  SIAM Journal on Computing   
+   
+
+Kifer  Daniel  Smith  Adam  and Thakurta  Abhradeep 
+Private convex empirical risk minimization and highdimensional regression  Journal of Machine Learning
+Research     
+
+Koller  Daphne and Friedman  Nir  Probabilistic graphical
+
+models  principles and techniques  MIT press   
+
+Differentially Private Learning of Graphical Models
+
+Kullback  Solomon and Leibler  Richard    On information and suf ciency  The annals of mathematical statistics     
+
+Williams  Oliver and McSherry  Frank  Probabilistic inference and differential privacy  In Advances in Neural
+Information Processing Systems  pp     
+
+Wu  Xi  Kumar  Arun  Chaudhuri  Kamalika  Jha  Somesh 
+and Naughton  Jeffrey    Differentially private stochastic gradient descent for inRDBMS analytics  CoRR 
+abs    URL http arxiv org 
+abs 
+
+Yang  Xiaolin  Fienberg  Stephen    and Rinaldo 
+Alessandro  Differential privacy for protecting multidimensional contingency table data  Extensions and applications  Journal of Privacy and Con dentiality   
+   
+
+Zhang  Jun  Cormode  Graham  Procopiuc  Cecilia    Srivastava  Divesh  and Xiao  Xiaokui  Privbayes  Private
+data release via Bayesian networks  In Proceedings of
+the   ACM SIGMOD International Conference on
+Management of Data  pp     
+
+Zhang  Zuhe  Rubinstein  Benjamin      and Dimitrakakis 
+Christos  On the differential privacy of Bayesian inference  In Thirtieth AAAI Conference on Arti cial Intelligence   
+
+Liu  LiPing  Sheldon  Daniel   
+
+and Dietterich 
+Thomas    Gaussian approximation of collective graphIn Proceedings of the  st International
+ical models 
+Conference on Machine Learning  ICML   
+
+Nguyen  Duc Thien  Kumar  Akshat  Lau  Hoong Chuin 
+and Sheldon  Daniel  Approximate inference using DC
+In Proprogramming for collective graphical models 
+ceedings of the  th International Conference on Arti 
+cial Intelligence and Statistics  pp     
+
+Rubinstein  Benjamin      Bartlett  Peter    Huang 
+Ling  and Taft  Nina  Learning in   large function
+space  Privacypreserving mechanisms for SVM learning  arXiv preprint arXiv   
+
+Sheldon  Daniel    and Dietterich  Thomas    Collective
+graphical models  Neural Information Processing Systems  NIPS   
+
+Sheldon  Daniel    Sun  Tao  Kumar  Akshat  and Dietterich  Thomas    Approximate inference in collective
+In Proceedings of the  th Internagraphical models 
+tional Conference on Machine Learning  ICML   
+
+Smith  Adam  Ef cient  differentially private point estima 
+
+tors  arXiv preprint arXiv   
+
+Smith  Adam 
+
+Privacypreserving statistical estimation
+In Proceedings of the
+with optimal convergence rates 
+FortyThird Annual ACM Symposium on Theory of Computing  STOC  pp    ACM   
+
+Sun  Tao  Sheldon  Daniel    and Kumar  Akshat  MesIn Prosage passing for collective graphical models 
+ceedings of the  nd International Conference on Machine Learning  ICML   
+
+Vilnis  Luke  Belanger  David  Sheldon  Daniel  and McCallum  Andrew  Bethe projections for nonlocal inference  In Proceedings of the ThirtyFirst Conference
+on Uncertainty in Arti cial Intelligence  pp   
+AUAI Press   
+
+Wainwright  Martin    and Jordan  Michael    Graphical
+models  exponential families  and variational inference 
+Foundations and Trends in Machine Learning   
+   
+
+Wang  YuXiang  Fienberg  Stephen  and Smola  Alex  Privacy for free  Posterior sampling and stochastic gradient
+Monte Carlo  In Proceedings of the  nd International
+Conference on Machine Learning  ICML  pp   
+   
+
+

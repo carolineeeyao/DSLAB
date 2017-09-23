@@ -1,0 +1,1646 @@
+Stochastic Generative Hashing
+
+Bo Dai    Ruiqi Guo    Sanjiv Kumar   Niao He   Le Song  
+
+Abstract
+
+Learningbased binary hashing has become  
+powerful paradigm for fast search and retrieval
+in massive databases  However  due to the requirement of discrete outputs for the hash functions  learning such functions is known to be
+very challenging  In addition  the objective functions adopted by existing hashing techniques are
+mostly chosen heuristically 
+In this paper  we
+propose   novel generative approach to learn
+hash functions through Minimum Description
+Length principle such that the learned hash codes
+maximally compress the dataset and can also
+be used to regenerate the inputs  We also develop an ef cient learning algorithm based on the
+stochastic distributional gradient  which avoids
+the notorious dif culty caused by binary output
+constraints  to jointly optimize the parameters
+of the hash function and the associated generative model  Extensive experiments on   variety
+of largescale datasets show that the proposed
+method achieves better retrieval results than the
+existing stateof theart methods 
+
+  Introduction
+Search for similar items in webscale datasets is   fundamental step in   number of applications  especially in image and document retrieval  Formally  given   reference
+dataset      xi  
+   with         Rd  we want to retrieve similar items from   for   given query   according
+to some similarity measure sim       When the negative
+Euclidean distance is used       sim          kx   yk 
+this corresponds to    Nearest Neighbor Search    NNS 
+problem  when the inner product is used       sim        
+     it becomes   Maximum Inner Product Search  MIPS 
+problem  In this work  we focus on   NNS for simplicity 
+however our method handles MIPS problems as well  as
+
+ Equal contribution   This work was done during internship at
+Google Research NY   Georgia Institute of Technology   Google
+Research  NYC  University of Illinois at UrbanaChampaign 
+Correspondence to  Bo Dai  bodai gatech edu 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+shown in the supplementary material    Bruteforce linear
+search is expensive for large datasets  To alleviate the time
+and storage bottlenecks  two research directions have been
+studied extensively    partition the dataset so that only
+  subset of data points is searched    represent the data
+as codes so that similarity computation can be carried out
+more ef ciently  The former often resorts to searchtree or
+bucketbased lookup  while the latter relies on binary hashing or quantization  These two groups of techniques are
+orthogonal and are typically employed together in practice 
+In this work  we focus on speeding up search via binary
+hashing  Hashing for similarity search was popularized by
+in uential works such as Locality Sensitive Hashing  Indyk
+and Motwani    Gionis et al    Charikar    
+The crux of binary hashing is to utilize   hash function 
+                which maps the original samples in
+    Rd to lbit binary vectors          while preserving the similarity measure       Euclidean distance or inner product  Search with such binary representations can
+be ef ciently conducted using Hamming distance computation  which is supported via POPCNT on modern CPUs
+and GPUs  Quantization based techniques  Babenko and
+Lempitsky    Jegou et al    Zhang et al     
+have been shown to give stronger empirical results but
+tend to be less ef cient than Hamming search over binary
+codes  Douze et al    He et al   
+Datadependent hash functions are wellknown to perform
+better than randomized ones  Wang et al    Learning hash functions or binary codes has been discussed in
+several papers  including spectral hashing  Weiss et al 
+  semisupervised hashing  Wang et al    iterative quantization  Gong and Lazebnik    and others  Liu et al    Gong et al    Yu et al    Shen
+et al    Guo et al    The main idea behind these
+works is to optimize some objective function that captures
+the preferred properties of the hash function in   supervised
+or unsupervised fashion 
+Even though these methods have shown promising performance in several applications  they suffer from two main
+drawbacks    the objective functions are often heuristically constructed without   principled characterization of
+goodness of hash codes  and   when optimizing  the binary constraints are crudely handled through some relaxation  leading to inferior results  Liu et al    In this
+
+Stochastic Generative Hashing
+
+work  we introduce Stochastic Generative Hashing  SGH 
+to address these two key issues  We propose   generative model which captures both the encoding of binary
+codes   from input   and the decoding of input   from
+   This provides   principled hash learning framework 
+where the hash function is learned by Minimum Description Length  MDL  principle  Therefore  its generated
+codes can compress the dataset maximally  Such   generative model also enables us to optimize distributions over
+discrete hash codes without the necessity to handle discrete
+variables  Furthermore  we introduce   novel distributional
+stochastic gradient descent method which exploits distributional derivatives and generates higher quality hash codes 
+Prior work on binary autoencoders  CarreiraPerpin an and
+Raziperchikolaei    also takes   generative view of
+hashing but still uses relaxation of binary constraints when
+optimizing the parameters  leading to inferior performance
+as shown in the experiment section  We also show that binary autoencoders can be seen as   special case of our formulation  In this work  we mainly focus on the unsupervised setting 
+  Stochastic Generative Hashing
+We start by  rst formalizing the two key issues that motivate the development of the proposed algorithm 
+Generative view  Given an input     Rd  most hashing works in the literature emphasize modeling the forward process of generating binary codes from input      
+             to ensure that the generated hash codes preserve the local neighborhood structure in the original space 
+Few works focus on modeling the reverse process of generating input from binary codes  so that the reconstructed
+input has small reconstruction error  In fact  the generative
+view provides   natural learning objective for hashing  Following this intuition  we model the process of generating  
+from           and derive the corresponding hash function
+       from the generative process  Our approach is not
+tied to any speci   choice of        but can adapt to any
+generative model appropriate for the domain  In this work 
+we show that even using   simple generative model  Section   already achieves the stateof theart performance 
+Binary constraints  The other issue arises from dealing
+with binary constraints  One popular approach is to relax
+the constraints from      Weiss et al    but this
+often leads to   large optimality gap between the relaxed
+and nonrelaxed objectives  Another approach is to enforce
+the model parameterization to have   particular structure
+so that when applying alternating optimization  the algorithm can alternate between updating the parameters and
+
+ The proposed algorithm can be extended to supervised semisupervised setting easily as described in the supplementary material   
+
+binarization ef ciently  For example   Gong and Lazebnik 
+  Gong et al    imposed an orthogonality constraint on the projection matrix  while  Yu et al    proposed to use circulant constraints  and  Zhang et al     
+introduced Kronecker Product structure  Although such
+constraints alleviate the dif culty with optimization  they
+substantially reduce the model  exibility  In contrast  we
+avoid such constraints and propose to optimize the distributions over the binary variables to avoid directly working
+with binary variables  This is attained by resorting to the
+stochastic neuron reparametrization  Section   which
+allows us to backpropagate through the layers of weights
+using the stochsastic gradient estimator 
+Unlike  CarreiraPerpin an and Raziperchikolaei   
+which relies on solving expensive integer programs  our
+model is endto end trainable using distributional stochastic gradient descent  Section   Our algorithm requires
+no iterative steps unlike iterative quantization  ITQ   Gong
+and Lazebnik    The training procedure is much more
+ef cient with guaranteed convergence compared to alternating optimization for ITQ 
+In the following sections  we  rst introduce the generative
+hashing model        in Section   Then  we describe the
+corresponding process of generating hash codes given input
+          in Section   Finally  we describe the training procedure based on the Minimum Description Length
+ MDL  principle and the stochastic neuron reparametrization in Sections   and   We also introduce the distributional stochastic gradient descent algorithm in Section  
+  Generative model       
+Unlike most works which start with the hash function     
+we  rst introduce   generative model that de nes the likelihood of generating input   given its binary code        
+       It is also referred as   decoding function  The corresponding hash codes are derived from an encoding function        described in Section  
+We use   simple Gaussian distribution to model the generation of   given   
+
+                     where                  
+ 
+and      ui  
+   ui   Rd is   codebook with   codewords  The prior             Ql
+         hi
+is modeled as the multivariate Bernoulli distribution on the
+hash codes  where         
+           Intuitively  this
+is an additive model which reconstructs   by summing the
+selected columns of   given    with   Bernoulli prior on
+the distribution of hash codes  The joint distribution can be
+written as 
+
+    hi
+
+          exp    
+
+                        
+ 
+ 
+ log  
+
+      
+
+kx   hk 
+
+  
+
+ 
+
+ 
+
+Stochastic Generative Hashing
+
+This generative model can be seen as   restricted form of
+general Markov Random Fields in the sense that the parameters for modeling correlation between latent variables
+  and correlation between   and   are shared  However 
+it is more  exible compared to Gaussian Restricted Boltzmann machines  Krizhevsky    Marc Aurelio and Geoffrey    due to an extra quadratic term for modeling
+correlation between latent variables  We  rst show that this
+generative model preserves local neighborhood structure of
+the   when the Frobenius norm of   is bounded 
+Proposition   If kUkF is bounded  then the Gaussian reconstruction error  kx   hxk  is   surrogate for Euclidean
+neighborhood preservation 
+Proof Given two points        Rd  their Euclidean distance is bounded by
+
+kx   yk 
+
+          hx           hy       hx     hy   
+  kx     hxk    ky     hyk    kU hx   hy   
+  kx     hxk    ky     hyk    kUkFkhx   hyk 
+where hx and hy denote the binary latent variables corresponding to   and    respectively  Therefore  we have
+kx yk kUkFkhx hyk    kx   hxk ky   hyk 
+which means minimizing the Gaussian reconstruction error         log        will lead to Euclidean neighborhood
+preservation 
+  similar argument can be made with respect to MIPS
+neighborhood preservation as shown in the supplementary material    Note that the choice of        is not
+unique  and any generative model that leads to neighborhood preservation can be used here  In fact  one can even
+use more sophisticated models with multiple layers and
+nonlinear functions  In our experiments  we  nd complex
+generative models tend to perform similarly to the Gaussian model on datasets such as SIFT   and GIST   
+Therefore  we use the Gaussian model for simplicity 
+  Encoding model       
+Even with the simple Gaussian model   computing the
+posterior                
+is not tractable  and  nding
+the MAP solution of the posterior involves solving an expensive integer programming subproblem 
+Inspired by
+the recent work on variational autoencoder  Kingma and
+Welling    Mnih and Gregor    Gregor et al 
+  we propose to bypass these dif culties by parameterizing the encoding function as
+
+    
+
+lYk 
+
+        
+
+  hk      hk   hk      hk  
+
+ 
+
+to approximate the exact posterior        With the linear
+parametrization       hk  
+             with    
+   At the training step    hash code is obtained by
+ wk  
+sampling from         At the inference step  it is
+
+      Xh
+
+                   
+
+still possible to sample    More directly  the MAP solution
+of the encoding function   is readily given by
+
+       argmax
+
+ 
+
+        
+
+sign          
+
+ 
+
+This involves only   linear projection followed by   sign
+operation  which is common in the hashing literature 
+Computing      in our model thus has the same amount
+of computation as ITQ  Gong and Lazebnik    except
+without the orthogonality constraints 
+  Training Objective
+Since our goal is to reconstruct   using the least information in binary codes  we train the variational autoencoder
+using the Minimal Description Length  MDL  principle 
+which  nds the best parameters that maximally compress
+the training data  The MDL principle seeks to minimize
+the expected amount of information to communicate   
+
+min
+
+     
+
+ 
+
+where          log        log        is the description length of the hashed representation   and         
+  log        is the description length of   having already
+communicated   in  Hinton and Van Camp    Hinton
+and Zemel    Mnih and Gregor    By summing
+over all training examples    we obtain the following training objective  which we wish to minimize with respect to
+the parameters of        and       
+      
+   Xx Xh
+
+      log           log       
+
+    Xx
+
+where      and     log  
+  are parameters of the generative model         as de ned in   and   comes
+from the encoding function        de ned in   This
+objective is sometimes called Helmholtz  variational  free
+energy  Williams    Zellner    Dai et al   
+When the true posterior        falls into the family of  
+       becomes the true posterior        which leads to
+the shortest description length to represent   
+We emphasize that this objective no longer includes binary variables   as parameters and therefore avoids optimizing with discrete variables directly  This paves the
+way for continuous optimization methods such as stochastic gradient descent  SGD  to be applied in training  As
+far as we are aware  this is the  rst time such   procedure
+has been used in the problem of unsupervised learning to
+hash  Our methodology serves as   viable alternative to the
+relaxationbased approaches commonly used in the past 
+  Reparametrization via Stochastic Neuron
+Using the training objective of   we can directly compute the gradients        parameters of        However  we
+
+Stochastic Generative Hashing
+
+cannot compute the stochastic gradients          because
+it depends on the stochastic binary variables    In order to
+backpropagate through stochastic nodes of    two possible
+solutions have been proposed  First  the reparametrization
+trick  Kingma and Welling    which works by introducing auxiliary noise variables in the model  However  it
+is dif cult to apply when the stochastic variables are discrete  as is the case for   in our model  On the other hand 
+the gradient estimators based on REINFORCE trick  Bengio et al    suffer from high variance  Although some
+variance reduction remedies have been proposed  Mnih and
+Gregor    Gu et al    they are either biased or require complicated extra computation in practice 
+In next section  we  rst provide an unbiased estimator
+of the gradient          derived based on distributional
+derivative  and then  we derive   simple and ef cient approximator  Before we derive the estimator  we  rst introduce the stochastic neuron for reparametrizing Bernoulli
+distribution    stochastic neuron reparameterizes each
+Bernoulli variable hk    with         Introducing random variables          the stochastic neuron is de ned
+as
+ 
+
+ 
+
+         
+
+ 
+
+if      
+if      
+
+Because                   we have                We
+use the stochastic neuron   to reparameterize our binary
+variables   by replacing  hk  
+                with
+ hk            
+   Note that    now behaves deterministically given   This gives us the reparameterized version
+of our original training objective  
+
+     Xx
+
+        Xx
+
+            
+
+ 
+
+ 
+
+      
+
+  log                  
+where
+log               with          With such
+  reformulation  the new objective can now be optimized
+by exploiting the distributional stochastic gradient descent 
+which will be explained in the next section 
+  Distributional Stochastic Gradient Descent
+For the objective in   given   point   randomly sampled
+from  xi  
+be easily computed in the standard way  However  with the
+reparameterization  the function        is no longer differentiable with respect to   due to the discontinuity of
+the stochastic neuron         Namely  the SGD algorithm
+is not readily applicable  To overcome this dif culty  we
+will adopt the notion of distributional derivative for generalized functions or distributions  Grubb   
+  Distributional derivative of Stochastic Neuron
+Let     Rd be an open set  Denote      as the space of
+the functions that are in nitely differentiable with compact
+
+   the stochastic gradient brU         can
+
+ 
+
+  
+
+Update parameters as
+
+Algorithm   DistributionalSGD
+Input   xi  
+  Initialize                randomly 
+  for                 do
+Sample xi uniformly from  xi  
+  
+ 
+Sample            
+ 
+Compute stochastic gradients br        xi  or
+ 
+           xi  de ned in   and   respectively 
+            ibr        xi  or
+            ib          xi  respectively 
+support in   Let    be the space of continuous linear
+functionals on      which can be considered as the dual
+space  The elements in space    are often called general distributions  We emphasize this de nition of distributions is more general than that of traditional probability
+distributions 
+De nition    Distributional derivative   Grubb 
+ 
+Let        then   distribution   is called the distributional derivative of    denoted as     Du  if it satis es
+
+  end for
+
+  
+
+  dx      
+
+  dx 
+
+        
+
+ 
+
+It is straightforward to verify that for given   the function              and moreover  Dz             
+which is exactly the Dirac  function  Based on the de 
+nition of distributional derivatives and chain rules  we are
+able to compute the distributional derivative of the function
+       which is provided in the following lemma 
+Lemma   For   given sample    the distributional derivative of function                 is given by
+DW         
+
+                                    
+where   denotes pointwise product and       denotes
+the  nite difference de ned ash     ik
+    
+  
+where  hi
+       hl if        otherwise  hi
+                
+We can therefore combine distributional derivative estimators   with stochastic gradient descent algorithm  see     
+ Nemirovski et al    and its variants  Kingma and Ba 
+  Bottou et al    which we designate as Distributional SGD  The detail is presented in Algorithm   where
+we denote
+
+br        xi   hbDW       xi brU        xi    
+
+as the unbiased stochastic estimator of the gradient at   
+constructed by sample xi      Compared to the existing
+algorithms for learning to hash which require substantial
+effort on optimizing over binary variables        CarreiraPerpin an and Raziperchikolaei    the proposed distri 
+
+     
+
+Stochastic Generative Hashing
+
+ 
+
+butional SGD is much simpler and also amenable to online
+settings  Huang et al    Leng et al   
+In general  the distributional derivative estimator   requires two forward passes of the model for each dimension  To further accelerate the computation  we approximate the distributional derivative DW        by exploiting the mean value theorem and Taylor expansion by
+ DW         
+
+which can be computed for each dimension in one pass 
+Then  we can exploit this estimator
+
+  hr                                   
+           xi   hb DW       xi brU        xi    
+
+in Algorithm  
+Interestingly  the approximate stochastic gradient estimator of the stochastic neuron we established through the distributional derivative coincides with
+the heuristic  pseudogradient  constructed  Raiko et al 
+  Please refer to the supplementary material   for
+details for the derivation of the approximate gradient estimator  
+  Convergence of Distributional SGD
+One caveat here is that due to the potential discrepancy
+of the distributional derivative and the traditional gradient 
+whether the distributional derivative is still   descent direction and whether the SGD algorithm integrated with distributional derivative converges or not remains unclear in
+general  However  for our learning to hash problem  one
+can easily show that the distributional derivative in   is
+indeed the true gradient 
+Proposition   The distributional derivative DW       
+is equivalent to the traditional gradient rW      
+Proof First of all  by de nition  we have         
+      One can easily verify that under mild condition 
+both DW        and rW       are continuous and  
+norm bounded  Hence  it suf ces to show that for any distribution        and Du ru      Du   ru  For
+any          by de nition of the distributional derivative  we have    Du dx         dx  On the other
+hand  we always haveR  ru dx        dx  Hence 
+  Du ru dx     for all          By the Du BoisReymond   lemma  see Lemma   in  Grubb    we
+have Du   ru 
+Consequently  the distributional SGD algorithm enjoys the
+same convergence property as the traditional SGD algorithm  Applying theorem   in  Ghadimi and Lan   
+we arrive at
+Theorem   Under the assumption that   is LLipschitz
+smooth and the variance of the stochastic distributional
+gradient   is bounded by   in the distributional SGD 
+for the solution    sampled from the trajectory     
+
+  
+
+with probability            
+
+  pt  we have
+
+          
+
+ 
+
+ 
+
+     
+Pt
+        
+        
+pt   
+
+where     
+
+We emphasize that although the estimator proposed in  
+and the REINFORCE gradient estimator are both unbiased 
+the latter is known to suffer from high variance  Hence  our
+algorithm is expected to converge faster even without extra
+variance reduction techniques        Gregor et al    Gu
+et al   
+In fact  even with the approximate gradient estimators  
+the proposed distributional SGD is also converging in terms
+of  rstorder conditions  For the detailed proof of theorem   and the convergence with approximate distributional
+derivative  please refer to the supplementary material   
+  Connections
+The proposed stochastic generative hashing is   general
+framework 
+In this section  we reveal the connection to
+several existing algorithms 
+Iterative Quantization  ITQ  If we    some       and
+        where   is formed by eigenvectors of the covariance matrix and   is an orthogonal matrix  we have
+         If we assume the joint distribution as
+
+               Rh       
+
+and parametrize     xi     bi    then from the objective
+in   and ignoring the irrelevant terms  we obtain the optimization
+
+min
+   
+
+kxi     Rbik 
+
+ 
+
+iterative quantiza 
+
+which is exactly the objective of
+tion  Gong and Lazebnik   
+Binary Autoencoder  BA  If we use the deterministic linear encoding function                   sign     
+    and
+pre   some       and ignore the irrelevant terms  the optimization   reduces to
+
+ 
+
+NXi 
+
+min
+   
+
+NXi xi       
+
+ 
+
+          
+
+    sign      
+
+ 
+
+ 
+
+ 
+
+which is the objective of   binary autoencoder  CarreiraPerpin an and Raziperchikolaei   
+In BA  the encoding procedure is deterministic  therefore 
+the entropy term Eq       log            In fact  the entropy term  if nonzero  performs like   regularization and
+helps to avoid wasting bits  Moreover  without the stochasticity  the optimization   becomes extremely dif cult
+due to the binary constraints  While for the proposed algorithm  we exploit the stochasticity to bypass such dif culty
+in optimization  The stochasticity enables us to accelerate
+the optimization as shown in section  
+
+Stochastic Generative Hashing
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+  Experiments
+In this section  we evaluate the performance of the proposed distributional SGD on commonly used datasets in
+hashing  Due to the ef ciency consideration  we conduct
+the experiments mainly with the approximate gradient estimator   We evaluate the model and algorithm from
+several aspects to demonstrate the power of the proposed
+SGH    Reconstruction loss  To demonstrate the  exibility of generative modeling  we compare the    reconstruction error to that of ITQ  Gong and Lazebnik    showing the bene ts of modeling without the orthogonality constraints    Nearest neighbor retrieval  We show Recall
+    plots on standard large scale nearest neighbor search
+benchmark datasets of MNIST  SIFT    GIST   and
+SIFT    for all of which we achieve stateof theart
+among binary hashing methods    Convergence of the
+distributional SGD  We evaluate the reconstruction error
+showing that the proposed algorithm indeed converges  verifying the theorems    Training time  The existing generative works require   signi cant amount of time for training the model  In contrast  our SGD algorithm is very fast
+to train both in terms of number of examples needed and the
+wall time    Reconstruction visualization  Due to the
+generative nature of our model  we can regenerate the original input with very few bits  On MNIST and CIFAR 
+we qualitatively illustrate the templates that correspond to
+each bit and the resulting reconstruction 
+We used several benchmarks datasets 
+       MNIST
+which contains   digit images of size       pixels 
+  CIFAR  which contains         pixel color
+images in   classes    SIFT   and   SIFT  
+which contain   and   samples  each of which is    
+dimensional vector  and   GIST   which contains  
+samples  each of which is     dimensional vector 
+  Reconstruction loss
+Because our method has   generative model        we can
+easily compute the regenerated input      argmax       
+and then compute the    loss of the regenerated input and
+the original         kx    xk 
+  ITQ also trains by minimizing the binary quantization loss  as described in Equation
+  in  Gong and Lazebnik    which is essentially   
+reconstruction loss when the magnitude of the feature vectors is compatible with the radius of the binary cube  We
+plotted the    reconstruction loss of our method and ITQ
+on SIFT   in Figure     and on MNIST and GIST  
+in Figure   where the xaxis indicates the number of examples seen by the training algorithm and the yaxis shows
+the average    reconstruction loss  The training time comparison is listed in Table   Our method  SGH  arrives
+at   better reconstruction loss with comparable or even
+less time compared to ITQ  The lower reconstruction loss
+demonstrates our claim that the  exibility of the proposed
+
+SIFT    reconstruction error
+
+  bits ITQ
+  bits ITQ
+  bits ITQ
+  bits ITQ
+  bits SGH
+  bits SGH
+  bits SGH
+  bits SGH
+
+SIFT Training Time
+BA
+SGH
+
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+bits of hashing codes
+    Training Time
+
+ 
+
+ 
+number of samples visited
+
+ 
+
+ 
+
+ 
+
+ 
+   
+
+    Reconstruction Error
+
+Figure  
+    Convergence of reconstruction error with
+number of samples seen by SGD  and     training time
+comparison of BA and SGH on SIFT   over the course
+of training with varying number of bits 
+
+Table   Training time on SIFT   in second 
+  bits
+Method
+SGH
+ 
+ 
+ITQ
+
+  bits
+ 
+ 
+
+  bits
+ 
+ 
+
+  bits
+ 
+ 
+
+model afforded by removing the orthogonality constraints
+indeed brings extra modeling ability  Note that ITQ is generally regarded as   technique with fast training among the
+existing binary hashing algorithms  and most other algorithms  He et al    Heo et al    CarreiraPerpin an
+and Raziperchikolaei    take much more time to train 
+
+  Large scale nearest neighbor retrieval
+We compared the stochastic generative hashing on an
+  NNS task with several stateof theart unsupervised algorithms  including Kmeans hashing  KMH   He et al 
+ 
+iterative quantization  ITQ   Gong and Lazebnik    spectral hashing  SH   Weiss et al   
+spherical hashing  SpH   Heo et al    binary autoencoder  BA   CarreiraPerpin an and Raziperchikolaei 
+  and scalable graph hashing  GH   Jiang and Li 
+  We demonstrate the performance of our binary
+codes by doing standard benchmark experiments of Approximate Nearest Neighbor  ANN  search by comparing
+the retrieval recall  In particular  we compare with other unsupervised techniques that also generate binary codes  For
+each query  linear search in Hamming space is conducted
+to  nd the approximate neighbors 
+Following the experimental setting of  He et al   
+we plot the Recall   curve for MNIST  SIFT   
+GIST    and SIFT   datasets under varying number
+of bits     and   in Figure   On the SIFT  
+datasets  we only compared with ITQ since the training cost
+of the other competitors is prohibitive  The recall is de ned
+as the fraction of retrieved true nearest neighbors to the total number of true nearest neighbors  The Recall   is
+the recall of   ground truth neighbors in the   retrieved
+samples  Note that Recall   is generally   more chal 
+
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+Stochastic Generative Hashing
+
+SIFT     bit Recall   
+SGH
+BA
+SpH
+SH
+ITQ
+KMH
+GH
+
+ 
+
+ 
+
+    number of retrieved items
+
+ 
+
+ 
+
+ 
+
+SIFT     bit Recall   
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+    number of retrieved items
+
+SIFT     bit Recall   
+
+ 
+
+ 
+
+    number of retrieved items
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+SGH
+BA
+SpH
+SH
+ITQ
+KMH
+GH
+
+ 
+
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+SGH
+BA
+SpH
+SH
+ITQ
+KMH
+GH
+
+ 
+
+GIST   bit Recall   
+
+SGH
+BA
+SpH
+SH
+ITQ
+KMH
+GH
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+    number of retrieved items
+
+GIST   bit Recall   
+
+SGH
+BA
+SpH
+SH
+ITQ
+KMH
+GH
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+    number of retrieved items
+
+GIST   bit Recall   
+
+SGH
+BA
+SpH
+SH
+ITQ
+KMH
+GH
+
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+ 
+
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+ 
+
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+   
+
+SIFT     bit Recall   
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+    number of retrieved items
+
+ 
+
+SIFT     bit Recall   
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+    number of retrieved items
+
+SIFT     bit Recall   
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+    number of retrieved items
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+    number of retrieved items
+
+SGH
+ITQ
+
+ 
+
+SGH
+ITQ
+
+ 
+
+SGH
+ITQ
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+SGH
+BA
+SpH
+SH
+ITQ
+KMH
+GH
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+SGH
+BA
+SpH
+SH
+ITQ
+KMH
+GH
+
+ 
+
+SGH
+BA
+SpH
+SH
+ITQ
+KMH
+GH
+
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+ 
+
+MNIST   bit Recall   
+
+ 
+
+ 
+
+ 
+
+    number of retrieved items
+
+ 
+
+MNIST   bit Recall   
+
+ 
+
+ 
+
+ 
+
+ 
+
+    number of retrieved items
+
+ 
+
+MNIST   bit Recall   
+
+ 
+
+ 
+
+ 
+
+    number of retrieved items
+
+ 
+
+ 
+
+ 
+
+Figure     NNS comparison on MNIST  SIFT    and GIST   and SIFT   with the length of binary codes varying
+from   to   bits  We evaluate the performance with Recall     fraction of top   ground truth neighbors in retrieved
+   where   increases up to  
+
+lenging criteria than Recall    which is essentially Recall    and better characterizes the retrieval results  For
+completeness  results of various Recall     curves can
+be found in the supplementary material which show similar trend as the Recall   curves 
+Figure   shows that the proposed SGH consistently performs the best across all bit settings and all datasets  The
+searching time is the same  because all algorithms use the
+same optimized implementation of POPCNT based Hamming distance computation and priority queue  We point
+out that many of the baselines need signi cant parameter
+tuning for each experiment to achieve   reasonable recall 
+except for ITQ and our method  where we    hyperparameters for all our experiments and used   batch size of  
+and learning rate of   with stepsize decay  Our method
+is less sensitive to hyperparameters 
+  Empirical study of Distributional SGD
+We demonstrate the convergence of the Adam  Kingma
+and Ba    with distributional derivative numerically on
+SIFT    GIST   and MINST from   bits to   bits 
+The convergence curves on SIFT   are shown in Figure       The results on GIST   and MNIST are similar
+
+and shown in Figure   in supplementary material    Obviously  the proposed algorithm converges quickly  no matter
+how many bits are used  It is reasonable that with more
+bits  the model  ts the data better and the reconstruction
+error can be reduced further 
+In line with the expectation  our distributional SGD trains
+much faster since it bypasses integer programming  We
+benchmark the actual time taken to train our method to
+convergence and compare that to binary autoencoder hashing  BA   CarreiraPerpin an and Raziperchikolaei   
+on SIFT    GIST   and MINST  We illustrate the performance on SIFT   in Figure       The results on
+GIST   and MNIST datasets follow   similar trend as
+shown in the supplementary material    Empirically  BA
+takes signi cantly more time to train on all bit settings
+due to the expensive cost for solving integer programming
+subproblem  Our experiments were run on AMD  GHz
+Opteron CPUs  and    memory  Our implementation
+of stochastic generative hashing as well as the whole training procedure was done in TensorFlow  We have released
+our code on GitHub  For the competing methods  we di 
+ https github com doubling Stochastic Generative Hashing
+
+Stochastic Generative Hashing
+
+    Templates and regenerated images on MNIST
+
+    Templates and regenerated images on CIFAR 
+
+Figure   Illustration of MNIST and CIFAR  templates  left  and regenerated images  right  from different methods
+with   hidden binary variables  In MNIST  the four rows and their number of bits used to encode them are  from the top 
+  original image            bits    PCA with   components         bits    SGH    bits    ITQ 
+  bits  In CIFAR     original image            bits    PCA with   components         bits   
+SGH    bits    ITQ    bits  The SGH reconstruction tends to be much better than that of ITQ  and is on par with PCA
+which uses   times more bits 
+
+rectly used the code released by the authors 
+  Visualization of reconstruction
+One important aspect of utilizing   generative model for  
+hash function is that one can generate the input from its
+hash code  When the inputs are images  this corresponds
+to image generation  which allows us to visually inspect
+what the hash bits encode  as well as the differences in the
+original and generated images 
+In our experiments on MNIST and CIFAR  we  rst visualize the  template  which corresponds to each hash bit 
+     each column of the decoding dictionary    This gives
+an interesting insight into what each hash bit represents 
+Unlike PCA components  where the top few look like averaged images and the rest are high frequency noise  each of
+our image template encodes distinct information and looks
+much like  lter banks of convolution neural networks  Empirically  each template also looks quite different and encodes somewhat meaningful information  indicating that no
+bits are wasted or duplicated  Note that we obtain this representation as   byproduct  without explicitly setting up
+the model with supervised information  similar to the case
+in convolution neural nets 
+We also compare the reconstruction ability of SGH with
+the that of ITQ and real valued PCA in Figure   For ITQ
+and SGH  we use    bit hash code  For PCA  we kept  
+components  which amounts to         bits  Visually comparing with SGH  ITQ reconstructed images look
+much less recognizable on MNIST and much more blurry
+on CIFAR  Compared to PCA  SGH achieves similar
+
+visual quality while using   signi cantly lower   less 
+number of bits 
+  Conclusion
+In this paper  we have proposed   novel generative approach to learn binary hash functions  We have justi ed
+from   theoretical angle that the proposed algorithm is
+able to provide   good hash function that preserves Euclidean neighborhoods  while achieving fast learning and
+retrieval  Extensive experimental results justify the  exibility of our model  especially in reconstructing the input
+from the hash codes  Comparisons with approximate nearest neighbor search over several benchmarks demonstrate
+the advantage of the proposed algorithm empirically  We
+emphasize that the proposed generative hashing is   general framework which can be extended to semisupervised
+settings and other learning to hash scenarios as detailed in
+the supplementary material  Moreover  the proposed distributional SGD with the unbiased gradient estimator and its
+approximator can be applied to general integer programming problems  which may be of independent interest 
+
+Acknowledgements
+LS is supported in part by NSF IIS  NIH BIGDATA    GM  NSF CAREER IIS  NSF
+IIS  EAGER  ONR    NVIDIA 
+Intel and Amazon AWS 
+
+Stochastic Generative Hashing
+
+References
+Babenko  Artem and Lempitsky  Victor  Additive quantization for extreme vector compression  In roceedings of
+the IEEE Conference on Computer Vision and Pattern
+Recognition   
+
+Yoshua Bengio  Nicholas   eonard  and Aaron Courville 
+Estimating or propagating gradients through stochastic
+neurons for conditional computation 
+arXiv preprint
+arXiv   
+
+  eon Bottou  Frank   Curtis  and Jorge Nocedal  Optimization methods for largescale machine learning  arXiv
+preprint arXiv   
+
+Miguel   CarreiraPerpin an and Ramin Raziperchikolaei 
+Hashing with binary autoencoders 
+In Proceedings of
+the IEEE Conference on Computer Vision and Pattern
+Recognition  pages    
+
+Charikar  Moses    Similarity estimation techniques from
+rounding algorithms  Proceedings of the thiryfourth annual ACM symposium on Theory of computing  pages
+     
+
+Bo Dai  Niao He  Hanjun Dai  and Le Song  Provable
+bayesian inference via particle mirror descent  In Proceedings of the  th International Conference on Arti 
+cial Intelligence and Statistics  pages    
+
+Matthijs Douze  Herv     egou  and Florent Perronnin  Polysemous codes  In European Conference on Computer
+Vision   
+
+Saeed Ghadimi and Guanghui Lan  Stochastic  rstand
+zerothorder methods for nonconvex stochastic programming  SIAM Journal on Optimization   
+ 
+
+Aristides Gionis  Piotr Indyk  Rajeev Motwani  et al  Similarity search in high dimensions via hashing  In VLDB 
+volume   pages    
+
+Yunchao Gong and Svetlana Lazebnik  Iterative quantization    procrustean approach to learning binary codes 
+In Computer Vision and Pattern Recognition  CVPR 
+  IEEE Conference on  pages   IEEE   
+
+Yunchao Gong  Sanjiv Kumar  Vishal Verma  and Svetlana
+Lazebnik  Angular quantizationbased binary codes for
+fast similarity search  In Advances in neural information
+processing systems   
+
+Yunchao Gong  Sanjiv Kumar  Henry   Rowley  and
+Svetlana Lazebnik  Learning binary codes for highdimensional data using bilinear projections  In Proceedings of the IEEE Conference on Computer Vision and
+Pattern Recognition  pages    
+
+Karol Gregor  Ivo Danihelka  Andriy Mnih  Charles Blundell  and Daan Wierstra  Deep autoregressive networks 
+In Proceedings of The  st International Conference on
+Machine Learning  pages    
+
+Gerd Grubb  Distributions and operators  volume  
+
+Springer Science   Business Media   
+
+Shixiang Gu  Sergey Levine  Ilya Sutskever  and Andriy
+Mnih  Muprop  Unbiased backpropagation for stochastic neural networks  arXiv preprint arXiv 
+ 
+
+Ruiqi Guo  Sanjiv Kumar  Krzysztof Choromanski  and
+David Simcha  Quantization based fast inner product
+search   th International Conference on Arti cial Intelligence and Statistics   
+
+Kaiming He  Fang Wen  and Jian Sun  Kmeans hashing 
+An af nitypreserving quantization method for learning binary compact codes  In Proceedings of the IEEE
+conference on computer vision and pattern recognition 
+pages    
+
+JaePil Heo  Youngwoon Lee  Junfeng He  ShihFu Chang 
+and SungEui Yoon  Spherical hashing  In Computer Vision and Pattern Recognition  CVPR    IEEE Conference on  pages   IEEE   
+
+Geoffrey   Hinton and Drew Van Camp  Keeping the neural networks simple by minimizing the description length
+of the weights  In Proceedings of the sixth annual conference on Computational learning theory  pages  
+ACM   
+
+Geoffrey   Hinton and Richard   Zemel  Autoencoders 
+minimum description length and helmholtz free energy 
+In Advances in Neural Information Processing Systems 
+pages    
+
+LongKai Huang  Qiang Yang  and WeiShi Zheng  Online
+hashing 
+In Proceedings of the TwentyThird international joint conference on Arti cial Intelligence  pages
+  AAAI Press   
+
+Piotr Indyk and Rajeev Motwani  Approximate nearest
+neighbors  towards removing the curse of dimensionality 
+In Proceedings of the thirtieth annual ACM symposium on Theory of computing  pages   ACM 
+ 
+
+Herve Jegou  Matthijs Douze  and Cordelia Schmid  Product quantization for nearest neighbor search  IEEE transactions on pattern analysis and machine intelligence   
+   
+
+QingYuan Jiang and WuJun Li  Scalable Graph Hashing
+with Feature Transformation  In TwentyFourth International Joint Conference on Arti cial Intelligence   
+
+Stochastic Generative Hashing
+
+Diederik Kingma
+
+and Jimmy Ba 
+method for stochastic optimization 
+arXiv   
+
+Adam 
+
+ 
+arXiv preprint
+
+Yair Weiss  Antonio Torralba  and Rob Fergus  Spectral
+hashing  In Advances in neural information processing
+systems  pages    
+
+      Williams  Bayesian conditionalisation and the principle of minimum information  British Journal for the
+Philosophy of Science     
+
+Felix   Yu  Sanjiv Kumar  Yunchao Gong  and ShihFu
+Chang  Circulant binary embedding 
+In International
+conference on machine learning  volume   page  
+ 
+
+Arnold Zellner  Optimal Information Processing and
+Bayes   Theorem  The American Statistician   
+November  
+
+Peichao Zhang  Wei Zhang  WuJun Li  and Minyi Guo 
+Supervised hashing with latent factor models 
+In Proceedings of the  th international ACM SIGIR conference on Research   development in information retrieval  pages   ACM     
+
+Ting Zhang  Chao Du  and Jingdong Wang  Composite
+quantization for approximate nearest neighbor search  In
+Proceedings of the  st International Conference on Machine Learning  ICML  pages      
+
+Han Zhu  Mingsheng Long  Jianmin Wang  and Yue Cao 
+Deep hashing network for ef cient similarity retrieval 
+In Thirtieth AAAI Conference on Arti cial Intelligence 
+ 
+
+Diederik   Kingma and Max Welling  Autoencoding vari 
+
+ational bayes  arXiv preprint arXiv   
+
+Alex Krizhevsky  Learning multiple layers of features from
+
+tiny images   
+
+Cong Leng  Jiaxiang Wu  Jian Cheng  Xiao Bai  and Hanqing Lu  Online sketching hashing 
+In   IEEE
+Conference on Computer Vision and Pattern Recognition
+ CVPR  pages   IEEE   
+
+Wei Liu  Jun Wang  Sanjiv Kumar  and ShihFu Chang 
+Hashing with graphs 
+In Proceedings of the  th international conference on machine learning  ICML 
+pages    
+
+Wei Liu   Cun Mu  Sanjiv Kumar and ShihFu Chang  Discrete graph hashing  In Advances in Neural Information
+Processing Systems  NIPS   
+
+Ranzato Marc Aurelio and   Hinton Geoffrey  Modeling
+pixel means and covariances using factorized thirdorder
+boltzmann machines 
+In Computer Vision and Pattern
+Recognition  CVPR    IEEE Conference on  pages
+  IEEE   
+
+Andriy Mnih and Karol Gregor  Neural variational inference and learning in belief networks  arXiv preprint
+arXiv   
+
+Arkadi Nemirovski  Anatoli Juditsky  Guanghui Lan  and
+Alexander Shapiro  Robust stochastic approximation approach to stochastic programming  SIAM Journal on optimization     
+
+Tapani Raiko  Mathias Berglund  Guillaume Alain  and
+Laurent Dinh  Techniques for learning binary stochastic feedforward neural networks 
+arXiv preprint
+arXiv   
+
+Fumin Shen  Wei Liu  Shaoting Zhang  Yang Yang  and
+Heng Tao Shen  Learning binary codes for maximum
+inner product search  In   IEEE International Conference on Computer Vision  ICCV  pages  
+IEEE   
+
+Jun Wang  Sanjiv Kumar  and ShihFu Chang  Semisupervised hashing for scalable image retrieval  In Computer Vision and Pattern Recognition  CVPR   
+
+Jingdong Wang  Heng Tao Shen  Jingkuan Song  and Jianqiu Ji  Hashing for similarity search    survey  arXiv
+preprint arXiv   
+
+

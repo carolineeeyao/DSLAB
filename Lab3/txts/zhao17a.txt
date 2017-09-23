@@ -1,0 +1,1108 @@
+Leveraging Node Attributes for Incomplete Relational Data
+
+He Zhao   Lan Du   Wray Buntine  
+
+Abstract
+
+Relational data are usually highly incomplete in
+practice  which inspires us to leverage side information to improve the performance of community detection and link prediction  This paper
+presents   Bayesian probabilistic approach that
+incorporates various kinds of node attributes encoded in binary form in relational models with
+Poisson likelihood  Our method works  exibly
+with both directed and undirected relational networks  The inference can be done by ef cient
+Gibbs sampling which leverages sparsity of both
+networks and node attributes  Extensive experiments show that our models achieve the stateof theart link prediction results  especially with
+highly incomplete relational data 
+
+  Introduction
+Relational learning from network data  particularly with
+probabilistic methods  has gained   wide range of applications such as social network analysis  Xiang et al   
+recommender systems  Gopalan et al      knowledge
+graph completion  Hu et al      and bioinformatics  Huopaniemi et al    Generally speaking  the
+goal of relational learning is to discover and analyse latent
+clusters of entities       community detection  and predict
+missing links       link prediction 
+The standard approach for modelling relational data is latent factor analysis via matrix factorisation and its variations  Among the existing approaches  Nonnegative Matrix Factorisation  NMF  and the Stochastic Block Model
+ SBM  are prominent foundational methods  NMF is usually used to model relationships between two sets of entities
+such as users and movies in collaborative  ltering  Mnih
+  Salakhutdinov    While developed independently 
+SBM  Wang   Wong    Nowicki   Snijders   
+can be viewed as an extension of NMF that introduces
+ Faculty of Information Technology  Monash University  Aus 
+
+tralia  Correspondence to  He Zhao  he zhao monash edu 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+  block matrix to capture the interactions between latent
+factors  There have been many Bayesian extensions of
+these two methods  relaxing the assumptions and or introducing extra components  such as the In nite Relational
+Model  IRM   Kemp et al    the mixture membership
+stochastic block model  MMSB   Airoldi et al    and
+the nonparametric latent feature models  NLFM   Miller
+et al    Poisson Factorisation  PF   Dunson   Herring    Zhou et al    is   popular version of
+NMF which models count data with convenient statistical
+properties  Gopalan et al        Combining the
+ideas of PF and SBM  the in nite Edge Partition Model
+ EPM   Zhou    and its extensions  Hu et al     
+have proven successful for relational networks 
+When   network has less data  relational learning becomes
+more dif cult  One extreme case is the coldstart problem  Lin et al    Sedhain et al    Zhang   Wang 
+  where   node has no observed links  making suggestion of links for that node even more challenging  In such
+cases  it is natural to appeal to side information such as
+node attributes or features  For instance  papers in citation
+networks are often associated with categories and authors 
+and users in Facebook or Twitter are often asked to provide
+information such as age  gender and interests  It is reasonable to assume that nodes having similar attributes are more
+likely to relate to each other       homophily  Nickel et al 
+  Thus  node attributes serve as important complementary information to relational data 
+There are few Bayesian probabilistic relational models that
+are able to leverage side information  For example  NLFM
+uses   linear regression model to transform the features of
+each node into   single number  which contributes to link
+probabilities  However  side information in NLFM cannot directly in uence the latent factors  which gives little support for community detection  As an extension of
+MMSB  the Nonparametric Metadata Dependent Relational  NMDR  model  Kim et al    incorporates attributes into the mixedmembership distribution of each
+node with the logisticnormal transform  which results in
+nonconjugacy for inference  Fan et al    further developed this idea in the Node information Involved Mixture Membership model  niMM  where side information
+is integrated in   conjugate way  Although these models demonstrate improvement using side information  they
+
+Leveraging Node Attributes for Incomplete Relational Data
+
+scale quadratically in the number of nodes and the incorporation of side information is often complicated 
+Several recent methods  Gopalan et al      Acharya
+et al    Hu et al      extend PF with side information using the additivity of the Poisson and gamma distributions processes  With improved scalability  the Structural
+Side Information Poisson Factorisation  SSIPF   Hu et al 
+    models directed unweighted networks with node labels  such as citation networks with papers labelled with
+one of several categories  However  its performance remains untested when   node has multiple attributes  Moreover  undirected networks are not handled by SSIPF 
+In this paper we present the Node Attribute Relational
+Model  NARM    fully Bayesian approach that models
+large  sparse  and unweighted relational networks with arbitrary node attributes encoded in binary form 
+It works
+with Poisson gamma relational models to incorporate side
+information 
+Speci cally  we propose the Symmetric
+NARM  SymNARM  for undirected networks  an extension of EPM  Zhou    and the Asymmetric NARM
+ AsymNARM  for directed networks  an extension of PF
+ Zhou et al    The proposed models have several key
+properties    Effectively modelling node attributes  the
+proposed models are able to achieve improved link prediction performance  especially where training data are lim 
+  Fully Bayesian and conjugate  the inference
+ited 
+is done by ef cient  closedform Gibbs sampling which
+scales linearly in the number of observed links and takes
+advantage of the sparsity of node attributes  It makes our
+models scalable for large but sparse relational networks
+with large sets of node attributes    Flexibility  the proposed models work on directed and undirected relational
+networks with  at and hierarchical node attributes 
+
+  The Node Attribute Relational Model
+Here we focus on modelling unweighted networks that can
+be either directed       the relationship is asymmetric  or
+undirected  Assume   relational network with   nodes is
+stored in   binary adjacency matrix            where
+yi       indicates the presence of   link between nodes
+  and   
+If the relationship described in the network is
+symmetric  then yi     yj    and if asymmetric  possibly
+yi    cid  yj    Node attributes are encoded in   binary matrix
+            where   is the total number of attributes 
+Attribute fi       indicates attribute   is active with node
+  and vice versa  Although our models incorporate binary
+attributes  categorical attributes and realvalued attributes
+can be converted into binary values with proper transformations  Kim et al    Fan et al    Hu et al     
+
+ Code
+
+available
+ethanhezhao NARM 
+
+at
+
+https github com 
+
+  The Symmetric Node Attribute Relational Model
+
+ 
+
+ 
+
+and     RK  
+
+SymNARM works with undirected networks  Its generative process is shown in Figure   Instead of modelling the
+binary matrix   directly  it applies the BernoulliPoisson
+link  BPL  function  Zhou    using an underlying latent count matrix    One  rst draws   latent count xi  
+from the Poisson distribution and then thresholds it at   to
+generate   binary value yi    This is shown in Eqs   
+  Analysed in  Zhou    Hu et al        BPL
+has the appealing property that if yi       then xi      
+with probability one  Thus  only nonzeros in   need to
+be sampled  giving huge computational savings for large
+sparse networks  illustrated in Section   and Section  
+The latent matrix   is further factorised into   latent factors with   nonnegative bilinear model      Poi    
+where     RN  
+    is referred to as the
+node factor loading matrix where      models the strength
+of the connection between node   and latent factor    As
+in SBM  the correlations of the latent factors are modelled
+in   symmetric matrix   referred to as the block matrix 
+Following  Zhou    we draw   from   hierarchical
+relational gamma process  implemented with truncation as
+  vector of gamma variables    shown in Eqs    and  
+One appealing aspect of our model is the incorporation of
+node attributes on the prior of            gi    Shown in
+Eq    gi   is constructed with   log linear combination of
+fi    hl   is referred to as the kth attribute factor loading of
+attribute    which in uences gi   iff attribute   is active with
+node         fi       bk acts as an attributefree bias for
+each latent factor    hl   and bk are gamma distributed with
+mean   hence if attribute   does not contribute to latent
+factor   or is less useful  hl   is expected to be near   and
+to have little in uence on gi    The hyperparameter  
+controls the variation of hl   
+The intuition of our model is 
+if two nodes have more
+common attributes  their gamma shape parameters will be
+more similar  with similar node factor loadings  resulting
+in   larger probability that they relate to each other  Moreover  instead of incorporating the node attributes directly
+into the node factor loadings  SymNARM uses them as the
+prior information using Eq    which results in   principled way of balancing the side information and the network
+data  In addition  different attributes can contribute differently to the latent factors  For example  the gender of an
+author may be much less important to coauthorship with
+others than the research  elds  This is controlled by the
+attribute factor loading hl   in our model 
+
+  The Asymmetric Node Attribute Relational Model
+
+Extending the Beta Gamma Gamma Poisson factorisation
+ BGGPF   Zhou et al    AsymNARM works on di 
+
+Leveraging Node Attributes for Incomplete Relational Data
+
+yi      xi    
+
+xi    
+
+xi      
+
+    
+
+xi         Poi                 
+
+       Ga gi     ci 
+
+  cid 
+
+  cid 
+
+hfi  
+   
+
+  
+
+gi     bk
+hl     Ga    
+bk   Ga    
+Ga rk     
+Ga rk rk      otherwise
+
+ cid 
+
+       
+
+if            
+
+rk   Ga       
+
+ 
+Figure   The generative model of SymNARM    is the indicator function  Poi  and Ga  stand for the Poisson distribution
+and the gamma distribution respectively  Conjugate gamma priors
+are imposed on the hyperparameters         ci  and   
+
+ 
+
+ 
+
+ 
+ 
+
+ 
+
+ 
+ 
+
+ 
+
+yi      xi    
+
+xi       cid 
+
+xi    
+
+ cid 
+
+ 
+
+xi       Poi         
+       Ga
+qk
+    qk
+qk   Be           
+
+gi   
+
+ cid 
+  cid 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+hfi  
+   
+
+  
+
+gi     bk
+hl     Ga    
+bk   Ga    
+     DirN    cid 
+
+ 
+ 
+ 
+Figure   The generative model of AsymNARM  DirN   and
+Be  stand for the   dimensional Dirichlet distribution and
+the beta distribution respectively                    are the
+hyperparameters 
+
+rected relational networks with node attributes incorporated in   similar way to SymNARM  Figure   shows
+its generative process  Here the latent count matrix   is
+factorised as     Poi  where     RN  
+and
+    RK  
+are referred to as the factor loading matrix
+and the factor score matrix respectively  Similar to SSIPF 
+the node attributes are incorporated on the prior of  
+
+ 
+
+ 
+
+  Incorporating Hierarchical Node Attributes
+
+Relational networks can be associated with hierarchical
+side information  Hu et al      For example  in  
+patent citation network  patents can be labelled with the
+International Patent Classi cation  IPC  code  which is  
+hierarchy of patent categories and subcategories  Suppose
+the second level attributes are stored in   binary matrix
+  cid           where   is the number of attributes in the
+second level  Our models can be used to incorporate hierarchical node attributes via   straightforward extension  ref cid 
+     
+This extension mirrors what is done for  rst level attributes 
+
+place hyperparameter   in Eq    with       cid  
+
+   
+
+   
+
+  Inference with Gibbs Sampling
+Both SymNARM and AsymNARM enjoy local conjugacy so the inference of all latent variables can be done
+by closedform Gibbs sampling  Moreover  the inference
+only needs to be conducted on the nonzero entries in  
+and    This section focuses on the sampling of hl    bk 
+the key variable in the proposed incorporation of node attributes  The sampling of the other latent variables is similar to those in EPM and BGGPF  detailed in  Zhou   
+
+Zhou et al    As the sampling for hl   is analogous
+in SymNARM and AsymNARM  our introduction will be
+based on AsymNARM alone 
+With the Poisson gamma conjugacy  the likelihood for gi  
+with      marginalised out is 
+
+ gi     xi   
+
+ gi   
+
+ 
+
+  gi     xi          qk gi  
+
+where xi    cid 
+
+ti  
+
+ gi   
+
+ cid xi  
+
+  xi     and xi     is the latent count  The
+gamma ratio in Eq         the Pochhammer symbol for
+  rising factorial  can be augmented with an auxiliary variable ti     gi   xi   
+  indicates an unsigned Stirling number of the  rst kind  Chen
+et al    Teh et al    Zhou   Carin   
+Taking   xi    ti   can be directly sampled by   Chinese
+Restaurant Process with gi   as the concentration and xi  
+as the number of customers 
+
+gti  
+    where Sx
+
+ti    Sxi  
+
+ti     ti     Bern
+
+for   cid        xi    
+where Bern  is the Bernoulli distribution  Alternatively 
+for large xi    because the standard deviation of ti   is
+
+  cid log xi     Buntine   Hutter    one can sample
+
+gi       cid 
+
+ cid  gi  
+
+ cid 
+
+ti   in   small window around the current value  Du et al 
+ 
+With the above augmentation and Eq    we get 
+
+                   
+ cid   
+
+  cid 
+
+  cid 
+
+  log
+
+Sxi  
+ti  
+
+ 
+
+ qk
+
+ cid 
+
+gi       cid 
+
+  cid 
+
+ cid  
+
+ 
+
+   
+
+ 
+
+   fi lti  
+
+  
+
+  
+
+  
+
+  
+
+Recall that all the attributes are binary and hl   in uences
+gi   only when fi       Extracting all the terms related to
+
+Leveraging Node Attributes for Incomplete Relational Data
+
+ cid 
+
+ 
+
+ cid 
+
+ cid cid cid cid  gi  
+ cid   
+
+hl  
+
+hl   in Eq    we get the likelihood of hl   
+
+ 
+
+hl  
+
+ hl   log
+
+ 
+
+          
+
+ cid cid  
+
+ cid  
+
+   
+
+gi  
+hl    
+
+ qk
+
+  fi   
+
+   fi lti  
+
+ 
+
+where gi  
+is the value of gi   with hl   removed when
+hl  
+fi       The likelihood function above is in   form that
+is conjugate to the gamma prior  Therefore  it is straightforward to yield the following sampling strategy for hl   
+
+Table   The computational complexity for the compared models 
+   number of nodes     number of latent factors     number
+of node attributes     the average degree  number of edges  per
+node     cid    in sparse networks    cid 
+the average number
+of nodes that an attribute is active with  usually    cid       For
+the models that incorporate node attributes  marked with     the
+complexity with one level attributes is shown 
+
+Model
+Models with the block matrix
+
+Complexity
+
+ NMDR  Kim et al   
+ niMM  Fan et al   
+
+EPM  Zhou   
+
+ SymNARM
+
+BGGPF  Zhou et al   
+ SSIPF  Hu et al     
+
+ AsymNARM
+
+           KL 
+             KL 
+             cid KL 
+
+         
+
+    KD 
+    KDL 
+
+    KD     cid KL 
+
+Models without the block matrix
+
+in Section   our model is more effective especially when  
+node has multiple attributes 
+There are also models that extend PF and collective matrix
+factorisation  Singh   Gordon    to jointly factorise
+relational networks and documentword matrices such as
+ Gopalan et al      Zhang   Wang    Acharya
+et al    Our NARM models incorporate general node
+attributes  not only texts  as the priors of the factor loading matrix in   supervised manner  rather than jointly modelling the side information in an unsupervised manner 
+Another related area is supervised topic models such as
+ Mcauliffe   Blei    Ramage et al    Lim   Buntine    The Dirichlet Multinomial Regression  DMR 
+model  Mimno   McCallum    is the most related one
+to ours  It models document attributes on the priors of the
+topic proportions with the logisticnormal transform  For
+comparison  we propose DMRMMSB  extending MMSB
+with the DMR technique to incorporate side information on
+the mixedmembership distribution of each node 
+
+  Experiments
+In this section we evaluate SymNARM and AsymNARM
+with   set of the link prediction tasks on   realworld relational datasets with different sizes and various kinds of
+node attributes  We compare our models with the stateof theart relational models  demonstrating that our models
+outperform the competitors on those datasets in terms of
+link prediction performance and periteration running time 
+We report the average area under the curve of both the receiver operating characteristic  AUCROC  and precision
+recall  AUCPR  for quantitatively analysing the models 
+Moreover  we perform qualitative analysis by comparing
+the link probabilities estimated by the compared models 
+
+hl     Ga cid   cid 
+ cid       
+
+  cid 
+
+ti  
+
+  fi   
+
+ cid        log     qk 
+
+ 
+
+ 
+
+ 
+
+gi  
+hl  
+
+  cid 
+
+  fi   
+
+   
+
+hl  
+
+ 
+
+for           and fi      
+
+Precomputed with Eq    gi   can be updated with
+Eq    after hl   is sampled 
+
+gi     gi kh cid 
+    is the newly sampled value of hi   
+
+where   cid 
+To compute Eqs    we only need to iterate over the
+nodes that attribute   is active with       fi       Thus 
+the sampling for   takes     cid KL  where   cid  is the average number of nodes that an attribute is active with  This
+demonstrates how the sparsity of node attributes is leveraged  As the mean of xi   is      sampling the tables
+    NN   takes        which can be accelerated with
+the window sampling technique explained above 
+We show the computational complexity of our and related
+models in Table   The empirical comparison of running
+speed is in Section   By taking advantage of both network sparsity and node attribute sparsity  our models are
+more ef cient than the competitors  especially on large
+sparse networks with large sets of attributes 
+
+  Related work
+Compared with the nodeattribute models such as NMDR
+and niMM whose methods result in complicated inference 
+our SymNARM is much more ef cient on large sparse networks  illustrated in Table  
+The most closely related model to our AsymNARM  also
+extending the BGGPF algorithm  is SSIPF  But it uses the
+gamma additivity to construct the prior of node factor loadings with the sum of attribute factor loadings  Our model
+has several advantages over SSIPF    The derivation of
+Gibbs sampling of SSIPF requires that each column of
+  is normalised  Eq    This limits the application of
+SSIPF to other models such as EPM which is an unnormalised model    Shown in Table   AsymNARM enjoys more ef cient computational complexity    Shown
+
+Leveraging Node Attributes for Incomplete Relational Data
+
+    Lazegacowork
+
+    NIPS 
+
+    Facebookego
+
+    NIPS 
+
+Figure   The AUCROC  the  rst row  and AUCPR  the second row  scores on the undirected networks  The values on the horizontal
+axis are the proportions of the training data and each of the error bars is the standard deviation over the  ve random splits for one
+proportion  DMRMMSB achieves its best performance at       and   on Lazegacowork and NIPS  respectively 
+
+    NIPS  network
+
+    SymNARM  
+
+    EPM  
+
+    niMM  
+
+    Author topic similarity
+
+    SymNARM  
+
+    EPM  
+
+    niMM  
+
+Figure   The link probability estimations in NIPS  Similar to  Zhou    the nodes are reordered to make   node with   larger
+index belong to the same or   smallersize community  where the disjoint community assignments are obtained by analysing the results
+of SymNARM      The original NIPS  network      The topic similarity of the authors  obtained by the pairwise cosine distances of
+the topic proportions  with   brighter colour representing   closer distance        and       Estimated link probabilities with   and
+  training data respectively for each compared model 
+  Link Prediction on Undirected Networks
+
+not consider node attributes  EPM  Zhou      stateof theart relational model  and iMMM  Koutsourelakis  
+EliassiRad      nonparametric version of MMSB 
+
+For the link prediction task on undirected network data 
+we compared our SymNARM with two models that do
+
+ SymNARMEPMniMMiMMMDMR MMSB SymNARMEPMniMMiMMMDMR MMSB SymNARMEPMniMMiMMM SymNARMEPM Leveraging Node Attributes for Incomplete Relational Data
+
+and two node attribute models  niMM  Fan et al   
+  nonparametric relational model which has been demonstrated to outperform NMDR  Kim et al    and DMRMMSB  our extension to MMSB using the Dirichlet Multinomial Regression  Mimno   McCallum    SymNAMR was implemented in MATLAB on top of the EPM
+code and we used the code released by the original authors
+for EPM and niMM  iMMM was implemented by Fan et al 
+  as   variant of niMM 
+The description of the four datasets used is given below 
+  Lazegacowork  This dataset  Lazega    contains
+  links of the cowork relationship among   attorneys  Each attorney is associated with attributes such as
+gender  of ce location  and age  After discretisation and
+binarisation  we derived         binary node attribute
+matrix with   nonzero entries 
+  NIPS  This is   coauthor network of the   authors with   links extracted from NIPS   conferences  Zhou    We merged all the papers written
+by the same author as   document  and then trained  
+LDA model with   topics  The   most frequent topics
+were used as the attributes  which gives us        
+attribute matrix with   nonzero entries 
+
+  Facebookego  The original dataset
+
+ McAuley  
+Leskovec    was collected from survey participants
+of Facebook users  Out of the   circles       friend
+lists  we used the  rst circle that contains   users with
+  links  Each user is associated with   binary attributes  encoding side information such as age  gender 
+and education  We got       binary node attribute
+matrix with   nonzero entries 
+  NIPS  NIPS  was collected from NIPS papers in
+vols   It is   mediansize coauthor network with
+  authors and   links  Similar to NIPS  we
+used the   most frequent topics as the attributes for each
+author  We got     binary node attribute matrix
+with   nonzero entries 
+
+  EXPERIMENTAL SETTINGS
+
+For each dataset  we varied the training data from  
+to   and used the remaining in testing  For each proportion  to generate  ve random splits  we used the code
+in the EPM package  Zhou    which splits   network in terms of its nodes  The reported AUCROC PR
+scores were averaged over the  ve splits  We used the
+default hyperparameter settings enclosed in the released
+code for EPM  niMM and iMMM  For our SymNARM 
+we set       and all the other hyperparameters the
+same as those in EPM  Note that the models in comparison except DMRMMSB are nonparametric models  For
+SymNARM and EPM  we set the truncation level large
+enough for each dataset  Kmax         for Lazega 
+
+cowork  Facebookego and NIPS  NIPS  respectively 
+For DMRMMSB  we varied   in         and reported the best one  Following  Zhou    we used  
+MCMC iterations and computed AUCROC PR with the
+average probability over the last   The performance
+of iMMM and niMM on NIPS  and DMRMMSB on
+Facebookego and NIPS  are not reported as the datasets
+are too large for them given our computational resources 
+
+  RESULTS
+
+The AUCROC PR scores are reported in Figure   Overall  our SymNARM model performs signi cantly better
+than niMM  iMMM  and DMRMMSB on all the datasets 
+and EPM on   datasets  except Facebookego with large
+training proportions 
+It is interesting that the performance of EPM on Facebookego gradually approaches ours
+when more than   training data were used  Note that
+Facebookego is much denser than the others  which means
+the network information itself could be rich enough for
+EPM to reconstruct the network and the node attributes
+contribute less  However in general  when relational data
+are highly incomplete  with less training data  our model
+is able to achieve improved link prediction performance 
+To illustrate how side information helps  we qualitatively
+compared our model with EPM and niMM by estimating
+the link probabilities on NIPS  shown in Figure   With
+  training data  EPM does not give   meaningful reconstruction of the original network  but it starts to with
+more data presented  The similarity of the authors  topics
+in Figure    matches the original network  demonstrating
+the usefulness of the topics  but with some error  Using the
+topics as the authors  attributes  our SymNARM achieves
+reasonably good reconstruction of the network with only
+  training data  further improving with   training
+data  Although niMM uses the same node attributes  its
+performance is not as good and is even outperformed by
+EPM with   training data 
+
+  Link Prediction on Directed Networks
+Here we compared our AsymNARM  implemented in
+MATLAB on top of the BGGPF code  with two models that
+do not consider node attributes  BGGPF  Zhou et al   
+and iMMM  and three nodeattribute models  niMM  SSIPF  Hu et al      and DMRMMSB  We used the following four datasets 
+  Lazegaadvice  This dataset is   directed network with
+  links of the advice relation among the attorneys 
+The node attributes are the same as in Lazegacowork 
+  Citeseer  This dataset  contains   citation network with
+
+ http linqs umiacs umd edu projects 
+
+ projects lbc index html
+
+Leveraging Node Attributes for Incomplete Relational Data
+
+    Lazegaadvice
+
+    Citeseer
+
+    Cora
+
+    Aminer
+
+Figure   The AUCROC  the  rst row  and AUCPR  the second row  scores on the directed networks  The models with     and    
+use the labels and the words as attributes respectively  The models with  others  in Aminer use the extra attributes  DMRMMSB
+achieves its best performance at       on Lazegaadvice 
+
+  links of   papers  labelled with one of   categories  For each paper  we used both the category label
+and the presence absence of   most frequent words as
+two separate attribute sets  We got         word
+attribute matrix with   nonzero entries 
+  Cora  This dataset  contains   citation network with
+  links of   papers in machine learning  labelled
+with one of   categories  Similar to Citeseer  we used
+both the category label and the   most frequent words
+as two separate attribute sets  We got       word
+attribute matrix with   nonzero entries 
+  Aminer  The Aminer dataset  Tang et al    contains   citation network with   papers labelled with
+  categories and   links  We further collected information of each paper via the Aminer   API  including the authors  names   unique authors  abstract 
+venue  year  and number of citations  For the abstract 
+we extract the   most frequent topics for each paper in  
+similar way to NIPS  In total  we prepared two sets
+of attributes  the labels and the others formed with the
+combination of all collected information 
+
+  EXPERIMENTAL SETTINGS
+
+For fair comparison  we generated training testing data
+with the code in the SSIPF package  which splits   network
+in terms of its links  We used the default hyperparameter
+settings of BGGPF  SSIPF  and niMM  provided by the
+original authors  Kmax was set to   on Lazegaadvice
+and    same as  Hu et al      on all the other three
+datasets  For our AsymNARM  we set       and the
+
+other hyperparameters the same as those used in  Zhou
+et al    Hu et al      Following the suggestion of
+Hu et al      we used   MCMC iterations in total and the last   samples to compute the AUCROC PR
+scores  Since Citeseer  Cora  and Aminer are already too
+large for niMM  iMMM  and DMRMMSB to produce results in reasonable time given our computational resources 
+we reported their performance only on Lazegaadvice 
+
+  RESULTS
+
+Shown in Figure     AsymNARM gains better results in
+terms of AUCROC PR on Lazegaadvice in most of the
+training proportions  Overall  the nodeattribute models
+perform better than the models that do not consider node
+attributes  showing the usefulness of node attributes  On
+the other three datasets  we used different sets of attributes
+to study how different attributes in uence the performance
+of AsymNARM and SSIPF 
+In general  AsymNARM performs better than SSIPF regardless of which set of attributes is used  The performance
+of SSIPF approaches ours in Citeseer with the labels as attributes  indicated by     But the gap between SSIPF
+and our model becomes larger when the words are used as
+attributes  indicated by    
+In Cora  SSIPF with the
+words does not perform as well as its nonnode attribute
+counterpart  BGGPF  indicating it may not be as robust as
+our model with large sets of attributes  To investigate this 
+we varied the number of the most frequent words from  
+to   for AsymNARM and SSIPF on Citeseer and Cora 
+With more words  the AUCROC PR score of SSIPF de 
+
+ AsymNARMSSI PFBGGPFniMMiMMMDMRMMSB AsymNARM lAsymNARM wSSIPF lSSIPF wBGGPF AsymNARM lAsymNARM wSSIPF lSSIPF wBGGPF AsymNARM lAsymNARM othersSSIPF lSSIPF othersBGGPF Leveraging Node Attributes for Incomplete Relational Data
+
+    Corahier AUCROC
+
+    Corahier AUCPR
+
+    Patenthier AUCROC
+
+    Patenthier AUCPR
+
+Figure   The AUCROC and AUCPR scores on the networks with hierarchical attributes  The models with the  rst level attributes
+only  the second level attributes only  and the hierarchical attributes are marked with     and     respectively 
+grades increasingly  We further checked the prior of the
+node factor loadings in SSIPF  the variable that incorporates node attributes and corresponds to gi   in our model 
+and found that the coef cient of variation of each node  
+prior drops dramatically  indicating with more words  SSIPF is failing to use the supervised information in the words 
+
+Table   The running time  seconds per iteration  of the compared
+models on Aminer  AT  the topics extracted from the abstracts 
+All  the combination of all the attributes we have 
+
+AsymNARM SSIPF
+
+DMRMMSB
+     
+
+Nonzeros
+  attr size
+
+niMM
+
+Attr
+
+Label
+
+AT
+
+Authors
+
+All
+
+ 
+
+ 
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  Link Prediction with Hierarchical Node Attributes
+
+Here we used two datasets with hierarchical node at 
+  Corahier    citation network with  
+tributes 
+papers and   links extracted from the original Cora
+dataset  The papers are labelled with one of   subareas
+ rst level  and each subarea belongs to one of   primary
+areas  second level  such as  machine learning in arti 
+cial intelligence  and  memory management in operating
+systems    Patenthier    citation network with  
+patents and   links from the National Bureau of Economic Research where the hierarchical International Patent
+Classi cation  IPC  code of   patent is used as attributes 
+The AUCROC PR scores in Figure   show that our AsymNARM with hierarchical attributes outperforms the others 
+which demonstrates leveraging hierarchical side information is bene cial to link prediction  Although SSIPF also
+models the hierarchical attributes  its performance in these
+two datasets is not comparable with our model   
+
+  Running Time
+
+In this section  we compare the running time of the models for directed networks  all implemented in MATLAB
+and running on   desktop with   GHz CPU and  GB
+RAM  Using   data for training  the running time for
+AsymNARM  SSIPF  and niMM on Aminer with different sets of node attributes is reported in Table   Note
+DMRMMSB did not complete with  Authors  and  All 
+due to our computational resources  AsymNARM is about
+  times faster than SSIPF with all the attributes and about
+
+ https people cs umass edu mccallum 
+
+data html
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  times faster with the labels  Thus AsymNARM is more
+ef cient  especially with large sets of attributes  supporting
+the complexity analysis in Table  
+
+  Conclusion
+As   summary of the experiments  Asym SymNARM
+achieved better link prediction performance with faster inference  While EPM    nonnode attribute model  performed well on nearly complete networks  it degraded with
+less training data  niMM and DMRMMSB  extensions to
+MMSB with the logisticnormal transform  had similar results to SymNARM but scaled inef ciently  SSIPF   performance and scalability were not as good as AsymNARM
+in the presented cases with  at and hierarchical attributes
+and it was less effective with larger numbers of attributes 
+Thus NARM is   comparatively simple yet effective and
+ef cient way of incorporating node attributes  including
+hierarchical attributes  for relational models with Poisson
+likelihood  This leads to improved link prediction and matrix completion for less complete relational data of both directed and undirected networks  With the ef cient inference  our models can be used to model large sparse relational networks with node attributes 
+NARM can easily be extended to multirelational networks
+such as  Hu et al      and topic models with document
+and word attributes  which is left for our future work 
+
+ AsymNARM AsymNARM AsymNARM hSSIPF hBGGPF AsymNARM AsymNARM AsymNARM hSSIPF hBGGPF AsymNARM AsymNARM AsymNARM hSSIPF hBGGPF AsymNARM AsymNARM AsymNARM hSSIPF hBGGPFLeveraging Node Attributes for Incomplete Relational Data
+
+References
+Acharya     Teffer     Henderson     Tyler     Zhou    
+and Ghosh     Gamma process Poisson factorization for
+joint modeling of network and documents  In Machine
+Learning and Knowledge Discovery in Databases  European Conference  Part    pp    Springer   
+
+Airoldi       Blei       Fienberg       and Xing      
+Mixed membership stochastic blockmodels  Journal of
+Machine Learning Research   Sep   
+
+Buntine     and Hutter    
+
+of
+the PoissonDirichlet process 
+arXiv     math ST   
+
+  Bayesian view
+arXiv preprint
+
+Chen     Du     and Buntine     Sampling table con 
+ gurations for the hierarchical PoissonDirichlet process  In Machine Learning and Knowledge Discovery in
+Databases  European Conference  Part    pp   
+Springer   
+
+Du     Buntine     and Jin       segmented topic model
+based on the twoparameter PoissonDirichlet process 
+Machine Learning     
+
+Dunson       and Herring       Bayesian latent variable
+models for mixed discrete outcomes  Biostatistics   
+   
+
+Fan     Xu     Yi     Cao     and Song     Learning
+nonparametric relational models by conjugately incorporating node information in   network  IEEE transactions
+on cybernetics   
+
+Gopalan     Charlin     and Blei     Contentbased recommendations with Poisson factorization  In Advances
+in Neural Information Processing Systems  pp   
+     
+
+Gopalan     Ruiz       Ranganath     and Blei      
+Bayesian nonparametric Poisson factorization for recIn  th International Conferommendation systems 
+ence on Arti cial Intelligence and Statistics  pp   
+     
+
+Gopalan     Hofman       and Blei       Scalable recommendation with hierarchical Poisson factorization  In
+ st Conference on Uncertainty in Arti cial Intelligence 
+pp     
+
+Hu     Rai     and Carin     Nonnegative matrix
+factorization for discrete data with hierarchical sideinformation  In  th International Conference on Arti 
+cial Intelligence and Statistics  pp       
+
+Hu     Rai     and Carin     Topicbased embeddings for
+learning from large knowledge graphs  In  th International Conference on Arti cial Intelligence and Statistics  pp       
+
+Huopaniemi     Suvitaival     Nikkil       Ore si      
+and Kaski     Multivariate multiway analysis of multisource data  Bioinformatics         
+
+Kemp     Tenenbaum       Grif ths       Yamada    
+and Ueda     Learning systems of concepts with an in 
+ nite relational model  In  st National Conference on
+Arti cial Intelligence  pp    AAAI   
+
+Kim       Hughes     and Sudderth     The nonparametric metadata dependent relational model  In  th International Conference on Machine Learning  pp   
+   
+
+Koutsourelakis       and EliassiRad     Finding mixedmemberships in social networks  In AAAI Spring Symposium  Social Information Processing  pp     
+
+Lazega     The collegial phenomenon  The social mechanisms of cooperation among peers in   corporate law
+partnership  Oxford University Press on Demand   
+
+Lim     and Buntine     Bibliographic analysis on research publications using authors  categorical labels and
+the citation network  Machine Learning   
+   
+
+Lin     Sugiyama     Kan       and Chua       Addressing coldstart in app recommendation  Latent user
+models constructed from Twitter followers  In  th International ACM SIGIR Conference on Research and
+Development in Information Retrieval  pp   
+ 
+
+McAuley       and Leskovec     Learning to discover social
+circles in ego networks  In Advances in Neural Information Processing Systems  pp     
+
+Mcauliffe       and Blei       Supervised topic models 
+In Advances in Neural Information Processing Systems 
+pp     
+
+Miller     Jordan       and Grif ths       Nonparametric
+latent feature models for link prediction  In Advances in
+Neural Information Processing Systems  pp   
+ 
+
+Mimno     and McCallum     Topic models conditioned
+on arbitrary features with Dirichletmultinomial regression  In  th Conference on Uncertainty in Arti cial Intelligence  pp     
+
+Mnih     and Salakhutdinov     Probabilistic matrix factorization  In Advances in Neural Information Processing
+Systems  pp     
+
+Nickel     Murphy     Tresp     and Gabrilovich      
+Review of Relational Machine Learning for Knowledge
+Graphs  Proceedings of the IEEE     
+
+Leveraging Node Attributes for Incomplete Relational Data
+
+Nowicki     and Snijders         Estimation and prediction for stochastic blockstructures  Journal of the American Statistical Association     
+
+Ramage     Hall     Nallapati     and Manning      
+Labeled LDA    supervised topic model for credit attribution in multilabeled corpora  In   Conference
+on Empirical Methods in Natural Language Processing 
+Volume   pp    ACL   
+
+Sedhain     Sanner     Braziunas     Xie     and Christensen     Social collaborative  ltering for coldstart
+recommendations  In  th ACM Conference on Recommender Systems  pp     
+
+Singh       and Gordon       Relational learning via colIn  th ACM SIGKDD
+lective matrix factorization 
+International Conference on Knowledge discovery and
+data mining  pp    ACM   
+
+Tang     Sun     Wang     and Yang     Social in uence
+analysis in largescale networks  In  th ACM SIGKDD
+International Conference on Knowledge discovery and
+data mining  pp    ACM   
+
+Teh       Jordan       Beal       and Blei       Hierarchical Dirichlet processes  Journal of the American
+Statistical Association     
+
+Wang       and Wong       Stochastic blockmodels for
+directed graphs  Journal of the American Statistical Association     
+
+Xiang     Neville     and Rogati     Modeling relationIn  th Intership strength in online social networks 
+national Conference on World Wide Web  pp   
+ACM   
+
+Zhang     and Wang       collective Bayesian Poisson factorization model for coldstart local event recommendation  In  th ACM SIGKDD International Conference on
+Knowledge Discovery and Data Mining  pp   
+ 
+
+Zhou    
+
+In nite edge partition models for overlapping
+community detection and link prediction  In  th International Conference on Arti cial Intelligence and Statistics  pp     
+
+Zhou     and Carin     Negative binomial process count
+IEEE Transactions on Patand mixture modeling 
+tern Analysis and Machine Intelligence   
+ 
+
+Zhou     Hannah     Dunson       and Carin     Betanegative binomial process and Poisson factor analysis  In
+ th International Conference on Arti cial Intelligence
+and Statistics  pp     
+
+

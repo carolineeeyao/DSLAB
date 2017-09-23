@@ -1,0 +1,1557 @@
+Uncorrelation and Evenness    New DiversityPromoting Regularizer
+
+Pengtao Xie     Aarti Singh   Eric    Xing  
+
+Abstract
+
+Latent space models  LSMs  provide   principled and effective way to extract hidden patterns
+from observed data  To cope with two challenges
+in LSMs 
+  how to capture infrequent patterns when pattern frequency is imbalanced and
+  how to reduce model size without sacri cing
+their expressiveness  several studies have been
+proposed to  diversify  LSMs  which design regularizers to encourage the components therein to
+be  diverse 
+In light of the limitations of existing approaches  we design   new diversitypromoting regularizer by considering two factors  uncorrelation and evenness  which encourage the components to be uncorrelated and to
+play equally important roles in modeling data 
+Formally  this amounts to encouraging the covariance matrix of the components to have more
+uniform eigenvalues  We apply the regularizer
+to two LSMs and develop an ef cient optimization algorithm  Experiments on healthcare  image and text data demonstrate the effectiveness
+of the regularizer 
+
+  Introduction
+  fundamental task in machine learning  ML  is to discover
+latent patterns underlying data  for instance  extracting topics from documents and communities from social networks 
+Latent space models  Bishop    Knott   Bartholomew 
+  Blei    are effective tools to accomplish this
+task  An LSM contains   collection of learnable components such as hidden units in neural networks and factors in
+factor analysis  Harman    Each component is aimed
+at capturing   hidden pattern  In most LSMs  components
+are parameterized by vectors 
+Among the many challenges encountered in latent space
+modeling  two of them are of particular interest to us 
+
+ Machine Learning Department  Carnegie Mellon University  Petuum Inc  Correspondence to  Pengtao Xie  pengtaox cs cmu edu  Eric    Xing  eric xing petuum com 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+First  under many circumstances  the frequency of patterns
+is highly imbalanced  Some patterns have very high frequency while others occur less frequently  As   typical example  in   news corpus  politics and economics are frequent topics  patterns  while furniture and gardening are
+infrequent  Classic LSMs are sensitive to the skewness
+of pattern frequency and less capable of capturing the infrequent patterns  Wang et al    Second  when using LSMs  one needs to carefully balance the tradeoff between model size  precisely  the number of components 
+and modeling power  Xie    Largersized LSMs are
+more expressive  but incur higher computational complexity  It is desirable but challenging to achieve suf cient modeling power with   small number of components 
+To address these two challenges  recent studies  Zou  
+Adams    Cogswell et al    Xie et al     
+investigate    diversi cation  strategy which encourages
+the components in LSMs to be mutually different  either
+through frequentiststyle regularization  Zou   Adams 
+  Cogswell et al    Xie et al    or Bayesian
+learning  Xie et al    They conjecture that 
+ 
+through  diversi cation  some components that are originally aggregated around frequent patterns can be pushed
+apart to cover infrequent patterns     diversi ed  components bear less redundancy and are mutually complementary    small number of such components are suf cient to
+model data well 
+Along this line of research  several diversitypromoting
+regularizers have been proposed  based upon determinantal point process  Kulesza   Taskar    Zou   Adams 
+  cosine similarity  Yu et al    Bao et al   
+Xie et al    and covariance  Malkin   Bilmes   
+Cogswell et al    While these regularizers demonstrate notable ef cacy  they have certain limitations  such
+as sensitivity to vector scaling  Zou   Adams   
+Malkin   Bilmes    inability to measure diversity
+in   global manner  Yu et al    Bao et al   
+Xie et al    and computational inef ciency  Cogswell
+et al    To address these limitations  we propose
+  new diversitypromoting regularizer gaining inspiration
+from principal component analysis  Jolliffe    biological diversity  Magurran    and information theory
+ Cover   Thomas   
+
+Uncorrelation and Evenness    New DiversityPromoting Regularizer
+
+We characterize  diversity  by considering two factors 
+uncorrelation and evenness  Uncorrelation  Cogswell
+et al    encourages the components to be uncorrelated  such that each component can independently capture
+  unique pattern  Evenness is inspired from biological diversity  Magurran    where an ecosystem is deemed
+to be more diverse if different species contribute equally to
+the maintenance of biological balance  Analogously  when
+measuring component diversity  we assign an  importance 
+score to each component and encourage these scores to be
+even 
+In the context of latent space modeling  evenness
+ensures each component plays   signi cant role in pattern
+discovery rather than being dominated by others 
+We study uncorrelation and evenness from   statistical perspective  The components are considered as random variables and the eigenvalues of their covariance matrix can
+be leveraged to characterize these two factors  First  according to Principle Component Analysis  Jolliffe   
+the disparity of eigenvalues re ects the correlation among
+components 
+the more uniform the eigenvalues  the less
+correlated the components  Second  eigenvalues represent
+the variance along principal directions and can be used to
+measure the  importance  of components  Promoting uniform importance amounts to encouraging evenness among
+eigenvalues 
+To promote uniformity among the eigenvalues  we encourage the discrete distribution parametrized by the normalized eigenvalues to have small KullbackLeibler divergence
+with the uniform distribution  based on which  we de ne
+  uniform eigenvalue regularizer  UER  and make   connection with the von Neumann entropy  Bengtsson   Zyczkowski    and with the von Neumann divergence
+ Kulis et al    We apply UER to two LSMs   distance
+metric learning  DML   Xing et al    and long shortterm memory  LSTM  network  Hochreiter   Schmidhuber      to encourage their components to be diverse
+and develop an ef cient optimization algorithm  Experiments on healthcare  image and text data demonstrate that
+UER   greatly improves the performance of LSMs   
+better captures infrequent patterns    reduces model size
+without sacri cing modeling power    outperforms other
+diversitypromoting regularizers 
+The major contributions of this paper are 
+
+  We propose   new diversitypromoting regularizer
+from the perspectives of uncorrelation and evenness 
+  We propose to simultaneously promote uncorrelation
+and evenness by encouraging uniformity among the
+eigenvalues of the covariance matrix of components 
+  We develop an ef cient projected gradient descent al 
+
+gorithm to solve UE regularized LSM problems 
+
+  In experiments  we demonstrate the effectiveness of
+
+this regularizer on two LSMs  DML and LSTM 
+
+ 
+
+    
+
+ 
+
+ cid 
+
+        cjk 
+
+de ne the regularizer as cid 
+
+The rest of the paper is organized as follows  Section  
+reviews related works  Section   introduces the uniform
+eigenvalue regularizer  Section   presents experimental results and Section   concludes the paper 
+  Related Works
+Diversity promoting regularization has been widely used
+in classi cation  Malkin   Bilmes    ensemble learning  Yu et al    and latent space modeling  Zou  
+Adams    Xie et al     
+In the sequel 
+we present   brief review of existing diversitypromoting
+regularizers  Several regularizers  Yu et al    Bao
+et al    Xie et al      are based on pairwise dissimilarity of components 
+if every two components are dissimilar  then overall the set of components
+are  diverse  Given the weight vectors  aj  
+ cid 
+   of  
+components  Yu et al    de ne the regularizer as
+       cjk  where cjk is the cosine similarity between component   and    In  Bao et al    the score
+is de ned as   log 
+  where
+      In  Xie et al    the score is de ned as mean
+of  arccos cjk  minus the variance of  arccos cjk 
+where the variance term is utilized to encourage the dissimilarity scores  arccos cjk  to be even  Xie et al   
+         ai  aj  where   
+is   kernel function  These regularizers are applied to classi ers ensemble  neural network and restricted Boltzmann
+machine  While these regularizers can capture pairwise
+dissimilarities between components  they are unable to capture higherorder  diversity 
+Determinantal Point Process  DPP   Kulesza   Taskar 
+  was used by  Zou   Adams    Mariet   Sra 
+  to encourage the topic vectors in Latent Dirichlet
+Allocation  Blei et al    Gaussian mean vectors in
+Gaussian Mixture Model and hidden units in neural network to be  diverse  The DPP regularizer is de ned as
+  log det    where   is         kernel matrix and
+det  denotes the determinant of the matrix  Lij equals
+to   ai  aj  and    is   kernel function  In geometry 
+det    is the volume of the parallelepiped formed by vectors in the feature space associated with kernel    Vectors
+that result in   larger volume are considered to be more
+ diverse  Since volume depends on all vectors simultaneously  DPP is able to measure diversity in   global way 
+The drawback of DPP lies in its sensitivity to the scaling of
+vectors  The volume increases with the  cid  norm of vectors 
+but  diversity  does not  Malkin   Bilmes   propose
+to promote diversity by maximizing the determinant of vectors  covariance matrix  Similar to DPP  this regularizer is
+sensitive to vector scaling 
+Unlike the aforementioned regularizers which are de ned
+directly on weight vectors  Cogswell et al    design  
+
+Uncorrelation and Evenness    New DiversityPromoting Regularizer
+
+Figure   Two views of the component matrix
+
+regularizer on hidden activations in the neural network and
+in uence the parameters indirectly  The number of hidden
+activations could be much larger than that of weight parameters  like in   convolutional neural network  which may
+render this regularizer to be computationally inef cient 
+  Method
+In this section  we develop   uniform eigenvalue regularizer
+and apply it to promote  diversity  in two LSMs 
+
+  Uniform Eigenvalue Regularizer
+
+  latent space model  LSM  is equipped with   set of  
+components and each component is represented with   vector     Rd  To achieve broader coverage of infrequent patterns and reduce model size without sacri cing modeling
+power  previous works  Zou   Adams    Xie et al 
+  propose to  diversify  the components by imposing
+  regularizer over them 
+As   subjective concept   diversity  has been de ned in
+various ways as reviewed in Section   In this paper  we
+de ne   new measure of  diversity  by taking two factors
+into consideration  uncorrelation and evenness  Uncorrelation is   measure of how uncorrelated the components are 
+Literally  less correlation is equivalent to more diversity 
+Evenness is borrowed from biological diversity  Magurran 
+  which measures how equally important different
+species are in maintaining the ecological balance within an
+ecosystem  If no species dominates another  the ecosystem
+is deemed as more diverse  Likewise  in latent space modeling  we desire the components to play equally important
+roles and no one dominates another  such that each component contributes signi cantly to the modeling of data 
+We characterize the uncorrelation among components from
+  statistical perspective  treating the components as random
+variables and measuring their covariance which is proportional to their correlation  Let     Rd   denote the component matrix where in the kth column is the parameter
+vector ak of component    Alternatively  we can take  
+row view  Figure     of    each component is treated as
+  random variable and each row vector    cid 
+  can be seen as
+  sample drawn from the random vector formed by the  
+    cid  be the sample
+components  Let      
+mean  where the elements of     Rd are all   We compute
+ 
+the empirical covariance matrix of the components as
+
+    ai    
+
+ cid  
+
+ cid  
+  ai    ai    cid 
+    cid        
+    cid cid 
+
+    cid   
+
+     
+ 
+   
+
+ 
+
+Figure   When the principal directions     and    are not
+aligned with the coordinate axis  the level of disparity between the
+eigenvalues   and   indicates the correlation between random
+variables  components 
+
+    kuku cid 
+
+   cid  
+
+Figure   When the principal directions     and    are aligned
+with the coordinate axis  the magnitude of eigenvalues represents
+the importance of components 
+Imposing the constraint   cid      we have      
+    cid   
+Suppose   is   full rank matrix and        then   is  
+fullrank matrix with rank   
+For the next step  we show that the eigenvalues of  
+play important roles in characterizing the uncorrelation and
+evenness of components  We start with uncorrelation  Let
+  be the eigendecomposition where   
+is an eigenvalue and uk is the associated eigenvector  As
+is well known in Principle Component Analysis  Jolliffe 
+  an eigenvector uk of the covariance matrix   represents   principal direction of the data points and the associated eigenvalue    tells the variability of points along
+that direction  As shown in Figure     the larger    is  the
+more spread out the points along the direction uk  When
+the eigenvectors  principal directions  are not aligned with
+coordinate axis  as shown in Figure   the level of disparity
+among eigenvalues indicates the level of correlation among
+the   components  random variables  The more different
+the eigenvalues are  the higher the correlation is  As shown
+in Figure       is about three times larger than   and
+there is   high correlation along the direction    On the
+other hand  in Figure     the two eigenvalues are close to
+each other and the points evenly spread out in both directions with negligible correlation  In light of this  we would
+utilize the uniformity among eigenvalues of   to measure
+how uncorrelated the components are 
+Secondly  we relate the eigenvalues with the other factor
+of diversity  evenness  When the eigenvectors are aligned
+with the coordinate axis  as shown in Figure     the components are uncorrelated  In this case  we bring in evenness
+to measure diversity  As stated earlier  we  rst need to assign each component an importance score  Since the eigenvectors are in parallel to the coordinate axis  the eigenvalues re ect the variance of components  Analogous to PCA
+which posits that random variables with larger variance are
+
+        DimensionsComponent VectorsRandom VariablesSamples                                                     Uncorrelation and Evenness    New DiversityPromoting Regularizer
+
+more important  we use variance to measure importance 
+As shown in Figure     component   has   larger eigenvalue   and accordingly larger variability  hence is more
+important than component   According to the evenness
+criteria  the components are more diverse if their importance match  which motivates us to encourage the eigenvalues to be uniform  As shown in Figure     the two
+eigenvalues are close and the two components have roughly
+the same variability  hence are similarly important 
+To sum up  we desire to encourage the eigenvalues to be
+even in both cases 
+  when the eigenvectors are not
+aligned with the coordinate axis  they are preferred to be
+even to reduce the correlation of components    when the
+eigenvectors are aligned with the coordinate axis  they are
+encouraged to be even such that different components contribute equally in modeling data  Previously  encouraging
+evenness among variances  eigenvalues  is investigated in
+other problems  such as learning compact representations
+for ef cient hashing  Kong   Li    Ge et al   
+Next  we discuss how to promote uniformity among eigenvalues  The basic idea is  we normalize the eigenvalues
+into   probability simplex and encourage the discrete
+distribution parameterized by the normalized eigenvalues to have small KullbackLeibler
+ KL  divergence
+with the uniform distribution  Given the eigenvalues
+    
+   we  rst normalize them into   probability
+based on which we de ne  
+distribution on   discrete random variable          
+In addition  to guarantee the
+eigenvalues are strictly positive  we require   cid   to be
+   to be uniform 
+we encourage the distribution      to be  close  to
+  uniform distribution             
+   where the
+ closeness  is measured using KL divergence KL     
+       log   
+to
+    cid    where log  denotes mad   cid     
+    according to the property of matrix
+    cid    equals
+    kuku cid 
+    which
+      log     According to the property
+of trace  we have tr   
+       Then the
+KL divergence can be turned into   diversitypromoting
+uniform eigenvalue regularizer  UER 
+
+simplex  cid    
+   cid  
+where             cid   
+positive de nite  To encourage  cid    
+ cid  
+ log cid  
+  cid   log  cid  
+ cid  
+ cid  
+In this equation   cid  
+ cid  
+    cid   log   
+   cid  
+tr cid  
+   log   uku cid 
+equals to  cid  
+    cid       cid  
+
+tr   
+trix logarithm  To show this  note that log   
+
+logarithm  Then we have tr   
+to
+
+    cid    log   
+   log   uku cid 
+
+is equivalent
+
+      log   
+
+      log   
+
+    
+
+     
+
+     
+
+    cid   
+
+  log tr 
+
+  cid   
+
+ 
+ 
+
+ 
+
+tr   
+
+    cid    log   
+    cid   
+
+tr   
+
+subject to   cid    cid    and   cid      Compared with previous diversitypromoting regularizers  UER has the following bene ts    It measures the diversity of all components in   holistic way  rather than reducing to pairwise
+
+dissimilarities as other regularizers  Yu et al    Bao
+et al    Xie et al    do  This enables UER to
+capture global relations among components 
+  Unlike
+determinantbased regularizers  Malkin   Bilmes   
+Zou   Adams    that are sensitive to vector scaling  UER is derived from normalized eigenvalues where
+the normalization effectively removes scaling    UER is
+amenable for computation  First  unlike DoCev  Cogswell
+et al    that is de ned over datadependent intermediate variables incurring computational inef ciency  UER
+is directly de ned on model parameters independent of
+data  Second  unlike the regularizers proposed in  Bao
+et al    Xie et al    that are nonsmooth  UER
+is   smooth function  The dominating computation in UER
+is the matrix logarithm  It does not substantially increase
+computational overhead as long as the number of components is not too large       less than  
+We apply UER to promote diversity in LSMs  Let     
+denote the objective function of an LSM  then an UEregularized LSM problem can be de ned as
+    cid   
+minA         
+    
+
+  cid        cid    cid   
+
+    cid    log   
+    cid   
+
+  log tr   
+
+tr   
+
+tr   
+
+    cid   
+
+where   is the regularization parameter  Similar to other
+diversitypromoting regularizers  UER is nonconvex 
+Since      in most LSMs is nonconvex  adding UER
+does not substantially increase dif culty for optimization 
+Connection with von Neumann Entropy In this section  we make   connection between UER and von Neumann entropy    matrix   is referred to as   density
+matrix  Bengtsson   Zyczkowski    if its eigenvalues
+are strictly positive and sum to one  equivalently     cid   
+and tr        The von Neumann entropy  Bengtsson   Zyczkowski    of   is de ned as       
+ tr   log    which is essentially the Shannon entropy
+of its eigenvalues  If the covariance matrix   of components is   density matrix  then we can use its von Neumann
+entropy to de ne   UER  To encourage the eigenvalues
+    
+   of   to be even  we directly encourage the KL
+divergence between the distribution parameterized by the
+eigenvalues  without normalization  and the uniform distrik     log     
+log    which is equivalent to encouraging the Shannon enk     log          the von
+Neumann entropy of   to be large  Then   new UER can
+be de ned as the negative von Neumann entropy of   
+    cid    subject to the constraints   
+    cid    log   
+tr   
+  cid    cid      tr   
+    cid            cid      This new
+UER is   special case of the previous one  Eq 
+Connection with von Neumann Divergence Next we
+make   connection between the UER and von Neumann
+divergence  Kulis et al    Given two positive de 
+
+bution to be small cid  
+tropy of the eigenvalues  cid  
+
+    cid  
+
+      log   
+
+Uncorrelation and Evenness    New DiversityPromoting Regularizer
+
+de ned as cid  
+
+nite matrices   and    their von Neumann divergence is
+de ned as tr   log       log            which measures the closeness between the two matrices  Given two
+vectors        Rm  their generalized KL divergence can be
+     xk   yk  which measures
+the closeness between two vectors  To encourage uniformity among the eigenvalues of the covariance matrix   
+we can decrease the generalized KL divergence between
+these eigenvalues and an all  vector 
+
+   xk log  xk
+yk
+
+      log    
+
+            
+
+  tr   
+
+    cid    log   
+
+    cid      tr   
+
+    cid       
+
+ 
+
+ cid  
+
+which is the von Neumann divergence between   and an
+identity matrix  Hence  encouraging uniformity among
+eigenvalues can be achieved by making   to be close to
+an identity matrix based on the von Neumann divergence 
+  Case Studies
+
+In this section  we apply the uniform eigenvalue regularizer to promote diversity in two latent space models  DML
+and LSTM  We also applied it to latent Dirichlet allocation  Blei et al    and classi er ensemble  Yu et al 
+  Due to space limit  the results of the latter two are
+deferred to the supplements 
+Distance Metric Learning  DML  Given data pairs either labeled as  similar  or  dissimilar  DML  Xing et al 
+  Davis et al    Guillaumin et al    aims to
+learn   distance metric under which similar pairs would be
+placed close to each other and dissimilar pairs are separated apart  The learned distance can bene     wide range
+of tasks  including retrieval  clustering and classi cation 
+Following  Weinberger   Saul    we de ne the distance metric between        Rd as  cid   cid      cid   cid 
+  where
+    Rd   is   parameter matrix whose column vectors are components  Built upon the DML formulation
+in  Xie    an uniformeigenvalue regularized DML
+ DMLUE  problem can be formulated as
+
+minA
+
+ cid   cid       cid   cid 
+
+ 
+
+ cid 
+   cid 
+
+      
+
+max       cid   cid       cid   cid 
+ 
+
+      
+tr   
+
+    cid    log   
+    cid   
+
+ 
+  cid        cid    cid   
+
+tr   
+
+    cid   
+
+    
+
+  log tr   
+
+    cid   
+
+ 
+where   and   are the set of similar and dissimilar pairs
+respectively  The  rst and second term in the objective
+function encourage similar pairs to have small distance and
+dissimilar pairs to have large distance respectively  The
+learned metrics are applied for information retrieval 
+Long ShortTerm Memory  LSTM  Network LSTM
+ Hochreiter   Schmidhuber    is   type of recurrent
+neural network  that is better at capturing longterm dependency in sequential modeling  At each time step   where
+
+the input is xt  there is an input gate it    forget gate ft  an
+output gate ot    memory cell ct and   hidden state ht  The
+transition equations among them are
+
+it        xt       ht        
+ft         xt        ht         
+ot        xt       ht        
+ct   it  cid  tanh     xt       ht           ft  cid  ct 
+ht   ot  cid  tanh ct 
+where                               and    
+            are gatespeci   weight matrices and    
+            are bias vectors  The row vectors in   and
+  are treated as components  Let          denote the
+loss function of an LSTM network and    denote the
+UER  including constraints  then   UEregularized LSTM
+problem can be de ned as
+
+minW                  cid 
+
+                   
+ 
+The LSTM network is applied for clozestyle reading comprehension  CSRC  The network architecture follows that
+in  Seo et al    which achieves the state of the art performance on CSRC 
+  Algorithm
+
+We develop   projected gradient descent  PGD  algorithm
+to solve the UEregularized LSM problem in Eq  The
+constraint   cid    cid    ensures the eigenvalues of   cid   are
+positive  such that log   cid    is wellde ned  However 
+it makes optimization very nasty  To address this issue 
+we add   small perturbation    over   cid   where   is  
+closeto zero positive scalar and   is an identity matrix  to
+ensure log   cid         is always wellde ned  Accordingly  the constraint   cid    cid    can be eliminated  The
+PGD algorithm iteratively performs three steps    compute  sub gradient  cid   of the objective function    up 
+
+date   using gradient descent   cid            cid      
+project  cid   to the constraint set      cid     
+In step
+    cid        
+  the derivative of tr   
+    cid              To compute the logarithm
+is  
+    log   
+    cid         we perform an eigendecomposition of
+of  
+onal matrix  cid  where  cid jj   log jj  and then compute
+this matrix into     cid  transform   into another diagd   cid         as   cid   cid  The complexity of eigen 
+
+log   
+decomposing this mby   matrix is     
+In our applications    is no more than   so      is not   big
+bottleneck  In addition  this matrix is symmetric and the
+symmetry can be leveraged for fast eigendecomposition 
+In implementation  we use the MAGMA library that supports ef cient eigendecomposition of symmetric matrices on both CPUs and GPUs 
+In step   the projection operation amounts to solving the following problem 
+  subject to   cid      According to
+minA
+KKT conditions  Boyd   Vandenberghe    we have
+
+ cid      cid   cid 
+
+    cid         log   
+
+ 
+
+Uncorrelation and Evenness    New DiversityPromoting Regularizer
+
+MIMIC
+Cars
+Birds
+CNN
+DailyMail
+
+ Train
+  
+ 
+ 
+  
+  
+
+ Test Dim 
+    
+ 
+ 
+ 
+ 
+ 
+  
+
+ 
+ 
+
+ Class
+ 
+ 
+ 
+ 
+ 
+
+     cid      
+row vectors in  cid   to have zero mean 
+
+equations  we get           
+
+ cid 
+
+Table   Dataset Statistics
+    and   cid      Solving this system of
+
+   cid cid    which centers the
+
+  Experiments
+In this section  we present experimental results 
+
+Dataset We used  ve datasets in the experiments  an
+electronic health record dataset MIMICIII  Johnson et al 
+  two image datasets StanfordCars  Krause et al 
+  and CaltechUCSD Birds  Welinder et al   
+two question answering  QA  datasets CNN and DailyMail  Hermann et al    The  rst three were used
+for DML and the last two for LSTM  Their statistics are
+summarized in Table   MIMICIII contains hospital admissions of patients  The class label of each admission is
+the primarily diagnosed disease  For StanfordCars  CNN
+and DailyMail  we use   single train test split speci ed by
+the data providers  for the other two   ve random splits are
+performed and the results are averaged over the  ve runs 
+For the MIMICIII dataset  we extract  dimensional
+features      dimensions from demographics  including
+age and gender      dimensions from clinical notes 
+including  dimensional bagof words  weighted using tfidf  and  dimensional Word Vec  Mikolov et al 
+     dimensions from lab tests where the zeroorder   rstorder and secondorder temporal features are
+extracted for each of the   lab items  For bagof words 
+we remove stop words  then select the   words with
+largest document frequency  For Word Vec  we train  
+dimensional embeddings for each word  to represent   document  we average the embeddings of all words in this document  For the two image datasets  we use the VGG   Simonyan   Zisserman    convolutional neural network
+trained on the ImageNet  Deng et al    dataset to extract features  which are the  dimensional outputs of
+the second fullyconnected layer  In the two QA datasets 
+each instance consists of   passage    question and an answer  The question is   clozestyle task where an entity is
+replaced by   placeholder and the goal is to infer this missing entity  answer  from all the possible entities appearing
+in the passage 
+
+Experimental Setup In DML experiments  two samples
+are labeled as similar if belonging to the same class and
+dissimilar otherwise  The learned distance metrics are ap 
+
+DML
+EUC
+ITML
+LDML
+GMML
+DMLL 
+DMLL 
+DMLLowRank
+DMLDropout
+DMLDC
+DMLCS
+DMLDPP
+DMLIC
+DMLMA
+DMLDeCov
+DMLUE
+
+MIMIC
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+
+Cars
+
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+
+Birds
+
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+
+Table   Precision    on three datasets  The Cars dataset
+has   single train test split  hence the standard error is  
+
+plied for retrieval whose performance is evaluated using
+precision    We compare with two sets of regularizers 
+  diversitypromoting regularizers based on determinant
+of covariance  DC   Malkin   Bilmes    cosine similarity  CS   Yu et al    determinantal point process
+ DPP   Kulesza   Taskar    Zou   Adams   
+InCoherence  IC   Bao et al    mutual angles  MA 
+ Xie et al    and decorrelation  DeCov   Cogswell
+et al      regularizers that are designed for other
+purposes  including    norm for small norm     norm for
+sparsity  lowrankness  Recht et al    and Dropout
+ Srivastava et al    All these regularizers are applied to the same DML formulation  Eq  without the
+regularizer 
+In addition  we compare with vanilla Euclidean distance  EUC  and other distance learning methods including information theoretic metric learning  ITML 
+ Davis et al    logistic discriminant metric learning
+ LDML   Guillaumin et al    and geometric mean
+metric learning  GMML   Zadeh et al    We use  
+fold cross validation to tune the regularization parameter
+in         and the number of components
+in           The best tuned regularization
+parameters of UER are    for MIMIC    for Cars
+and Birds  The best tuned component numbers are    for
+MIMIC    for Cars and   for Birds  The learning rate
+of the PGD algorithm is set to  
+In LSTM experiments  the model architecture and experimental settings follow the Bidirectional Attention Flow
+ BIDAF   Seo et al    model  which consists of the
+following layers  character embedding  word embedding 
+contextual embedding  attention  ow  modeling and output  The contextual and modeling layers use long shortterm memory  LSTM  networks  Seo et al    In char 
+
+Uncorrelation and Evenness    New DiversityPromoting Regularizer
+
+MIMIC Cars Birds Average
+
+DML
+DMLL 
+DMLL 
+DMLLowRank
+DMLDropout
+DMLDC
+DMLCS
+DMLDPP
+DMLIC
+DMLMA
+DMLDeCov
+DMLUE
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Table   Optimal number of components 
+
+acter embedding based on convolutional neural network 
+      lters are used  each with   width of   The hidden
+state size is set to   AdaDelta  Zeiler    is used for
+optimization with   minibatch size of   Dropout  Srivastava et al    with probability   is used for all LSTM
+layers  The model is trained for   epochs with early stop
+when the validation accuracy starts to drop  We compare
+UER with other diversitypromoting regularizers including
+DC  CS  DPP  IC  MA and DeCov 
+
+Results Table   shows the retrieval precision       
+on three datasets  where we observe    DMLUE achieves
+much better precision than DML  proving that UER is
+an effective regularizer in improving generalization performance    UER outperforms other diversitypromoting
+regularizers possibly due to its capability to capture global
+relations among all components and insensitivity to vector
+scaling    diversitypromoting regularizers perform better than other types of regularizers such as       low
+rank and Dropout  corroborating the ef cacy of inducing
+diversity    DMLUE outperforms other popular distance
+learning methods such as ITML  LDML and GMML 
+Table   shows the number of components that achieves
+the precision in Table   Compared with DML  DMLUE uses much fewer components to achieve better precision  For example  on the Cars dataset  DMLUE achieves
+  precision with   components  In contrast  with
+more components   DML achieves   much lower precision   This demonstrates that by encouraging the
+components to be diverse  UER is able to reduce model
+size without sacri cing modeling power  UER encourages equal  importance  among components such that each
+component plays   signi cant role in modeling data  As
+  result  it suf ces to use   small number of components
+to achieve larger modeling power  Compared with other
+diversitypromoting regularizers  UER achieves better precision with fewer components  demonstrating its ability to
+better promote diversity 
+
+DML
+EUC
+ITML
+LDML
+GMML
+DMLL 
+DMLL 
+DMLLowRank
+DMLDropout
+DMLDC
+DMLCS
+DMLDPP
+DMLIC
+DMLMA
+DMLDeCov
+DMLUE
+
+Frequent
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+
+Infrequent
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+
+Table   Precision    on frequent and infrequent diseases
+of the MIMICIII dataset 
+
+Next  we verify whether  diversifying  the components in
+DML can better capture infrequent patterns  In the MIMICIII dataset  we consider diseases as patterns and consider  
+disease as  frequent  if more than   hospital admissions
+are diagnosed with this disease and  infrequent  if otherwise  Table   shows the retrieval precision on frequent diseases and infrequent diseases  As can be seen  compared
+with the baselines  DMLUE achieves more improvement
+on infrequent diseases than on frequent diseases  This indicates that by encouraging the components to diversely
+spread out  UER is able to better capture infrequent patterns
+ diseases in this case  without compromising the performance on frequent patterns  On infrequent diseases  DMLUE outperforms other diversitypromoting methods  showing the advantage of UER over other diversitypromoting
+regularizers  To further verify this  we select   most frequent diseases  hypertension  AFib  CAD  and randomly
+select   infrequent ones  helicobacter pylori  acute cholecystitis  joint painshlder  dysarthria  pressure ulcer  and
+show the precision  on each individual disease in Table   As can be seen  on the  ve infrequent diseases 
+DMLUE achieves higher precision than baselines while
+on the three frequent diseases  DMLUE achieves comparable precision 
+We empirically verify whether UER can promote uncorrelation and evenness  Given   component vectors  we compute the empirical correlation  cosine similarity  of every
+two vectors  then average these pairwise correlation scores
+to measure the overall correlation of   vectors  We perform the study by learning distance metrics that have  
+components  on the MIMICIII dataset  The average correlation under unregularized DML and DMLUE is   and
+  respectively  This shows that UER can reduce corre 
+
+Uncorrelation and Evenness    New DiversityPromoting Regularizer
+
+DML
+EUC
+ITML
+LDML
+GMML
+DMLL 
+DMLL 
+DMLLowRank
+DMLDropout
+DMLDC
+DMLCS
+DMLDPP
+DMLIC
+DMLMA
+DMLDeCov
+DMLUE
+
+   
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+
+   
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+
+   
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+
+   
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+
+   
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+
+   
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+
+   
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+
+   
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+
+Table   Precision    on three frequent and  ve infrequent diseases  The number next to   disease ID is its frequency 
+
+DML
+DMLDC
+DMLCS
+DMLDPP
+DMLIC
+DMLMA
+DMLDeCov
+DMLUE
+
+MIMIC Cars Birds
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Table   Average runtime  hours  of DML methods
+
+     
+
+     
+
+   then use the variance of    cid 
+
+lation  To measure evenness  we  rst measure the  importance  of components  For each component with parameter
+vector    we project the training examples  xi  
+   onto   
+   cid 
+   to measure
+the importance of this component  After that  we map these
+importance scores into   probabilistic simplex using softmax  Finally  the evenness is measured by the KL divergence between the discrete distribution parameterized by
+these probabilities and   uniform distribution    smaller
+KL divergence indicates larger evenness  On MIMICIII
+with   components  the KL divergence under unregularized DML and DMLUE is   and   respectively  This
+suggests that our regularizer is able to encourage evenness 
+Table   shows the runtime taken by DML methods to reach
+convergence  Compared with unregularized DML  DMLUE does not increase the training time substantially  The
+relative increase is   on MIMIC    on Cars and
+  on Birds  The runtime of DMLUE is close to DML
+regularized by other diversitypromoting regularizers 
+In the LSTM experiments  Table   shows state of the art accuracy on the two QA datasets  Compared with the original
+BIDAF  Seo et al    our method BIDAFUE achieves
+better accuracy  further demonstrating UER   ability to improve generalization performance  Besides  UER outperforms other regularizers 
+
+Kadlec et al   
+Kobayashi et al   
+Sordoni et al   
+Trischler et al   
+Chen et al   
+Dhingra et al   
+Cui et al   
+Shen et al   
+BIDAF
+BIDAFDC
+BIDAFCS
+BIDAFDPP
+BIDAFIC
+BIDAFMA
+BIDAFDeCov
+BIDAFUE
+Dhingra et al   
+Dhingra et al   
+
+CNN
+
+DailyMail
+Test
+Dev
+ 
+ 
+
+ 
+ 
+ 
+
+ 
+
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+
+ 
+ 
+ 
+
+ 
+
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+
+Dev
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Test
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Table   Accuracy   on the two QA datasets
+
+  Conclusions
+We propose   new diversitypromoting regularizer from
+the perspectives of uncorrelation which prefers the components in LSMs to be uncorrelated and evenness which encourages the components to contribute equally to the modeling of data  Gaining insight from PCA  promoting uncorrelation and evenness both amount to encouraging the
+covariance matrix of components to have uniform eigenvalues  which leads to   uniform eigenvalue regularizer
+ UER  The UER is applied to DML and LSTM  Experimental studies reveal that UER greatly boosts the performance of LSMs  better captures infrequent patterns  reduces model size without compromising modeling power
+and outperforms other diversitypromoting regularizers 
+
+Uncorrelation and Evenness    New DiversityPromoting Regularizer
+
+Acknowledgements
+We would like to thank the anonymous reviewers for the
+helpful suggestions and comments      and     are supported by National Institutes of Health   DA 
+  GM  National Science Foundation IIS 
+DARPA FA    and Pennsylvania Department of
+Health BD BH 
+
+References
+Bao  Yebo  Jiang  Hui  Dai  Lirong  and Liu  Cong 
+
+Incoherent training of deep neural networks to decorrelate
+bottleneck features for speech recognition   
+
+Bengtsson  Ingemar and Zyczkowski  Karol  Geometry of
+quantum states  an introduction to quantum entanglement  Cambridge University Press   
+
+Bishop  Christopher    Latent variable models  In Learn 
+
+ing in graphical models  pp    Springer   
+
+Blei  David    Build  compute  critique  repeat  Data
+analysis with latent variable models  Annual Review of
+Statistics and Its Application   
+
+Blei  David    Ng  Andrew    and Jordan  Michael    Latent dirichlet allocation  the Journal of machine Learning research   
+
+Boyd  Stephen and Vandenberghe  Lieven  Convex opti 
+
+mization  Cambridge university press   
+
+Chen  Danqi  Bolton  Jason  and Manning  Christopher   
+  thorough examination of the cnn daily mail reading
+comprehension task  arXiv preprint arXiv 
+ 
+
+Cogswell  Michael  Ahmed  Faruk  Girshick  Ross  Zitnick  Larry  and Batra  Dhruv  Reducing over tting in
+deep networks by decorrelating representations  arXiv
+preprint arXiv   
+
+Cover  Thomas   and Thomas  Joy    Elements of infor 
+
+mation theory  John Wiley   Sons   
+
+Cui  Yiming  Chen  Zhipeng  Wei  Si  Wang  Shijin  Liu 
+Ting  and Hu  Guoping  Attentionover attention neural networks for reading comprehension  arXiv preprint
+arXiv   
+
+Davis  Jason    Kulis  Brian  Jain  Prateek  Sra  Suvrit  and
+Dhillon  Inderjit    Informationtheoretic metric learning  In Proceedings of the  th international conference
+on Machine learning  ACM   
+
+Deng  Jia  Dong  Wei  Socher  Richard  Li  LiJia  Li  Kai 
+Imagenet    largescale hierarchical
+
+and FeiFei  Li 
+
+image database  In Computer Vision and Pattern Recognition    CVPR   IEEE Conference on  pp   
+  IEEE   
+
+Dhingra  Bhuwan  Liu  Hanxiao  Cohen  William    and
+Salakhutdinov  Ruslan  Gatedattention readers for text
+comprehension  arXiv preprint arXiv   
+
+Dhingra  Bhuwan  Yang  Zhilin  Cohen  William    and
+Salakhutdinov  Ruslan  Linguistic knowledge as memarXiv preprint
+ory for recurrent neural networks 
+arXiv   
+
+Ge  Tiezheng  He  Kaiming  Ke  Qifa  and Sun  Jian  Optimized product quantization for approximate nearest
+In Proceedings of the IEEE Conferneighbor search 
+ence on Computer Vision and Pattern Recognition  pp 
+   
+
+Guillaumin  Matthieu  Verbeek 
+
+Jakob  and Schmid 
+Cordelia 
+Is that you  metric learning approaches for
+face identi cation  In IEEE International Conference on
+Computer Vision  IEEE   
+
+Harman  Harry    Modern factor analysis   
+
+Hermann  Karl Moritz  Kocisky  Tomas  Grefenstette  Edward  Espeholt  Lasse  Kay  Will  Suleyman  Mustafa 
+and Blunsom  Phil  Teaching machines to read and comprehend  In Advances in Neural Information Processing
+Systems  pp     
+
+Hochreiter  Sepp and Schmidhuber    urgen  Long shortterm memory  Neural computation   
+ 
+
+Johnson  Alistair EW  Pollard  Tom    Shen  Lu  Lehman 
+Liwei    Feng  Mengling  Ghassemi  Mohammad 
+Moody  Benjamin  Szolovits  Peter  Celi  Leo Anthony 
+and Mark  Roger    Mimiciii    freely accessible critical care database  Scienti   data     
+
+Jolliffe  Ian  Principal component analysis  Wiley Online
+
+Library   
+
+Kadlec  Rudolf  Schmid  Martin  Bajgar  Ondrej  and
+Kleindienst  Jan  Text understanding with the attention
+sum reader network  ACL   
+
+Knott  Martin and Bartholomew  David    Latent variable
+models and factor analysis  Number   Edward Arnold 
+ 
+
+Kobayashi  Sosuke  Tian  Ran  Okazaki  Naoaki  and
+Inui  Kentaro  Dynamic entity representation with maxIn Proceedings of
+pooling improves machine reading 
+NAACLHLT  pp     
+
+Uncorrelation and Evenness    New DiversityPromoting Regularizer
+
+Kong  Weihao and Li  WuJun  Isotropic hashing  In Advances in Neural Information Processing Systems  pp 
+   
+
+Krause  Jonathan  Stark  Michael  Deng  Jia  and FeiFei 
+Li     object representations for  negrained categorizaIn Proceedings of the IEEE International Contion 
+ference on Computer Vision Workshops  pp   
+ 
+
+Kulesza  Alex and Taskar  Ben  Determinantal point
+arXiv preprint
+
+processes for machine learning 
+arXiv   
+
+Kulis  Brian  Sustik    aty as    and Dhillon  Inderjit   
+Lowrank kernel learning with bregman matrix diverJournal of Machine Learning Research   
+gences 
+ Feb   
+
+Magurran  Anne    Measuring biological diversity  John
+
+Wiley   Sons   
+
+Malkin  Jonathan and Bilmes  Jeff  Ratio semide nite
+In   IEEE International Conference on
+classi ers 
+Acoustics  Speech and Signal Processing  pp   
+  IEEE   
+
+Mariet  Zelda and Sra  Suvrit  Diversity networks  arXiv
+
+preprint arXiv   
+
+Mikolov  Tomas  Sutskever  Ilya  Chen  Kai  Corrado 
+Greg    and Dean  Jeff  Distributed representations of
+In Adwords and phrases and their compositionality 
+vances in neural information processing systems  pp 
+   
+
+Recht  Benjamin  Fazel  Maryam  and Parrilo  Pablo   
+Guaranteed minimumrank solutions of linear matrix
+equations via nuclear norm minimization  SIAM review 
+   
+
+Seo  Minjoon  Kembhavi  Aniruddha  Farhadi  Ali  and
+Hajishirzi  Hannaneh  Bidirectional attention  ow for
+machine comprehension  ICLR   
+
+Shen  Yelong  Huang  PoSen  Gao  Jianfeng  and Chen 
+Weizhu  Reasonet  Learning to stop reading in machine
+comprehension  arXiv preprint arXiv   
+
+Simonyan  Karen and Zisserman  Andrew  Very deep convolutional networks for largescale image recognition 
+arXiv preprint arXiv   
+
+Sordoni  Alessandro  Bachman  Philip  Trischler  Adam 
+Iterative alternating neuarXiv preprint
+
+and Bengio  Yoshua 
+ral attention for machine reading 
+arXiv   
+
+Srivastava  Nitish  Hinton  Geoffrey    Krizhevsky  Alex 
+Sutskever  Ilya  and Salakhutdinov  Ruslan  Dropout 
+  simple way to prevent neural networks from over tJournal of Machine Learning Research   
+ting 
+   
+
+Trischler  Adam  Ye  Zheng  Yuan  Xingdi  and Suleman  Kaheer  Natural language comprehension with the
+epireader  arXiv preprint arXiv   
+
+Wang  Yi  Zhao  Xuemin  Sun  Zhenlong  Yan  Hao  Wang 
+Lifeng  Jin  Zhihui  Wang  Liubin  Gao  Yang  Law 
+Ching  and Zeng  Jia  Peacock  Learning longtail topic
+features for industrial applications  ACM Transactions
+on Intelligent Systems and Technology   
+
+Weinberger  Kilian   and Saul  Lawrence    Distance metric learning for large margin nearest neighbor classi cation  Journal of Machine Learning Research   Feb 
+   
+
+Welinder  Peter  Branson  Steve  Mita  Takeshi  Wah 
+Catherine  Schroff  Florian  Belongie  Serge  and Perona  Pietro  Caltechucsd birds    
+
+Xie  Bo  Liang  Yingyu  and Song  Le  Diversity leads to
+
+generalization in neural networks  AISTATS   
+
+Xie  Pengtao  Learning compact and effective distance
+metrics with diversity regularization  In European Conference on Machine Learning   
+
+Xie  Pengtao  Deng  Yuntian  and Xing  Eric    Diversifying restricted boltzmann machine for document modeling  In ACM SIGKDD Conference on Knowledge Discovery and Data Mining   
+
+Xie  Pengtao  Zhu  Jun  and Xing  Eric  Diversitypromoting bayesian learning of latent variable models 
+In Proceedings of The  rd International Conference on
+Machine Learning  pp     
+
+Xing  Eric    Jordan  Michael    Russell  Stuart  and Ng 
+Andrew    Distance metric learning with application to
+clustering with sideinformation  In Advances in neural
+information processing systems   
+
+Yu  Yang  Li  YuFeng  and Zhou  ZhiHua  Diversity reg 
+
+ularized machine   
+
+Zadeh  Pourya Habib  Hosseini  Reshad  and Sra  Suvrit 
+
+Geometric mean metric learning   
+
+Zeiler  Matthew    Adadelta  an adaptive learning rate
+
+method  arXiv preprint arXiv   
+
+Zou  James   and Adams  Ryan    Priors for diversity in
+generative latent variable models  In Advances in Neural
+Information Processing Systems  pp     
+
+

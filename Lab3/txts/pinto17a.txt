@@ -1,0 +1,932 @@
+Robust Adversarial Reinforcement Learning
+
+Lerrel Pinto   James Davidson   Rahul Sukthankar   Abhinav Gupta    
+
+Abstract
+
+Deep neural networks coupled with fast simulation and improved computation have led to recent successes in the  eld of reinforcement learning  RL  However  most current RLbased approaches fail to generalize since      the gap between simulation and real world is so large that
+policylearning approaches fail to transfer     
+even if policy learning is done in real world  the
+data scarcity leads to failed generalization from
+training to test scenarios       due to different
+friction or object masses 
+Inspired from   
+control methods  we note that both modeling errors and differences in training and test scenarios can be viewed as extra forces disturbances in
+the system  This paper proposes the idea of robust adversarial reinforcement learning  RARL 
+where we train an agent to operate in the presence of   destabilizing adversary that applies disturbance forces to the system  The jointly trained
+adversary is reinforced   that is  it learns an optimal destabilization policy  We formulate the
+policy learning as   zerosum  minimax objective function  Extensive experiments in multiple
+environments  InvertedPendulum  HalfCheetah 
+Swimmer  Hopper  Walker   and Ant  conclusively demonstrate that our method     improves
+training stability      is robust to differences in
+training test conditions  and    outperform the
+baseline even in the absence of the adversary 
+
+  Introduction
+Highcapacity function approximators such as deep neural networks have led to increased success in the  eld of
+reinforcement learning  Mnih et al    Silver et al 
+  Gu et al    Lillicrap et al    Mordatch
+et al    However    major bottleneck for such
+
+ Carnegie Mellon University  Google Brain  Google Research  Correspondence to  Lerrel Pinto  lerrelp cs cmu edu 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+policylearning methods is their reliance on data 
+training highcapacity models requires huge amounts of training data trajectories  While this training data can be easily
+obtained for tasks like games       Doom  Montezuma  
+Revenge   Mnih et al    datacollection and policy
+learning for realworld physical tasks are signi cantly more
+challenging 
+There are two possible ways to perform policy learning for
+realworld physical tasks 
+
+  Realworld Policy Learning  The  rst approach is to
+learn the agent   policy in the realworld  However 
+training in the realworld is too expensive  dangerous
+and timeintensive leading to scarcity of data  Due to
+scarcity of data  training is often restricted to   limited
+set of training scenarios  causing over tting 
+If the
+test scenario is different       different friction coef 
+ cient  the learned policy fails to generalize  Therefore  we need   learned policy that is robust and generalizes well across   range of scenarios 
+  Learning in simulation  One way of escaping the
+data scarcity in the realworld is to transfer   policy
+learned in   simulator to the real world  However the
+environment and physics of the simulator are not exactly the same as the real world  This reality gap often
+results in unsuccessful transfer if the learned policy
+isn   robust to modeling errors  Christiano et al   
+Rusu et al   
+
+Both the testgeneralization and simulationtransfer issues
+are further exacerbated by the fact
+that many policylearning algorithms are stochastic in nature  For many hard
+physical tasks such as Walker    Erez et al    only  
+small fraction of runs leads to stable walking policies  This
+makes these approaches even more time and dataintensive 
+What we need is an approach that is signi cantly more stable robust in learning policies across different runs and initializations while requiring less data during training 
+So  how can we model uncertainties and learn   policy robust to all uncertainties  How can we model the
+gap between simulations and realworld  We begin with
+the insight that modeling errors can be viewed as extra forces disturbances in the system  Bas ar   Bernhard 
+  For example  high friction at test time might be
+modeled as extra forces at contact points against the di 
+
+Robust Adversarial Reinforcement Learning
+
+Figure   We evaluate RARL on   variety of OpenAI gym problems  The adversary learns to apply destabilizing forces on speci   points
+ denoted by red arrows  on the system  encouraging the protagonist to learn   robust control policy  These policies also transfer better to
+new test environments  with different environmental conditions and where the adversary may or may not be present 
+
+rection of motion  Inspired by this observation  this paper
+proposes the idea of modeling uncertainties via an adversarial agent that applies disturbance forces to the system 
+Moreover  the adversary is reinforced   that is  it learns an
+optimal policy to thwart the original agent   goal  Our proposed method  Robust Adversarial Reinforcement Learning  RARL  jointly trains   pair of agents    protagonist
+and an adversary  where the protagonist learns to ful   the
+original task goals while being robust to the disruptions
+generated by its adversary 
+We perform extensive experiments to evaluate RARL on
+multiple OpenAI gym environments like InvertedPendulum  HalfCheetah  Swimmer  Hopper  Walker   and Ant
+ see Figure   We demonstrate that our proposed approach
+is      Robust to model initializations  The learned policy
+performs better given different model parameter initializations and random seeds  This alleviates the data scarcity
+    Robust to
+issue by reducing sensitivity of learning 
+modeling errors and uncertainties  The learned policy
+generalizes signi cantly better to different test environment
+settings       with different mass and friction values 
+
+  Overview of RARL
+
+Our goal is to learn   policy that is robust to modeling errors in simulation or mismatch between training and test
+scenarios  For example  we would like to learn policy for
+Walker   that works not only on carpet  training scenario 
+but also generalizes to walking on ice  test scenario  Similarly  other parameters such as the mass of the walker might
+vary during training and test  One possibility is to list all
+such parameters  mass  friction etc  and learn an ensemble of policies for different possible variations  Rajeswaran
+et al    But explicit consideration of all possible parameters of how simulation and real world might differ or
+what parameters can change between training test is infeasible 
+Our core idea is to model the differences during training
+and test scenarios via extra forces disturbances in the system  Our hypothesis is that if we can learn   policy that
+
+is robust to all disturbances  then this policy will be robust
+to changes in training test situations  and hence generalize
+well  But is it possible to sample trajectories under all possible disturbances  In unconstrained scenarios  the space
+of possible disturbances could be larger than the space of
+possible actions  which makes sampled trajectories even
+sparser in the joint space 
+To overcome this problem  we advocate   twopronged approach 
+    Adversarial agents for modeling disturbances  Instead of sampling all possible disturbances  we jointly train
+  second agent  termed the adversary  whose goal is to impede the original agent  termed the protagonist  by applying destabilizing forces  The adversary is rewarded only
+for the failure of the protagonist  Therefore  the adversary
+learns to sample hard examples  disturbances which will
+make original agent fail  the protagonist learns   policy that
+is robust to any disturbances created by the adversary 
+    Adversaries that incorporate domain knowledge 
+The naive way of developing an adversary would be to simply give it the same action space as the protagonist   like
+  driving student and driving instructor  ghting for control
+of   dualcontrol car  However  our proposed approach is
+much richer and is not limited to symmetric action spaces  
+we can exploit domain knowledge to  focus the adversary
+on the protagonist   weak points  and since the adversary
+is in   simulated environment  we can give the adversary
+ superpowers    the ability to affect the robot or environment in ways the protagonist cannot       suddenly change
+  physical parameter like frictional coef cient or mass 
+
+  Background
+Before we delve into the details of RARL  we  rst outline our terminology  standard reinforcement learning setting and twoplayer zerosum games from which our paper
+is inspired 
+
+InvertedPendulumHalfCheetahSwimmerHopperWalker dAntRobust Adversarial Reinforcement Learning
+
+  Standard reinforcement learning on MDPs
+
+In this paper we examine continuous space MDPs that are
+represented by the tuple                  where   is  
+set of continuous states and   is   set of continuous actions 
+                  is the transition probability     
+         is the reward function    is the discount factor 
+and    is the initial state distribution 
+Batch policy algorithms like REINFORCE  Williams 
+  NPG  Kakade    and TRPO  Schulman et al 
+     
+  attempt to learn   stochastic policy  
+      that maximizes the cumulative discounted reward
+    tr st  at  Here    denotes the parameters for the
+policy   which takes action at given state st at timestep   
+
+ cid   
+
+  Twoplayer zerosum discounted games
+
+The adversarial setting we propose can be expressed as  
+two player   discounted zerosum Markov game  Littman 
+  Perolat et al    This game MDP can be expressed as the tuple                    where    and
+   are the continuous set of actions the players can take 
+                is the transition probability density and                is the reward of both players 
+If player    protagonist  is playing strategy   and player  
+ adversary  is playing the strategy   the reward function
+is      Ea                    zerosum
+twoplayer game can be seen as player   maximizing the
+  discounted reward while player   is minimizing it 
+
+  Robust Adversarial RL
+  Robust Control via Adversarial Agents
+
+Our goal is to learn the policy of the protagonist  denoted
+by   such that it is better  higher reward  and robust  generalizes better to variations in test settings  In the standard
+reinforcement learning setting  for   given transition function    we can learn policy parameters   such that the
+expected reward is maximized where expected reward for
+policy   from the start    is
+
+         
+
+ tr st  at      
+
+ 
+
+ 
+
+  
+
+Note that in this formulation the expected reward is conditioned on the transition function since the the transition
+function de nes the rollout of states  In standardRL settings  the transition function is  xed  since the physics engine and parameters such as mass  friction are  xed  However  in our setting  we assume that the transition function
+will have modeling errors and that there will be differences
+between training and test conditions  Therefore  in our general setting  we should estimate policy parameters   such
+that we maximize the expected reward over different possi 
+
+ cid    cid 
+
+ cid 
+
+ble transition functions as well  Therefore 
+
+       
+ 
+
+ 
+
+ tr st  at      
+
+ cid 
+
+ cid    cid 
+
+  
+
+ cid cid 
+
+ 
+
+ 
+
+Optimizing for the expected reward over all transition functions optimizes mean performance  which is   risk neutral
+formulation that assumes   known distribution over model
+parameters    large fraction of policies learned under such
+  formulation are likely to fail in   different environment 
+Instead  inspired by work in robust control  Tamar et al 
+  Rajeswaran et al    we choose to optimize for
+conditional value at risk  CVaR 
+
+ RC           
+
+ 
+where    is the  quantile of  values  Intuitively  in
+robust control  we want to maximize the worstpossible  
+values  But how do you tractably sample trajectories that
+are in worst  percentile  Approaches like EPOpt  Rajeswaran et al    sample these worst percentile trajectories by changing parameters such as friction  mass of objects  etc  during rollouts 
+Instead  we introduce an adversarial agent that applies
+forces on prede ned locations  and this agent tries to
+change the trajectories such that reward of the protagonist is minimized  Note that since the adversary tries to
+minimize the protagonist   reward  it ends up sampling trajectories from worstpercentile leading to robust controllearning for the protagonist  If the adversary is kept  xed 
+the protagonist could learn to over   to its adversarial actions  Therefore  instead of using either   random or  
+ xedadversary  we advocate generating the adversarial actions using   learned policy   We would also like to point
+out the connection between our proposed approach and the
+practice of hardexample mining  Sung   Poggio   
+Shrivastava et al    The adversary in RARL learns to
+sample hardexamples  worsttrajectories  for the protagonist to learn  Finally  instead of using   as percentileparameter  RARL is parameterized by the magnitude of
+force available to the adversary  As the adversary becomes
+stronger  RARL optimizes for lower percentiles  However 
+very high magnitude forces lead to very biased sampling
+and make the learning unstable  In the extreme case  an unreasonably strong adversary can always prevent the protagonist from achieving the task  Analogously  the traditional
+RL baseline is equivalent to training with an impotent  zero
+strength  adversary 
+
+  Formulating Adversarial Reinforcement Learning
+
+In our adversarial game  at every timestep   both playt    st  and
+ers observe the state st and take actions   
+     st  The state transitions st      st    
+  
+      
+   
+
+Robust Adversarial Reinforcement Learning
+
+  cid 
+
+      
+
+    rt while the adversary gets   reward   
+
+and   reward rt     st    
+    is obtained from the environment  In our zerosum game  the protagonist gets  
+reward   
+   
+ rt  Hence each step of this MDP can be represented as
+ st    
+The protagonist seeks to maximize the following reward
+function 
+
+    st 
+
+      
+
+      
+
+      
+
+     Es         
+
+          
+
+ 
+
+  
+
+Since  the policies   and   are the only learnable components            Similarly the adversary attempts to
+maximize its own reward                   
+One way to solve this MDP game is by discretizing the
+continuous state and action spaces and using dynamic programming to solve  Perolat et al    and Patek  
+show that notions of minimax equilibrium and Nash equilibrium are equivalent for this game with optimal equilibrium reward 
+
+     min
+
+ 
+
+max
+
+ 
+
+       max
+
+ 
+
+min
+
+ 
+
+    
+
+ 
+
+However solutions to  nding the Nash equilibria strategies
+often involve greedily solving   minimax equilibria for  
+zerosum matrix game  with   equal to the number of observed datapoints  The complexity of this greedy solution
+is exponential in the cardinality of the action spaces  which
+makes it prohibitive  Perolat et al   
+Most Markov Game approaches require solving for the
+equilibrium solution for   multiplayer value or minimaxQ
+function at each iteration  This requires evaluating   typically intractable minimax optimization problem  Instead 
+we focus on learning stationary policies   and   such that
+          This way we can avoid this costly optimization at each iteration as we just need to approximate
+the advantage function and not determine the equilibrium
+solution at each iteration 
+
+  Proposed Method  RARL
+
+Our algorithm  RARL  optimizes both of the agents using
+the following alternating procedure  In the  rst phase  we
+learn the protagonist   policy while holding the adversary  
+policy  xed  Next  the protagonist   policy is held constant
+and the adversary   policy is learned  This sequence is repeated until convergence 
+Algorithm   outlines our approach in detail  The initial parameters for both players  policies are sampled from   random distribution  In each of the Niter iterations  we carry
+out   twostep  alternating  optimization procedure  First 
+for    iterations  the parameters of the adversary   are
+held constant while the parameters   of the protagonist
+
+Algorithm   RARL  proposed algorithm 
+
+Input  Environment    Stochastic policies   and  
+Initialize  Learnable parameters  
+for   Niter do
+
+  for   and  
+
+  for  
+
+       
+
+       
+
+     
+ 
+  
+for      do
+ si
+       
+      
+    policyOptimizer si
+ 
+end for
+     
+ 
+  
+for      do
+ si
+       
+      
+    policyOptimizer si
+ 
+
+       
+
+       
+
+end for
+
+end for
+Return   
+
+   
+
+Niter
+
+Niter
+
+      roll     
+       
+
+      
+
+ 
+
+  
+
+   
+
+  Ntraj 
+       
+   
+
+      roll     
+       
+
+      
+
+ 
+
+  Ntraj 
+   
+       
+   
+
+ 
+
+      
+
+are optimized to maximize     Equation   The roll function samples Ntraj trajectories given the environment de 
+nition   and the policies for both the players  Note that  
+contains the transition function   and the reward functions
+   and    to generate the trajectories  The tth element of
+the ith trajectory is of the form  si
+    These
+trajectories are then split such that the tth element of the ith
+    The protrajectory is of the form  si
+tagonist   parameters   are then optimized using   policy
+optimizer  For the second step  player    parameters   are
+held constant for the next    iterations  Ntraj Trajectories
+are sampled and split into trajectories such that tth element
+of the ith trajectory is of the form  si
+   
+Player    parameters   are then optimized  This alternating procedure is repeated for Niter iterations 
+
+       
+
+       
+
+       
+
+       
+
+       
+
+       
+
+       
+
+    ri
+
+    ri
+
+   ai
+
+   ai
+
+  Experimental Evaluation
+We now demonstrate the robustness of the RARL algorithm      for training with different initializations      for
+testing with different conditions      for adversarial disturbances in the testing environment  But  rst we will
+describe our implementation and test setting followed by
+evaluations and results of our algorithm 
+
+  Implementation
+
+Our implementation of the adversarial environments build
+on OpenAI Gym    Brockman et al    control environments with the MuJoCo  Todorov et al    physics simulator  Details of the environments and their corresponding
+adversarial disturbances are  also see Figure  
+InvertedPendulum  The inverted pendulum is mounted
+on   pivot point on   cart  with the cart restricted to linear movement in   plane  The state space is     position
+
+Robust Adversarial Reinforcement Learning
+
+and velocity for both the cart and the pendulum  The protagonist can apply    forces to keep the pendulum upright 
+The adversary applies      force on the center of pendulum
+in order to destabilize it 
+HalfCheetah  The halfcheetah is   planar biped robot
+with   rigid links  including two legs and   torso  along
+with   actuated joints  The    state space includes joint
+angles and joint velocities  The adversary applies      action with    forces on the torso and both feet in order to
+destabilize it 
+Swimmer  The swimmer is   planar robot with   links and
+  actuated joints in   viscous container  with the goal of
+moving forward  The    state space includes joint angles
+and joint velocities  The adversary applies      force to
+the center of the swimmer 
+Hopper  The hopper is   planar monopod robot with  
+rigid links  corresponding to the torso  upper leg  lower leg 
+and foot  along with   actuated joints  The    state space
+includes joint angles and joint velocities  The adversary
+applies      force on the foot 
+Walker    The walker is   planar biped robot consisting
+of   links  corresponding to two legs and   torso  along with
+  actuated joints  The    state space includes joint angles
+and joint velocities  The adversary applies      action with
+   forces on both the feet 
+Ant  The ant is   quadruped robot with   torso and   legs
+that contain   joints  The    observation space includes
+joint angles  joint velocities and contact forces  The adversary applies      action with    forces on each foot 
+Our implementation of RARL is built on top of rllab  Duan
+et al    and uses Trust Region Policy Optimization
+ TRPO   Schulman et al    as the policy optimizer 
+For all the tasks and for both the protagonist and adversary 
+we use   policy network with two hidden layers with  
+neurons each  We train both RARL and the baseline for
+  iterations on InvertedPendulum and for   iterations
+on the other tasks  Hyperparameters of TRPO are selected
+by grid search 
+
+  Evaluating Learned Policies
+
+We evaluate the robustness of our RARL approach compared to the strong TRPO baseline  Since our policies are
+stochastic in nature and the starting state is also drawn from
+  distribution  we learn   policies for each task with different seeds initializations  First  we report the mean and
+variance of cumulative reward  over   policies  as   function of the training iterations  Figure   shows the mean and
+variance of the rewards of learned policies for the task of
+HalfCheetah  Swimmer  Hopper and Walker    We omit
+the graph for InvertedPendulum because the task is easy
+
+and both TRPO and RARL show similar performance and
+similar rewards  As we can see from the  gure  for all the
+four tasks RARL learns   better policy in terms of mean
+reward and variance as well  This clearly shows that the
+policy learned by RARL is better than the policy learned
+by TRPO even when there is no disturbance or change of
+settings between training and test conditions  Table   reports the average rewards with their standard deviations for
+the best learned policy 
+
+Figure   Cumulative reward curves for RARL trained policies
+versus the baseline  TRPO  when tested without any disturbance 
+For all the tasks  RARL achieves   better mean than the baseline  For tasks like Hopper  we also see   signi cant reduction of
+variance across runs 
+
+However  the primary focus of this paper is to show robustness in training these control policies  One way of visualizing this is by plotting the average rewards for the nth percentile of trained policies  Figure   plots these percentile
+curves and highlight the signi cant gains in robustness for
+training for the HalfCheetah  Swimmer and Hopper tasks 
+
+  Robustness under Adversarial Disturbances
+
+While deploying controllers in the real world  unmodeled
+environmental effects can cause controllers to fail  One
+way of measuring robustness to such effects is by measuring the performance of our learned control polices in the
+presence of an adversarial disturbance  For this purpose 
+we train an adversary to apply   disturbance while holding
+the protagonist   policy constant  We again show the percentile graphs as described in the section above  RARL  
+control policy  since it was trained on similar adversaries 
+performs better  as seen in Figure  
+
+Baseline  TRPO RARLSwimmerHalfCheetah IterationsReward Hopper RewardRewardWalker   RewardIterationsIterationsIterations Robust Adversarial Reinforcement Learning
+
+Table   Comparison of the best policy learned by RARL and the baseline  mean one standard deviation 
+Ant
+
+Walker  
+     
+     
+
+     
+     
+
+Baseline
+RARL
+
+InvertedPendulum HalfCheetah
+     
+     
+
+     
+     
+
+Swimmer
+     
+     
+
+Hopper
+     
+     
+
+  Robustness to Test Conditions
+
+Finally  we evaluate the robustness and generalization of
+the learned policy with respect to varying test conditions 
+In this section  we train the policy based on certain mass
+and friction values  however at test time we evaluate the
+policy when different mass and friction values are used in
+the environment  Note we omit evaluation of Swimmer
+since the policy for the swimming task is not signi cantly
+impacted by   change mass or friction 
+
+  EVALUATION WITH CHANGING MASS
+
+We describe the results of training with the standard mass
+variables in OpenAI Gym while testing it with different mass  Speci cally  the mass of InvertedPendulum 
+HalfCheetah  Hopper and Walker   were      
+and   respectively  At test time  we evaluated the
+learned policies by changing mass values and estimating
+the average cumulative rewards  Figure   plots the average
+rewards and their standard deviations against   given torso
+mass  horizontal axis  As seen in these graphs  RARL
+policies generalize signi cantly better 
+
+Figure   We show percentile plots without any disturbance to
+show the robustness of RARL compared to the baseline  Here
+the algorithms are run on multiple initializations and then sorted
+to show the nth percentile of cumulative  nal reward 
+
+Figure   Percentile plots with   learned adversarial disturbance show the robustness of RARL compared to the baseline
+in the presence of an adversary  Here the algorithms are run on
+multiple initializations followed by learning an adversarial disturbance that is applied at test time 
+
+Figure   The graphs show robustness of RARL policies to
+changing mass between training and testing  For the InvertedPendulum the mass of the pendulum is varied  while for the other
+tasks  the mass of the torso is varied  We exclude the results of
+Ant since it   policies aren   signi cantly affected by changing
+mass 
+
+Baseline  TRPO RARLSwimmerHalfCheetah PercentileReward Percentile Hopper Percentile RewardRewardWalker   Percentile RewardBaseline  TRPO RARLSwimmerHalfCheetah PercentileReward Percentile Hopper PercentileRewardRewardWalker   Percentile Reward Baseline  TRPO RARLInvertedPendulumHalfCheetah Mass of pendulumReward Mass of torsoHopper Mass of torso RewardRewardWalker   Mass of torso Reward Robust Adversarial Reinforcement Learning
+
+  EVALUATION WITH CHANGING FRICTION
+
+Since several of the control tasks involve contacts and friction  which is often poorly modeled  we evaluate robustness to different friction coef cients in testing  Similar to
+the evaluation of robustness to mass  the model is trained
+with the standard variables in OpenAI Gym  Figure  
+shows the average reward values with different friction coef cients at test time  It can be seen that the baseline policies fail to generalize and the performance falls signi 
+cantly when the test friction is different from training  On
+the other hand RARL shows more resilience to changing
+friction values 
+
+Figure   The heatmaps show robustness of RARL policies to
+changing both friction and mass between training and testing  For
+both the tasks of Hopper and HalfCheetah  we observe   signi 
+cant increase in robustness 
+
+cart to stabilize the pole 
+
+Figure   The graphs show robustness of RARL policies to
+changing friction between training and testing  Note that we exclude the results of InvertedPendulum and the Swimmer because
+friction is not relevant to those tasks 
+
+We visualize the increased robustness of RARL in Figure   where we test with jointly varying both mass and
+friction coef cient  As observed from the  gure  for most
+combinations of mass and friction values RARL leads signi cantly higher reward values compared to the baseline 
+
+  Visualizing the Adversarial Policy
+
+Finally  we visualize the adversarial policy for the case of
+InvertedPendulum and Hopper to see whether the learned
+policies are human interpretable  As shown in Figure  
+the direction of the force applied by the adversary agrees
+with human intuition  speci cally  when the cart is stationary and the pole is already tilted  top row  the adversary
+attempts to accentuate the tilt  Similarly  when the cart is
+moving swiftly and the pole is vertical  bottom row  the
+adversary applies   force in the direction of the cart   motion  The pole will fall unless the cart speeds up further
+ which can also cause the cart to go out of bounds  Note
+that the naive policy of pushing in the opposite direction
+would be less effective since the protagonist could slow the
+
+Figure   Visualization of forces applied by the adversary on InvertedPendulum  In     and     the cart is stationary  while in    
+and     the cart is moving with   vertical pendulum 
+Similarly for the Hopper task in Figure   the adversary applies horizontal forces to impede the motion when the Hopper is in the air  left  while applying forces to counteract
+gravity and reduce friction when the Hopper is interacting
+with the ground  right 
+
+  Related Research
+Recent applications of deep reinforcement learning  deep
+RL  have shown great success in   variety of tasks rang 
+
+Baseline  TRPO RARLHalfCheetah Friction coefficientRewardHopperFriction coefficient RewardWalker   Friction coefficient Reward Ant Friction coefficientRewardHalfCheetahHopperBaseline  TRPO RARL Friction coefficient Mass of torso Friction coefficient Mass of torso Friction coefficient Mass of torso Friction coefficient Mass of torso         adversarial disturbancecart velocityRobust Adversarial Reinforcement Learning
+
+the game optimization problem  Sharma   Gopal  
+extend the Markov game formulation using   trained neural network for the policy and approximating the game to
+continue using LP to solve the game  Wiesemann et al 
+  present an enhancement to standard MDP that provides probabilistic guarantees to unknown model parameters  Other approaches are riskbased including Tamar et al 
+  and Delage   Mannor   which formulate various mechanisms of percentile risk into the formulation 
+Our approach focuses on continuous space problems and
+is   modelfree approach that requires explicit parametric
+formulation of model uncertainty 
+Adversarial methods have been used in other learning problems including Goodfellow et al    which leverages
+adversarial examples to train   more robust classi ers and
+Goodfellow et al    Dumoulin et al    which
+uses an adversarial loss function for   discriminator to train
+  generative model  In Pinto et al    two supervised
+agents were trained with one acting as an adversary for selfsupervised learning which showed improved robot grasping  Other adversarial multiplayer approaches have been
+proposed including Heinrich   Silver   to perform
+selfplay or  ctitious play  Refer to Bus oniu et al   
+for an review of multiagent RL techniques 
+Recent deep RL approaches to the problem focus on explicit parametric model uncertainty  Heess et al   
+use recurrent neural networks to perform direct adaptive
+control  Indirect adaptive control was applied in Yu et al 
+  for online parameter identi cation  Rajeswaran
+et al    learn   robust policy by sampling the worst
+case trajectories from   class of parametrized models  to
+learn   robust policy 
+
+  Conclusion
+We have presented   novel adversarial reinforcement learning framework  RARL  that is      robust to training initializations      generalizes better and is robust to environmental changes between training and test conditions     
+robust to disturbances in the test environment that are hard
+to model during training  Our core idea is that modeling
+errors should be viewed as extra forces disturbances in the
+system  Inspired by this insight  we propose modeling uncertainties via an adversary that applies disturbances to the
+system  Instead of using    xed policy  the adversary is reinforced and learns an optimal policy to optimally thwart
+the protagonist  Our work shows that the adversary effectively samples hard examples  trajectories with worst rewards  leading to   more robust control strategy 
+ACKNOWLEDGEMENTS  This work was supported
+by ONR MURI  NSF IIS  and Google Focused
+Award  AG was supported by Sloan Research Fellowship 
+
+Figure   Visualization of forces applied by the adversary on Hopper  On the left  the Hopper   foot is in the air while on the right
+the foot is interacting with the ground 
+
+ing from games  Mnih et al    Silver et al   
+robot control  Gu et al    Lillicrap et al    Mordatch et al    to meta learning  Zoph   Le    An
+overview of recent advances in deep RL is presented in Li
+  and Kaelbling et al    Kober   Peters  
+provide   comprehensive history of RL research 
+Learned policies should be robust to uncertainty and parameter variation to ensure predicable behavior  which is
+essential for many practical applications of RL including robotics  Furthermore  the process of learning policies should employ safe and effective exploration with improved sample ef ciency to reduce risk of costly failure 
+These issues have long been recognized and investigated
+in reinforcement learning  Garc     Fern andez    and
+have an even longer history in control theory research
+ Zhou   Doyle    These issues are exacerbated in
+deep RL by using neural networks  which while more expressible and  exible  often require signi cantly more data
+to train and produce potentially unstable policies 
+In terms of taxonomy  Garc     Fern andez    our
+approach lies in the class of worstcase formulations 
+We model the problem as an    optimal control problem  Bas ar   Bernhard   
+In this formulation  nature  which may represent input  transition or model uncertainty  is treated as an adversary in   continuous dynamic
+zerosum game  We attempt to  nd the minimax solution to
+the reward optimization problem  This formulation was introduced as robust RL  RRL  in Morimoto   Doya  
+RRL proposes   modelfree actordisturber critic method 
+Solving for the optimal strategy for general nonlinear systems is often analytically infeasible for most problems  To
+address this  we extend RRL   modelfree formulation using deep RL via TRPO  Schulman et al    with neural
+networks as the function approximator 
+Other worstcase formulations have been introduced 
+Nilim   El Ghaoui   solve  nite horizon tabular
+MDPs using   minimax form of dynamic programming 
+Using   similar game theoretic formulation Littman  
+introduces the notion of   Markov Game to solve tabular problems  which involves linear program  LP  to solve
+
+adversarial disturbanceRobust Adversarial Reinforcement Learning
+
+References
+Bas ar  Tamer and Bernhard  Pierre  Hin nity optimal control and related minimax design problems    dynamic
+game approach  Springer Science   Business Media 
+ 
+
+Brockman  Greg  Cheung  Vicki  Pettersson  Ludwig 
+Schneider  Jonas  Schulman  John  Tang  Jie  and
+arXiv preprint
+Zaremba  Wojciech  OpenAI gym 
+arXiv   
+
+Bus oniu  Lucian  Babu ska  Robert  and De Schutter  Bart 
+Multiagent reinforcement learning  An overview  In Innovations in multiagent systems and applications  pp 
+  Springer   
+
+Christiano  Paul  Shah  Zain  Mordatch  Igor  Schneider 
+Jonas  Blackwell  Trevor  Tobin  Joshua  Abbeel  Pieter 
+and Zaremba  Wojciech  Transfer from simulation to real
+world through learning deep inverse dynamics model 
+arXiv preprint arXiv   
+
+Delage  Erick and Mannor  Shie  Percentile optimization
+for Markov decision processes with parameter uncertainty  Operations research     
+
+Duan  Yan  Chen  Xi  Houthooft  Rein  Schulman  John 
+and Abbeel  Pieter  Benchmarking deep reinforcement
+In Proceedings of the
+learning for continuous control 
+ rd International Conference on Machine Learning
+ ICML   
+
+Dumoulin  Vincent  Belghazi  Ishmael  Poole  Ben  Lamb 
+Alex  Arjovsky  Martin  Mastropietro  Olivier  and
+Courville  Aaron  Adversarially learned inference  arXiv
+preprint arXiv   
+
+Erez  Tom  Tassa  Yuval  and Todorov  Emanuel  In nite
+horizon model predictive control for nonlinear periodic
+tasks  Manuscript under review     
+
+Garc    Javier and Fern andez  Fernando    comprehensive
+survey on safe reinforcement learning  Journal of Machine Learning Research     
+
+Goodfellow  Ian  PougetAbadie  Jean  Mirza  Mehdi  Xu 
+Bing  WardeFarley  David  Ozair  Sherjil  Courville 
+Aaron  and Bengio  Yoshua  Generative adversarial nets 
+In Neural Information Processing Systems  NIPS   
+
+Goodfellow  Ian    Shlens  Jonathon  and Szegedy  Christian  Explaining and harnessing adversarial examples 
+International Conference on Learning Representations
+ ICLR   
+
+Gu  Shixiang  Lillicrap  Timothy  Sutskever 
+
+and Levine  Sergey 
+with modelbased acceleration 
+arXiv   
+
+Ilya 
+Continuous deep Qlearning
+arXiv preprint
+
+Heess  Nicolas  Hunt  Jonathan    Lillicrap  Timothy   
+and Silver  David  Memorybased control with recurrent neural networks  arXiv preprint arXiv 
+ 
+
+Heinrich  Johannes and Silver  David  Deep reinforcement
+learning from selfplay in imperfectinformation games 
+arXiv preprint arXiv   
+
+Kaelbling  Leslie Pack  Littman  Michael    and Moore 
+Andrew    Reinforcement learning    survey  Journal
+of arti cial intelligence research     
+
+Kakade  Sham    natural policy gradient  Advances in neural information processing systems     
+
+Kober  Jens and Peters  Jan  Reinforcement learning in
+robotics    survey  In Reinforcement Learning  pp   
+  Springer   
+
+Li  Yuxi  Deep reinforcement learning  An overview  arXiv
+
+preprint arXiv   
+
+Lillicrap  Timothy    Hunt  Jonathan    Pritzel  Alexander 
+Heess  Nicolas  Erez  Tom  Tassa  Yuval  Silver  David 
+and Wierstra  Daan  Continuous control with deep reinforcement learning  arXiv preprint arXiv 
+ 
+
+Littman  Michael    Markov games as   framework for
+In Proceedings of
+multiagent reinforcement learning 
+the eleventh international conference on machine learning  volume   pp     
+
+Mnih  Volodymyr et al  Humanlevel control through deep
+reinforcement learning  Nature   
+ 
+
+Mordatch  Igor  Lowrey  Kendall  Andrew  Galen  Popovic 
+Zoran  and Todorov  Emanuel    Interactive control of
+diverse complex characters with neural networks  In Advances in Neural Information Processing Systems  pp 
+   
+
+Morimoto  Jun and Doya  Kenji  Robust reinforcement
+
+learning  Neural computation     
+
+Nilim  Arnab and El Ghaoui  Laurent  Robust control of
+Markov decision processes with uncertain transition matrices  Operations Research     
+
+Patek  Stephen David  Stochastic and shortest path games 
+theory and algorithms  PhD thesis  Massachusetts Institute of Technology   
+
+Perolat  Julien  Scherrer  Bruno  Piot  Bilal  and Pietquin 
+Olivier  Approximate dynamic programming for twoplayer zerosum games  In ICML   
+
+Robust Adversarial Reinforcement Learning
+
+Zoph  Barret and Le  Quoc   
+
+search with reinforcement learning 
+arXiv   
+
+Neural architecture
+arXiv preprint
+
+Pinto  Lerrel  Davidson  James  and Gupta  Abhinav  Supervision via competition  Robot adversaries for learning tasks  ICRA   
+
+Rajeswaran  Aravind  Ghotra  Sarvjeet  Ravindran  Balaraman  and Levine  Sergey  EPOpt  Learning robust neural
+network policies using model ensembles  arXiv preprint
+arXiv   
+
+Rusu  Andrei    Vecerik  Matej  Roth orl  Thomas  Heess 
+Nicolas  Pascanu  Razvan  and Hadsell  Raia  Simto 
+real robot learning from pixels with progressive nets 
+arXiv preprint arXiv   
+
+Schulman  John  Levine  Sergey  Moritz  Philipp  Jordan 
+Michael    and Abbeel  Pieter  Trust region policy optimization  CoRR  abs   
+
+Sharma  Rajneesh and Gopal  Madan    robust Markov
+game controller for nonlinear systems  Applied Soft
+Computing     
+
+Shrivastava  Abhinav  Gupta  Abhinav  and Girshick 
+Ross    Training regionbased object detectors with online hard example mining  CoRR  abs   
+
+Silver  David et al  Mastering the game of Go with deep
+neural networks and tree search  Nature   
+   
+
+Sung     and Poggio     Learning and example selection
+for object and pattern detection  MIT      Memo   
+ 
+
+Tamar  Aviv  Glassner  Yonatan  and Mannor  Shie  OparXiv preprint
+
+timizing the CVaR via sampling 
+arXiv   
+
+Todorov  Emanuel  Erez  Tom  and Tassa  Yuval  Mujoco 
+In IntelliA physics engine for modelbased control 
+gent Robots and Systems  IROS    IEEE RSJ International Conference on  pp    IEEE   
+
+Wiesemann  Wolfram  Kuhn  Daniel  and Rustem  Berc 
+Robust Markov decision processes  Mathematics of Operations Research     
+
+Williams  Ronald    Simple statistical gradientfollowing
+learning 
+
+algorithms for connectionist reinforcement
+Machine learning     
+
+Yu  Wenhao  Liu     Karen  and Turk  Greg  Preparing for
+the unknown  Learning   universal policy with online
+system identi cation  arXiv preprint arXiv 
+ 
+
+Zhou  Kemin and Doyle  John Comstock  Essentials of
+robust control  volume   Prentice hall Upper Saddle
+River  NJ   
+
+

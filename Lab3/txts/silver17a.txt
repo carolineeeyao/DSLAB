@@ -1,0 +1,957 @@
+The Predictron  EndTo End Learning and Planning
+
+David Silver     Hado van Hasselt     Matteo Hessel     Tom Schaul     Arthur Guez     Tim Harley  
+
+Gabriel DulacArnold   David Reichert   Neil Rabinowitz   Andre Barreto   Thomas Degris  
+
+Abstract
+
+One of the key challenges of arti cial intelligence is to learn models that are effective in the
+context of planning  In this document we introduce the predictron architecture  The predictron
+consists of   fully abstract model  represented by
+  Markov reward process  that can be rolled forward multiple  imagined  planning steps  Each
+forward pass of the predictron accumulates internal rewards and values over multiple planning depths  The predictron is trained endto 
+end so as to make these accumulated values accurately approximate the true value function  We
+applied the predictron to procedurally generated
+random mazes and   simulator for the game of
+pool  The predictron yielded signi cantly more
+accurate predictions than conventional deep neural network architectures 
+
+  Introduction
+The central idea of modelbased reinforcement learning is
+to decompose the RL problem into two subproblems  learning   model of the environment  and then planning with this
+model  The model is typically represented by   Markov
+reward process  MRP  or decision process  MDP  The
+planning component uses this model to evaluate and select among possible strategies  This is typically achieved
+by rolling forward the model to construct   value function that estimates cumulative reward  In prior work  the
+model is trained essentially independently of its use within
+the planner  As   result  the model is not wellmatched
+with the overall objective of the agent  Prior deep reinforcement learning methods have successfully constructed
+models that can unroll near pixelperfect reconstructions
+
+ Equal contribution
+
+ DeepMind  London 
+
+Correspondence to  David Silver  davidsilver google com  Hado
+van Hasselt  hado google com  Matteo Hessel  mtthss google com 
+Tom Schaul  schaul google com 
+Arthur Guez  aguez google com 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+ Oh et al    Chiappa et al    but are yet to surpass stateof theart modelfree methods in challenging RL
+domains with raw inputs       Mnih et al      Lillicrap et al   
+In this paper we introduce   new architecture  which we
+call the predictron  that integrates learning and planning
+into one endto end training procedure  At every step   
+model is applied to an internal state  to produce   next
+state  reward  discount  and value estimate  This model
+is completely abstract and its only goal is to facilitate accurate value prediction  For example  to plan effectively
+in   game  an agent must be able to predict the score  If
+our model makes accurate predictions  then an optimal plan
+with respect to our model will also be optimal for the underlying game   even if the model uses   different state
+space       abstract representations of enemy positions  ignoring their shapes and colours  action space       highlevel actions to move away from an enemy  rewards      
+  single abstract step could have   higher value than any
+real reward  or even timestep         single abstract step
+could  jump  the agent to the end of   corridor  All we require is that trajectories through the abstract model produce
+scores that are consistent with trajectories through the real
+environment  This is achieved by training the predictron
+endto end  so as to make its value estimates as accurate as
+possible 
+An ideal model could generalise to many different prediction tasks  rather than over tting to   single task  and could
+learn from   rich variety of feedback signals  not just  
+single extrinsic reward  We therefore train the predictron
+to predict   host of different value functions for   variety
+of pseudoreward functions and discount factors  These
+pseudorewards can encode any event or aspect of the environment that the agent may care about       staying alive
+or reaching the next room 
+We focus upon the prediction task  estimating value functions in MRP environments with uncontrolled dynamics 
+In this case  the predictron can be implemented as   deep
+neural network with an MRP as   recurrent core  The predictron unrolls this core multiple steps and accumulates rewards into an overall estimate of value 
+We applied the predictron to procedurally generated ran 
+
+The Predictron  EndTo End Learning and Planning
+
+dom mazes  and   simulated pool domain  directly from
+pixel inputs  In both cases  the predictron signi cantly outperformed modelfree algorithms with conventional deep
+network architectures  and was much more robust to architectural choices such as depth 
+
+  Background
+We consider environments de ned by an MRP with states
+       The MRP is de ned by   function    cid        
+       where   cid  is the next state    is the reward  and  
+is the discount factor  which can for instance represent the
+nontermination probability for this transition  The process
+may be stochastic  given IID noise  
+The return of an MRP is the cumulative discounted reward over   single trajectory  gt   rt       rt   
+     rt        where    can vary per timestep  We
+consider   generalisation of the MRP setting that includes
+vectorvalued rewards    diagonalmatrix discounts   and
+vectorvalued returns    de nitions are otherwise identical to the above  We use this bold font notation to closely
+match the more familiar scalar MRP case  the majority of
+the paper can be comfortably understood by reading all rewards as scalars  and all discount factors as scalar and constant             
+The value function of an MRP   is the expected return from
+state    vp      Ep  gt   st      In the vector case  these
+are known as general value functions  Sutton et al   
+We will say that    general  value function    is consistent
+with environment   if and only if     vp which satis es the
+following Bellman equation  Bellman   
+vp      Ep       vp   cid        
+
+ 
+
+In modelbased reinforcement learning  Sutton   Barto 
+  an approximation       to the environment is
+learned  In the uncontrolled setting this model is normally
+an MRP   cid                that maps from state   to subsequent state   cid  and additionally outputs rewards   and discounts   the model may be stochastic given an IID source
+of noise      general  value function vm  is consistent
+with model    or valid   Sutton    if and only if it
+satis es   Bellman equation vm      Em       vm   cid      
+with respect to model    Conventionally  modelbased RL
+methods focus on  nding   value function   that is consistent with   separately learned model   
+
+  Predictron architecture
+The predictron is composed of four main components 
+First    state representation           that encodes raw input    this could be   history of observations  in partially
+observed settings  for example when   is   recurrent network  into an internal  abstract  hidden  state    Second   
+
+model   cid                that maps from internal state   to
+subsequent internal state   cid  internal rewards    and internal discounts   Third    value function   that outputs internal values          representing the remaining internal
+return from internal state   onwards  The predictron is applied by unrolling its model   multiple  planning  steps to
+produce internal rewards  discounts and values  We use superscripts    to indicate internal steps of the model  which
+have no necessary connection to time steps    of the environment  Finally  these internal rewards  discounts and
+values are combined together by an accumulator into an
+overall estimate of value    The whole predictron  from
+input state   to output  may be viewed as   value function
+approximator for external targets       the returns in the real
+environment  We consider both kstep and  weighted accumulators 
+The kstep predictron rolls its internal model forward  
+steps  Figure     The  step predictron return  henceforth
+abbreviated as preturn  is simply the  rst value        
+the  step preturn is           More generally  the kstep predictron return gk is the internal return obtained by
+accumulating   model steps  plus   discounted  nal value
+vk from the kth step 
+
+gk                         rk    kvk       
+
+The  predictron combines together many kstep preturns 
+Speci cally  it computes   diagonal weight matrix    from
+each internal state sk  The accumulator uses weights
+       to aggregate over kstep preturns      gK and
+output   combined value that we call the  preturn   
+
+    
+
+  cid 
+       cid   
+ cid   
+
+     
+
+wk  
+
+wkgk
+
+  
+
+     
+
+ 
+
+ 
+
+if      
+
+otherwise 
+
+where   is the identity matrix  This  preturn is analogous
+to the  return in the forwardview TD  algorithm  Sutton    Sutton   Barto   
+It may also be computed by   backward accumulation through intermediate
+steps gk 
+
+gk           vk      cid rk       gk cid   
+
+ 
+
+where gK    vK  and then using         Computation in the  predictron operates in   sweep  iterating
+ rst through the model from               and then back
+through the accumulator from               in   single  forward  pass of the network  see Figure     Each    weight
+
+The Predictron  EndTo End Learning and Planning
+
+   kstep predictron
+
+    predictron
+
+ 
+ 
+ 
+
+ 
+ 
+ 
+
+ 
+ 
+ 
+
+ 
+ 
+ 
+
+  
+
+  
+
+ 
+
+  
+
+  
+
+  
+
+ 
+
+  
+
+  
+
+  
+
+   
+
+ 
+
+ 
+
+ 
+
+ 
+
+  
+
+  
+
+  
+
+  
+
+ 
+
+  
+
+  
+
+   
+
+ 
+
+ 
+
+  
+
+ 
+ 
+ 
+
+  
+
+ 
+
+  
+
+   
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+ 
+
+ 
+
+   
+
+ 
+
+ 
+
+ 
+
+   
+
+ 
+
+ 
+
+ 
+
+   
+
+ 
+
+  
+
+Figure      The kstep predictron architecture  The  rst three columns illustrate     and  step pathways through the predictron  The
+ step preturn reduces to standard modelfree value function approximation  other preturns  imagine  additional steps with an internal
+model  Each pathway outputs   kstep preturn gk that accumulates discounted rewards along with    nal value estimate  In practice all
+kstep preturns are computed in   single forward pass     The  predictron architecture  The  parameters gate between the different
+preturns  The output is    preturn    that is   mixture over the kstep preturns  For example  if                   then we
+recover the  step preturn          Discount factors    and  parameters    are dependent on state sk  this dependence is not shown
+in the  gure 
+
+acts as   gate on the computation of the  preturn    value
+of        will truncate the  preturn at layer    while  
+value of        will utilise deeper layers based on additional steps of the model    the  nal weight is always
+       The individual    weights may depend on the
+corresponding abstract state sk and can differ per prediction  This enables the predictron to compute to an adaptive
+depth  Graves    depending on the internal state and
+learning dynamics of the network 
+
+  Predictron learning updates
+We  rst consider updates that optimise the joint parameters
+  of the state representation  model  and value function 
+We begin with the kstep predictron  We update the kstep
+preturn gk towards   target outcome        
+the MonteCarlo return from the real environment  by minimising  
+meansquared error loss 
+
+ 
+ 
+
+ cid gk     cid cid cid 
+
+ cid cid Ep           Em
+ cid     gk cid   gk
+ cid cid     gk cid cid  is the sample loss  We can use
+
+ 
+
+ 
+
+ 
+
+ 
+
+Lk  
+
+ lk
+ 
+
+where lk    
+ 
+the gradient of the sample loss to update parameters      
+by stochastic gradient descent  For stochastic models  independent samples of gk and  gk
+  are required for unbiased
+samples of the gradient of Lk 
+The  predictron combines many kstep preturns  To up 
+
+date the joint parameters   we can uniformly average the
+losses on the individual preturns gk 
+
+  cid 
+  cid 
+
+  
+
+  
+
+ cid cid Ep           Em
+ cid     gk cid   gk
+
+ 
+
+ 
+
+     
+
+ 
+  
+
+    
+ 
+
+ 
+
+ 
+ 
+
+ cid gk     cid cid cid 
+
+ 
+
+ 
+
+Alternatively  we could weight each loss by the usage
+wk of the corresponding preturn  such that the gradient is
+
+   wk cid     gk cid   gk
+ cid  
+
+   
+
+In the  predictron  the    weights  that determine the relative weighting wk of the kstep preturns  depend on additional parameters   which are updated so as to minimise  
+meansquared error loss   
+
+ cid cid Ep           Em
+ cid       cid     
+
+ 
+ 
+
+ 
+
+ 
+
+    
+
+   
+ 
+
+ cid        cid cid cid 
+
+ 
+
+ 
+
+In summary  the joint parameters   of the state representation    the model    and the value function   are updated
+to make each of the kstep preturns gk more similar to the
+target    and the parameters   of the  accumulator are
+updated to learn the weights wk so that the aggregate  
+preturn    becomes more similar to the target   
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+  Consistency updates
+
+The Predictron  EndTo End Learning and Planning
+
+In modelbased reinforcement learning architectures such
+as Dyna  Sutton    value functions may be updated
+using both real and imagined trajectories  The re nement
+of value estimates based on these imagined trajectories is
+often referred to as planning    similar opportunity arises
+in the context of the predictron  Each rollout of the predictron generates   trajectory in abstract space  alongside with
+rewards  discounts and values  Furthermore  the predictron
+aggregates these components in multiple value estimates
+      gk    
+We may therefore update each individual value estimate towards the best aggregated estimate  This corresponds to adjusting each preturn gk towards the  preturn    by minimizing 
+
+ cid gk     cid cid cid 
+
+ cid cid Em
+ cid        cid    Em
+ cid      gk cid   gk
+
+ 
+
+ 
+
+  cid 
+  cid 
+
+  
+
+  
+
+   
+
+ 
+ 
+
+  
+ 
+
+ 
+
+ 
+
+ 
+
+Here    is considered  xed  the parameters   are only updated to make gk more similar to    not vice versa 
+These consistency updates do not require any labels   or
+samples from the environment  As   result  it can be applied to  potentially hypothetical  states that have no associated  real        MonteCarlo  outcome  we update the
+value estimates to be selfconsistent with each other  This
+is especially relevant in the semisupervised setting  where
+these consistency updates allow us to exploit the unlabelled
+inputs 
+
+  Experiments
+We conducted experiments in two domains  The  rst domain consists of randomly generated mazes  Each location
+either is empty or contains   wall  In these mazes  we considered two tasks  In the  rst task  the input was        
+maze and   random initial position and the goal is to predict   trajectory generated by   simple  xed deterministic
+policy  The target   was   vector with an element for each
+cell of the maze which is either one  if that cell was reached
+by the policy  or zero  In the second randommaze task the
+goal was to predict for each of the cells on the diagonal
+of         maze  topleft to bottomright  whether it is
+connected to the bottomright corner  Two locations in  
+maze are considered connected if they are both empty and
+we can reach one from the other by moving horizontally
+or vertically through adjacent empty cells  In both cases
+some predictions would seem to be easier if we could learn
+  simple algorithm  such as some form of search or  ood
+ ll  our hypothesis is that an internal model can learn to
+
+Figure   Top  Two sample mazes from the randommaze domain  Light blue cells are empty  darker blue cells contain   wall 
+One maze is connected from topleft to bottomright  the other
+is not  Bottom  An example trajectory in the pool domain  before downsampling  selected by maximising the prediction by  
+predictron of pocketing balls 
+
+emulate such algorithms  where naive approximation may
+struggle    few example mazes are shown in Figure  
+Our second domain is   simulation of the game of pool 
+using four balls and four pockets  The simulator is implemented in the physics engine Mujoco  Todorov et al 
+  We generate sequences of RGB frames starting
+from   random arrangement of balls on the table  The
+goal is to simultaneously learn to predict future events
+for each of the four balls  given   RGB frames as input 
+These events include  collision with any other ball  collision with any boundary of the table  entering   quadrant
+  for each quadrant  being located in   quadrant  
+for each quadrant  and entering   pocket   for each
+pocket  Each of these       events provides   binary
+pseudoreward that we combine with   different discount
+factors           and predict their cumulative
+discounted sum over various time spans  This yields   total of   general value functions  An example trajectory is
+shown in Figure   In both domains  inputs are presented as
+minibatches of        samples with their regression targets 
+Additional domain details are provided in the appendix 
+
+  Learning sequential plans
+
+ing prediction     cid 
+
+In the  rst experiment we trained   predictron to predict
+trajectories generated by   simple deterministic policy in
+  random mazes with random starting positions  Figure   shows the weighted preturns wkgk and the resultk wkgk for six example inputs and
+targets  The predictions are almost perfect the training
+error was very close to zero  The full prediction is composed from weighted preturns which decompose the trajectory piece by piece  starting at the start position in the  rst
+step       and where often multiple policy steps are added
+per planning step  The predictron was not informed about
+the sequential build up of the targets it never sees   policy
+
+The Predictron  EndTo End Learning and Planning
+
+or not we use the structure of an MRP model  In the MRP
+case internal rewards and discounts are both learned  In the
+non      case  which corresponds to   vanilla hiddento 
+hidden neural network module  internal rewards and discounts are ignored by  xing their values to rk     and
+      
+The second dimension is whether   Kstep accumulator or
+ accumulator is used to aggregate preturns  When    
+accumulator is used     preturn is computed as described
+in Section   Otherwise  intermediate preturns are ignored
+by  xing        for        In this case  the overall output
+of the predictron is the maximumdepth preturn gK 
+The third dimension  labelled usage weighting  de nes the
+loss that is used to update the parameters   We consider
+two options  the preturn losses can either be weighted uniformly  see Equation   or the update for each preturn
+gk can be weighted according to the weight wk that determines how much it is used in the  predictron   overall output  We call the latter loss  usage weighted  Note
+that for architectures without    accumulator  wk     for
+       and wK     thus usage weighting then implies
+backpropagating only the loss on the  nal preturn gK 
+All variants utilise   convolutional core with   intermediate hidden layers  parameters were updated by supervised learning  see appendix for more details  Root mean
+squared prediction errors for each architecture  aggregated
+over all predictions  are shown in Figure   The top row
+corresponds to the random mazes and the bottom row to
+the pool domain  The main conclusion is that learning an
+MRP model improved performance greatly  The inclusion
+of   weights helped as well  especially on pool  Usage
+weighting further improved performance 
+
+  Comparing to other architecture
+
+Our third set of experiments compares the predictron to
+feedforward and recurrent deep learning architectures  with
+and without skip connections  We compare the corners of
+  new cube  as depicted on the left in Figure   based on
+three different binary dimensions 
+The  rst dimension of this second cube is whether we use
+  predictron  or    non  non      deep network that
+does not have an internal model and does not output or
+learn from intermediate predictions  We use the most effective predictron from the previous section       the        
+predictron with usage weighting 
+The second dimension is whether all cores share weights
+ as in   recurrent network  or each core uses separate
+weights  as in   feedforward network  The non  non 
+      variants of the predictron then correspond to standard  convolutional  feedforward and  unrolled  recurrent
+neural networks respectively 
+
+tion cid 
+
+Figure   Indication of planning  Sampled mazes  grey  and
+start positions  black  are shown superimposed on each other at
+the bottom  The corresponding target vector    arranged as   matrix for visual clarity  is shown at the top  The ensembled predick wkgk      is shown just below the target the prediction is near perfect  The weighted preturns wkgk that make up
+the prediction are shown below    We can see that full predicted
+trajectory is built up in steps  starting at the start position and then
+planning through the trajectory in sequence 
+
+walking through the maze  only the resulting trajectories 
+and yet sequential plans emerged spontaneously  Notice
+also that the easier trajectory on the right was predicted in
+only two steps  while more thinking steps are used for more
+complex trajectories 
+
+  Exploring the predictron architecture
+
+In the next set of experiments  we tackle the problem of
+predicting connectivity of multiple pairs of locations in  
+random maze  and the problem of learning many different
+value functions from our simulator of the game of pool  We
+use these more challenging domains to examine three binary dimensions that differentiate the predictron from standard deep networks  We compare eight predictron variants
+corresponding to the corners of the cube on the left in Figure  
+The  rst dimension  labelled      corresponds to whether
+
+The Predictron  EndTo End Learning and Planning
+
+Figure   Exploring predictron variants  Aggregated prediction errors over all predictions   for mazes    for pool  for the eight
+predictron variants corresponding to the cube on the left  as described in the main text  for both random mazes  top  and pool  bottom 
+Each line is the median of RMSE over  ve seeds  shaded regions encompass all seeds  The full        prediction  red  consistently
+performed best 
+
+The third dimension is whether we include skip connections  This is equivalent to de ning the model step to output   change to the current state      and then de ning
+sk      sk    sk  where   is the nonlinear function 
+in our case   ReLU         max     The deep network with skip connections is   variant of ResNet  He et al 
+ 
+Root mean squared prediction errors for each architecture are shown in Figure   All        predictrons  red
+lines  outperformed the corresponding feedforward or recurrent baselines  black lines  both in the random mazes
+and in pool  We also investigated the effect of changing
+the depth of the networks  see appendix  the predictron
+outperformed the corresponding feedforward or recurrent
+baselines for all depths  with and without skip connections 
+
+  Semisupervised learning by consistency
+
+We now consider how to use the predictron for semisupervised learning  training the model on   combination
+of labelled and unlabelled random mazes  Semisupervised
+learning is important because   common bottleneck in applying machine learning in the real world is the dif culty
+of collecting labelled data  whereas often large quantities
+of unlabelled data exist 
+We trained   full        predictron by alternating standard supervised updates with consistency updates  obtained
+by stochastically minimizing the consistency loss   on
+additional unlabelled samples drawn from the same distribution  For each supervised update we apply either    
+or   consistency updates  Figure   shows that the perfor 
+
+mance improved monotonically with the number of consistency updates  measured as   function of the number of
+labelled samples consumed 
+
+  Analysis of adaptive depth
+
+In principle  the predictron can adapt its depth to  think
+more  about some predictions than others  perhaps depending on the complexity of the underlying target  We saw indications of this in Figure   We investigate this further by
+looking at qualitatively different prediction types in pool 
+ball collisions  rail collisions  pocketing balls  and entering or staying in quadrants  For each prediction type we
+consider several different timespans  determined by the
+realworld discount factors associated with each pseudoreward  Figure   shows distributions of depth for each type
+of prediction  The  depth  of   predictron is here de ned as
+the effective number of model steps  If the predictron relies fully on the very  rst value             this counts
+as   steps  If  instead  it learns to place equal weight on all
+rewards and on the  nal value  this counts as   steps  Concretely  the depth   can be de ned recursively as       
+where dk          kdk  and dK     Note that
+even for the same input state  each prediction has   separate depth 
+The depth distributions exhibit three properties  First  different types of predictions used different depths  Second 
+depth was correlated with the realworld discount for the
+ rst four prediction types  Third  the distributions are not
+strongly peaked  which implies that the depth can differ
+per input even for   single realworld discount and prediction type  In   control experiment  not shown  we used  
+
+usage weighting cid     cid weight sharingskipconnections     cid   cid predictronFeedforward netRecurrent netResNetRecurrent ResNetRecurrent net           MSE on random mazes log scale Usage weighted         MUniformly weightedrecurrent net predictron   predictron   predictron   MUpdates MSE on pool   MUpdatesThe Predictron  EndTo End Learning and Planning
+
+Figure   Comparing predictron to baselines  Aggregated prediction errors on random mazes  top  and pool  bottom  over all predictions for the eight architectures corresponding to the cube on the left  Each line is the median of RMSE over  ve seeds  shaded regions
+encompass all seeds  The full        predictron  red  consistently outperformed conventional deep network architectures  black 
+with and without skips and with and without weight sharing 
+
+Figure   Semisupervised learning  Prediction errors of the        predictrons  shared core  no skips  using     or   consistency
+updates for every update with labelled data  plotted as function of the number of labels consumed  Learning performance improves with
+more consistency updates 
+
+scalar   shared among all predictions  which reduced performance in all scenarios  indicating that the heterogeneous
+depth is   valuable form of  exibility 
+
+  Using predictions to make decisions
+
+We test the quality of the predictions in the pool domain
+to evaluate whether they are wellsuited to making decisions  For each sampled pool position  we consider   set  
+of different initial conditions  different angles and velocity
+of the white ball  and ask which is more likely to lead to
+pocketing coloured balls  For each initial condition       
+we apply the        predictron  shared cores    model
+steps  no skip connections  to obtain predictions    We
+ensemble the predictions associated to pocketing any ball
+ except the white one  with discounts       and      
+We select the condition    that maximises this sum 
+We then roll forward the pool simulator from    and log
+the number of pocketing events  Figure   shows   sam 
+
+pled rollout  using the predictron to pick    When providing the choice of   angles and two velocities for initial
+conditions         this procedure resulted in pocketing   coloured balls in   episodes  Using the same procedure with an equally deep convolutional network only
+resulted in   pocketing events  These results suggest
+that the lower loss of the learned        predictron translated into meaningful improvements when informing decisions    video of the rollouts selected by the predictron
+is available at the following url  https youtu be 
+BeaLdaN     
+
+  Related work
+Lee et al    introduced   neural network architecture
+where classi cations branch off intermediate hidden layers 
+An important difference with respect to the  predictron
+is that the weights are handtuned as hyperparameters 
+whereas in the predictron the   weights are learnt and  more
+
+ cid     cid weight sharingskipconnections     cid   cid predictronConvNetrecurrent ConvNetResNetrecurrent ResNetusage weighting           MSE on random mazes log scale Shared coredeep netdeep net with skips   predictron   predictron with skips         MUnshared cores   MUpdates MSE on pool   MUpdates         KNumber of labels MSE on random mazes log scale Shared core  consistency updates  consistency update  consistency updates         KNumber of labelsUnshared coresThe Predictron  EndTo End Learning and Planning
+
+Figure   Thinking depth  Distributions of thinking depth on pool for different types of predictions and for different realworld discounts 
+
+importantly  conditional on the input  Another difference is
+that the loss on the auxiliary classi cations is used to speed
+up learning  but the classi cations themselves are not combined into an aggregate prediction  the output of the model
+itself is the deepest prediction 
+Graves   introduced an architecture with adaptive
+computation time  ACT  with   discrete  but differentiable  decision on when to halt  and aggregating the outputs at each pondering step  This is related to our  
+weights  but obtains depth in   different way  one notable
+difference is that the  predictron can use different pondering depths for each of its predictions 
+Value iteration networks  VINs   Tamar et al    also
+learn value functions endto end using an internal model 
+similar to the  non  predictron  However  VINs plan
+via convolutional operations over the full input state space 
+whereas the predictron plans via imagined trajectories
+through an abstract state space  This may allow the predictron architecture to scale much more effectively in domains
+that do not have   natural twodimensional encoding of the
+state space 
+The notion of learning about many predictions of the future
+relates to work on predictive state representations  PSRs 
+Littman et al    general value functions  GVFs  Sutton et al    and nexting  Modayil et al    Such
+predictions have been shown to be useful as representations  Schaul   Ring    and for transfer  Schaul et al 
+  So far  however  none of these have been considered
+for learning abstract models 
+Schmidhuber   discusses learning abstract models 
+but maintains separate losses for the model and   controller 
+and suggests training the model unsupervised to compactly
+encode the entire history of observations  through predictive coding  The predictron   abstract model is instead
+trained endto end to obtain accurate values 
+
+  Conclusion
+The predictron is   single differentiable architecture that
+rolls forward an internal model to estimate external values 
+This internal model may be given both the structure and
+the semantics of traditional reinforcement learning models 
+But  unlike most approaches to modelbased reinforcement
+learning  the model is fully abstract  it need not correspond
+to the real environment in any human understandable fashion  so long as its rolledforward  plans  accurately predict
+outcomes in the true environment 
+The predictron may be viewed as   novel network architecture that incorporates several separable ideas  First  the
+predictron outputs   value by accumulating rewards over
+  series of internal planning steps  Second  each forward
+pass of the predictron outputs values at multiple planning
+depths  Third  these values may be combined together  also
+within   single forward pass  to output an overall ensemble
+value  Finally  the different values output by the predictron
+may be encouraged to be selfconsistent with each other 
+to provide an additional signal during learning  Our experiments demonstrate that these differences result in more
+accurate predictions of value  in reinforcement learning environments  than more conventional network architectures 
+We have focused on value prediction tasks in uncontrolled
+environments  However  these ideas may transfer to the
+control setting  for example by using the predictron as   Qnetwork  Mnih et al    Even more intriguing is the
+possibility of learning an internal MDP with abstract internal actions  rather than the MRP considered in this paper 
+We aim to explore these ideas in future work 
+
+ Realworld discounts Depthcollision Realworld discounts rails Realworld discounts enter Realworld discounts pocket Realworld discounts stayThe Predictron  EndTo End Learning and Planning
+
+Sutton        Integrated architectures for learning  planning and
+reacting based on dynamic programming  In Machine Learning  Proceedings of the Seventh International Workshop   
+
+Sutton        and Barto        Reinforcement Learning  An Intro 
+
+duction  The MIT press  Cambridge MA   
+
+Sutton  Richard    TD models  Modeling the world at   mixture of time scales  In Proceedings of the Twelfth International
+Conference on Machine Learning  pp     
+
+Sutton  Richard    Modayil  Joseph  Delp  Michael  Degris 
+Thomas  Pilarski  Patrick    White  Adam  and Precup  Doina 
+Horde    scalable realtime architecture for learning knowledge from unsupervised sensorimotor interaction  In The  th
+International Conference on Autonomous Agents and Multiagent SystemsVolume   pp    International Foundation
+for Autonomous Agents and Multiagent Systems   
+
+Tamar  Aviv  Wu  Yi  Thomas  Garrett  Levine  Sergey  and
+Abbeel  Pieter  Value iteration networks  In Neural Information Processing Systems  NIPS   
+
+Todorov  Emanuel  Erez  Tom  and Tassa  Yuval  Mujoco   
+physics engine for modelbased control  In   IEEE RSJ International Conference on Intelligent Robots and Systems  pp 
+  IEEE   
+
+References
+Bellman  Richard  Dynamic programming  Princeton University
+
+Press   
+
+Chiappa  Silvia  Racaniere  Sebastien  Wierstra  Daan  and Mo 
+
+hamed  Shakir  Recurrent environment simulators   
+
+Graves  Alex  Adaptive computation time for recurrent neural networks  CoRR  abs    URL http 
+ arxiv org abs 
+
+He  Kaiming  Zhang  Xiangyu  Ren  Shaoqing  and Sun  Jian 
+Deep residual learning for image recognition  arXiv preprint
+arXiv   
+
+Lee  ChenYu  Xie  Saining  Gallagher  Patrick  Zhang 
+Zhengyou  and Tu  Zhuowen  Deeplysupervised nets  In AISTATS  volume   pp     
+
+Lillicrap     Hunt     Pritzel     Heess     Erez     Tassa    
+Silver     and Wierstra     Continuous control with deep reinforcement learning  In ICLR   
+
+Littman  Michael    Sutton  Richard    and Singh  Satinder   
+In NIPS  volume   pp 
+
+Predictive representations of state 
+   
+
+Mnih     Badia    Puigdom enech  Mirza     Graves     Lillicrap     Harley     Silver     and Kavukcuoglu     Asynchronous methods for deep reinforcement learning  In International Conference on Machine Learning   
+
+Mnih  Volodymyr  Kavukcuoglu  Koray  Silver  David  Rusu  Andrei    Veness  Joel  Bellemare  Marc    Graves  Alex  Riedmiller  Martin  Fidjeland  Andreas    Ostrovski  Georg  Petersen  Stig  Beattie  Charles  Sadik  Amir  Antonoglou  Ioannis  King  Helen  Kumaran  Dharshan  Wierstra  Daan  Legg 
+Shane  and Hassabis  Demis  Humanlevel control through
+deep reinforcement learning  Nature   
+ 
+
+Modayil  Joseph  White  Adam  and Sutton  Richard    Multitimescale nexting in   reinforcement learning robot  In International Conference on Simulation of Adaptive Behavior  pp 
+  Springer   
+
+Oh  Junhyuk  Guo  Xiaoxiao  Lee  Honglak  Lewis  Richard   
+and Singh  Satinder  Actionconditional video prediction using
+deep networks in atari games  In Advances in Neural Information Processing Systems  pp     
+
+Schaul  Tom and Ring  Mark    Better Generalization with Forecasts  In Proceedings of the International Joint Conference on
+Arti cial Intelligence  IJCAI  Beijing  China   
+
+Schaul  Tom  Horgan  Daniel  Gregor  Karol  and Silver  David 
+In International
+
+Universal Value Function Approximators 
+Conference on Machine Learning  ICML   
+
+Schmidhuber  Juergen  On learning to think  Algorithmic information theory for novel combinations of reinforcement learnarXiv
+ing controllers and recurrent neural world models 
+preprint arXiv   
+
+Sutton        Learning to predict by the methods of temporal
+
+differences  Machine Learning     
+
+

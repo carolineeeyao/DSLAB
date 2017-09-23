@@ -1,0 +1,815 @@
+PixelCNN Models with Auxiliary Variables for Natural Image Modeling
+
+Alexander Kolesnikov   Christoph    Lampert  
+
+Abstract
+
+We study probabilistic models of natural images and extend the autoregressive family of
+PixelCNN architectures by incorporating auxiliary variables  Subsequently  we describe two
+new generative image models that exploit different image transformations as auxiliary variables 
+  quantized grayscale view of the image or  
+multiresolution image pyramid  The proposed
+models tackle two known shortcomings of existing PixelCNN models    their tendency to focus
+on lowlevel image details  while largely ignoring highlevel image information  such as object
+shapes  and   their computationally costly procedure for image sampling  We experimentally
+demonstrate bene ts of the proposed models  in
+particular showing that they produce much more
+realistically looking image samples than previous
+stateof theart probabilistic models 
+
+  Introduction
+Natural images are the main input to visual processing systems and  thus  understanding their structure is important
+for building strong and accurate automatic vision systems 
+Image modeling is also useful for   wide variety of key
+computer vision tasks  such as visual representation learning  image inpainting  deblurring  superresolution  image
+compression  and others 
+Natural image modeling is known to be   very challenging
+statistical problem  Because the distribution over natural
+images is highly complex  developing models that are both
+accurate and computationally tractable is very challenging 
+Until recently  most of the existing models were restricted
+to modeling very small image patches  no bigger than      
+    pixels  Recently  however  deep convolutional neural networks  CNNs  have triggered noticeable advances
+in probabilistic image modeling  Out of these  PixelCNN 
+
+ IST Austria  Klosterneuburg  Austria  Correspondence to 
+
+Alexander Kolesnikov  akolesnikov ist ac at 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+type models  van den Oord et al        Salimans et al 
+  have shown to deliver the best performance  while
+at the same time staying computationally tractable  However  PixelCNNs also have noticeable shortcomings  unless
+conditioned on external input  the samples they produce
+rarely re ect global structure of complex natural images 
+see  van den Oord et al      Salimans et al    This
+raises concerns that current PixelCNN architectures might
+also be more limited than originally presumed  Moreover 
+PixelCNN   image sampling procedure is relatively slow in
+practice  as it requires to invoke   very deep neural network
+for every single image pixel that is to be generated 
+In this work we derive improved PixelCNN models that
+address several of the aforementioned shortcomings  The
+main idea is to augment PixelCNN with appropriate auxiliary variables in order to isolate and overcome these drawbacks  This step  at the same time  provides us with important insights into the task of modeling natural images 
+Besides the above insight  we make two main technical
+contributions in this paper  First  we show that uncertainty in lowlevel image details  such as texture patterns 
+dominates the objective of ordinary probabilistic PixelCNN
+models and  thus  these models may have little incentive
+to capture visually essential highlevel image information 
+such as object shapes  We tackle this issue by deriving
+Grayscale PixelCNNs that effectively decouple the tasks of
+modeling low and highlevel image details  This results
+in image samples of substantially improved visual quality 
+Second  we show that the sampling speed of PixelCNN models can be largely accelerated  We accomplish this by deriving Pyramid PixelCNNs that decompose the modeling of
+the image pixel probabilities into   series of much simpler
+steps  Employing   much lighterweight PixelCNN architecture for each of them  globally coherent highresolution
+samples can be obtained at reduced computational cost 
+
+  Related Work
+Probabilistic image modeling is   research area of long tradition that has attracted interest from many different disciplines  Ruderman   Bialek    Olshausen   Field 
+  Hyv arinen et al    However  because of the
+dif culty of the problem  until recently all existing models
+were restricted to small image patches  typically between
+
+PixelCNN Models with Auxiliary Variables for Natural Image Modeling
+
+    and     pixels  and re ected only loworder statistics  such as edge frequency and orientation  Zhu et al 
+  Roth   Black    Carlsson et al    Zoran
+  Weiss    Utilized as prior probabilities in combination with other probabilistic models  such as Markov random  elds  Geman   Geman    these models proved
+to be useful for lowlevel imaging tasks  such as image denoising and inpainting  Their expressive power is limited 
+though  as one can see from the fact that samples from the
+modeled distribution do not resemble natural images  but
+rather structured noise 
+This situation changed with the development of probabilistic image models based on deep neural networks  in particular variational autoencoders  VAEs  and PixelCNNs 
+In this paper  we concentrate on the latter  The PixelCNN
+family of models  van den Oord et al        Salimans
+et al    factorizes the distribution of   natural image
+using the elementary chain rule over pixels  The factors are
+modeled as deep convolutional neural networks with shared
+parameters and trained by maximum likelihood estimation 
+VAEs  Kingma   Welling    offer an alternative approach to probabilistic image modeling  They rely on  
+variational inequality to bound the intractable true likelihood of an image by   tractable approximation  VAEs
+are ef cient to evaluate  but so far  produce results slightly
+worse than stateof theart PixelCNNs  both the likelihood
+scores and sampled images  Recent advances  Gregor
+et al      Bachman    Kingma et al   
+Gulrajani et al    Chen et al    in VAEs literature exploit modi cations of model structure  including usage of latent variables and autoregression principle  though
+these techniques remain technically and conceptually different from PixelCNNs 
+Speci cally for the task of producing images and other
+complex highdimensional objects  generative adversarial networks  GANs   Goodfellow et al    have recently gained popularity 
+In contrast to PixelCNNs and
+VAEs  GANs are not explicit probabilistic models but feedforward networks that are directly trained to produce naturally looking images from random inputs    drawback of
+GAN models is that they have   generally unstable training
+procedure  associated with the search of   Nash equilibrium
+between two competing network players  and they can suffer from various technical problems  such as mode collapse
+or vanishing gradients 
+In order to make GANs work in
+practice  researchers resort to multiple nontrivial heuristics  Salimans et al    This strongly contrasts with
+probabilistic autoregressive models  such as PixelCNNs 
+which rely on well understood likelihood maximization for
+training and do not suffer from mode collapse problems 
+Despite having fundamental differences on the technical
+level  PixelCNNs  VAEs and GANs may also bene   each
+
+other by sharing ideas  In particular  our work is related to
+the line of work on GANs with controllable image structure  Reed et al    Wang   Gupta      crucial
+difference of our work is  however  that our models do not
+require external supervision and  thus  remain purely unsupervised  Another notable paper in the context of this
+work introduces Laplacian GANs  Denton et al   
+with which we share the similar idea of using multiscale
+decomposition for image generation  Similar constructions
+were suggested in  van den Oord et al      in the context of recurrent networks and  Dahl et al    for the
+problem of superresolution 
+Very recent work  Reed et al    which appeared in
+parallel with ours  also addresses PixelCNN   sampling
+speed with multiscale decomposition  Unlike our work 
+this paper makes strong additional independence assumption on the pixel level  Our paper makes   largely complementary contribution  as we explore different angles in
+which   multiscale approach can improve performance 
+
+  PixelCNNs with Auxiliary Variables
+In this section we remind the reader of the technical background and develop   framework for PixelCNNs with auxiliary variables  We then propose two new PixelCNN instances that provide insights into the natural image modeling task and lead to improved quality of sampled images
+and accelerated sampling procedure  Finally  we conclude
+the section with implementation and training details 
+We de ne an image                    xn  as   collection
+of   random variables associated with some unknown probability measure      Each random variable represents  
+ channel pixel value in the RGB format  where each channel takes   discrete value from the set                
+The pixels are ordered according to   raster scan order 
+from left to right and from top to bottom  Given   dataset
+  of   images  our main goal is to estimate the unknown
+probability measure      from   
+Recall that PixelCNNs are   family of models  van den
+Oord et al        Salimans et al    that factorize
+the distribution of natural images using the basic chain rule 
+
+  cid 
+
+  
+
+      
+
+   xj            xj   
+
+ 
+
+Our key idea is to introduce an additional auxiliary vari 
+
+able   cid    into the image modeling process  Formally   
+of the joint distribution of   and  cid    factorized as
+
+PixelCNN with auxiliary variable is   probabilistic model
+
+      cid        cid       cid   
+
+ 
+
+where     are the model parameters  The conditional
+
+PixelCNN Models with Auxiliary Variables for Natural Image Modeling
+
+probability distribution      cid    is modeled using the
+
+PixelCNN model  van den Oord et al      including the recent improvements suggested in  Salimans et al 
+ 
+
+ cid 
+
+ cid 
+xj            xj  fw cid   
+
+  
+
+ 
+
+ 
+
+    cid     
+
+  cid 
+
+  
+
+where fw is an embedding function parametrized by   parameter vector   
+Like other PixelCNNbased models  our model can be used
+for drawing samples  For    xed     one follows the ordinary PixelCNN   sampling strategy  Otherwise  one  rst
+
+as described before 
+Speci cally  in this work we concentrate on auxiliary variables that   are   form of images themselves such that we
+
+samples  cid   from   cid    and then samples   from     cid   
+can model   cid    by   PixelCNNtype model  and   for
+which  cid   is approximately computable by   known deterministic function          cid    This choice has the useful
+consequence that   cid      is going to be   highly peaked
+
+distribution around the location     which provides us
+with   very ef cient training procedure  denoting the model
+parameters            we jointly maximize the loglikelihood of the observed training data   and the corre 
+
+sponding auxiliary variables   cid         More precisely 
+
+we solve
+    argmax
+
+ 
+
+  argmax
+
+ 
+
+ cid 
+ cid 
+
+   
+
+   
+
+log       cid   
+
+log         
+
+ cid 
+
+   
+
+ 
+
+log     
+
+Because the objective function decomposes and the parameters do not interact  we can perform the optimization
+over   and      separately  and potentially in parallel 
+Note  that by this procedure we maximize   lower bound
+on the loglikelihood of the data 
+
+ cid 
+
+   
+
+log
+
+      cid      log
+
+ cid 
+
+   
+
+    
+
+ 
+
+By making the lower bound high we also guarantee that
+the loglikelihood of the data itself is high  Furthermore 
+
+we expect the bound   to be  almost  tight  as       cid     
+  cid          and by construction the  rst factor    cid     
+is  almost     peak centered at  cid        
+
+In the rest of this section we present two concrete realizations of the PixelCNNs augmented with auxiliary variables 
+
+Figure   Samples produced by the current stateof theart autoregressive probabilistic image models   van den Oord et al 
+     top  and  Salimans et al     bottom 
+
+current stateof theart models reveals that they typically
+match lowlevel image details well  but fail at capturing
+global image structure  such as object shapes  see Figure  
+for an illustration 
+We conjecture that   major reason for this is that the
+PixelCNN training objective provides too little incentive
+for the model to actually capture highlevel image structure  Concretely  the PixelCNN   loss function  the negative data loglikelihood  measures the amount of uncertainty of the color value of each pixel  conditioned on
+the previous ones  This quantity is dominated by hardto predict lowlevel cues  such as texture patterns  which
+exhibit   large uncertainty  As   consequence  the probabilistic model is encouraged to represent such textures well 
+while visually more essential image details  such as object
+shapes  are neglected  We provide quantitative evidence for
+this claim in our experimental section  Similar  ndings are
+also discussed in  Salimans et al   
+In order to tackle the aforementioned shortcoming we derive Grayscale PixelCNN  in which the auxiliary variable
+
+original  bits color image    In combination with the
+factorization   this choice of auxiliary variable decouples the modeling of low and highlevel image details  the
+
+ cid   is    bit per pixel quantized grayscale version of the
+distribution   cid     the quantized grayscale image  conp   cid    models missing color and texture details  In Sec 
+
+tains most information about global image properties  re 
+ ecting present objects and their shapes  The distribution
+
+tion   we highlight the quantitative and qualitative effects
+of augmenting PixelCNN with this choice of auxiliary variable 
+
+  Grayscale PixelCNN
+
+  Pyramid PixelCNN
+
+Despite great success of PixelCNNtype models  they are
+still far from producing plausible samples of complex natural scenes    visual inspection of samples produced by the
+
+In this section we address two further shortcomings of existing PixelCNN models  First  the strong asymmetry of
+the factors in Equation   the top left pixel of an image
+
+PixelCNN Models with Auxiliary Variables for Natural Image Modeling
+
+ding functions fw cid    which needs to be computed only
+
+once per pyramid layer  not once for each pixel 
+We quantify the modeling performance and sampling speed
+of the proposed multiscale model later in Section  
+
+is modeled unconditionally       without any available information  while the bottom right pixel has access to the
+information of  potentially  all other pixel values  Nevertheless  the same network is evaluated to model either of
+them  as well as all others pixels in between  We conjecture that it would be bene cial if pixels were generated
+with   less asymmetric usage of the image information 
+Second  PixelCNNs have high computational cost for sampling images due to the recurrent nature of the procedure 
+for each generated pixel  the PixelCNN must invoke   convolutional neural network that is very deep  often in the order of   hundred convolutional layers  Note  that  in principle  at the sampling phase PixelCNN allows to cache intermediate values across consecutive PixelCNN invocations
+and  thus  save considerate computational effort  However 
+as reported in  Ramachandran et al    caching delivers minor sampling speed gain  when only   few or   single
+image is generated at once  which is   common scenario in
+reallife applications 
+In order to alleviate the aforementioned drawbacks we pro 
+
+pose   PixelCNN model in which the auxiliary variable  cid  
+
+corresponds to   twice lower resolution view of    thereby
+decoupling the full image model into   pair of simpler
+models  creating   lower resolution image  and upscaling   lowres into   highres image  The upscaling step
+has strongly reduced model asymmetry  because all pixels on the high scale have equal access to all information
+from the lower scale  Also  by explicitly modeling the lowresolution image view we make it easier for the model to
+capture longrange image correlations  simply because the
+ long range  now stretches over fewer pixels 
+Since the proposed auxiliary variable is an ordinary image 
+we can recursively apply the same decomposition to model
+the auxiliary variable itself  For example  if we apply decomposition recursively   times for modeling     images  it will result in   model  which  rst generates an image on     resolution  and then upscales it   times by  
+factor   We call the resulting model Pyramid PixelCNN 
+as it resembles image pyramid decomposition 
+Pyramid PixelCNNs break the image model into   series
+of simpler submodels  Each submodel is determined by
+
+the corresponding conditional distribution     cid    and
+the embedding fw cid     or just by   cid    for the lowest
+
+resolution image  These conditional distributions model
+relatively simple task of producing an image  given an embedding of the slightly lower resolution view of this image  Thus  we hypothesize that with an appropriate embedding function  potentially modeled by   very deep network  the conditional distributions can be reliably modeled using   very lightweight network  We then expect  
+signi cant sampling speed acceleration  because the major
+part of computational burden is redistributed to the embed 
+
+  Details of model parameterization
+
+The PixelCNN model with auxiliary variable is fully de 
+ ned by factors in   each of which is realized by  
+network with the PixelCNN  architecture  This is described in details in  Salimans et al    The output
+of the PixelCNN  is    component mixture of threedimensional logistic distributions that is followed by   discretized likelihood function  Kingma et al    Salimans
+et al    The only exception is the model for  bit
+
+  vector of   probabilities for every possible grayscale
+value  followed by the standard crossentropy loss 
+
+quantized grayscale auxiliary variable  cid    where output is
+The conditional PixelCNN model      cid    depends on
+auxiliary variable  cid   in   fashion similar to  van den Oord
+ cid   using   convolutional network fw cid    and bias the conembedding function  fw cid    to be almost identical to the
+
+et al      Salimans et al   
+It can be summarized in two steps as follows  compute an embedding of
+
+volutions of every residual block by adding the computed
+embedding  We choose the architecture for modeling the
+
+architecture of PixelCNN  The main difference is that
+we use only one  ow of residual blocks and do not shift the
+convolutional layers outputs  because there is no need to
+impose sequential dependency structure on the pixel level 
+For numeric optimization  we use Adam  Kingma   Ba 
+    variant of stochastic gradient optimization  During training we use dropout with   rate  in   way that suggested in  Salimans et al    No explicit regularization
+is used  Further implementation details  such as number of
+layers are speci ed later in Section  
+
+  Experiments
+In this section we experimentally study the proposed
+Grayscale PixelCNN and Pyramid PixelCNN models on
+natural image modeling task and report quantitative and
+qualitative evaluation results 
+
+  Grayscale PixelCNN
+Experimental setup  We evaluate the modeling performance of   Grayscale PixelCNN on the CIFAR 
+dataset  Krizhevsky   Hinton    It consists of  
+natural images of size       belonging to   categories 
+The dataset is split into two parts    training set with  
+images and   test set with   images  We augment the
+training data by random horizontal image  ipping 
+
+same hyperparameters as in  Salimans et al    The
+
+For setting up the architectures for modeling the distribu 
+
+tions   cid        cid    and embedding fw    we use the
+only exception is that for parameterizing     cid    and
+fw cid    we use   residual blocks instead of  
+We train the grayscale model   cid    for   epochs and the
+conditional model     cid    for   epochs 
+
+In the Adam optimizer we use an initial learning rate of
+    batch size of   images and an exponential learning rate decay of   that is applied after each iteration 
+
+Modeling performance 
+The Grayscale PixelCNN
+achieves an upper bound on the negative loglikelihood
+score of   bitsper dimension  This is on par with current stateof the art models  see Table   Note  that since
+we measure an upper bound  the actual model performance
+might be slightly better  However  in light of our and other
+experiments  we believe small differences in this score to
+be of minor importance  as the loglikelihood does not
+seem to correlate well with visual quality in this regime 
+In Figure   we present random samples produced by
+the Grayscale PixelCNN model  demonstrating grayscale
+
+samples from   cid    and resulting colored samples from
+    cid    We observe that the produced samples are
+
+highly diverse  and  unlike samples from previously proposed probabilistic autoregressive models  often exhibit  
+strongly coherent global structure  resembling highly complex objects  such as cars  dogs  horses  etc 
+Given the high quality of the samples  one might be wor 
+
+ried if possibly the grayscale model    cid    had over  
+of   cid    are very close to each other  namely   and
+
+the training data  We observe that training and test loss
+
+  of bitsper dimension  which speaks against signi 
+cant over tting  Note also  that it is not clear if an over tted
+model would automatically produce good samples  For instance  as reported in  Salimans et al    severe over 
+ tting of the PixelCNN  model does not lead to   high
+perceptual quality of sampled images 
+Discussion  By explicitly emphasizing the modeling of
+highlevel image structures in the Grayscale PixelCNN  we
+achieve signi cantly better visual quality of the produced
+samples  Additionally  the Grayscale PixelCNN offers interesting insights into the image modeling task  As the objective we minimize for training is   sum of two scores 
+we can individually examine the performance of auxiliary
+
+variable model   cid    and the conditional model     cid   
+The trained conditional model achieves     cid      negap cid    achieves   score of   bitsper dimension on the
+
+tive loglikelihood score of   bitsper dimension  while
+
+CIFAR  test set  In other words  highlevel image properties  despite being harder to model for the network  contribute only   small fraction of the uncertainty score to the
+
+PixelCNN Models with Auxiliary Variables for Natural Image Modeling
+
+Model
+Deep Diffusion  SohlDickstein et al   
+NICE  Dinh et al   
+DRAW  Gregor et al   
+Deep GMMs  van den Oord   Schrauwen   
+Conv Draw  Gregor et al   
+Real NVP  Dinh et al   
+Matnet   AR  Bachman   
+PixelCNN  van den Oord et al     
+VAE with IAF  Kingma et al   
+Gated PixelCNN  van den Oord et al     
+PixelRNN  van den Oord et al     
+Grayscale PixelCNN  this paper 
+DenseNet VLAE  Chen et al   
+PixelCNN   Salimans et al   
+
+Bits per dim 
+
+   
+ 
+   
+ 
+   
+ 
+   
+ 
+   
+ 
+ 
+   
+   
+ 
+
+Table   The negative loglikelihood of the different models for
+the CIFAR  test set measured as bitsper dimension 
+
+the overall loglikelihood  We take this as indication that if
+lowlevel and highlevel image details are modeled by one
+model  then at training time lowlevel image uncertainty
+will dominate the training objective  We believe that this
+is this the key reason why previously proposed PixelCNN
+models failed to produce globally coherent samples of natural images  Importantly  this problem does not appear in
+the Grayscale PixelCNN  because global and local image
+models do not share parameters and  thus  do not interfere
+with each other at training phase 
+An alternative explanation for the differences in loglikelihood scores would be that PixelCNNtype models are
+actually not very good at modeling lowlevel image input 
+Additional experiments that we performed show that this
+is not the case  we applied the learned conditional model
+
+    cid    to  bit grayscale images obtained by quantiz 
+
+ing real images of the CIFAR  test set  Figure   compares the resulting colorized samples with the corresponding original images  showing that the samples produced by
+our conditional model are of visual quality comparable to
+the original images  This suggests that in order to produce
+even better image samples  mainly improved models for
+
+  cid    are required 
+
+  Pyramid PixelCNN 
+Experimental setup  We evaluate the Pyramid PixelCNN
+on the task of modeling face images  We rely on the
+aligned cropped CelebA dataset  Liu et al    that
+contains approximately   images of size    
+In order to focus on human faces and not background  we
+preprocess all images in the dataset by applying    xed
+    crop  left margin    pixels  right margin   
+pixel  top margin    bottom margin    pixels  We use
+  random   subset of all images as training set and the
+remaining images as   test set 
+
+PixelCNN Models with Auxiliary Variables for Natural Image Modeling
+
+Figure   Random quantized grayscale samples from   cid     top  and corresponding image samples from     cid     bottom  The
+
+grayscale samples show several recognizable objects  which are subsequently also present in the color version 
+
+Figure   CIFAR  images in original color  left  and quantized to  bit grayscale  center  Images sampled from our conditional model
+
+    cid    using the grayscale CIFAR images as auxiliary variables  right  The images produced by our model are visually as plausible
+
+as the original ones 
+
+Res 
+Bpd
+
+ 
+ 
+
+ 
+ 
+
+by Pyramid
+Table   Bitsper dimension
+PixelCNN on the test images from the CelebA dataset for various
+resolutions  Res 
+
+achieved
+
+ Bpd 
+
+For the Pyramid PixelCNN we apply the auxiliary variable
+decomposition   times  This results in   sequences of probabilistic models  where the  rst model generates faces in
+  resolution  We use   PixelCNN  architecture without down or upsampling layers with only   residual blocks
+
+to model the distributions   cid    and     cid    for all
+scales  For the embedding fw cid    we use   PixelCNN 
+
+architecture with   residual blocks with downsampling
+layer after the residual block number   and upsampling
+layers after the residual blocks number   and   For all
+convolutional layers we set the number of  lters to  
+In the Adam optimizer we use an initial learning rate  
+  batch size of   and   learning rate decay of  
+We train the model for   epochs 
+Modeling performance  We present   quantitative evaluation of Pyramid PixelCNN in Table   We evaluate the performance of our model on different output resolutions  observing that bitsper dimension score is smaller for higher
+resolutions  as pixel values are more correlated and  thus 
+easier to predict  As an additional check  we also train and
+evaluate Pyramid PixelCNN model on the CIFAR dataset 
+achieving   competitive score of   bitsper dimension 
+Before demonstrating and discussing face samples produced by our model we make an observation regarding the
+PixelCNN   sampling procedure  Recall that the output of
+the Pyramid PixelCNN is   mixture of logistic distributions  We observe an intriguing effect related to the mixture representation of the predicted pixel distributions for
+face images  the perceptual quality of sampled faces substantially increases if we arti cially reduce the predicted
+variance of the mixture components  We illustrate this effect in Figure   where we alter the variance by subtracting constants from    xed set of               from
+the predicted logvariance of the mixture components  Inspired by this observation we propose an alternative sampling procedure  for each pixel  we randomly sample one
+of the logistic components based on their weight in the predicted mixture  Then  we use the mode of this component
+as sampled pixel value  instead of performing   second random sampling step  This sampling procedure can be seen
+as   hybrid of probabilistic sampling and maximum   posteriori  MAP  prediction 
+Figure   shows further samples obtained by such MAP
+sampling  The produced images have very high perceptual
+quality  with some generated faces appearing almost photo 
+
+PixelCNN Models with Auxiliary Variables for Natural Image Modeling
+ 
+ 
+
+ 
+ 
+
+ 
+
+ 
+
+realistic  The complete multiscale sampling mechanism of
+the Pyramid PixelCNN  from   to   images  is
+demonstrated in Figure  
+Discussion  First  we observe that  despite the very high
+resolution of modeled images  the produced samples capture global human face characteristics  such as arrangement
+of face elements and global symmetries  At the same time 
+the set of samples is diverse  containing male as well as female faces  different hair and skin colors as well as facial
+expressions and head poses  Second  we emphasize that by
+properly decomposing the model we are able to scale the
+Pyramid PixelCNN to produce samples with very high resolution of     As discussed previously in Section  
+this results from the fact that our decomposition allows to
+parametrize autoregressive parts of the image model by  
+lightweight architecture  Concretely  on an NVidia TitanX
+GPU  our Pyramid PixelCNN without caching optimizations requires approximately   seconds on average to
+generate one image pixel  while   PixelCNN  even with
+recently suggested caching optimizations requires roughly
+  seconds for the same task  If we add caching optimizations to our model  we expect its speed to improve even
+further 
+
+  Conclusion
+In this paper we presented Grayscale PixelCNN and Pyramid PixelCNN  an improved autoregressive probabilistic
+techniques that incorporate auxiliary variables  We derived two generative image models that exploit different
+image views as auxiliary variables and address known limitations of existing PixelCNN models  The use of quantized
+grayscale images as auxiliary variables resulted in   model
+that captures global structure of complex natural images
+and produces globally coherent samples  With multiscale
+image views as auxiliary variable  the model was able to ef 
+ ciently produce realistic highresolution images of human
+faces  Note  that these improvements are complementary
+and we plan to combine them in   future work 
+Furthermore  we gained interesting insights into the image
+modeling problem  First  our experiments suggest that texture and other lowlevel image information distract probabilistic models from focusing on more essential highlevel
+image information  such as object shapes  Thus  it is bene cial to decouple the modeling of low and highlevel image details  Second  we demonstrate that multiscale image
+model  even with very shallow PixelCNN architectures  can
+accurately model highresolution face images 
+Acknowledgments  We thank Tim Salimans for spotting   mistake in our preliminary arXiv manuscript  This
+work was funded by the European Research Council under the European Unions Seventh Framework Programme
+ FP ERC grant agreement no  
+
+PixelCNN Models with Auxiliary Variables for Natural Image Modeling
+
+Figure   Effect of the variance reduction  Numbers on top of each column indicates the amount of reduction in the predicted logvariance
+of the mixture components  The last column corresponds to MAP sampling 
+
+Figure   Images sampled from the Pyramid PixelCNN by MAP sampling  The generated faces are of very high quality  many being
+close to photorealistic  At the same time  the set of sample is diverse in terms of the depicted gender  skin color and head pose 
+
+Figure   Visualization of the Pyramid PixelCNN sampling process  Faces are  rst generated on   small      resolution and then are
+gradually upsampled until reaching the desired     resolution 
+
+PixelCNN Models with Auxiliary Variables for Natural Image Modeling
+
+References
+Bachman  Philip  An architecture for deep  hierarchical
+generative models  In Conference on Neural Information
+Processing Systems  NIPS   
+
+Carlsson  Gunnar  Ishkhanov  Tigran  De Silva  Vin  and
+Zomorodian  Afra  On the local behavior of spaces of
+natural images  International Journal of Computer Vision  IJCV     
+
+Chen  Xi  Kingma  Diederik    Salimans  Tim  Duan  Yan 
+Dhariwal  Prafulla  Schulman  John  Sutskever  Ilya  and
+Abbeel  Pieter  Variational lossy autoencoder  International Conference on Learning Representations  ICLR 
+ 
+
+Dahl  Ryan  Norouzi  Mohammad  and Shlens  Jonathov 
+arXiv preprint
+
+resolution 
+
+recursive super
+
+Pixel
+arXiv   
+
+Denton  Emily    Chintala  Soumith  Fergus  Rob  et al 
+Deep generative image models using   laplacian pyramid of adversarial networks  In Conference on Neural
+Information Processing Systems  NIPS   
+
+Dinh  Laurent  Krueger  David  and Bengio  Yoshua 
+NICE  Nonlinear independent components estimation 
+Workshop on International Conference on Learning
+Representations  Workshop on ICLR   
+
+Dinh  Laurent  SohlDickstein  Jascha  and Bengio  Samy 
+Density estimation using real NVP  International Conference on Learning Representations  ICLR   
+
+Geman  Stuart and Geman  Donald  Stochastic relaxation 
+gibbs distributions  and the bayesian restoration of images  IEEE Transactions on Pattern Analysis and Machine Intelligence  TPAMI     
+
+Goodfellow  Ian  PougetAbadie  Jean  Mirza  Mehdi  Xu 
+Bing  WardeFarley  David  Ozair  Sherjil  Courville 
+Aaron  and Bengio  Yoshua  Generative adversarial networks  In Conference on Neural Information Processing
+Systems  NIPS   
+
+Gregor  Karol  Danihelka  Ivo  Graves  Alex  Rezende 
+Danilo  and Wierstra  Daan  Draw    recurrent neural
+network for image generation  In International Conference on Machine Learing  ICML   
+
+Gregor  Karol  Besse  Frederic  Jimenez Rezende  Danilo 
+Danihelka  Ivo  and Wierstra  Daan  Towards conceptual compression  In Conference on Neural Information
+Processing Systems  NIPS   
+
+Gulrajani  Ishaan  Kumar  Kundan  Ahmed  Faruk  Taiga 
+Adrien Ali  Visin  Francesco  Vazquez  David  and
+
+Courville  Aaron  PixelVAE    latent variable model for
+International Conference on Learning
+natural images 
+Representations  ICLR   
+
+Hyv arinen  Aapo  Hurri  Jarmo  and Hoyer  Patrick    Natural Image Statistics    Probabilistic Approach to Early
+Computational Vision  volume   Springer   
+
+Kingma  Diederik    and Ba  Jimmy  Adam    method for
+stochastic optimization  In International Conference on
+Learning Representations  ICLR   
+
+Kingma  Diederik   and Welling  Max  Autoencoding
+variational bayes  In International Conference on Learning Representations  ICLR   
+
+Kingma  Diederik    Salimans  Tim  and Welling  Max 
+Improving variational inference with inverse autoregressive  ow  Conference on Neural Information Processing
+Systems  NIPS   
+
+Krizhevsky  Alex and Hinton  Geoffrey  Learning multiple
+layers of features from tiny images  Technical report 
+University of Toronto   
+
+Liu  Ziwei  Luo  Ping  Wang  Xiaogang  and Tang  Xiaoou 
+Deep learning face attributes in the wild  In International
+Conference on Computer Vision  ICCV   
+
+Olshausen  Bruno   and Field  David    Natural image
+statistics and ef cient coding  Network  computation in
+neural systems     
+
+Ramachandran  Prajit  Paine  Tom Le  Khorrami  Pooya 
+Babaeizadeh  Mohammad  Chang  Shiyu  Zhang  Yang 
+HasegawaJohnson  Mark  Campbell  Roy  and Huang 
+Thomas  Fast generation for convolutional autoregressive models  Workshop on International Conference on
+Learning Representations  Workshop on ICLR   
+
+Reed  Scott  Oord    aron van den  Kalchbrenner  Nal  Colmenarejo  Sergio   omez  Wang  Ziyu  Belov  Dan  and
+de Freitas  Nando  Parallel multiscale autoregressive
+International Conference on Madensity estimation 
+chine Learing  ICML   
+
+Reed  Scott    Akata  Zeynep  Mohan  Santosh  Tenka 
+Samuel  Schiele  Bernt  and Lee  Honglak  Learning
+what and where to draw  In Conference on Neural Information Processing Systems  NIPS   
+
+Roth  Stefan and Black  Michael    Fields of experts   
+In Conference
+framework for learning image priors 
+on Computer Vision and Pattern Recognition  CVPR 
+ 
+
+Ruderman  Daniel   and Bialek  William  Statistics of natural images  Scaling in the woods  Physical review letters     
+
+PixelCNN Models with Auxiliary Variables for Natural Image Modeling
+
+Salimans  Tim  Goodfellow  Ian  Zaremba  Wojciech  Cheung  Vicki  Radford  Alec  and Chen  Xi  Improved techniques for training GANs  In Conference on Neural Information Processing Systems  NIPS   
+
+Salimans  Tim  Karpathy  Andrej  Chen  Xi  Knigma 
+Diederik    and Bulatov  Yaroslav  PixelCNN   
+PixelCNN implementation with discretized logistic mixInternational
+ture likelihood and other modi cations 
+Conference on Learning Representations  ICLR   
+
+SohlDickstein  Jascha  Weiss  Eric  Maheswaranathan 
+Niru  and Ganguli  Surya  Deep unsupervised learning
+using nonequilibrium thermodynamics  In International
+Conference on Machine Learing  ICML   
+
+van den Oord  Aaron and Schrauwen  Benjamin  Factoring
+variations in natural images with deep gaussian mixture
+models  In Conference on Neural Information Processing Systems  NIPS   
+
+van den Oord  Aaron  Kalchbrenner  Nal  Espeholt  Lasse 
+Vinyals  Oriol  and Graves  Alex  Conditional image
+generation with pixelCNN decoders  In Conference on
+Neural Information Processing Systems  NIPS     
+
+van
+
+den Oord  Aaron  Kalchbrenner  Nal 
+
+and
+recurrent neural netInternational Conference on Machine Learing
+
+Kavukcuoglu  Koray 
+works 
+ ICML     
+
+Pixel
+
+Wang  Xiaolong and Gupta  Abhinav  Generative image
+modeling using style and structure adversarial networks 
+In European Conference on Computer Vision  ECCV 
+ 
+
+Zhu  Song Chun  Wu  Yingnian  and Mumford  David  Filters  random  elds and maximum entropy  FRAME 
+InterTowards   uni ed theory for texture modeling 
+national Journal of Computer Vision  IJCV   
+   
+
+Zoran  Daniel and Weiss  Yair  From learning models of
+natural image patches to whole image restoration 
+In
+International Conference on Computer Vision  ICCV 
+ 
+
+

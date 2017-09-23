@@ -1,0 +1,975 @@
+Deep Voice  Realtime Neural Textto Speech
+
+Sercan     Ar       Mike Chrzanowski     Adam Coates     Gregory Diamos     Andrew Gibiansky    
+Yongguo Kang     Xian Li     John Miller     Andrew Ng     Jonathan Raiman     Shubho Sengupta    
+
+Mohammad Shoeybi    
+
+Abstract
+
+We present Deep Voice    productionquality
+textto speech system constructed entirely from
+deep neural networks  Deep Voice lays the
+groundwork for truly endto end neural speech
+synthesis 
+The system comprises  ve major building blocks    segmentation model for
+locating phoneme boundaries    graphemeto 
+phoneme conversion model    phoneme duration
+prediction model    fundamental frequency prediction model  and an audio synthesis model 
+For the segmentation model  we propose   novel
+way of performing phoneme boundary detection
+with deep neural networks using connectionist
+temporal classi cation  CTC  loss  For the audio synthesis model  we implement   variant
+of WaveNet that requires fewer parameters and
+trains faster than the original  By using   neural network for each component  our system is
+simpler and more  exible than traditional textto 
+speech systems  where each component requires
+laborious feature engineering and extensive domain expertise  Finally  we show that inference
+with our system can be performed faster than real
+time and describe optimized WaveNet inference
+kernels on both CPU and GPU that achieve up to
+   speedups over existing implementations 
+
+  Introduction
+Synthesizing arti cial human speech from text  commonly
+known as textto speech  TTS  is an essential component
+in many applications such as speechenabled devices  navigation systems  and accessibility for the visuallyimpaired 
+
+ Listed alphabetically  Baidu Silicon Valley Arti cial Intelligence Lab    Bordeaux Dr  Sunnyvale  CA    Baidu
+Corporation  No    Xibeiwang East Road  Beijing  
+China  Correspondence to  Andrew Gibiansky  gibianskyandrew baidu com 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+Fundamentally 
+it allows humantechnology interaction
+without requiring visual interfaces  Modern TTS systems
+are based on complex  multistage processing pipelines 
+each of which may rely on handengineered features and
+heuristics  Due to this complexity  developing new TTS
+systems can be very labor intensive and dif cult 
+Deep Voice is inspired by traditional
+textto speech
+pipelines and adopts the same structure  while replacing all
+components with neural networks and using simpler features   rst we convert text to phoneme and then use an
+audio synthesis model to convert linguistic features into
+speech  Taylor    Unlike prior work  which uses
+handengineered features such as spectral envelope  spectral parameters  aperiodic parameters  etc  our only features are phonemes with stress annotations  phoneme durations  and fundamental frequency     This choice of
+features makes our system more readily applicable to new
+datasets  voices  and domains without any manual data annotation or additional feature engineering  We demonstrate
+this claim by retraining our entire pipeline without any hyperparameter changes on an entirely new dataset that contains solely audio and unaligned textual transcriptions and
+generating relatively high quality speech  In   conventional
+TTS system this adaptation requires days to weeks of tuning  whereas Deep Voice allows you to do it in only   few
+hours of manual effort and the time it takes models to train 
+Realtime inference is   requirement for   productionquality TTS system  without it  the system is unusable for
+most applications of TTS  Prior work has demonstrated that
+  WaveNet  van den Oord et al    can generate close to
+humanlevel speech  However  WaveNet inference poses  
+daunting computational problem due to the highfrequency 
+autoregressive nature of the model  and it has been hitherto
+unknown whether such models can be used in   production system  We answer this question in the af rmative and
+demonstrate ef cient  fasterthan realtime WaveNet inference kernels that produce highquality   kHz audio and
+realize      speedup over previous WaveNet inference
+implementations  Paine et al   
+
+Deep Voice  Realtime Neural TTS
+
+  Related Work
+Previous work uses neural networks as substitutes for
+several TTS system components  including graphemeto 
+phoneme conversion models  Rao et al    Yao  
+Zweig    phoneme duration prediction models  Zen
+  Sak    fundamental frequency prediction models
+ Pascual   Bonafonte    Ronanki et al    and
+audio synthesis models  van den Oord et al    Mehri
+et al    Unlike Deep Voice  however  none of these
+systems solve the entire problem of TTS and many of them
+use specialized handengineered features developed specifically for their domain 
+Most recently  there has been   lot of work in parametric audio synthesis  notably WaveNet  SampleRNN  and
+Char Wav  van den Oord et al    Mehri et al   
+Sotelo et al    While WaveNet can be used for
+both conditional and unconditional audio generation  SampleRNN is only used for unconditional audio generation 
+Char Wav extends SampleRNN with an attentionbased
+phoneme duration model and the equivalent of an    prediction model  effectively providing local conditioning information to   SampleRNNbased vocoder 
+Deep Voice differs from these systems in several key aspects that notably increase the scope of the problem  First 
+Deep Voice is completely standalone  training   new Deep
+Voice system does not require   preexisting TTS system 
+and can be done from scratch using   dataset of short audio clips and corresponding textual transcripts  In contrast 
+reproducing either of the aforementioned systems requires
+access and understanding of   preexisting TTS system  because they use features from another TTS system either at
+training or inference time 
+Second  Deep Voice minimizes the use of handengineered
+features  it uses onehot encoded characters for grapheme
+to phoneme conversion  onehot encoded phonemes and
+stresses  phoneme durations in milliseconds  and normalized log fundamental frequency that can be computed from
+waveforms using any    estimation algorithm  All of these
+can easily be obtained from audio and transcripts with minimal effort  In contrast  prior works use   much more complex feature representation  that effectively makes reproducing the system impossible without   preexisting TTS
+system  WaveNet uses several features from   TTS system
+ Zen et al    that include values such as the number
+of syllables in   word  position of syllables in the phrase 
+position of the current frame in the phoneme  and dynamic
+features of the speech spectrum like spectral and excitation
+parameters  as well as their time derivatives  Char Wav
+relies on vocoder features from the WORLD TTS system
+ Morise et al    for pretraining their alignment module which include    spectral envelope  and aperiodic parameters 
+
+Finally  we focus on creating   productionready system 
+which requires that our models run in realtime for inference  Deep Voice can synthesize audio in fractions of  
+second  and offers   tunable tradeoff between synthesis
+speed and audio quality  In contrast  previous results with
+WaveNet require several minutes of runtime to synthesize
+one second of audio  We are unaware of similar benchmarks for SampleRNN  but the  tier architecture as described in the original publication requires approximately
+   as much compute during inference as our largest
+WaveNet models  so running the model in realtime may
+prove challenging 
+  TTS System Components
+As shown in Fig    the TTS system consists of  ve major
+building blocks 
+
+  The graphemeto phoneme model converts from
+written text  English characters  to phonemes  encoded using   phonemic alphabet such as ARPABET 
+  The segmentation model locates phoneme boundaries in the voice dataset  Given an audio  le and  
+phonemeby phoneme transcription of the audio  the
+segmentation model identi es where in the audio each
+phoneme begins and ends 
+
+  The phoneme duration model predicts the temporal
+duration of every phoneme in   phoneme sequence  an
+utterance 
+
+  The fundamental frequency model predicts whether
+  phoneme is voiced 
+the model predicts the fundamental frequency     throughout the
+phoneme   duration 
+
+If it
+
+is 
+
+  The audio synthesis model combines the outputs
+of the graphemeto phoneme  phoneme duration  and
+fundamental frequency prediction models and synthesizes audio at   high sampling rate  corresponding to
+the desired text 
+
+text is fed through the graphemeto 
+During inference 
+phoneme model or   phoneme dictionary to generate
+phonemes  Next  the phonemes are provided as inputs to
+the phoneme duration model and    prediction model to
+assign durations to each phoneme and generate an    contour  Finally  the phonemes  phoneme durations  and   
+are used as local conditioning input features to the audio
+synthesis model  which generates the  nal utterance 
+Unlike the other models  the segmentation model is not
+used during inference 
+it is used to annotate
+the training voice data with phoneme boundaries  The
+phoneme boundaries imply durations  which can be used
+to train the phoneme duration model  The audio  annotated with phonemes and phoneme durations as well as
+fundamental frequency  is used to train the audio synthesis model 
+
+Instead 
+
+Deep Voice  Realtime Neural TTS
+
+label encoding  consider
+
+Figure   System diagram depicting     training procedure and     inference procedure  with inputs on the left and outputs on the right 
+In our system  the duration prediction model and the    prediction model are performed by   single neural network trained with   joint
+loss  The graphemeto phoneme model is used as   fallback for words that are not present in   phoneme dictionary  such as CMUDict 
+Dotted lines denote nonlearned components 
+In the following sections  we describe all the building
+blocks in detail 
+  Graphemeto Phoneme Model
+Our graphemeto phoneme model is based on the encoderdecoder architecture developed by  Yao   Zweig   
+However  we use   multilayer bidirectional encoder with
+  gated recurrent unit  GRU  nonlinearity and an equally
+deep unidirectional GRU decoder  Chung et al    The
+initial state of every decoder layer is initialized to the  nal
+hidden state of the corresponding encoder forward layer 
+The architecture is trained with teacher forcing and decoding is performed using beam search  We use   bidirectional
+layers with   units each in the encoder and   unidirectional layers of the same size in the decoder and   beam
+search with   width of   candidates  During training  we
+use dropout with probability   after each recurrent layer 
+For training  we use the Adam optimization algorithm with
+                  batch size of    
+learning rate of   and an annealing rate of   applied
+every   iterations  Kingma   Ba   
+  Segmentation Model
+Our segmentation model is trained to output the alignment between   given utterance and   sequence of target
+phonemes  This task is similar to the problem of aligning
+speech to written output in speech recognition  In that domain  the connectionist temporal classi cation  CTC  loss
+function has been shown to focus on character alignments
+to learn   mapping between sound and text  Graves et al 
+  We adapt the convolutional recurrent neural network architecture from   stateof theart speech recognition system  Amodei et al    for phoneme boundary
+detection 
+
+  network trained with CTC to generate sequences of
+phonemes will produce brief peaks for every output
+phoneme  Although this is suf cient to roughly align the
+phonemes to the audio  it is insuf cient to detect precise
+phoneme boundaries  To overcome this  we train to predict
+sequences of phoneme pairs rather than single phonemes 
+The network will then tend to output phoneme pairs at
+timesteps close to the boundary between two phonemes in
+  pair 
+To illustrate our
+the string
+ Hello  To convert this to   sequence of phoneme pair
+labels  convert the utterance to phonemes  using   pronunciation dictionary such as CMUDict or   graphemeto 
+phoneme model  and pad the phoneme sequence on either
+end with the silence phoneme to get  sil HH EH   OW sil 
+Finally  construct consecutive phoneme pairs and get  sil 
+HH   HH  EH   EH         OW   OW  sil 
+Input audio is featurized by computing   Melfrequency
+cepstral coef cients  MFCCs  with   ten millisecond stride 
+On top of the input layer  there are two convolution layers    convolutions in time and frequency  three bidirectional recurrent GRU layers  and  nally   softmax output
+layer  The convolution layers use kernels with unit stride 
+height nine  in frequency bins  and width  ve  in time 
+and the recurrent layers use   GRU cells  for each direction  Dropout with   probability of   is applied
+after the last convolution and recurrent layers  To compute the phonemepair error rate  PPER  we decode using
+beam search  To decode phoneme boundaries  we perform
+  beam search with width   with the constraint that neighboring phoneme pairs overlap by at least one phoneme and
+keep track of the positions in the utterance of each phoneme
+pair 
+For training  we use the Adam optimization algorithm with
+
+   DurationsF  ProfileInferenceGraphemeto PhonemeDuration PredictionFundamental Frequency     PredictionAudio SynthesisTextAudioPhonemesPhoneme DictionaryTraining   AudioSegmentationGraphemeto PhonemeTextPhonemesAudio SynthesisDurationsDuration PredictionFundamental Frequency     PredictionF  ExtractionPhoneme DictionaryAudioDeep Voice  Realtime Neural TTS
+
+                  batch size of    
+learning rate of   and an annealing rate of   applied
+every   iterations  Kingma   Ba   
+
+  Phoneme Duration and Fundamental Frequency
+
+Model
+
+We use   single architecture to jointly predict phoneme duration and timedependent fundamental frequency  The input to the model is   sequence of phonemes with stresses 
+with each phoneme and stress being encoded as   onehot
+vector  The architecture comprises two fully connected layers with   units each followed by two unidirectional recurrent layers with   GRU cells each and  nally   fullyconnected output layer  Dropout with   probability of   is
+applied after the initial fullyconnected layers and the last
+recurrent layer 
+The  nal layer produces three estimations for every input
+phoneme  the phoneme duration  the probability that the
+phoneme is voiced       has   fundamental frequency  and
+  timedependent    values  which are sampled uniformly
+over the predicted duration 
+The model is optimized by minimizing   joint loss that
+combines phoneme duration error  fundamental frequency
+error  the negative log likelihood of the probability that
+the phoneme is voiced  and   penalty term proportional to
+the absolute change of    with respect to time to impose
+smoothness  The speci   functional form of the loss function is described in Appendix   
+For training  we use the Adam optimization algorithm with
+                  batch size of    
+learning rate of       and an annealing rate of  
+applied every   iterations  Kingma   Ba   
+
+  Audio Synthesis Model
+Our audio synthesis model
+is   variant of WaveNet 
+WaveNet consists of   conditioning network  which upsamples linguistic features to the desired frequency  and
+an autoregressive network  which generates   probability distribution      over discretized audio samples    
+              We vary the number of layers   the number of residual channels    dimension of the hidden state of
+every layer  and the number of skip channels    the dimension to which layer outputs are projected prior to the output
+layer 
+WaveNet consists of an upsampling and conditioning network  followed by     convolution layers with   residual
+output channels and gated tanh nonlinearities  We break
+the convolution into two matrix multiplies per timestep
+with Wprev and Wcur  These layers are connected with
+residual connections  The hidden state of every layer is
+concatenated to an    vector and projected to   skip chan 
+
+nels with Wskip  followed by two layers of       convolutions  with weights Wrelu and Wout  with relu nonlinearities 
+WaveNet uses transposed convolutions for upsampling and
+conditioning  We  nd that our models perform better  train
+faster  and require fewer parameters if we instead  rst encode the inputs with   stack of bidirectional quasiRNN
+ QRNN  layers  Bradbury et al    and then perform
+upsampling by repetition to the desired frequency 
+Our highestquality  nal model uses       layers       
+residual channels  and       skip channels  For training  we use the Adam optimization algorithm with    
+              batch size of     learning
+rate of   and an annealing rate of   applied every
+  iterations  Kingma   Ba   
+Please refer to Appendix   for full details of our WaveNet
+architecture and the QRNN layers we use 
+
+  Results
+We train our models on an internal English speech database
+containing approximately   hours of speech data segmented into   utterances 
+In addition  we present
+audio synthesis results for our models trained on   subset
+of the Blizzard   data  Prahallad et al    Both
+datasets are spoken by   professional female speaker 
+All of our models are implemented using the TensorFlow
+framework  Abadi et al   
+
+  Segmentation Results
+We train on   TitanX Maxwell GPUs  splitting each batch
+equally among the GPUs and using   ring allreduce to average gradients computed on different GPUs  with each
+iteration taking approximately   milliseconds  After
+approximately   iterations  the model converges to  
+phoneme pair error rate of   We also  nd that phoneme
+boundaries do not have to be precise  and randomly shifting phoneme boundaries by   milliseconds makes no
+difference in the audio quality  and so suspect that audio
+quality is insensitive to the phoneme pair error rate past  
+certain point 
+
+  Graphemeto Phoneme Results
+We train   graphemeto phoneme model on data obtained
+from CMUDict  Weide    We strip out all words that
+do not start with   letter  contain numbers  or have multiple
+pronunciations  which leaves   out of the original
+  graphemephoneme sequence pairs 
+We train on   single TitanX Maxwell GPU with each iteration taking approximately   milliseconds  After ap 
+
+Deep Voice  Realtime Neural TTS
+
+proximately   iterations  the model converges to  
+phoneme error rate of   and   word error rate of  
+which are on par with previous reported results  Yao  
+Zweig    Unlike prior work  we do not use   language
+model during decoding and do not include words with multiple pronunciations in our data set 
+
+  Phoneme Duration and Fundamental Frequency
+
+Results
+
+We train on   single TitanX Maxwell GPU with each iteration taking approximately   milliseconds  After approximately   iterations  the model converges to   mean
+absolute error of   milliseconds  for phoneme duration 
+and   Hz  for fundamental frequency 
+
+  Audio Synthesis Results
+We divide the utterances in our audio dataset into one
+second chunks with   quarter second of context for each
+chunk  padding each utterance with   quarter second of silence at the beginning  We  lter out chunks that are predominantly silence and end up with   total chunks 
+We trained models with varying depth  including    
+  and   layers in the residual layer stack  We  nd that
+models below   layers result in poor quality audio  The
+    and   layer models all produce high quality recognizable speech  but the   layer models have less noise
+than the   layer models  which can be detected with highquality overear headphones 
+Previous work has emphasized the importance of receptive
+ eld size in determining model quality  Indeed  the   layer
+models have half the receptive  eld as the   layer models  However  when run at   kHz  models with   layers
+have only   milliseconds of receptive  eld  but still generate high quality audio  This suggests the receptive  eld
+of the   layer models is suf cient  and we conjecture the
+difference in audio quality is due to some other factor than
+receptive  eld size 
+We train on   TitanX Maxwell GPUs with one chunk per
+GPU  using   ring allreduce to average gradients computed
+on different GPUs  Each iteration takes approximately  
+milliseconds  Our model converges after approximately
+  iterations  We  nd that   single    chunk is suf 
+ cient to saturate the compute on the GPU and that batching does not increase training ef ciency 
+As is common with highdimensional generative models
+ Theis et al    model loss is somewhat uncorrelated
+with perceptual quality of individual samples  While models with unusually high loss sound distinctly noisy  models
+that optimize below   certain threshold do not have   loss
+indicative of their quality  In addition  changes in model
+architecture  such as depth and output frequency  can have
+
+  signi cant impact on model loss while having   small effect on audio quality 
+To estimate perceptual quality of the individual stages of
+our TTS pipeline  we crowdsourced mean opinion score
+ MOS  ratings  ratings between one and  ve  higher values
+being better  from Mechanical Turk using the CrowdMOS
+toolkit and methodology  Ribeiro et al    In order to
+separate the effect of the audio preprocessing  the WaveNet
+model quality  and the phoneme duration and fundamental
+frequency model quality  we present MOS scores for   variety of utterance types  including synthesis results where
+the WaveNet inputs  duration and    are extracted from
+ground truth audio rather than synthesized by other models  The results are presented in Table   We purposefully
+include ground truth samples in every batch of samples that
+raters evaluate to highlight the delta from human speech
+and allow raters to distinguish  ner grained differences between models  the downside of this approach is that the resulting MOS scores will be signi cantly lower than if raters
+are presented only with synthesized audio samples 
+First of all  we  nd   signi cant drop in MOS when simply
+downsampling the audio stream from   kHz to   kHz  especially in combination with  law companding and quantization  likely because     kHz sample is presented to the
+raters as   baseline for     score  and   low quality noisy
+synthesis result is presented as     When used with ground
+truth durations and    our models score highly  with the
+  con dence intervals of our models intersecting those
+of the ground truth samples  However  using synthesized
+frequency reduces the MOS  and further including synthesized durations reduces it signi cantly  We conclude that
+the main barrier to progress towards natural TTS lies with
+duration and fundamental frequency prediction  and our
+systems have not meaningfully progressed past the state of
+the art in that regard  Finally  our best models run slightly
+slower than realtime  see Table   so we demonstrate that
+synthesis quality can be traded for inference speed by adjusting model size by obtaining scores for models that run
+   and    faster than realtime 
+We also tested WaveNet models trained on the full set of
+features from the original WaveNet publication  but found
+no perceptual difference between those models and models
+trained on our reduced feature set 
+
+  Blizzard Results
+To demonstrate the  exibility of our system  we retrained
+all of our models with identical hyperparameters on the
+Blizzard   dataset  Prahallad et al    For our experiments  we used     hour subset of the dataset segmented into   utterances  We evaluated the model using the procedure described in Section   which encourages raters to compare synthesized audio directly with the
+
+Deep Voice  Realtime Neural TTS
+
+Type
+Ground Truth   kHz 
+Ground Truth
+Ground Truth  companded and expanded 
+Synthesized
+Synthesized   kHz 
+Synthesized  Synthesized   
+Synthesized  Synthesized Duration and   
+Synthesized    realtime inference 
+Synthesized    realtime inference 
+
+Model Size
+
+None
+None
+None
+
+                 
+                 
+                 
+                 
+                 
+                 
+
+MOS CI
+     
+     
+     
+     
+     
+     
+     
+     
+     
+
+Table   Mean Opinion Scores  MOS  and   con dence intervals  CIs  for utterances  This MOS score is   relative MOS score
+obtained by showing raters the same utterance across all the model types  which encourages comparative rating and allows the raters
+to distinguish  ner grained differences  Every batch of samples also includes the ground truth   kHz recording  which makes all our
+ratings comparative to natural human voices    ratings were collected for every sample  Unless otherwise mentioned  models used
+phoneme durations and    extracted from the ground truth  rather than synthesized by the duration prediction and frequency prediction
+models  as well as     Hz audio sampling rate 
+
+Platform Data Type Number of Threads
+
+Model
+
+                 
+                 
+                 
+                 
+                 
+                 
+                 
+                 
+                 
+                 
+                 
+                 
+
+CPU
+CPU
+CPU
+CPU
+CPU
+CPU
+CPU
+CPU
+GPU
+GPU
+GPU
+GPU
+
+float 
+float 
+
+int 
+
+float 
+float 
+
+int 
+
+float 
+float 
+float 
+float 
+float 
+float 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+   
+   
+   
+   
+
+Speedup Over Realtime
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Table   CPU and GPU inference kernel benchmarks for different models in  oat  and int  At least one main and one auxiliary
+thread were used for all CPU kernels  These kernels operate on   single utterance with no batching  CPU results are from   Intel Xeon
+      Haswell processor clocked at   GHz and GPU results are from   GeForce GTX Titan   Maxwell GPU 
+
+ground truth  On the held out set    kHz companded and
+expanded audio receives   MOS score of   while
+our synthesized audio received   MOS score of  
+  Optimizing Inference
+Although WaveNet has shown promise in generating highquality synthesized speech  initial experiments reported
+generation times of many minutes or hours for short utterances  WaveNet inference poses an incredibly challenging computational problem due to the highfrequency  autoregressive nature of the model  which requires orders of
+magnitude more timesteps than traditional recurrent neural
+networks  When generating audio    single sample must
+be generated in approximately       for   kHz audio  or
+      for   kHz audio  For our   layer models  this
+means that   single layer  consisting of several matrix multiplies and nonlinearities  must complete in approximately
+
+      For comparison  accessing   value that resides
+in main memory on   CPU can take      
+In order to
+perform inference at realtime  we must take great care to
+never recompute any results  store the entire model in the
+processor cache  as opposed to main memory  and optimally utilize the available computational units  These same
+techniques could be used to accelerate image synthesis with
+PixelCNN  Oord et al    to fractions of   second per
+image 
+Synthesizing one second of audio with our   layer
+WaveNet model takes approximately    oating point
+operations  FLOPs  The activations in any given layer depend on the activations in the previous layer and the previous timestep  so inference must be done one timestep
+and one layer at   time    single layer requires only
+      FLOPs  which makes achieving meaningful parallelism dif cult  In addition to the compute requirements 
+
+Deep Voice  Realtime Neural TTS
+
+the model has approximately       parameters  which
+equate to about   MB if represented in single precision 
+ See Appendix   for   complete performance model 
+On CPU    single Haswell or Broadwell core has   peak
+singleprecision throughput of approximately      
+FLOPs and an   toL  cache bandwidth of approximately
+  GB    assuming two  wide AVX FMA instructions
+every cycle and an   toL  bandwidth of   bytes per
+cycle  The model must be loaded from cache once per
+timestep  which requires   bandwidth of   GB    Even
+if the model were to    in    cache  the implementation
+would need to utilize   of the maximum bandwidth and
+  of the peak FLOPS in order to do inference in realtime on   single core  Splitting the calculations across
+multiple cores reduces the dif culty of the problem  but
+nonetheless it remains challenging as inference must operate at   signi cant fraction of maximum memory bandwidth and peak FLOPs and while keeping threads synchronized 
+  GPU has higher memory bandwidth and peak FLOPs
+than   CPU but provides   more specialized and hence
+restrictive computational model    naive implementation
+that launches   single kernel for every layer or timestep is
+untenable  but an implementation based on the persistent
+RNN technique  Diamos et al    may be able to take
+advantage of the throughput offered by GPUs 
+We implement highspeed optimized inference kernels for
+both CPU and GPU and demonstrate that WaveNet inference at fasterthan realtime speeds is achievable  Table  
+lists the CPU and GPU inference speeds for different models 
+In both cases  the benchmarks include only the autoregressive  highfrequency audio generation and do not
+include the generation of linguistic conditioning features
+ which can be done in parallel for the entire utterance  Our
+CPU kernels run at realtime or fasterthan realtime for  
+subset of models  while the GPU models do not yet match
+this performance 
+
+  CPU Implementation
+We achieve realtime CPU inference by avoiding any recomputation  doing cachefriendly memory accesses  parallelizing work via multithreading with ef cient synchronization  minimizing nonlinearity FLOPs  avoiding cache
+thrashing and thread contention via thread pinning  and using custom hardwareoptimized routines for matrix multiplication and convolution 
+For the CPU implementation  we split the computation into
+the following steps 
+
+  Sample Embedding  Compute the WaveNet input
+causal convolution by doing two sample embeddings 
+
+one for the current timestep and one for the previous
+timestep  and summing them with   bias  That is 
+     Wemb prev   yi    Wemb cur   yi   Bembed  
+  Layer Inference  For every layer   from       to  
+
+with dilation width   
+
+    Compute the left half of the widthtwo dilated
+
+convolution via   matrixvector multiply 
+
+    
+prev        
+
+ 
+    Compute the right half of the dilated convolution 
+ 
+    Compute the hidden state      given the condi 
+
+prev       
+   
+cur       
+
+    
+cur        
+
+ 
+
+cur       
+
+        
+
+ 
+
+ 
+
+tioning vector     
+   
+           
+prev       
+
+           
+      
+
+       tanh     
+
+ 
+where     denotes the  rst   elements of the vector   and vr   denotes the next   elements  Then 
+compute the input to the next layer via   matrixvector multiply 
+
+res
+
+            
+res
+
+             
+
+ 
+    Compute the contribution to the skipchannel
+matrix multiply from this layer  accumulating
+over all layers  with      Bskip 
+                   
+
+ 
+  Output  Compute the two output       convolutions 
+ 
+ 
+ 
+Finally  sample yi  randomly from the distribution   
+
+zs   relu   
+za   relu  Wrelu   zs   Brelu 
+    softmax  Wout   za   Bout 
+
+skip       
+
+prev       and zs  with the     
+
+We parallelize these across two groups of threads as depicted in Figure     group of main threads computes
+       
+cur        and      za  and      group of auxiliary
+threads computes     
+prev being
+computed for the next upcoming timestep while the main
+threads compute za and    Each of these groups can consist of   single thread or of multiple threads  if there are
+multiple threads  each thread computes one block of each
+matrixvector multiply  binary operation  or unary operation  and thread barriers are inserted as needed  Splitting
+the model across multiple threads both splits up the compute and can also be used to ensure that the model weights
+   into the processor    cache 
+Pinning threads to physical cores  or disabling hyperthreading  is important for avoiding thread contention and
+cache thrashing and increases performance by approximately  
+
+Deep Voice  Realtime Neural TTS
+
+Main Threads
+
+  
+cur
+  
+
+  
+cur
+  
+
+     
+
+  
+cur
+  
+
+  
+cur
+  
+
+zs   za    
+
+  
+
+Sync Points
+
+Auxiliary Threads
+
+  
+
+  
+
+     
+
+  
+
+     
+
+prev     
+
+prev             
+
+prev     
+
+prev
+
+cur             
+
+  
+cur     
+cur     
+                         
+
+cur
+
+timestep  
+
+timestep      
+
+Figure   Two groups of threads run in parallel  Computation of the Wskip is of oaded to the auxiliary threads while the main threads
+progress through the stack of WaveNet layers  While the main threads are computing the output layer  the auxiliary threads prepare the
+left Wprev half of the WaveNet layer convolutions for the upcoming timestep  Arrows indicate where one thread group waits on results
+from the other thread group  and are implemented as spinlocks 
+Depending on model size 
+the nonlinearities  tanh 
+sigmoid  and softmax  can also take   signi cant fraction of inference time  so we replace all nonlinearities with
+highaccuracy approximations  which are detailed in Appendix    The maximum absolute error arising from these
+approximations is       for tanh        for
+sigmoid  and       for ex  With approximate instead
+of exact nonlinearities  performance increases by roughly
+ 
+We also implement inference with weight matrices quantized to int  and  nd no change in perceptual quality
+when using quantization  For larger models  quantization
+offers   signi cant speedup when using fewer threads  but
+overhead of thread synchronization prevents it from being
+useful with   larger number of threads 
+Finally  we write custom AVX assembly kernels for matrixvector multiplication using PeachPy  Dukhan    specialized to our matrix sizes 
+Inference using our custom
+assembly kernels is up to    faster than Intel MKL and
+   faster than OpenBLAS when using float  Neither library provides the equivalent int  operations 
+
+To get close to realtime on   GPU  we instead build   kernel using the techniques of persistent RNNs  Diamos et al 
+  which generates all samples in the output audio in  
+single kernel launch  The weights for the model are loaded
+to registers once and then used without unloading them for
+the entire duration of inference  Due to the mismatch between the CUDA programming model and such persistent
+kernels  the resulting kernels are specialized to particular
+model sizes and are incredibly laborintensive to write  Although our GPU inference speeds are not quite realtime
+ Table   we believe that with these techniques and   better implementation we can achieve realtime WaveNet inference on GPUs as well as CPUs  Implementation details
+for the persistent GPU kernels are available in Appendix   
+
+  GPU Implementation
+Due to their computational intensity  many neural models
+are ultimately deployed on GPUs  which can have   much
+higher computational throughput than CPUs  Since our
+model is memory bandwidth and FLOP bound  it may seem
+like   natural choice to run inference on   GPU  but it turns
+out that comes with   different set of challenges 
+Usually  code is run on the GPU in   sequence of kernel
+invocations  with every matrix multiply or vector operation
+being its own kernel  However  the latency for   CUDA
+kernel launch  which may be up to       combined with
+the time needed to load the entire model from GPU memory are prohibitively large for an approach like this  An
+inference kernel in this style ends up being approximately
+   slower than realtime 
+
+  Conclusion
+In this work  we demonstrate that current Deep Learning
+approaches are viable for all the components of   highquality textto speech engine by building   fully neural system  We optimize inference to fasterthan realtime speeds 
+showing that these techniques can be applied to generate audio in realtime in   streaming fashion  Our system
+is trainable without any human involvement  dramatically
+simplifying the process of creating TTS systems 
+Our work opens many new possible directions for exploration 
+Inference performance can be further improved
+through careful optimization  model quantization on GPU 
+and int  quantization on CPU  as well as experimenting with other architectures such as the Xeon Phi  Another natural direction is removing the separation between
+stages and merging the segmentation  duration prediction 
+and fundamental frequency prediction models directly into
+the audio synthesis model  thereby turning the problem into
+  full sequenceto sequence model  creating   single endto end trainable TTS system  and allowing us to train the
+entire system with no intermediate supervision  In lieu of
+fusing the models  improving the duration and frequency
+models via larger training datasets or generative modeling
+techniques may have an impact on voice naturalness 
+
+Deep Voice  Realtime Neural TTS
+
+References
+Abadi  Mart    Agarwal  Ashish  Barham  Paul  Brevdo 
+Eugene  Chen  Zhifeng  Citro  Craig  Corrado  Greg   
+Davis  Andy  Dean  Jeffrey  Devin  Matthieu  Ghemawat  Sanjay  Goodfellow  Ian  Harp  Andrew  Irving  Geoffrey  Isard  Michael  Jia  Yangqing  Jozefowicz 
+Rafal  Kaiser  Lukasz  Kudlur  Manjunath  Levenberg 
+Josh  Man    Dan  Monga  Rajat  Moore  Sherry  Murray 
+Derek  Olah  Chris  Schuster  Mike  Shlens  Jonathon 
+Steiner  Benoit  Sutskever  Ilya  Talwar  Kunal  Tucker 
+Paul  Vanhoucke  Vincent  Vasudevan  Vijay  Vi egas 
+Fernanda  Vinyals  Oriol  Warden  Pete  Wattenberg 
+Martin  Wicke  Martin  Yu  Yuan  and Zheng  Xiaoqiang 
+TensorFlow  Largescale machine learning on heterogeneous systems    URL http tensorflow 
+org  Software available from tensor ow org 
+
+Amodei  Dario  Anubhai  Rishita  Battenberg  Eric  Case 
+Carl  Casper  Jared  Catanzaro  Bryan  Chen  Jingdong 
+Chrzanowski  Mike  Coates  Adam  Diamos  Greg  et al 
+Deep speech   Endto end speech recognition in english
+and mandarin  arXiv preprint arXiv   
+
+Boersma  Paulus Petrus Gerardus et al  Praat    system
+for doing phonetics by computer  Glot international   
+ 
+
+Bradbury  James  Merity  Stephen  Xiong  Caiming  and
+Socher  Richard  Quasirecurrent neural networks  arXiv
+preprint arXiv   
+
+Chung  Junyoung  Gulcehre  Caglar  Cho  KyungHyun 
+and Bengio  Yoshua  Empirical evaluation of gated recurrent neural networks on sequence modeling  arXiv
+preprint arXiv   
+
+Diamos  Greg  Sengupta  Shubho  Catanzaro  Bryan 
+Chrzanowski  Mike  Coates  Adam  Elsen  Erich  Engel 
+Jesse  Hannun  Awni  and Satheesh  Sanjeev  Persistent
+rnns  Stashing recurrent weights onchip 
+In Proceedings of The  rd International Conference on Machine
+Learning  pp     
+
+Dukhan  Marat  Peachpy meets opcodes  direct machine
+code generation from python  In Proceedings of the  th
+Workshop on Python for HighPerformance and Scienti   Computing  pp    ACM   
+
+Graves  Alex  Fern andez  Santiago  Gomez  Faustino  and
+Schmidhuber    urgen  Connectionist temporal classi cation  Labelling unsegmented sequence data with recurrent neural networks  In Proceedings of the  rd International Conference on Machine Learning  ICML  
+pp    New York  NY  USA    ACM 
+
+Mehri  Soroush  Kumar  Kundan  Gulrajani  Ishaan  Kumar  Rithesh  Jain  Shubham  Sotelo  Jose  Courville 
+Aaron  and Bengio  Yoshua  Samplernn  An unconditional endto end neural audio generation model  arXiv
+preprint arXiv   
+
+Morise  Masanori  Yokomori  Fumiya  and Ozawa  Kenji 
+World    vocoderbased highquality speech synthesis
+system for realtime applications 
+IEICE TRANSACTIONS on Information and Systems   
+ 
+
+Oord  Aaron
+
+van
+
+and
+Kavukcuoglu  Koray  Pixel recurrent neural networks 
+arXiv preprint arXiv   
+
+den  Kalchbrenner  Nal 
+
+Paine  Tom Le  Khorrami  Pooya  Chang  Shiyu  Zhang 
+Yang  Ramachandran 
+Prajit  HasegawaJohnson 
+Mark    and Huang  Thomas    Fast wavenet generation algorithm 
+arXiv preprint arXiv 
+ 
+
+Pascual  Santiago and Bonafonte  Antonio  Multioutput
+rnnlstm for multiple speaker speech synthesis with  
+interpolation model  way     
+
+Prahallad  Kishore  Vadapalli  Anandaswarup  Elluru 
+Naresh  et al  The blizzard challenge  indian language task 
+In In Blizzard Challenge Workshop  
+ 
+
+Rao  Kanishka  Peng  Fuchun  Sak  Has im  and Beaufays  Franc oise  Graphemeto phoneme conversion using long shortterm memory recurrent neural networks 
+In Acoustics  Speech and Signal Processing  ICASSP 
+  IEEE International Conference on  pp   
+IEEE   
+
+Ribeiro  Fl avio  Flor encio  Dinei  Zhang  Cha  and Seltzer 
+Michael  Crowdmos  An approach for crowdsourcing
+mean opinion score studies 
+In Acoustics  Speech and
+Signal Processing  ICASSP    IEEE International
+Conference on  pp    IEEE   
+
+Ronanki  Srikanth  Henter  Gustav Eje  Wu  Zhizheng  and
+King  Simon    templatebased approach for speech
+synthesis intonation generation using lstms  Interspeech
+  pp     
+
+Sotelo  Jose  Mehri  Soroush  Kumar  Kundan  Santos 
+Joao Felipe  Kastner  Kyle  Courville  Aaron  and Bengio  Yoshua  Char wav  Endto end speech synthesis  In
+ICLR   workshop submission    URL https 
+ openreview net forum id   VWyySKx 
+
+Kingma     and Ba     Adam    method for stochastic
+
+optimization  arXiv preprint arXiv   
+
+Stephenson  Ian  Production Rendering  Design and Im 
+
+plementation  Springer   
+
+Deep Voice  Realtime Neural TTS
+
+Taylor  Paul  Textto Speech Synthesis  Cambridge University Press  New York  NY  USA   st edition    ISBN
+   
+
+Theis  Lucas  Oord    aron van den  and Bethge  Matthias 
+  note on the evaluation of generative models  arXiv
+preprint arXiv   
+
+van den Oord    aron  Dieleman  Sander  Zen  Heiga  Simonyan  Karen  Vinyals  Oriol  Graves  Alex  Kalchbrenner  Nal  Senior  Andrew  and Kavukcuoglu  Koray  Wavenet    generative model for raw audio  CoRR
+abs   
+
+Weide    
+
+The CMU pronunciation dictionary  
+
+Carnegie Mellon University   
+
+Yao  Kaisheng and Zweig  Geoffrey 
+
+Sequenceto 
+sequence neural net models for graphemeto phoneme
+conversion  arXiv preprint arXiv   
+
+Zen  Heiga and Sak  Has im  Unidirectional long shortterm
+memory recurrent neural network with recurrent output
+layer for lowlatency speech synthesis 
+In Acoustics 
+Speech and Signal Processing  ICASSP    IEEE International Conference on  pp    IEEE   
+
+Zen  Heiga  Senior  Andrew  and Schuster  Mike  Statistical
+parametric speech synthesis using deep neural networks 
+In Proceedings of the IEEE International Conference on
+Acoustics  Speech  and Signal Processing  ICASSP  pp 
+   
+
+

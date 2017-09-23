@@ -1,0 +1,1033 @@
+Adversarial Feature Matching for Text Generation
+
+Yizhe Zhang   Zhe Gan   Kai Fan   Zhi Chen   Ricardo Henao   Dinghan Shen   Lawrence Carin  
+
+Abstract
+
+The Generative Adversarial Network  GAN  has
+achieved great success in generating realistic  realvalued  synthetic data  However  convergence
+issues and dif culties dealing with discrete data
+hinder the applicability of GAN to text  We propose   framework for generating realistic text via
+adversarial training  We employ   long shortterm memory network as generator  and   convolutional network as discriminator  Instead of
+using the standard objective of GAN  we propose
+matching the highdimensional latent feature distributions of real and synthetic sentences  via  
+kernelized discrepancy metric  This eases adversarial training by alleviating the modecollapsing
+problem  Our experiments show superior performance in quantitative evaluation  and demonstrate
+that our model can generate realisticlooking sentences 
+
+  Introduction
+Generating meaningful and coherent sentences is central to
+many natural language processing applications  The general idea is to estimate   distribution over sentences from
+  corpus  then use it to sample realisticlooking sentences 
+This task is important because it enables generation of novel
+sentences that preserve the semantic and syntactic properties
+of realworld sentences  while being potentially different
+from any of the examples used to estimate the model  For
+instance  in the context of dialog generation  it is desirable
+to generate answers that are more diverse and less generic
+ Li et al   
+One simple approach consists of  rst learning   latent
+space to represent  xedlength  sentences using an encoderdecoder  autoencoder  framework based on Recurrent Neural Networks  RNNs   Cho et al    Sutskever et al 
+  then generate synthetic sentences by decoding ran 
+
+ Duke University  Durham  NC    Correspondence to 
+
+Yizhe Zhang  yizhe zhang duke edu 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright   by
+the author   
+
+dom samples from this latent space  However  this approach
+often fails to generate realistic sentences from arbitrary
+latent representations  The reason for this is that  when mapping sentences to their latent representations using an autoencoder  the mappings usually cover   small but structured
+region of the latent space  which corresponds to   manifold
+embedding  Bowman et al    In practice  most regions
+of the latent space do not necessarily map  decode  to realistic sentences  Consequently  randomly sampling latent
+representations often yields nonsensical sentences  Recent
+work by Bowman et al    has attempted to generate
+more diverse sentences via RNNbased variational autoencoders  However  they did not address the fundamental
+problem that the posterior distribution over latent variables
+does not appropriately cover the latent space 
+Another underlying challenge of generating realistic text
+relates to the nature of the RNN  During inference  the
+RNN generates words in sequence from previously generated words  contrary to learning  where groundtruth words
+are used every time  As   result  error accumulates proportional to the length of the sequence       the  rst few words
+look reasonable  however  quality deteriorates quickly as
+the sentence progresses  Bengio et al    coined this
+phenomenon exposure bias  Toward addressing this problem  Bengio et al    proposed the scheduled sampling
+approach  However  Husz     showed that scheduled
+sampling is   fundamentally inconsistent training strategy 
+in that it produces largely unstable results in practice 
+The Generative Adversarial Network  GAN   Goodfellow
+et al    is an appealing and natural answer to the above
+issues  GAN matches the distributions of synthetic and real
+data by introducing an adversarial game between   generator and   discriminator  The GAN objective seeks to
+constitute   generator  that functionally maps samples from
+  given  simple  prior distribution  to synthetic data that appear to be realistic  The GAN setup explicitly seeks that the
+latent representations from real data  via encoding  be distributed in   manner consistent with the speci ed prior      
+Gaussian or uniform  Due to the nature of adversarial training  the discriminator compares real and synthetic sentences 
+rather than their individual words  which in principle should
+alleviate the exposurebias issue  Recent work  Lamb et al 
+  has incorporated an additional discriminator to train  
+sequenceto sequence language model that better preserves
+
+Adversarial Feature Matching for Text Generation
+
+longterm dependencies 
+Effort has also been made to generate realisticlooking sentences via adversarial training  For instance  by borrowing
+ideas from reinforcement learning  Yu et al    Li et al 
+  treat the sentence generation as   sequential decision
+making process  Despite the success of these methods  two
+fundamental problems of the GAN framework limit their
+use in practice      the generator tends to produce   single
+observation for multiple latent representations       mode
+collapsing  Metz et al    and  ii  the generator   contribution to the learning signal is insubstantial when the
+discriminator is close to its local optimum       vanishing
+gradient behavior  Arjovsky   Bottou   
+In this paper we propose   new framework  TextGAN  to
+alleviate the problems associated with generating realisticlooking sentences via GAN  Speci cally  the Long ShortTerm Memory  LSTM   Hochreiter   Schmidhuber   
+RNN is used as generator  and the Convolutional Neural
+Network  CNN   Kim    is used as discriminator  We
+consider   kernelbased momentmatching scheme over  
+Reproducing Kernel Hilbert Space  RKHS  to force the empirical distributions of real and synthetic sentences to have
+matched moments in latentfeature space  As   consequence 
+our approach ameliorates the modecollapsing issue associated with standard GAN training  This strategy encourages
+the model to learn representations that are both informative
+of the original sentences  via the autoencoder  and discriminative        synthetic sentences  via the discriminator  We
+also propose several complementary techniques  including
+initialization strategies and discretization approximations
+to ease GAN training  and to achieve superior performance
+compared to related approaches 
+
+  Model
+  Generative Adversarial Networks
+
+GAN  Goodfellow et al    aims to obtain the equilibrium of the following optimization objective
+LGAN   Ex px log        Ez pz log            
+where LGAN is maximized           and minimized       
+   Note that the  rst term of   does not depend on
+   Observed  real  data     are sampled from empirical
+distribution px  The latent code     that feeds into the
+generator       is drawn from   simple prior distribution
+pz  When the discriminator is optimal  solving this adversarial game is equivalent to minimizing the JensonShannon
+Divergence  JSD   Arjovsky   Bottou    between the
+real data distribution px  and the synthetic data distribution       cid           where     pz   Goodfellow et al 
+  However  in most cases  the saddlepoint solution of
+the objective in   is intractable  Therefore    procedure to
+
+Figure   Model scheme of TextGAN  Latent codes   are fed
+through   generator    to produce synthetic sentence     Synthetic and real sentences    and    are fed into   binary discriminator    for real vs  fake  synthetic  prediction  and also for
+latent code reconstruction        and   represent features of    and
+   respectively 
+iteratively update    and    is often applied 
+Arjovsky   Bottou   pointed out that the standard
+GAN objective in   suffers from an unstably weak learning
+signal when the discriminator gets close to local optimal 
+due to the gradientvanishing effect  This is because the
+JSD implied by the original GAN loss becomes   constant
+if px  and      share no support  thus minimizing the
+JSD yields no learning signal  This problem also exists in
+the recently proposed energybased GAN  EBGAN   Zhao
+et al    as the distance metric implied by EBGAN
+is the Total Variance Distance  TVD  which has the same
+issue        JSD  as shown by Arjovsky et al   
+
+  TextGAN
+Given   sentence corpus    instead of directly optimizing the
+objective from standard GAN in   we adopt an approach
+that is similar to the feature matching scheme of Salimans
+et al    Speci cally  we consider the objective
+
+LD   LGAN    rLrecon    mLMM   
+LG   LMM   
+
+LGAN   Es   log        Ez pz log          
+Lrecon            
+
+ 
+ 
+
+where LD and LG are iteratively maximized          and
+minimized           respectively  LGAN is the standard
+objective of GAN in   Lrecon is the Euclidean distance
+between the reconstructed latent code      and the original
+code     drawn from prior distribution pz  We denote the
+synthetic sentences as     cid       where     pz  LMM   
+represents the Maximum Mean Discrepancy  MMD   Gretton et al    between the empirical distribution of sentence embeddings    and    for synthetic and real data 
+respectively  The model framework is illustrated in Figure  
+and detailed below 
+We  rst consider LG in   The generator    attempts to
+adjust itself to produce synthetic sentence     with features
+
+zz   sGssReal Syn CNNLSTM   fffMMD   zD  Adversarial Feature Matching for Text Generation
+
+    encoded by    to mimic the real sentence features  
+ also encoded by    This is achieved by matching the
+empirical distributions of    and   via the MMD objective 
+Concisely  MMD measures the mean squared difference
+between two sets of samples   and    where    
+ xi   Nx  xi   Rd       yi   Ny  yi   Rd    is the
+dimensionality of the samples  and Nx and Ny are sample
+sizes for   and    respectively  The MMD metric characterizes the differences between   and   over   Reproducing
+Kernel Hilbert Space  RKHS     associated with kernel
+function      Rd   Rd  cid     The kernel can be written
+as an inner product over           cid     cid          cid cid   
+and      cid           is denoted as the feature mapping
+ Gretton et al    Formally  the MMD for two empirical
+distributions   and   is given by
+LMM       Ex         Ey       
+
+ cid 
+  Ex   Ex cid          
+ 
+     Ex   Ey           
+ cid 
+  Ey YEy cid          
+Note that LMM    reaches its minimum when the two empirical distributions   and    in general  match exactly  For
+example  with   polynomial kernel             xT         
+minimizing LMM    can be understood as matching moments of two empirical distributions up to order    With
+  universal kernel like the Gaussian kernel           
+exp     
+  with bandwidth   minimizing the MMD
+objective will match moments of all orders  Gretton et al 
+  Here  we use MMD to match the empirical distribution of    and   using   Gaussian kernel 
+The adversarial discriminator    associated with the loss
+in   aims to produce sentence features that are most discriminative  representative and challenging  These aims
+are explicitly represented as the three components of  
+namely      LGAN requires    and   to be discriminative of
+real and synthesized sentences   ii  Lrecon requires    and
+  to preserve maximum reconstruction information for the
+latent code   that generates synthetic sentences  and  iii 
+LMM    forces    to select the most challenging features
+for the generator to match 
+In the situation for which simple features are enough for the
+discrimination reconstruction task  this additional loss seeks
+to estimate complex features that are dif cult for the current
+generator  thus improving in terms of generation ability  In
+our experience  we  nd the reconstruction and MMD loss
+in   serve as regularizer to the binary classi cation loss  in
+that by adding these losses  discriminator features tend to
+be more spreadout in the feature space 
+In summary  the adversarial game associated with   and
+  is the following     attempts to select informative
+sentence features  while    aims to match these features 
+Parameters    and    act as tradeoff between discrim 
+
+ 
+
+ 
+
+ination ability  and reconstruction and moment matching
+precision  respectively  We argue that this framework has
+several advantages over the standard GAN objective in  
+The original GAN objective has been shown to be prone to
+mode collapsing  especially when the socalled log   alternative for the generator loss is used  Metz et al        
+replacing the second term of   by  Ez pz log       
+This is because when log   is used  fakelooking samples
+are penalized more severely than less diverse samples  Arjovsky   Bottou    thus grossly underestimating the
+variance of latent features  The loss in   on the other hand 
+forces the generator to produce highly diverse sentences to
+match the variation of real sentences  by latent moment
+matching  thus alleviating the modecollapsing problem 
+We believe that leveraging MMD is general enough to be
+useful as   framework in other data domains       images 
+Presumably  the discrete nature of text data makes standard GAN prone to modecollapsing  This is manifested
+by close neighbors in latent code space producing the same
+text output  In our approach  MMD and feature matching
+are introduced to alleviate mode collapsing with text data
+as motivating domain  However  whether such an objective
+is free from the convergence issues of the standard GAN 
+due to vanishing gradient from the generator  is known to
+be problem speci    Arjovsky   Bottou   
+Arjovsky   Bottou   demonstrated that JSD yields
+weak gradient signals when the real and synthetic data
+are far apart  To deliver stable gradients    smoother distance metric over the data domain is required 
+In  
+we are essentially employing   Neural Network  NN  embedding via Gaussian kernel for matching   and         
+ks      cid                cid  where    denotes the NN
+embedding that maps from the data to the feature domain 
+Under the assumption that    is   bijective mapping      
+distinct sentences have different embedded feature vectors 
+in the Supplementary Material we prove that if the original kernel function                    is universal  the
+composed kernel ks      cid  is also universal  As shown in
+Gretton et al    the MMD is   proper metric when the
+kernel is universal  In fact  if the kernel function is universal 
+the MMD metric will be no worse than TVD in terms of
+vanishing gradients  Arjovsky et al    However  if the
+bandwidth of the kernel is too small  much smaller than the
+average distance between data points  the vanishing gradient
+problem remains  Arjovsky et al   
+Additionally  seeking to match the sentence features provides   more achievable and informative objective than directly trying to mislead the discriminator as in standard
+GAN  Speci cally  the loss in   implies   clearer aim for
+the generator  as it requires matching the latent features
+ distributionwise  as opposed to uniquely trying to fake  
+binary classi er 
+
+Adversarial Feature Matching for Text Generation
+
+Note that if the latent features from real and synthetic data
+have similar distributions it is unlikely that the discriminator 
+that uses these features as inputs  will be able to tell them
+apart  Implementationwise  the updating signal from the
+generator does not need to propagate all the way back from
+the discriminator  but rather directly from the features layer 
+thus less prone to fading  We believe there may be other
+possible approaches for text generation using GAN  however  we hope to provide    rst attempt toward overcoming
+some of the dif culties associated with it 
+
+  Alternative  data ef cient  objectives
+
+One limitation of the proposed approach is that the dimensionality of features    and   could be much larger than
+the size of the subset of data  minibatch  used during learning  hence the empirical distribution may not be suf ciently
+representative  In fact    reliable Gaussian kernel MMD twosample test generally requires the size of the minibatch to
+be proportional to the number of dimensions  Ramdas et al 
+  To alleviate this issue  we consider two strategies 
+
+Compressing network We map    and   into   lowerdimensional feature space using   compressing network with
+fully connected layers  also learned by    This is sensible because the discriminator will still encourage the most
+challenging features to be abstracted  compressed  from the
+original features    and    This approach provides signi 
+cant computational savings  as computation of the MMD in
+  scales with     df   where df denotes the dimensionality of the feature vector  However    lowerdimensional
+mapping may miss valuable information  Besides   nding
+the optimal mapping dimension may be dif cult in practice 
+There exists   tradeoff between fast estimation and   richer
+feature vector  by setting df appropriately 
+
+Gaussian covariance matching We could also avoid using the kernel trick  as was used in   Instead  we can
+replace LMM    by     
+   below  where we accumulate
+ Gaussian  suf cient statistics from multiple minibatches 
+thus alleviating the inadequateminibatch size issue  Specifically 
+
+    
+    tr   
+
+     
+              
+
+   
+     
+
+         
+
+ 
+
+where   and   represent the covariance matrices of synthetic and real sentence feature vectors    and    respectively 
+  and   denote the mean vectors of    and    respectively 
+By setting              reduces to the  rstmoment
+feature matching technique from Salimans et al   
+Note that this loss     
+  is an upper bound of the JSD  omitting constant  proved in the Supplementary Material  between two multivariate Gaussian distribution       and
+
+Figure   Top  CNNbased sentence discriminator encoder  Bottom  LSTM sentence generator 
+
+        which is more tractable than directly minimizing JSD  The feature vectors used in   are the neural net
+outputs before applying any nonlinear activation function 
+We note that the Gaussian assumption may still be strong
+in many cases  In practice  we use   moving average of
+the most recent   minibatches for estimating all suf cient
+statistics       and   Further    and   are initialized to
+be   to prevent numerical problems 
+
+  Model speci cation
+
+Let wt denote the tth word in sentence    Each word wt is
+embedded into   kdimensional word vector xt   We wt 
+where We   Rk   is    learned  word embedding matrix 
+  is the vocabulary size  and notation We    denotes the
+vth column of matrix We 
+
+CNN discriminator We use the CNN architecture in Kim
+  Collobert et al    for sentence encoding  It
+consists of   convolution layer and   maxpooling operation
+over the entire sentence for each feature map    sentence
+of length    padded where necessary  is represented as  
+matrix     Rk     by concatenating its word embeddings
+as columns       the tth column of   is xt 
+As shown in Figure  top    convolution operation involves
+   lter Wc   Rk    applied to   window of   words to
+produce   new feature  Following Collobert et al    we
+induce   latent feature map         Wc        RT   
+where   is   nonlinear activation function  we use the
+hyperbolic tangent  tanh      RT    is   bias vector 
+
+ThisisaverygoodenglishmovieffSentence as     by   matrixConvolvingMaxpooling Feature layer Fully connected MLPhLhLZh       LSTMGyLyLAdversarial Feature Matching for Text Generation
+
+and   denotes the convolutional operator  We then apply
+  maxover time pooling operation  Collobert et al   
+to the feature map and take its maximum value           
+max    as the feature corresponding to this particular  lter 
+Convolving the same  lter with the hgram at every position
+in the sentence allows features to be extracted independently
+of their position in the sentence  This pooling scheme tries
+to capture the most salient feature       the one with the
+highest value  for each feature map  effectively  ltering
+out less informative compositions of words  Further  this
+pooling scheme also guarantees that the extracted features
+are independent of the length of the input sentence 
+The above process describes how one feature is extracted
+from one  lter  In practice  the model uses multiple  lters
+with varying window sizes  Each  lter can be considered
+as   linguistic feature detector that learns to recognize  
+speci   class of hgrams  Assume we have   window
+sizes  and for each window size  we use    lters  then we
+obtain   mpdimensional vector   to represent   sentence 
+On top of this mpdimensional feature vector  we specify
+  softmax layer to map the input sentence to an output
+           representing the probability of   being from
+the data distribution  real  rather than from the adversarial
+generator  synthesized 
+There are other CNN architectures in the literature  Kalchbrenner et al    Hu et al    Johnson   Zhang 
+  We adopt the CNN model of Kim   Collobert
+et al    due to its simplicity and excellent performance
+on sentence classi cation tasks 
+LSTM generator We specify an LSTM generator to
+translate   latent code vector     into   synthetic sentence    
+This is illustrated in Figure  bottom  The probability of  
+lengthT sentence      given the encoded feature vector     is
+de ned as
+
+  cid 
+
+                 
+
+    wt            
+
+ 
+
+  
+
+where  wt denotes the tth generated token  Speci cally 
+we generate the  rst word     deterministically from   
+with           argmax Vh  where      tanh Cz 
+Bias terms are omitted for simplicity  All other words
+in the sentence are sequentially generated using the RNN 
+based on previously generated words  until the endsentence
+symbol is generated  The tth word  wt is generated as
+   wt             argmax Vht  where      cid                 
+and the hidden units ht are recursively updated through
+ht     yt  ht       is   weight matrix used for computing   distribution over words  The input yt  for the tth
+step is the embedding vector of the previous generated word
+ wt      
+
+yt    We   wt   
+
+ 
+
+The synthetic sentence               wL  is deterministically obtained given   by concatenating the generated words 
+In experiments  the transition function     is implemented
+with an LSTM  Hochreiter   Schmidhuber    Details
+are provided in the Supplementary Material 
+
+  Training Techniques
+Softargmax approximation To train the generator   
+which contains discrete variables  direct application of the
+gradient estimation may be dif cult  Yu et al    Scorefunction based approaches  such as the REINFORCE algorithm  Williams    achieve unbiased gradient estimation for discrete variables using Monte Carlo estimation 
+However  in our experiments  we found that the variance
+of the gradient estimation is very large  which is consistent
+with Maddison et al    Here we consider   softargmax
+operator  Zhang et al    similar to the Gumbelsoftmax
+ Gumbel   Lieblein    Jang et al    when performing learning  as an approximation to  
+
+yt    Wesoftmax Vht   cid      
+
+ 
+
+where  cid  represents the elementwise product  Note that
+when       this approximation approaches  
+
+Pretraining Previous literature  Goodfellow et al   
+Salimans et al    has discussed the fundamental dif 
+culty of training GANs using gradientbased methods  In
+general  gradient descent optimization schemes may fail to
+converge to the equilibrium by moving along the orbit trajectory among saddle points  Salimans et al    Intuitively 
+good initialization can facilitate convergence  Toward this
+end  we initialize the LSTM parameters of the generator
+by pretraining   standard CNNLSTM autoencoder  Gan
+et al    For the discriminator encoder initialization 
+we use   permutation training strategy  For each sentence
+in the corpus  we randomly swap two words to construct  
+slightly tweaked sentence counterpart  The discriminator is
+pretrained to distinguish the tweaked sentences from the
+true sentences  The swapping operation is preferred here
+because it constitutes   much more challenging task for
+the discriminator to learn  compared to adding or deleting
+words  where the structure of real sentences is more strongly
+disrupted  thus making it easier for the discriminator  The
+permutation pretraining is important because it requires the
+discriminator to learn features characteristic of sentences 
+long dependencies  We empirically found this provides  
+better initialization  compared to no pretraining  for the
+discriminator to learn good features 
+We also utilized other training techniques to stabilize training  such as softlabeling  Salimans et al    Details of
+these are provided in the Supplementary Material 
+
+Adversarial Feature Matching for Text Generation
+
+  Related Work
+Generative Moment Matching Networks  GMMNs   Dziugaite et al    Li et al    are closely related to our
+approach  However  these methods either directly match the
+empirical distribution in the data domain  or extract features
+using   pretrained autoencoder  Li et al    If the goal
+is to perform matching in the data domain when generating
+sentences  the dimensionality of input data would be      
+ higher than   in our case  Note that the minibatch
+size required to obtain reasonable statistical power grows
+linearly with the number of dimension  Ramdas et al   
+and the computational cost of MMD grows quadratically
+with the size of data points  Therefore  directly applying
+GMMNs is often computationally prohibitive  Furthermore 
+directly matching in the data domain via GMMNs implies
+wordby word discrepancy  which yields less smooth gradients  This happens because   wordby word discrepancy
+ignores sentence structure  For example  two sentences   
+boy is swimming  and  boy is swimming  will be far apart
+in   wordby word metric  when they are indeed close in  
+sentenceby sentence feature space 
+  twostep method  where   feature encoder is generated
+ rst as in Li et al    helps alleviate the problems above 
+However  in Li et al    the feature encoder is  xed once
+pretrained  limiting the potential to adjust features during
+the training phase  Alternatively  our approach matches the
+real and synthetic data on   sentence feature space  where
+features are dynamically and adversarially adapted to focus
+on the most challenging features for the generator to mimic 
+In addition  features are designed to maintain both discrimination and reconstruction ability  instead of merely focusing
+on reconstruction as in Li et al   
+Recent work considered combining autoencoders or variational autoencoders  Kingma   Welling    with GAN
+ Zhao et al    Larsen et al    Makhzani et al 
+  Mescheder et al    Wang   Liu    They
+demonstrated superior performance on image generation 
+Our approach is similar to these approaches  however  we
+attempt to learn the reconstruction of the latent code  instead of the input data  sentences  Donahue et al   
+learned   reverse mapping from data space to latent space 
+In our approach we enforce the discriminator and encoder to
+share   latent structure  with the aim of learning   representation for both discrimination and latent code reconstruction 
+Chen et al    maximized the mutual information between the generated data and the latent codes by leveraging
+  networkadapted variational proposal distribution  In our
+case  we minimize the distance between the original and
+reconstructed latent codes 
+Our approach attempts to minimize   NNbased embedded
+MMD distance of two empirical distributions  Aside from
+MMD  kernelbased discrepancy metrics such as kernelized
+
+Stein discrepancy  Liu et al    Wang   Liu    have
+been shown to be computationally tractable  while maintaining statistical power  We leave the investigation of using
+Stein for moment matching as   promising future direction  Wasserstein GAN  Arjovsky et al    considers an
+EarthMover  EM  distance of the real data and synthetic
+data distribution  instead of the JSD as in standard GAN
+ Goodfellow et al    or TVD as in Zhao et al   
+The EM metric yields stable gradients  thus avoiding the collapsing mode and vanishing gradient problem of the latter
+two  We note that our approach is equivalent to minimizing
+  MMD loss over the data domain  however  with   NNbased embedded Gaussian kernel  As shown in Arjovsky
+et al    MMD is   proper metric when the kernel is
+universal  Because of the similarity of the conditions  our approach enjoys the advantages of Wasserstein GAN  namely 
+ameliorating the gradient vanishing problems 
+
+  Experiments
+Data and Experimental Setup Our model is trained using   combination of two datasets      the BookCorpus
+dataset  Zhu et al    which consists of   million sentences from over   books  and  ii  the ArXiv dataset 
+which consists of   million sentences from abstracts of papers from various subjects  obtained from the arXiv website 
+The motivation for merging two different corpora is to investigate whether the model can generate sentences that
+integrate both scienti   and informal writing styles  We randomly choose   million sentences from BookCorpus and
+  million sentences from arXiv to construct training and
+validation sets         million sentences for each  For testing 
+we randomly select   sentences from both corpus  for
+  total of   sentences 
+We train the generator and discriminator encoder iteratively 
+Provided that the LSTM generator typically involves more
+parameters and is more dif cult to train than the CNN discriminator  we perform one optimization step for the discriminator for every       steps of the generator  We use  
+mixture of   isotropic Gaussian  RBF  kernels with different
+bandwidths   as in Li et al    Bandwidth parameters
+are selected to be close to the median distance  in our case
+around   of feature vectors encoded from real sentences 
+   and    are selected based on the performance on the
+validation set  The validation performance is evaluated by
+loss of generator and corpuslevel BLEU score  Papineni
+et al    described below 
+For the CNN discriminator encoder  we use  lter windows
+    of sizes   with   feature maps each  hence each
+sentence is represented as    dimensional vector  The
+dimensionality of   and    is also   The feature vector is
+then fed into     fully connected network for the
+discriminator and   for encoder  with sigmoid
+
+Adversarial Feature Matching for Text Generation
+
+Table   Quantitative results using BLEU  and KDE 
+
+AE
+VAE
+
+seqGAN
+
+textGAN MM 
+textGAN CM 
+textGAN MMD 
+textGAN MMDL 
+
+BLEU 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+BLEU 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+BLEU 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+KDE nats 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Figure   Moment matching comparison  Left  expectations of
+latent features from real vs  synthetic data  Right  elements of
+       vs             for real and synthetic data  respectively 
+
+activation units connecting the intermediate layers and softmax tanh units for the top layer of discriminator encoder 
+We did not observe performance changes by adding dropout 
+For the LSTM sentence generator  we use one hidden layer
+of   units 
+Gradients are clipped if the norm of the parameter vector
+exceeds    Sutskever et al    Adam  Kingma   Ba 
+  with learning rate       for both discriminator
+and generator is utilized for optimization  The size of the
+minibatch is set to  
+Both the generator and the discriminator are pretrained
+using the strategies described in Section   We also employed   warmup training during the  rst two epochs  as
+we found it improves convergence during the initial stage
+of learning  Speci cally  we use   meanmatching objective
+for the generator loss        Ef        as in Salimans et al 
+  Further details of the experimental design are provided in the the Supplementary Material  All experiments
+are implemented in Theano  Bastien et al    using one
+NVIDIA GeForce GTX TITAN   GPU with  GB memory 
+The model was trained for   epochs in roughly   days 
+Learning curves are shown in the Supplementary Material 
+
+Matching feature distributions We  rst examine the
+generator   ability to produce synthetic features similar to
+those obtained from real data  For this purpose  we calculate the empirical expectation of the  dimensional sentence feature vector over   real sentences and   synthetic sentences  As shown in Figure  left  the expectation
+of these   feature dimensions from synthetic sentences
+matches well with the feature expectation from the real sentences  We also compared the estimated covariance matrix
+elements         including       offdiagonal elements and   diagonal elements  from real data against the
+covariance matrix elements          estimated from synthetic
+data  in Figure  right  We observe that the covariance
+structure of the  dimensional features from real and synthetic sentences in general match well  The full covariance
+matrices for real and synthetic sentences are provided in
+
+the Supplementary Material  We observe that the  mapped 
+synthetic features nicely cover the real sentence features
+density  while  completing  other areas of low density 
+Quantitative comparison We evaluate the generatedsentence quality using the BLEU score  Papineni et al 
+  and Kernel Density Estimation  KDE  as in Goodfellow et al    Nowozin et al    For comparison  we consider textGAN with   different loss objectives 
+Mean Matching  MM  as in Salimans et al    Covariance Matching  CM  as in   MMD and MMD with
+compressed network  MMDL  by mapping the original
+ dimensional features to  dimensional  as described
+in Section   We also compare to   baseline autoencoder  AE  model  The AE uses   CNN as encoder and
+an LSTM as decoder  where the CNN and LSTM network
+structures are set to be identical as the CNN and LSTM used
+in textGAN  We  nally consider   Variational Autoencoder
+ VAE  implemented as in Bowman et al    To train
+the VAE model  we use annealing to gradually increase the
+KL divergence between the prior and approximated posterior  The details are provided in the the Supplementary
+Material  We also compare with seqGAN  Yu et al   
+For seqGAN we follow the authors  guidelines of running
+  pretraining epochs followed by   discriminator training epochs  to generate   sentences  For AE  VAE and
+textGAN  we  rst uniformly sample   latent codes from
+the latent code space  and use the corresponding generator
+ or decoder  in the AE VAE case  to generate sentences 
+For BLEU score evaluation  we follow the strategy in Yu
+et al    of using the entire test set as the reference  For
+KDE evaluation  the lengths of the generated sentences are
+different  thus we  rst embed all the sentences to    
+dimensional vector  Since no standard sentence encoder
+is available  we use the encoder learned from AE  The covariance matrix for the Parzen kernel in KDE is set to be
+the covariance of feature vectors for real tested sentences 
+Despite the fact that the KDE approach  as   loglikelihood
+estimator tends to have high variance  Theis et al   
+the KDE score tracks well with our BLEU score evaluation 
+The results are shown in Table   MMD and MMDL generally score higher in sentences quality  MMDL seems better
+at capturing  grams  BLEU  while MMD outperforms
+MMDL in  grams  BLEU  We also observed that when
+using CM  the generated sentences tend to be shorter than
+
+ Syn  sent  feature mean Real sent  feature mean 
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+
+Table   Sentences generated by textGAN 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+we show the joint likelihood estimator   in   large number of estimating
+variables embedded on the subspace learning    
+this problem achieves less interesting choices of convergence guarantees
+on turing machine learning  
+in hidden markov relational spaces   the random walk feature
+decomposition is unique generalized parametric mappings 
+  see those primitives specifying   deterministic probabilistic machine
+learning algorithm  
+  wanted in alone in   gene expression dataset which do     form phantom
+action values  
+as opposite to   set of fuzzy modelling algorithm   pruning is performed
+using   template representing network structures  
+
+MMD  not shown 
+
+Generated sentences Table   shows six sentences generated by textGAN  Note that the generated sentences seem
+to be able to produce novel phrases by imagining concept
+combinations       in Table         or to borrow words
+from   different corpus to compose novel sentences       in
+Table       In many cases  it learns to automatically match
+the parentheses and quotation marks       in Table     and
+can synthesize relatively long sentences       in       In
+general  the synthetic sentences seem syntactically reasonable  However  the semantic meaning is less well preserved
+especially in sentence of more than   words       in Table      
+We observe that the discriminator can still suf ciently distinguish the synthetic sentences from the real ones  the
+probability to predict synthetic data as real is around  
+even when the synthetic sentences seems to perserve reasonable grammatical structure and use proper wording  It
+is likely that the CNN is able to accurately characterize
+the semantic meaning and differentiate sentences  while the
+generator may get trapped into   local optimum  where any
+slight modi cation would result in   higher loss   for the
+generator  Presumably  longrange distance features are not
+dif cult to abstract by the discriminator encoder  however 
+is less likely to be imitated by the generator  One promising
+direction is to leverage reinforcement learning strategies as
+in Yu et al    where the updating for LSTM can be
+more effectively steered  Nevertheless  investigation on how
+to improve the the longrange behavior is left as interesting
+future work 
+
+Latent feature space trajectories Following Bowman
+et al    we further empirically evaluate whether the
+latent variable space can  densely  encode sentences  We
+visualize the transition from one sentence to another by constructing   linear path between two randomly selected points
+in latent feature space  to then generate the intermediate sentences along the linear trajectory  For comparison    baseline autoencoder  AE  is trained for   epochs  The results
+for textGAN and AE are presented in Table   Compared
+to AE  the sentences produced by textGAN are generally
+
+Adversarial Feature Matching for Text Generation
+
+Table   Intermediate sentences produced from linear transition
+between two points    and    in the latent feature space  Each
+sentence is generated from   latent point on   linear path 
+
+textGAN
+
+AE
+
+our methods apply novel approaches to solve modeling tasks  
+
+our methods apply novel approaches to solve modeling  
+our methods apply two different
+approaches to solve computing  
+our methods achieves some different approaches to solve computing  
+our methods achieves the best expert structure detection  
+the methods have been different
+related tasks  
+the guy is the minimum of UNK  
+
+the guy is     easy tonight  
+
+  believe the guy is     smart
+okay 
+  believe the guy is     smart  
+
+our methods apply to train UNK
+models involving complex  
+our methods solve use to train    
+
+our approach show UNK to models
+exist  
+
+that supervised algorithms show to
+UNK speed  
+that address algorithms to handle  
+ 
+that address versions to be used in
+ 
+  believe the means of this attempt
+to cope  
+  believe it    we be used to get  
+
+  believe it        way to belong  
+
+  believe      going to get out  
+
+more syntactically and semantically reasonable  The transition suggest  smoothness  and interpretability  however  the
+wording choices and sentence structure showed dramatic
+changes in some regions in the latent feature space  This
+seems to indicate that local  transition smoothness  varies
+from region to region 
+
+  Conclusion
+We have introduced   novel approach for text generation
+using adversarial training  termed TextGAN  and have discussed several techniques to specify and train such   model 
+We demonstrated that the proposed model delivers superior
+performance compared to related approaches  can produce
+realistic sentences  and that the learned latent representation space can  smoothly  encode plausible sentences  We
+quantitatively evaluate the proposed methods with baseline
+models and existing methods  The results indicate superior
+performance of TextGAN 
+In future work  we will attempt to apply conditional GAN
+models  Mirza   Osindero    to disentangle the latent
+representations for different writing styles  This would enable   smooth lexical and grammatical transition between
+different writing styles  It would be also interesting to generate text by conditioning on observed images  Pu et al   
+In addition  we plan to leverage an additional re ning stage
+where   reverseorder LSTM  Graves   Schmidhuber   
+is applied after the sentence is  rst generated  to produce
+sentences with better longterm semantical interpretation 
+
+Acknowledgments
+This research was supported by ARO  DARPA  DOE  NGA 
+ONR and NSF 
+
+Adversarial Feature Matching for Text Generation
+
+References
+Arjovsky  Martin and Bottou    on  Towards principled methods
+
+for training generative adversarial networks  In ICLR   
+
+Arjovsky  Martin  Chintala  Soumith  and Bottou    on  Wasser 
+
+stein gan  In ICML   
+
+Bastien     Lamblin     Pascanu     Bergstra     Goodfellow     Bergeron     Bouchard     WardeFarley     and
+Bengio     Theano  new features and speed improvements 
+arXiv   
+
+Bengio  Samy  Vinyals  Oriol  Jaitly  Navdeep  and Shazeer  Noam 
+Scheduled sampling for sequence prediction with recurrent neural networks  In NIPS   
+
+Bowman  Samuel    Vilnis  Luke  Vinyals  Oriol  Dai  Andrew   
+Jozefowicz  Rafal  and Bengio  Samy  Generating sentences
+from   continuous space  In CoNLL   
+
+Chen  Xi  Duan  Yan  Houthooft  Rein  Schulman  John  Sutskever 
+Ilya  and Abbeel  Pieter  Infogan  Interpretable representation
+learning by information maximizing generative adversarial nets 
+In NIPS   
+
+Husz    Ferenc  How  not  to train your generative model  Scheduled sampling  likelihood  adversary  arXiv   
+
+Ioffe  Sergey and Szegedy  Christian  Batch normalization  Accelerating deep network training by reducing internal covariate
+shift  In ICML   
+
+Jang  Eric  Gu  Shixiang  and Poole  Ben  Categorical reparame 
+
+terization with gumbelsoftmax  In ICLR   
+
+Johnson     and Zhang     Effective use of word order for text
+categorization with convolutional neural networks  In NAACL
+HLT   
+
+Kalchbrenner     Grefenstette     and Blunsom       convolutional neural network for modelling sentences  In ACL   
+
+Kim     Convolutional neural networks for sentence classi cation 
+
+In EMNLP   
+
+Kingma     and Ba     Adam    method for stochastic optimiza 
+
+tion  In ICLR   
+
+Kingma  Diederik   and Welling  Max  Autoencoding variational
+
+bayes  In ICLR   
+
+Cho     Van Merri nboer     Gulcehre     Bahdanau    
+Bougares     Schwenk     and Bengio     Learning phrase representations using rnn encoderdecoder for statistical machine
+translation  In EMNLP   
+
+Lamb  Alex    GOYAL  Anirudh Goyal ALIAS PARTH  Zhang 
+Ying  Zhang  Saizheng  Courville  Aaron    and Bengio 
+Yoshua  Professor forcing    new algorithm for training recurrent networks  In NIPS   
+
+Collobert     Weston     Bottou     Karlen     Kavukcuoglu 
+   and Kuksa     Natural language processing  almost  from
+scratch  In JMLR   
+
+Larsen  Anders Boesen Lindbo    nderby    ren Kaae  Larochelle 
+Hugo  and Winther  Ole  Autoencoding beyond pixels using  
+learned similarity metric  In ICML   
+
+Donahue  Jeff  Kr henb hl  Philipp  and Darrell  Trevor  Adver 
+
+sarial feature learning  In ICLR   
+
+Dziugaite  Gintare Karolina  Roy  Daniel    and Ghahramani 
+Zoubin  Training generative neural networks via maximum
+mean discrepancy optimization  arXiv   
+
+Gan  Zhe  Pu  Yunchen  Henao  Ricardo  Li  Chunyuan  He 
+Xiaodong  and Carin  Lawrence  Unsupervised learning of
+sentence representations using convolutional neural networks 
+arXiv preprint arXiv   
+
+Goodfellow  Ian  PougetAbadie  Jean  Mirza  Mehdi  Xu  Bing 
+WardeFarley  David  Ozair  Sherjil  Courville  Aaron  and Bengio  Yoshua  Generative adversarial nets  In NIPS   
+
+Graves  Alex and Schmidhuber    rgen  Framewise phoneme
+classi cation with bidirectional lstm and other neural network
+architectures  Neural Networks   
+
+Gretton  Arthur  Borgwardt  Karsten    Rasch  Malte    Sch lkopf 
+Bernhard  and Smola  Alexander    kernel twosample test 
+JMLR   
+
+Gumbel  Emil Julius and Lieblein  Julius  Statistical theory of
+extreme values and some practical applications    series of
+lectures   
+
+Hochreiter     and Schmidhuber     Long shortterm memory  In
+
+Neural computation   
+
+Hu     Lu     Li     and Chen     Convolutional neural network
+architectures for matching natural language sentences  In NIPS 
+ 
+
+Li  Jiwei  Monroe  Will  Ritter  Alan  Galley  Michel  Gao  Jianfeng  and Jurafsky  Dan  Deep reinforcement learning for dialogue generation  In EMNLP   
+
+Li  Jiwei  Monroe  Will  Shi  Tianlin  Ritter  Alan  and Jurafsky  Dan  Adversarial learning for neural dialogue generation 
+arXiv   
+
+Li  Yujia  Swersky  Kevin  and Zemel  Richard    Generative
+
+moment matching networks  In ICML   
+
+Liu  Qiang  Lee  Jason    and Jordan  Michael      kernelized
+
+stein discrepancy for goodnessof   tests  In ICML   
+
+Maaten  Laurens van der and Hinton  Geoffrey  Visualizing data
+
+using tsne  JMLR   
+
+Maddison  Chris    Mnih  Andriy  and Teh  Yee Whye  The concrete distribution    continuous relaxation of discrete random
+variables  In ICLR   
+
+Makhzani  Alireza  Shlens  Jonathon  Jaitly  Navdeep  Goodfellow  Ian  and Frey  Brendan  Adversarial autoencoders 
+arXiv   
+
+Mescheder  Lars  Nowozin  Sebastian  and Geiger  Andreas  Adversarial variational bayes  Unifying variational autoencoders
+and generative adversarial networks  In ICML   
+
+Metz  Luke  Poole  Ben  Pfau  David  and SohlDickstein  Jascha 
+
+Unrolled generative adversarial networks  In ICLR   
+
+Micchelli  Charles    Xu  Yuesheng  and Zhang  Haizhang  Uni 
+
+versal kernels  JMLR   
+
+Adversarial Feature Matching for Text Generation
+
+Mirza  Mehdi and Osindero  Simon  Conditional generative adver 
+
+sarial nets  arXiv   
+
+Nowozin  Sebastian  Cseke  Botond  and Tomioka  Ryota  fgan 
+Training generative neural samplers using variational divergence
+minimization  In NIPS   
+
+Papineni  Kishore  Roukos  Salim  Ward  Todd  and Zhu  WeiJing 
+Bleu    method for automatic evaluation of machine translation 
+In ACL   
+
+Pu  Yunchen  Gan  Zhe  Henao  Ricardo  Yuan  Xin  Li  Chunyuan 
+Stevens  Andrew  and Carin  Lawrence  Variational autoencoder
+for deep learning of images  labels and captions  In NIPS   
+
+Ramdas  Aaditya  Reddi  Sashank    Poczos  Barnabas  Singh 
+Aarti  and Wasserman  Larry  On the highdimensional power
+of lineartime kernel twosample testing under meandifference
+alternatives  arXiv   
+
+Salimans  Tim  Goodfellow  Ian  Zaremba  Wojciech  Cheung 
+Vicki  Radford  Alec  and Chen  Xi  Improved techniques for
+training gans  In NIPS   
+
+Sutskever     Vinyals     and Le     Sequence to sequence
+
+learning with neural networks  In NIPS   
+
+Theis  Lucas  Oord    ron van den  and Bethge  Matthias    note
+
+on the evaluation of generative models  In ICLR   
+
+Wang  Dilin and Liu  Qiang  Learning to draw samples  With
+application to amortized mle for generative adversarial learning 
+arXiv   
+
+Williams  Ronald    Simple statistical gradientfollowing algorithms for connectionist reinforcement learning  Machine learning   
+
+Yu  Lantao  Zhang  Weinan  Wang  Jun  and Yu  Yong  Seqgan 
+sequence generative adversarial nets with policy gradient  In
+AAAI   
+
+Zhang  Yizhe  Gan  Zhe  and Carin  Lawrence  Generating text via
+adversarial training  In NIPS Workshop on Adversarial Training 
+ 
+
+Zhao  Junbo  Mathieu  Michael  and LeCun  Yann  Energybased
+
+generative adversarial network  In ICLR   
+
+Zhu     Kiros     Zemel     Salakhutdinov     Urtasun    
+Torralba     and Fidler     Aligning books and movies  Towards
+storylike visual explanations by watching movies and reading
+books  In ICCV   
+
+

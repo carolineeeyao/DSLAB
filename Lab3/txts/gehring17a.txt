@@ -1,0 +1,1244 @@
+Convolutional Sequence to Sequence Learning
+
+Jonas Gehring   Michael Auli   David Grangier   Denis Yarats   Yann    Dauphin  
+
+Abstract
+
+The prevalent approach to sequence to sequence
+learning maps an input sequence to   variable length
+output sequence via recurrent neural networks 
+We introduce an architecture based entirely on
+convolutional neural networks  Compared to recurrent
+models  computations over all elements can be fully
+parallelized during training to better exploit the GPU
+hardware and optimization is easier since the number
+of nonlinearities is fixed and independent of the
+input length  Our use of gated linear units eases
+gradient propagation and we equip each decoder layer
+with   separate attention module  We outperform the
+accuracy of the deep LSTM setup of Wu et al   
+on both WMT  EnglishGerman and WMT 
+EnglishFrench translation at an order of magnitude
+faster speed  both on GPU and CPU 
+
+  Introduction
+Sequence to sequence learning has been successful in many tasks
+such as machine translation  speech recognition  Sutskever et al 
+  Chorowski et al    and text summarization  Rush
+et al    Nallapati et al    Shen et al    amongst
+others  The dominant approach to date encodes the input
+sequence with   series of bidirectional recurrent neural networks
+ RNN  and generates   variable length output with another set
+of decoder RNNs  both of which interface via   softattention
+mechanism  Bahdanau et al    Luong et al    In
+machine translation  this architecture has been demonstrated to
+outperform traditional phrasebased models by large margins
+ Sennrich et al      Zhou et al    Wu et al   
+Convolutional neural networks are less common for sequence
+modeling  despite several advantages  Waibel et al    LeCun
+  Bengio    Compared to recurrent layers  convolutions
+create representations for fixed size contexts  however  the
+effective context size of the network can easily be made larger
+
+ Facebook AI Research  Correspondence to  Jonas Gehring
+
+ jgehring fb com  Michael Auli michaelauli fb com 
+
+Proceedings of the   th International Conference on Machine Learning 
+Sydney  Australia  PMLR     Copyright   by the author   
+ The source code and models are available at https 
+
+ github com facebookresearch fairseq 
+
+by stacking several layers on top of each other  This allows
+to precisely control the maximum length of dependencies to
+be modeled  Convolutional networks do not depend on the
+computations of the previous time step and therefore allow
+parallelization over every element in   sequence  This contrasts
+with RNNs which maintain   hidden state of the entire past that
+prevents parallel computation within   sequence 
+Multilayer convolutional neural networks create hierarchical
+representations over the input sequence in which nearby input
+elements interact at lower layers while distant elements interact
+at higher layers  Hierarchical structure provides   shorter path
+to capture longrange dependencies compared to the chain
+structure modeled by recurrent networks       we can obtain
+  feature representation capturing relationships within   window
+of   words by applying only     
+    convolutional operations
+for kernels of width    compared to   linear number      for
+recurrent neural networks  Inputs to   convolutional network
+are fed through   constant number of kernels and nonlinearities 
+whereas recurrent networks apply up to   operations and
+nonlinearities to the first word and only   single set of operations
+to the last word  Fixing the number of nonlinearities applied
+to the inputs also eases learning 
+Recent work has applied convolutional neural networks to sequence modeling such as Bradbury et al    who introduce
+recurrent pooling between   succession of convolutional layers or
+Kalchbrenner et al    who tackle neural translation without
+attention  However  none of these approaches has been demonstrated improvements over state of the art results on large benchmark datasets  Gated convolutions have been previously explored
+for machine translation by Meng et al    but their evaluation
+was restricted to   small dataset and the model was used in tandem
+with   traditional countbased model  Architectures which are
+partially convolutional have shown strong performance on larger
+tasks but their decoder is still recurrent  Gehring et al   
+In this paper we propose an architecture for sequence to sequence
+modeling that is entirely convolutional  Our model is equipped
+with gated linear units  Dauphin et al    and residual
+connections  He et al      We also use attention in every
+decoder layer and demonstrate that each attention layer only
+adds   negligible amount of overhead  The combination of these
+choices enables us to tackle large scale problems  
+We evaluate our approach on several large datasets for machine
+translation as well as summarization and compare to the current
+
+Convolutional Sequence to Sequence Learning
+
+best architectures reported in the literature  On WMT 
+EnglishRomanian translation we achieve   new state of the
+art  outperforming the previous best result by   BLEU  On
+WMT  EnglishGerman we outperform the strong LSTM
+setup of Wu et al    by   BLEU and on WMT 
+EnglishFrench we outperform the likelihood trained system
+of Wu et al    by   BLEU  Furthermore  our model can
+translate unseen sentences at an order of magnitude faster speed
+than Wu et al    on GPU and CPU hardware  
+  Recurrent Sequence to Sequence Learning
+Sequence to sequence modeling has been synonymous with
+recurrent neural network based encoderdecoder architectures
+ Sutskever et al    Bahdanau et al    The encoder
+RNN processes an input sequence        xm  of  
+elements and returns state representations        zm 
+The decoder RNN takes   and generates the output sequence
+     yn  left to right  one element at   time  To generate
+output yi  the decoder computes   new hidden state hi 
+based on the previous state hi  an embedding gi of the previous
+target language word yi  as well as   conditional input ci derived
+from the encoder output    Based on this generic formulation 
+various encoderdecoder architectures have been proposed  which
+differ mainly in the conditional input and the type of RNN 
+Models without attention consider only the final encoder state zm
+by setting ci  zm for all    Cho et al    or simply initialize
+the first decoder state with zm  Sutskever et al    in which
+case ci is not used  Architectures with attention  Bahdanau et al 
+  Luong et al    compute ci as   weighted sum of
+   zm  at each time step  The weights of the sum are referred
+to as attention scores and allow the network to focus on different
+parts of the input sequence as it generates the output sequences 
+Attention scores are computed by essentially comparing each
+encoder state zj to   combination of the previous decoder state
+hi and the last prediction yi  the result is normalized to be  
+distribution over input elements 
+Popular choices for recurrent networks in encoderdecoder models are long short term memory networks  LSTM  Hochreiter  
+Schmidhuber    and gated recurrent units  GRU  Cho et al 
+  Both extend Elman RNNs  Elman    with   gating
+mechanism that allows the memorization of information from
+previous time steps in order to model longterm dependencies 
+Most recent approaches also rely on bidirectional encoders to
+build representations of both past and future contexts  Bahdanau
+et al    Zhou et al    Wu et al    Models with
+many layers often rely on shortcut or residual connections  He
+et al      Zhou et al    Wu et al   
+
+    Convolutional Architecture
+Next we introduce   fully convolutional architecture for sequence
+to sequence modeling  Instead of relying on RNNs to compute
+
+intermediate encoder states   and decoder states   we use
+convolutional neural networks  CNN 
+
+  Position Embeddings
+First  we embed input elements     xm  in distributional
+space as        wm  where wj   Rf is   column in an
+embedding matrix    RV     We also equip our model with
+  sense of order by embedding the absolute position of input
+elements     pm  where pj Rf  Both are combined to
+obtain input element representations       wm pm 
+We proceed similarly for output elements that were already
+generated by the decoder network to yield output element
+representations that are being fed back into the decoder network
+    gn  Position embeddings are useful in our architecture since they give our model   sense of which portion of the
+sequence in the input or output it is currently dealing with  
+  Convolutional Block Structure
+Both encoder and decoder networks share   simple block
+structure that computes intermediate states based on   fixed
+number of input elements  We denote the output of the lth block
+as hl  hl
+  
+for the encoder network  we refer to blocks and layers interchangeably  Each block contains   one dimensional convolution
+followed by   nonlinearity  For   decoder network with  
+single block and kernel width    each resulting state   
+  contains
+information over   input elements  Stacking several blocks
+on top of each other increases the number of input elements
+represented in   state  For instance  stacking   blocks with    
+results in an input field of   elements       each output depends
+on   inputs  Nonlinearities allow the networks to exploit the
+full input field  or to focus on fewer elements if needed 
+Each convolution kernel is parameterized as         kd 
+bw     and takes as input   Rk   which is   concatenation
+of   input elements embedded in   dimensions and maps
+them to   single output element         that has twice the
+dimensionality of the input elements  subsequent layers operate
+over the   output elements of the previous layer  We choose
+gated linear units  GLU  Dauphin et al    as nonlinearity
+which implement   simple gating mechanism over the output
+of the convolution            
+
+   for the decoder network  and zl  zl
+
+ hl
+
+ zl
+
+          
+
+where       Rd are the inputs to the nonlinearity    is the
+pointwise multiplication and the output       Rd is half
+the size of     The gates     control which inputs   of the
+current context are relevant    similar nonlinearity has been
+introduced in Oord et al      who apply tanh to   but
+Dauphin et al    shows that GLUs perform better in the
+context of language modelling 
+To enable deep convolutional networks  we add residual
+connections from the input of each convolution to the output
+
+of the block  He et al     
+
+Convolutional Sequence to Sequence Learning
+
+         hl 
+hl
+
+    hl 
+
+    bl
+
+  hl 
+
+ 
+
+the output of the
+For encoder networks we ensure that
+convolutional layers matches the input length by padding the
+input at each layer  However  for decoder networks we have to
+take care that no future information is available to the decoder
+ Oord et al      Specifically  we pad the input by     
+elements on both the left and right side by zero vectors  and then
+remove   elements from the end of the convolution output 
+We also add linear mappings to project between the embedding
+size   and the convolution outputs that are of size     We
+apply such   transform to   when feeding embeddings to the
+encoder network  to the encoder output zu
+    to the final layer of
+the decoder just before the softmax hL  and to all decoder layers
+hl before computing attention scores  
+Finally  we compute   distribution over the   possible next target
+elements yi  by transforming the top decoder output hL
+  via
+  linear layer with weights Wo and bias bo 
+  yi   yi   softmax WohL
+
+   bo RT
+
+  Multistep Attention
+We introduce   separate attention mechanism for each decoder
+layer  To compute the attention  we combine the current decoder
+state hl
+  with an embedding of the previous target element gi 
+
+dl
+      
+
+dhl
+
+  bl
+
+  gi
+
+ 
+
+For decoder layer   the attention al
+ij of state   and source element
+  is computed as   dotproduct between the decoder state
+summary dl
+
+  of the last encoder block   
+
+  and each output zu
+
+al
+ij  
+
+  zu
+
+exp dl
+  
+  exp dl
+Pm
+
+  zu
+
+  
+
+The conditional input cl
+  to the current decoder layer is  
+weighted sum of the encoder outputs as well as the input element
+embeddings ej  Figure   center right 
+
+cl
+   
+
+al
+ij zu
+
+   ej 
+
+mXj 
+
+ 
+
+This is slightly different to recurrent approaches which compute
+both the attention and the weighted sum over zu
+  only  We
+found adding ej to be beneficial and it resembles keyvalue
+memory networks where the keys are the zu
+  and the values are
+the zu
+  represent
+potentially large input contexts and ej provides point information
+about   specific input element that is useful when making  
+
+   ej  Miller et al    Encoder outputs zu
+
+Figure   Illustration of batching during training  The English source
+sentence is encoded  top  and we compute all attention values for the
+four German target words  center  simultaneously  Our attentions are
+just dot products between decoder context representations  bottom left 
+and encoder representations  We add the conditional inputs computed
+by the attention  center right  to the decoder states which then predict
+the target words  bottom right  The sigmoid and multiplicative boxes
+illustrate Gated Linear Units 
+
+  has been computed  it is simply added to
+
+prediction  Once cl
+the output of the corresponding decoder layer hl
+  
+This can be seen as attention with multiple  hops   Sukhbaatar
+et al    compared to single step attention  Bahdanau et al 
+  Luong et al    Zhou et al    Wu et al   
+In particular  the attention of the first layer determines   useful source context which is then fed to the second layer that
+takes this information into account when computing attention etc 
+The decoder also has immediate access to the attention history
+of the    previous time steps because the conditional inputs
+cl 
+    cl 
+   This
+makes it easier for the model to take into account which previous
+inputs have been attended to already compared to recurrent nets
+where this information is in the recurrent state and needs to survive several nonlinearities  Overall  our attention mechanism considers which words we previously attended to  Yang et al   
+and performs multiple attention  hops  per time step  In Appendix
+    we plot attention scores for   deep decoder and show that at
+different layers  different portions of the source are attended to 
+
+  which are input to hl
+
+    hl 
+
+are part of hl 
+
+ 
+
+Convolutional Sequence to Sequence Learning
+
+Our convolutional architecture also allows to batch the attention
+computation across all elements of   sequence compared to
+RNNs  Figure   middle  We batch the computations of each
+decoder layer individually 
+
+  Normalization Strategy
+We stabilize learning through careful weight initialization  
+and by scaling parts of the network to ensure that the variance
+throughout the network does not change dramatically  In particular  we scale the output of residual blocks as well as the attention
+to preserve the variance of activations  We multiply the sum
+of the input and output of   residual block by    to halve the
+variance of the sum  This assumes that both summands have the
+same variance which is not always true but effective in practice 
+The conditional input cl
+  generated by the attention is   weighted
+sum of   vectors   and we counteract   change in variance
+
+through scaling by mp    we multiply by   to scale up
+
+the inputs to their original size  assuming the attention scores
+are uniformly distributed  This is generally not the case but we
+found it to work well in practice 
+For convolutional decoders with multiple attention  we scale
+the gradients for the encoder layers by the number of attention
+mechanisms we use  we exclude source word embeddings  We
+found this to stabilize learning since the encoder received too
+much gradient otherwise 
+
+  Initialization
+Normalizing activations when adding the output of different
+layers       residual connections  requires careful weight initialization  The motivation for our initialization is the same as for the
+normalization  maintain the variance of activations throughout
+the forward and backward passes  All embeddings are initialized
+from   normal distribution with mean   and standard deviation
+  For layers whose output is not directly fed to   gated linear
+
+unit  we initialize weights from      nl  where nl is the
+
+number of input connections to each neuron  This ensures that
+the variance of   normally distributed input is retained 
+For layers which are followed by   GLU activation  we propose
+  weight initialization scheme by adapting the derivations in  He
+et al      Glorot   Bengio    Appendix    If the GLU
+inputs are distributed with mean   and have sufficiently small
+variance  then we can approximate the output variance with  
+of the input variance  Appendix    Hence  we initialize the
+weights so that the input to the GLU activations have   times
+the variance of the layer input  This is achieved by drawing their
+
+initial values from      nl  Biases are uniformly set to
+
+zero when the network is constructed 
+We apply dropout to the input of some layers so that inputs
+are retained with   probability of    This can be seen as
+multiplication with   Bernoulli random variable taking value   
+with probability   and   otherwise  Srivastava et al    The
+
+application of dropout will then cause the variance to be scaled
+by     We aim to restore the incoming variance by initializing
+the respective layers with larger weights  Specifically  we use
+
+       nl  for layers whose output is subject to   GLU and
+   pp nl  otherwise  Appendix   
+
+  Experimental Setup
+  Datasets
+WMT  EnglishRomanian  We use the same data and
+preprocessing as Sennrich et al      but remove sentences
+with more than   words  This results in    sentence pairs
+for training and we evaluate on newstest  We experiment
+with wordbased models using   source vocabulary of   
+types and   target vocabulary of    types  We also consider
+  joint source and target bytepair encoding  BPE  with   
+types  Sennrich et al       
+WMT  EnglishGerman  We use the same setup as Luong
+et al    which comprises    sentence pairs for training
+and we test on newstest  As vocabulary we use   
+subword types based on BPE 
+WMT  EnglishFrench  We use the full training set of   
+sentence pairs  and remove sentences longer than   words
+as well as pairs with   source target length ratio exceeding  
+This results in    sentencepairs for training  Results are
+reported on newstest  We use   source and target vocabulary
+with    BPE types 
+In all setups   small subset of the training data serves as validation
+set  about   for early stopping and learning rate annealing 
+Abstractive summarization  We train on the Gigaword corpus
+ Graff et al    and preprocess it identically to Rush et al 
+  resulting in    training examples and    for validation  We evaluate on the DUC  test data comprising
+  articletitle pairs  Over et al    and report recallbased
+ROUGE  Lin    We also evaluate on the Gigaword test set
+of Rush et al    and report    ROUGE similar to prior work 
+Similar to Shen et al    we use   source and target vocabulary
+of    words and require outputs to be at least   words long 
+
+  Model Parameters and Optimization
+We use   hidden units for both encoders and decoders  unless
+otherwise stated  All embeddings  including the output produced
+by the decoder before the final linear layer  have dimensionality
+  we use the same dimensionalities for linear layers mapping
+between the hidden and embedding sizes  
+
+ We followed the preprocessing of https github 
+
+com rsennrich wmt scripts blob     
+sample preprocess sh and added the backtranslated data
+from
+http data statmt org rsennrich wmt 
+backtranslations enro 
+
+ http nlp stanford edu projects nmt
+
+Convolutional Sequence to Sequence Learning
+
+We train our convolutional models with Nesterov   accelerated
+gradient method  Sutskever et al    using   momentum value
+of   and renormalize gradients if their norm exceeds    Pascanu et al    We use   learning rate of   and once the validation perplexity stops improving  we reduce the learning rate by
+an order of magnitude after each epoch until it falls below  
+Unless otherwise stated  we use minibatches of   sentences 
+We restrict the maximum number of words in   minibatch
+to make sure that batches with long sentences still fit in GPU
+memory  If the threshold is exceeded  we simply split the batch
+until the threshold is met and process the parts separatedly 
+Gradients are normalized by the number of nonpadding tokens
+per minibatch  We also use weight normalization for all layers
+except for lookup tables  Salimans   Kingma   
+Besides dropout on the embeddings and the decoder output 
+we also apply dropout to the input of the convolutional blocks
+ Srivastava et al    All models are implemented in Torch
+ Collobert et al    and trained on   single Nvidia   
+GPU except for WMT  EnglishFrench for which we use  
+multiGPU setup on   single machine  We train on up to eight
+GPUs synchronously by maintaining copies of the model on each
+card and split the batch so that each worker computes  th of
+the gradients  at the end we sum the gradients via Nvidia NCCL 
+
+  Evaluation
+We report average results over three runs of each model  where
+each differs only in the initial random seed  Translations are generated by   beam search and we normalize loglikelihood scores
+by sentence length  We use   beam of width   We divide the loglikelihoods of the final hypothesis in beam search by their length
+    For WMT  EnglishGerman we tune   length normalization constant on   separate development set  newstest  and
+we normalize loglikelihoods by      Wu et al    On other
+datasets we did not find any benefit with length normalization 
+For wordbased models  we replace unknown words after generation by looking up the source word with the maximum attention
+score in   precomputed dictionary  Jean et al    If the dictionary contains no translation  then we simply copy the source word 
+Dictionaries were extracted from the word aligned training data
+that we obtained with fast align  Dyer et al    In our
+multistep attention   we simply average the attention scores
+over all layers  Finally  we compute casesensitive tokenized
+BLEU  except for WMT  EnglishRomanian where we use
+detokenized BLEU to be comparable with Sennrich et al     
+
+  Results
+  Recurrent vs  Convolutional Models
+We first evaluate our convolutional model on three translation
+tasks  On WMT  EnglishRomanian translation we compare
+to Sennrich et al      which is the winning entry on this
+
+language pair at WMT   Bojar et al    Their model
+implements the attentionbased sequence to sequence architecture
+of Bahdanau et al    and uses GRU cells both in the encoder
+and decoder  We test both wordbased and BPE vocabularies  
+Table   shows that our fully convolutional sequence to sequence
+model  ConvS    outperforms the WMT  winning entry for
+EnglishRomanian by   BLEU with   BPE encoding and by  
+BLEU with   word factored vocabulary  This instance of our architecture has   layes in the encoder and   layers in the decoder 
+both using kernels of width   and hidden size   throughout 
+Training took between   and   days on   single GPU 
+On WMT  English to German translation we compare to the
+following prior work  Luong et al    is based on   four layer
+LSTM attention model  ByteNet  Kalchbrenner et al    propose   convolutional model based on characters without attention 
+with   layers in the encoder and   layers in the decoder  GNMT
+ Wu et al    represents the state of the art on this dataset and
+they use eight encoder LSTMs as well as eight decoder LSTMs 
+we quote their result for   wordbased model  such as ours  as
+well as   wordpiece model  Schuster   Nakajima   
+The results  Table   show that our convolutional model
+outpeforms GNMT by   BLEU  Our encoder has   layers
+and the decoder has   layers  both with   hidden units in the
+first ten layers and   units in the subsequent three layers  all
+using kernel width   The final two layers have   units which
+are just linear mappings with   single input  We trained this
+model on   single GPU over   period of   days with   batch
+size of   LSTM sparse mixtures have shown strong accuracy
+at   BLEU for   single run  Shazeer et al    which
+compares to   BLEU for our best run  This mixture sums
+the output of four experts  not unlike an ensemble which sums
+the output of multiple networks  ConvS   also benefits from
+ensembling   therefore mixtures are   promising direction 
+Finally  we train on the much larger WMT  EnglishFrench
+task where we compare to the state of the art result of GNMT
+ Wu et al    Our model is trained with   simple tokenlevel
+likelihood objective and we improve over GNMT in the same
+setting by   BLEU on average  We also outperform their
+reinforcement  RL  models by   BLEU  Reinforcement
+learning is equally applicable to our architecture and we believe
+that it would further improve our results 
+The ConvS   model for this experiment uses   layers in the encoder and   layers in the decoder  both with   hidden units in
+the first five layers    units in the subsequent four layers   
+units in the next   layers  all using kernel width   the final two
+layers have   units and   units each but the they are linear
+mappings with kernel width   This model has an effective context size of only   words  beyond which it cannot access any information on the target size  Our results are based on training with
+
+ We did not use the exact same vocabulary size because word pieces
+
+and BPE estimate the vocabulary differently 
+
+Convolutional Sequence to Sequence Learning
+
+WMT  EnglishRomanian
+Sennrich et al      GRU  BPE    
+ConvS    Word    
+ConvS    BPE    
+
+WMT  EnglishGerman
+Luong et al    LSTM  Word    
+Kalchbrenner et al    ByteNet  Char 
+Wu et al    GNMT  Word    
+Wu et al    GNMT  Word pieces 
+ConvS    BPE    
+
+WMT  EnglishFrench
+Wu et al    GNMT  Word    
+Wu et al    GNMT  Word pieces 
+Wu et al    GNMT  Word pieces    RL
+ConvS    BPE    
+
+BLEU
+ 
+ 
+ 
+
+BLEU
+ 
+ 
+ 
+ 
+ 
+
+BLEU
+ 
+ 
+ 
+ 
+
+Table   Accuracy on WMT tasks comapred to previous work  ConvS  
+and GNMT results are averaged over several runs 
+
+  GPUs for about   days and batch size   on each worker  The
+same configuration as for WMT  EnglishGerman achieves
+  BLEU in two weeks on this dataset in an eight GPU setup 
+Zhou et al    report   nonaveraged result of   BLEU 
+More recently  Ha et al    showed that one can generate
+weights with one LSTM for another LSTM  This approach
+achieves   BLEU but the result is not averaged  Shazeer et al 
+  compares at   BLEU to our best single run of  
+BLEU 
+The translations produced by our models often match the length
+of the references for the large WMT  EnglishFrench task 
+or are very close for small to medium data sets such as WMT 
+EnglishGerman or WMT  EnglishRomanian 
+
+  Ensemble Results
+Next  we ensemble eight likelihoodtrained models for both
+WMT  EnglishGerman and WMT  EnglishFrench and
+compare to previous work which also reported ensemble results 
+Table   shows that we outperform the best current ensembles
+on both datasets  For WMT  EnglishFrench we also show
+results when ensembling   models 
+
+ This is half of the GPU time consumed by   basic model of Wu
+et al    who use   GPUs for   days  We expect the time to train
+our model to decrease substantially in   multimachine setup 
+
+WMT  EnglishGerman
+Wu et al    GNMT
+Wu et al    GNMT   RL
+ConvS  
+
+WMT  EnglishFrench
+Zhou et al   
+Wu et al    GNMT
+Wu et al    GNMT   RL
+ConvS  
+ConvS     models 
+
+BLEU
+ 
+ 
+ 
+
+BLEU
+ 
+ 
+ 
+ 
+ 
+
+Table   Accuracy of ensembles with eight models  We show both
+likelihood and Reinforce  RL  results for GNMT  Zhou et al   
+and ConvS   use simple likelihood training 
+
+  Generation Speed
+Next  we evaluate the inference speed on the development set
+of the WMT  EnglishFrench task which is the concatenation
+of newstest  and newstest  it comprises   sentences 
+We measure generation speed both on GPU and CPU hardware 
+Specifically  we measure GPU speed on three generations
+of Nvidia cards    GTX ti  an    as well as an older
+   card  CPU timings are measured on one host with  
+hyperthreaded cores  Intel Xeon       GHz  with  
+workers  In all settings  we batch up to   sentences  composing
+batches with sentences of equal length  Note that the majority of
+batches is smaller because of the small size of the development
+set  We experiment with beams of size   as well as greedy
+search      beam of size   To make generation fast  we do not
+recompute convolution states that have not changed compared
+to the previous time step but rather copy  shift  these activations 
+We compare to results reported in Wu et al    who use
+Nvidia    GPUs which are essentially two      We did not
+have such   GPU available and therefore run experiments on an
+older    card which is inferior to      in addition to the newer
+   and GTX ti cards  The results  Table   show that our
+model can generate translations on      GPU at   times the
+speed and   higher BLEU  on an    the speedup is up to
+  times and on   GTX ti card the speed is   times faster 
+  larger beam of size   decreases speed but gives better BLEU 
+On CPU  our model is up to   times faster  however  the
+GNMT CPU results were obtained with an   core machine
+whereas our results were obtained with just over half the number
+of cores  On   per CPU core basis  our model is   times faster
+at   better BLEU  Finally  our CPU speed is   times higher
+than GNMT on   custom TPU chip which shows that high speed
+can be achieved on commodity hardware  We do no report TPU
+figures as we do not have access to this hardware 
+
+Convolutional Sequence to Sequence Learning
+
+GNMT GPU    
+GNMT CPU   cores
+GNMT TPU
+ConvS   GPU       
+ConvS   GPU       
+ConvS   GPU  GTX ti    
+ConvS   CPU   cores   
+ConvS   GPU       
+ConvS   CPU   cores   
+ConvS   GPU       
+ConvS   GPU  GTX ti    
+
+BLEU Time    
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Table   CPU and GPU generation speed in seconds on the development
+set of WMT  EnglishFrench  We show results for different beam
+sizes    GNMT figures are taken from Wu et al    CPU speeds
+are not directly comparable because Wu et al    use     core
+machine versus our   core setup 
+
+ConvS  
+ source position
+ target position
+ source   target position
+
+PPL BLEU
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Table   Effect of removing position embeddings from our model in
+terms of validation perplexity  valid PPL  and BLEU 
+
+  Position Embeddings
+In the following sections  we analyze the design choices in our
+architecture  The remaining results in this paper are based on
+the WMT  EnglishGerman task with   encoder layers at
+kernel size   and   decoder layers at kernel size   We use  
+target vocabulary of    words as well as vocabulary selection
+ Mi et al      Hostis et al    to decrease the size of
+the output layer which speeds up training and testing  The
+average vocabulary size for each training batch is about    target
+words  All figures are averaged over three runs   and BLEU
+is reported on newstest  before unknown word replacement 
+We start with an experiment that removes the position embeddings from the encoder and decoder   These embeddings
+allow our model to identify which portion of the source and
+target sequence it is dealing with but also impose   restriction
+on the maximum sentence length  Table   shows that position
+embeddings are helpful but that our model still performs well
+without them  Removing the source position embeddings results
+in   larger accuracy decrease than target position embeddings 
+However  removing both source and target positions decreases
+accuracy only by   BLEU  We also find that the length of the
+outputs of models without position embeddings closely matches
+the output length of models with position information  This
+
+Attn Layers PPL BLEU
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Table   Multistep attention in all five decoder layers or fewer layers
+in terms of validation perplexity  PPL  and test BLEU 
+
+indicates that the models can learn relative position information
+within the contexts visible to the encoder and decoder networks
+which can observe up to   and   words respectively 
+Recurrent models typically do not use explicit position
+embeddings since they can learn where they are in the sequence
+through the recurrent hidden state computation  In our setting 
+the use of position embeddings requires only   simple addition
+to the input word embeddings which is   negligible overhead 
+
+  Multistep Attention
+The multiple attention mechanism   computes   separate
+source context vector for each decoder layer  The computation
+also takes into account contexts computed for preceding decoder
+layers of the current time step as well as previous time steps
+that are within the receptive field of the decoder  How does
+multiple attention compare to attention in fewer layers or even
+only in   single layer as is usual  Table   shows that attention in
+all decoder layers achieves the best validation perplexity  PPL 
+Furthermore  removing more and more attention layers decreases
+accuracy  both in terms of BLEU as well as PPL 
+The computational overhead for attention is very small compared
+to the rest of the network  Training with attention in all five
+decoder layers processes   target words per second on
+average on   single GPU  compared to   words per second
+for   single attention module  This corresponds to   overhead
+per attention module and demonstrates that attention is not
+the bottleneck in neural machine translation  even though it
+is quadratic in the sequence length  cf  Kalchbrenner et al 
+  Part of the reason for the low impact on speed is that
+we batch the computation of an attention module over all target
+words  However  for RNNs batching of the attention may be less
+effective because of the dependence on the previous time step 
+
+Convolutional Sequence to Sequence Learning
+
+RNN MLE  Shen et al   
+RNN MRT  Shen et al   
+WFE  Suzuki   Nagata   
+ConvS  
+
+DUC 
+
+Gigaword
+
+RG      RG      RGL     RG      RG      RGL    
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+Table   Accuracy on two summarization tasks in terms of Rouge   RG  Rouge   RG  and RougeL  RGL 
+
+ 
+ 
+ 
+ 
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+                                                          
+
+Layers
+
+Encoder
+Decoder
+
+Figure   Encoder and decoder with different number of layers 
+
+Kernel width
+
+ 
+ 
+ 
+
+Encoder layers
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+Table   Encoder with different kernel width in terms of BLEU 
+
+Kernel width
+
+ 
+ 
+ 
+
+Decoder layers
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+Table   Decoder with different kernel width in terms of BLEU 
+
+  Kernel size and Depth
+Figure   shows accuracy when we change the number of layers
+in the encoder or decoder  The kernel width for layers in the
+encoder is   and for the decoder it is   Deeper architectures are
+particularly beneficial for the encoder but less so for the decoder 
+Decoder setups with two layers already perform well whereas
+for the encoder accuracy keeps increasing steadily with more
+layers until up to   layers when accuracy starts to plateau 
+Aside from increasing the depth of the networks  we can also
+change the kernel width  Table   shows that encoders with
+
+narrow kernels and many layers perform better than wider kernels 
+These networks can also be faster since the amount of work to
+compute   kernel operating over   input elements is less than half
+compared to kernels over   elements  We see   similar picture for
+decoder networks with large kernel sizes  Table   Dauphin et al 
+  shows that context sizes of   words are often sufficient
+to achieve very good accuracy on language modeling for English 
+
+  Summarization
+Finally  we evaluate our model on abstractive sentence
+summarization which takes   long sentence as input and outputs
+  shortened version  The current best models on this task are
+recurrent neural networks which either optimize the evaluation
+metric  Shen et al    or address specific problems of summarization such as avoiding repeated generations  Suzuki   Nagata 
+  We use standard likelhood training for our model and
+  simple model with six layers in the encoder and decoder each 
+hidden size   batch size   and we trained on   single GPU
+in one night  Table   shows that our likelhood trained model outperforms the likelihood trained model  RNN MLE  of Shen et al 
+  and is not far behind the best models on this task which
+benefit from taskspecific optimization and model structure 
+
+  Conclusion and Future Work
+We introduce the first fully convolutional model for sequence
+to sequence learning that outperforms strong recurrent models
+on very large benchmark datasets at an order of magnitude
+faster speed  Compared to recurrent networks  our convolutional
+approach allows to discover compositional structure in the sequences more easily since representations are built hierarchically 
+Our model relies on gating and performs multiple attention steps 
+We achieve   new state of the art on several public translation
+benchmark data sets  On the WMT  EnglishRomanian
+task we outperform the previous best result by   BLEU  on
+WMT  EnglishFrench translation we improve over the LSTM
+model of Wu et al    by   BLEU in   comparable setting 
+and on WMT  EnglishGerman translation we ouperform the
+same model by   BLEU  In future work  we would like to
+apply convolutional architectures to other sequence to sequence
+learning problems which may benefit from learning hierarchical
+representations as well 
+
+Convolutional Sequence to Sequence Learning
+
+Acknowledgements
+We thank Benjamin Graham for providing   fast    convolution 
+and Ronan Collobert as well as Yann LeCun for helpful
+discussions related to this work 
+
+References
+Ba  Jimmy Lei  Kiros  Jamie Ryan  and Hinton  Geoffrey   
+Layer normalization  arXiv preprint arXiv   
+
+Glorot  Xavier and Bengio  Yoshua  Understanding the difficulty
+of training deep feedforward neural networks  The handbook
+of brain theory and neural networks   
+
+Graff  David  Kong  Junbo  Chen  Ke  and Maeda  Kazuaki 
+English gigaword  Linguistic Data Consortium  Philadelphia 
+ 
+
+Ha  David  Dai  Andrew  and Le  Quoc    Hypernetworks 
+
+arXiv preprint arXiv   
+
+Bahdanau  Dzmitry  Cho  Kyunghyun  and Bengio  Yoshua 
+Neural machine translation by jointly learning to align and
+translate  arXiv preprint arXiv   
+
+He  Kaiming  Zhang  Xiangyu  Ren  Shaoqing  and Sun  Jian 
+Deep Residual Learning for Image Recognition  In Proc  of
+CVPR     
+
+Bojar  Ondej  Chatterjee  Rajen  Federmann  Christian  Graham 
+Yvette  Haddow  Barry  Huck  Matthias  JimenoYepes 
+Antonio  Koehn  Philipp  Logacheva  Varvara  Monz  Christof 
+Negri  Matteo    ev eol  Aur elie  Neves  Mariana    Popel 
+Martin  Post  Matt  Rubino  Rapha el  Scarton  Carolina 
+Specia  Lucia  Turchi  Marco  Verspoor  Karin    and
+Zampieri  Marcos  Findings of the   conference on
+machine translation  In Proc  of WMT   
+
+Bradbury  James  Merity  Stephen  Xiong  Caiming  and Socher 
+Richard  QuasiRecurrent Neural Networks  arXiv preprint
+arXiv   
+
+Cho  Kyunghyun  Van Merri enboer  Bart  Gulcehre  Caglar 
+Bahdanau  Dzmitry  Bougares  Fethi  Schwenk  Holger  and
+Bengio  Yoshua  Learning Phrase Representations using RNN
+EncoderDecoder for Statistical Machine Translation  In Proc 
+of EMNLP   
+
+Chorowski  Jan    Bahdanau  Dzmitry  Serdyuk  Dmitriy  Cho 
+Kyunghyun  and Bengio  Yoshua  Attentionbased models
+for speech recognition  In Advances in Neural Information
+Processing Systems  pp     
+
+Collobert  Ronan  Kavukcuoglu  Koray 
+
+and Farabet 
+Clement  Torch    Matlablike Environment for Machine
+Learning 
+In BigLearn  NIPS Workshop    URL
+http torch ch 
+
+Dauphin  Yann    Fan  Angela  Auli  Michael  and Grangier 
+David  Language modeling with gated linear units  arXiv
+preprint arXiv   
+
+Dyer  Chris  Chahuneau  Victor  and Smith  Noah      Simple 
+Fast  and Effective Reparameterization of IBM Model   In
+Proc  of ACL   
+
+Elman  Jeffrey    Finding Structure in Time  Cognitive Science 
+
+   
+
+Gehring  Jonas  Auli  Michael  Grangier  David  and Dauphin 
+Yann      Convolutional Encoder Model for Neural Machine
+Translation  arXiv preprint arXiv   
+
+He  Kaiming  Zhang  Xiangyu  Ren  Shaoqing  and Sun 
+Jian  Delving deep into rectifiers  Surpassing humanlevel
+performance on imagenet classification  In Proceedings of
+the IEEE International Conference on Computer Vision  pp 
+     
+
+Hochreiter  Sepp and Schmidhuber    urgen  Long shortterm
+
+memory  Neural computation     
+
+Ioffe  Sergey and Szegedy  Christian  Batch normalization 
+Accelerating deep network training by reducing internal
+covariate shift  In Proceedings of The  nd International
+Conference on Machine Learning  pp     
+
+Jean    ebastien  Firat  Orhan  Cho  Kyunghyun  Memisevic 
+Roland  and Bengio  Yoshua  Montreal Neural Machine
+Translation systems for WMT 
+In Proc  of WMT  pp 
+   
+
+Kalchbrenner  Nal  Espeholt  Lasse  Simonyan  Karen  van den
+Oord  Aaron  Graves  Alex  and Kavukcuoglu  Koray  Neural
+Machine Translation in Linear Time  arXiv   
+
+LeCun  Yann and Bengio  Yoshua  Convolutional networks
+for images  speech  and time series  The handbook of brain
+theory and neural networks     
+
+  Hostis  Gurvan  Grangier  David  and Auli  Michael  Vocabulary Selection Strategies for Neural Machine Translation 
+arXiv preprint arXiv   
+
+Lin  ChinYew  Rouge    package for automatic evaluation
+In Text Summarization Branches Out 
+
+of summaries 
+Proceedings of the ACL  Workshop  pp     
+
+Luong  MinhThang  Pham  Hieu  and Manning  Christopher   
+Effective approaches to attentionbased neural machine
+translation  In Proc  of EMNLP   
+
+Meng  Fandong  Lu  Zhengdong  Wang  Mingxuan  Li  Hang 
+Jiang  Wenbin  and Liu  Qun  Encoding Source Language
+with Convolutional Neural Network for Machine Translation 
+In Proc  of ACL   
+
+Convolutional Sequence to Sequence Learning
+
+Mi  Haitao  Wang  Zhiguo  and Ittycheriah  Abe  Vocabulary
+Manipulation for Neural Machine Translation  In Proc  of
+ACL   
+
+Shen  Shiqi  Zhao  Yu  Liu  Zhiyuan  Sun  Maosong  et al 
+Neural headline generation with sentencewise optimization 
+arXiv preprint arXiv   
+
+Srivastava  Nitish  Hinton  Geoffrey    Krizhevsky  Alex 
+Sutskever  Ilya  and Salakhutdinov  Ruslan  Dropout    simple
+way to prevent Neural Networks from overfitting  JMLR   
+   
+
+Sukhbaatar  Sainbayar  Weston  Jason  Fergus  Rob  and Szlam 
+Arthur  Endto end Memory Networks  In Proc  of NIPS 
+pp     
+
+Sutskever  Ilya  Martens  James  Dahl  George    and Hinton 
+Geoffrey    On the importance of initialization and
+momentum in deep learning  In ICML   
+
+Sutskever  Ilya  Vinyals  Oriol  and Le  Quoc    Sequence to
+Sequence Learning with Neural Networks  In Proc  of NIPS 
+pp     
+
+Suzuki  Jun and Nagata  Masaaki  Cuttingoff redundant
+repeating generations for neural abstractive summarization 
+arXiv preprint arXiv   
+
+Waibel  Alex  Hanazawa  Toshiyuki  Hinton  Geoffrey  Shikano 
+Kiyohiro  and Lang  Kevin    Phoneme Recognition using
+Timedelay Neural Networks  IEEE transactions on acoustics 
+speech  and signal processing     
+
+Wu  Yonghui  Schuster  Mike  Chen  Zhifeng  Le  Quoc   
+Norouzi  Mohammad  Macherey  Wolfgang  Krikun  Maxim 
+Cao  Yuan  Gao  Qin  Macherey  Klaus  et al  Google  
+Neural Machine Translation System  Bridging the Gap
+between Human and Machine Translation  arXiv preprint
+arXiv   
+
+Yang  Zichao  Hu  Zhiting  Deng  Yuntian  Dyer  Chris  and
+Smola  Alex  Neural Machine Translation with Recurrent
+Attention Modeling  arXiv preprint arXiv   
+
+Zhou  Jie  Cao  Ying  Wang  Xuguang  Li  Peng  and Xu 
+Wei  Deep Recurrent Models with FastForward Connections for Neural Machine Translation  arXiv preprint
+arXiv   
+
+Miller  Alexander    Fisch  Adam  Dodge  Jesse  Karimi  AmirHossein  Bordes  Antoine  and Weston  Jason  Keyvalue
+memory networks for directly reading documents  In Proc 
+of EMNLP   
+
+Nallapati  Ramesh  Zhou  Bowen  Gulcehre  Caglar  Xiang 
+Bing  et al  Abstractive text summarization using sequenceto sequence rnns and beyond  In Proc  of EMNLP   
+
+Oord  Aaron van den  Kalchbrenner  Nal  and Kavukcuoglu 
+Koray  Pixel recurrent neural networks  arXiv preprint
+arXiv     
+
+Oord  Aaron van den  Kalchbrenner  Nal  Vinyals  Oriol 
+Espeholt  Lasse  Graves  Alex  and Kavukcuoglu  Koray 
+Conditional image generation with pixelcnn decoders  arXiv
+preprint arXiv     
+
+Over  Paul  Dang  Hoa  and Harman  Donna  Duc in context 
+Information Processing   Management   
+ 
+
+Pascanu  Razvan  Mikolov  Tomas  and Bengio  Yoshua  On
+the difficulty of training recurrent neural networks 
+In
+Proceedings of The  th International Conference on Machine
+Learning  pp     
+
+Rush  Alexander    Chopra  Sumit  and Weston  Jason   
+neural attention model for abstractive sentence summarization 
+In Proc  of EMNLP   
+
+Salimans  Tim and Kingma  Diederik    Weight normalization 
+  simple reparameterization to accelerate training of deep
+neural networks  arXiv preprint arXiv   
+
+Schuster  Mike and Nakajima  Kaisuke  Japanese and korean
+voice search  In Acoustics  Speech and Signal Processing
+ ICASSP    IEEE International Conference on  pp 
+  IEEE   
+
+Sennrich  Rico  Haddow  Barry  and Birch  Alexandra  Neural
+Machine Translation of Rare Words with Subword Units  In
+Proc  of ACL     
+
+Sennrich  Rico  Haddow  Barry  and Birch  Alexandra  Edinburgh
+Neural Machine Translation Systems for WMT   In Proc 
+of WMT     
+
+Shazeer  Noam  Mirhoseini  Azalia  Maziarz  Krzysztof 
+Davis  Andy  Le  Quoc  Hinton  Geoffrey  and Dean  Jeff 
+Outrageously large neural networks  The sparselygated
+mixtureof experts layer  ArXiv eprints  January  
+
+

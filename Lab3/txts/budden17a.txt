@@ -1,0 +1,1209 @@
+Deep Tensor Convolution on Multicores
+
+David Budden   Alexander Matveev   Shibani Santurkar   Shraman Ray Chaudhuri   Nir Shavit  
+
+Abstract
+
+Deep convolutional neural networks  ConvNets 
+of  dimensional kernels allow joint modeling of
+spatiotemporal features  These networks have
+improved performance of video and volumetric
+image analysis  but have been limited in size due
+to the low memory ceiling of GPU hardware  Existing CPU implementations overcome this constraint but are impractically slow  Here we extend and optimize the faster Winogradclass of
+convolutional algorithms to the Ndimensional
+case and speci cally for CPU hardware  First 
+we remove the need to manually handcraft algorithms by exploiting the relaxed constraints
+and cheap sparse access of CPU memory  Second  we maximize CPU utilization and multicore scalability by transforming data matrices to
+be cacheaware  integer multiples of AVX vector
+widths  Treating    ConvNets as   special case 
+we demonstrate     to  fold improvement in
+throughput compared to previous stateof theart 
+
+  Introduction
+Although convolutional neural networks  ConvNets  have
+been successfully applied to solve nontrivial image processing problems since the     LeCun et al   
+ 
+their adoption as   de facto standard for image classi cation  Russakovsky et al    and segmentation  Long et al    is due largely to recent
+breakthroughs in network architecture  Beginning with
+AlexNet in    Krizhevsky et al    the annual ImageNet classi cation challenge  ILSVRC  has been dominated by progressively deeper networks with smaller kernels  Szegedy et al    Simonyan   Zisserman     
+Recent solutions to the issues of vanishing and exploding
+gradients  Glorot   Bengio    have allowed these networks to extend even deeper  with the ILSVRC  winner
+ ResNet  He et al    being  fold deeper than VGG 
+
+ Massachusetts Institute of Technology  Correspondence to 
+
+David Budden  budden csail mit edu 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+It is easy to see why the  deeper is better  trend has led to
+better performing ConvNets  Constructing even   modest
+      receptive  eld with stacked       kernels requires
+  fewer parameters than   single kernel of size      
+Intuitively it also captures   richer set of features due to additional nonlinearity  Recent studies have begun to formalize the expressive power of deep versus shallow networks 
+ nding that classi cation boundaries acquire local curvature and expressivity as an exponential function of network
+depth but not breadth  Poole et al    The only obvious
+tradeoff to this performance is the extra memory necessary
+to store the intermediate activations in deeper networks 
+Motivated by the success of these models in image processing tasks  researchers have begun to investigate ConvNet applications in the video processing domain  Example applications include video classi cation  Karpathy
+et al    segmentation  Couprie et al    and denoising  Shi et al      An important observation
+that has emerged from these studies is the importance of
+   convolutional primitives for modelling joint spatiotemporal features  the na ve application of traditional   
+ConvNets frameby frame does not capture motion continuity or other rich temporal correlations  Ledig et al 
+  Tran et al    It is thus unsurprising that simple
+   ConvNets have yielded stateof theart performance on
+video classi cation benchmarks  Tran et al    and volumetric image segmentation       tracing neurons between
+electron microscopy samples  Lee et al   
+Given the early success and conceptual simplicity of   
+ConvNets  it is interesting to note that many popular deep
+learning libraries       Caffe  Jia et al    do not provide native support  One simple explanation is that these
+libraries are optimized for execution on GPUs  and higherorder convolutions require prohibitively large volumes of
+data with respect to the   GB ceiling of today   most advanced GPU hardware  These limitations are clear in previous studies  which either     limit the network size  Tran
+et al        downsample images to lower resolution  Ji et al    or     include    primitives for only  
+subset of network layers  Lee et al   
+There are many potential options for circumventing the issue of ConvNet memory usage  The  rst is to split the
+network across multiple GPUs  which requires the careful
+
+Deep Tensor Convolution on Multicores
+
+coordination of activation and gradient  ow  Dean et al 
+  Even in the case of the most successful distributed
+frameworks for ConvNets  Abadi et al    GPU memory management is largely unresolved  The TensorFlow
+authors propose two partial solutions warranting further investigation      recomputing versus storing large tensors 
+and     transferring longlived tensors from GPU to host
+CPU memory  Instead  we propose an alternative to horizontal scalability for overcoming GPU memory constraints
+    fast implementation of Ndimension convolution optimized for multicore CPU systems  which have access to
+practically unbounded memory on   single node 
+
+  Prior Art
+Algorithms for fast convolution have existed in signal processing literature since the     Winograd    The
+general recipe is to transform both data and kernel into
+  new space  where expensive sliding windowstyle convolutions reduce to cheaper elementwise products  The
+ rst examples of this approach in ConvNet literature involved Fast Fourier Transforms  FFTs  exploiting the convolution theorem  Mathieu et al    Vasilache et al 
+  More recently  Lavin and Gray have pioneered
+the use of the more general class of Winogradstyle algorithms  Lavin   Gray    Winograd    Their
+implementation and its cuDNN derivatives  Chetlur et al 
+  have produced stateof theart GPU performance on
+deep networks of small kernels  In this Section we provide
+  brief overview of the theory underlying this approach  focusing on the aspects that are important for exploiting the
+architecture of multicore CPUs 
+
+                where the coef cients si  cid 
+
+  Fast Vector Convolution
+Consider the  dimension convolution          where the
+kernel and data vectors are of length   and    This problem can be rephrased as one of polynomial multiplication
+by introducing the associated polynomials           and
+  gi kdk
+of xi are the solution to the desired convolution  This computation can be distributed across   set of ef cient local
+computations by considering the Chinese Remainder Theorem  CRT   Ding et al    as summarized in Theorem
+  By observing that                  mod      for any
+polynomial      of suf ciently high degree  we can exploit Theorem   to ef ciently calculate      as shown in
+Algorithm   which can be conveniently rephrased in terms
+matrixvector products 
+
+         Cg   cid   Bd     
+
+ 
+
+where      and   are introduced as the kernel  data and
+inverse transforms respectively  With respect to Algorithm
+  Step   is implemented by the kernel and data trans 
+
+forms  Step   by their transformed elementwise product
+and Step   by the  nal inverse transform 
+
+Theorem    CRT for Polynomials 
+Let          
+         where        are pairwise
+coprime  If               are   set of polynomials then
+there must exist   unique polynomial      which satis es
+the set of congruences 
+
+            mod     
+            mod     
+
+ 
+
+              mod       
+
+provided the degree of      is not less than that of     
+
+Algorithm   Fast Vector Convolution
+
+Input                
+for       to   do
+
+  Compute residual polynomials for      and     
+
+              mod       
+              mod       
+
+  Compute residual polynomial multiplications 
+
+ cid 
+
+ cid 
+
+        
+
+            
+
+mod       
+
+end for
+  Reduce partial convolutions to solve     
+
+  cid 
+
+      
+
+            
+
+  
+
+  Minimal Winograd Algorithms
+
+In the above formulation   the matrices   and   are the
+remainders of the polynomial divisions      and      by
+       respectively  The derivation of   is more involved
+and is omitted for brevity  Importantly  the only parameter
+required to synthesize these matrices  in addition to the kernel      and data      is the polynomial     
+Traditionally  the selection of      has been subject to
+many constraints  First  it should be chosen such that the
+transform matrices contain only degree   scalar  values 
+Lavin has published code that automates this procedure using the CookToom algorithm to produce transformed kernels and data both of length    Lavin    For an unpadded convolution           of length              
+and ignoring the cost of applying the transforms  this fast
+algorithm therefore requires SG   fewer computations to
+
+Deep Tensor Convolution on Multicores
+
+calculate than the standard slidingwindow approach  Inappropriate selection of      would yield matrices of polynomials  degree     that require considerably more scalar
+multiplications to compute 
+In reality  the transformations themselves require expensive
+matrix multiplications that can outweigh the above saving 
+Accordingly  existing implementations of fast convolution
+aim to synthesize matrices enriched for  simple        integer  values  There are two motivations for this  First 
+it improves numeric stability which can have an impact
+on doubleprecision convolutions  Lavin   Gray   
+More importantly  it supports the handcrafting of minimal
+algorithms  These algorithms reduce the cost of applying
+transform matrices by identifying and eliminating redundant subexpressions    famous instance of this approach
+was documented by Winograd  Winograd    Consider
+the following matrices 
+
+ cid   
+ 
+
+   
+
+   
+
+ 
+
+ 
+       
+
+   
+ 
+ 
+ 
+ 
+ 
+   
+ 
+ 
+   
+ 
+ 
+
+     
+
+ 
+
+ 
+ 
+ 
+
+ 
+
+ 
+ 
+ 
+
+ 
+ 
+
+     
+
+   
+
+ 
+ 
+ 
+ 
+ 
+ 
+
+By substituting these matrices into   and factoring out redundant computations  we arrive at the following minimal
+algorithm for vector convolution 
+
+ cid 
+
+ cid 
+
+ cid 
+
+            
+            
+
+ 
+
+       
+
+where 
+
+                             
+                             
+
+            
+            
+
+ 
+
+ 
+
+ 
+
+ 
+
+This is   socalled          algorithm for vector convolution  here for       and       Importantly  this algorithm only works for  xed length kernel and data vectors
+ here       Generating          algorithms for different
+combinations requires both     searching over the space of
+possible      polynomials as input to Lavin   or similar
+code  Lavin    and     reducing the matrix multiplications to   minimal set of addition  multiplication and shifting operations  To our knowledge there are no automated
+solutions to either step and thus only   small set of handcrafted Winogradstyle algorithms                  
+and       have been released as fast CPU  Dukhan 
+  or GPU primitives  Chetlur et al   
+
+  Deep Tensor Convolution
+Below we present an alternative approach to fast convolution that removes the need to handcraft minimal algorithms  This new approach is better suited to video and
+volumetric image processing for two main reasons  First 
+the number of terms involved in   closedform solution for
+  and higherdimensional convolutions makes Winogradstyle refactoring impractical  Second  by removing numeric simplicity as   constraint we are instead able to
+synthesize transforms optimized to CPU architectural constraints       data that are integer multiples of the AVX
+register width  This is made possible by the relaxed memory constraints of CPUs and allows us to close the previous
+CPUGPU performance gap by   full orderof magnitude 
+We  rst de ne Ndimensional convolution and describe
+how existing fast algorithms can be extended to this general case  Instead of crafting   minimal algorithm  we show
+how relaxed memory constraints and ef cient sparse linear
+algebra of CPU systems can be leveraged to amortize transform costs  Later we show how architectureaware transform synthesis can lead to further acceleration 
+
+  Convolution in NDimensions
+
+Mathematically  the standard convolutional layer used in
+   ConvNets extends trivially to higherdimensional tensors  Consider   network where for each layer    kernel  
+and channel    the kernel weights                      and
+resulting feature map                    are both    tensors  This calculation can be expressed elementwise as 
+
+ cid 
+
+ cid 
+
+ cid 
+
+       
+
+         
+
+        
+
+              
+         
+
+             
+
+ 
+
+ 
+
+     
+
+ 
+where        is the bias term and   is   ReLU or other nonlinear activation function  This extends to higher dimensions by looping over additional subscripts on   and   
+The dimensionality of feature maps is clearly preserved in
+         video at the input produces   video at the output  The triple          loop ranges from   to the layeri
+kernel size to perform slidingwindow convolution  and the
+mloop is   reduction over the previous layer   output channels  This differs from previous studies where the temporal
+axis is encoded as network channels and  attened after the
+ rst layer  Karpathy et al    Simonyan   Zisserman 
+    producing   single    image or class label at the
+output  These methods have been shown to produce less
+accurate results on   broad range of video processing tasks
+when compared to true    ConvNets  Tran et al   
+It is also evident from   why higherdimensional ConvNets suffer from issues of impractical memory consumption  Each layer of an Ndimensional network requires  
+
+ cid 
+
+Deep Tensor Convolution on Multicores
+
+and   to be stored as     and    dimensional tensors 
+owing to their operation over multiple kernels and channels  We believe that this multiplicative effect has likely
+stalled the adoption of the deeper network architectures that
+dominate image processing tasks  with recent studies instead compromising on network expressiveness to    within
+the   GB memory constraints of today   topend GPUs  Ji
+et al    Lee et al    Tran et al   
+
+  Accelerating Tensor Convolution
+
+Sidestepping memory constraints by shifting from GPU
+to CPU hardware is conceptually trivial  as most popular ConvNet frameworks support execution on both CPU
+and GPU environments  However  the issue preventing the
+widespread adoption of CPU implementations is not   lack
+of software support but the large perceived gap between
+CPU and GPU performance  This is reminiscent of   large
+ongoing CPUvs GPU debate  with various studies claiming that GPUs provide anywhere from  to   speedup across broad problem domains  Lee et al      recent review has demonstrated   similar performance gap in
+the order of    across the most popular ConvNet frameworks  Shi et al      Even if distributed GPU solutions like TensorFlow require tensors to be recomputed
+or swapped between GPU and host CPU memory  Abadi
+et al    this overhead is easy to justify if the alternative is    fold increase in singlenode execution time 
+Here we describe how fast algorithms for convolution can
+be extended to the general case of Ndimensional tensors 
+where the theoretical speedup is   substantial  SG      
+Although recent studies have begun to explore extensions
+of FFTbased convolution to  dimensions  Zlateski et al 
+  to our knowledge there have been no attempts to
+extend Lavin and Gray   Winogradstyle approach  Lavin
+  Gray    In order to extend the fast vector algorithm
+to   to Ndimensions  we consider the nmode product of
+  tensor      RI   IN   with   matrix      RJ In 
+herein denoted as         Kolda   Bader   
+
+          in   in iN  
+
+xi iN uj in    
+
+in 
+
+In our case   is sparse and   is dense  so we implement
+  such that   is traversed in the outermost two loops  We
+also introduce the following notation for brevity 
+   Un                 UN  
+
+    
+
+In cid 
+
+The fast algorithm for tensor convolution applies the transforms Cn  Bn and An separately to each dimension   of
+the kernel and data tensors    and   
+
+   cid       
+
+   Bn cid    
+
+   Cn   cid       
+
+   An 
+
+ 
+
+It is straightforward to show that   is   special case of  
+by considering the following equivalence 
+
+                    UX   
+
+where the matrix      is the moden major unfolding of
+tensor    Kolda   Bader   
+In the  dimensional
+case     is simply   and thus         Ux  Likewise
+in     as         UX and         UX cid  then  
+reduces to the case reported by  Lavin   Gray   
+
+      cid   CGC cid   cid   BDB cid cid    cid 
+
+  Amortizing Transform Costs
+
+Manually reducing transform costs via Winogradstyle
+minimal algorithms is important for  dimensional GPU
+implementations  However  this is less important for   CPU
+implementation of higherdimensional convolution  The
+reasons are twofold      the matrix multiplication cost can
+be amortized across   larger number of kernels and channels due to relaxed memory constraints  and     CPUs are
+able to directly leverage the sparse structure of these matrices for further acceleration  Although ef cient sparse linear
+algebra is possible on GPUs  this typically involves reshuf 
+ ing sparse matrices into   dense representation       COO 
+CSR or ELLPACK  Grewe   Lokhmotov    and introduces unnecessary computational overhead 
+As   simple example  consider Winograd   minimal   
+algorithm presented in Section   Computing the output
+  of length       requires   total of   multiplications  
+  between the data and kernel  and   by   constant factor
+of   The   additions are ignored as modern CPUs can
+compute fused multiplyaccumulate operations in   single
+cycle  By contrast  computing   explicitly by equation  
+requires   multiplications     for the elementwise product    for the data transform and   for the inverse transform  assuming transformed kernels are cached at training
+time  Even leveraging sparsity in the transform matrices
+requires   multiplications  which is more than triple that
+required for Winograd   minimal algorithm 
+The game changes when one considers these approaches
+in the context of   ConvNet layer with multiple channels
+and kernels  Without loss of generality  assume the numbers of kernels and channels are both equal to    As the
+inverse transform can be applied once over the reduced output and the data transform once across all kernels  the required number of multiplications is just            versus      for Winograd  This can be reduced further to
+          by exploiting the sparsity of   and   
+Although it is also possible to restructure Winograd   algorithm to exploit the size of the network  for larger networks the      multiplications required by the elementwise product quickly renders the linear transform cost neg 
+
+Deep Tensor Convolution on Multicores
+
+fast algorithm is best suited for networks of small kernels 
+which is fortunately wellaligned with recent trends in deep
+ConvNet architecture  He et al    Simonyan   Zisserman      Szegedy et al    Sparsity and numerical precision also decrease as   function of    In practice 
+the data matrix   is not the full feature map       an ImageNet image  but rather one of many small  overlapping
+input tiles  each of size        stepping by   along both
+axes  whose      outputs are stitched together to form the
+ nal convolution result  In Section   we discuss how the
+fullyautomated nature of our implementation can leverage
+this property for further performance improvement 
+
+  Optimizing for CPU Architecture
+There are   myriad of algorithmic tricks that can be applied
+to reduce the number of computations required for convolution  Consider the special case where our transforms
+are the discrete Fourier transform  DFT  and inverse DFT
+matrices  As the Fourier transform of   realvalued signal
+has Hermitian symmetry  the number of unique terms in
+the elementwise product can be reduced  Mathieu et al 
+  More generally  one could also apply the Strassen
+algorithm to reduce the number of steps required for matrix
+multiplication  Cong   Xiao   
+In practice  the merit of any of these approaches depends
+intimately on whether they can be implemented to effectively leverage hardware  Consider the  to  performance ratio observed between existing GPU and CPU implementations  Shi et al      For the devices used
+in this study  Titan   versus Xeon    the ratio of
+theoretical throughput is actually less than to  to  This
+seems to suggest that current CPU performance limitations
+are largely issues of software rather than hardware 
+Although some previous studies have discussed CPUspeci   performance optimizations
+for neural networks  Vanhoucke et al    these guidelines have not
+necessarily translated to optimal implementations  For
+example  the Eigen   linear algebra library  used until
+recently by TensorFlow  does not provide native support
+for AVX  vectorized  instructions 
+introducing   tight
+bottleneck on theoretical throughput  Looking beyond  
+single core    recent review demonstrates poor multicore
+scalability across all major ConvNet frameworks  Shi et al 
+    Solving these two issues alone has the potential to
+close the CPUGPU gap by   full orderof magnitude  and
+this improvement is multiplicative with the algorithmic
+savings described earlier 
+
+  SingleCore Utilization
+
+Although our fast algorithm requires theoretically fewer
+computations to execute than na ve convolution        fold
+
+Figure   Reduction in computations achieved by fast tensor convolution  forward pass  for       kernel       as   function
+of number of layer channels and kernels  Dashed line indicates
+direct convolution baseline 
+
+ligible 
+It is also impractical to construct similar minimal algorithms in higher dimensions  Consider the    
+network of           kernels that has yielded stateof 
+theart performance across many video processing benchmarks  Tran et al    As an example  we synthesize the
+following transform matrices such that convolution reduces
+to             elementwise product 
+
+ 
+
+ 
+ 
+ 
+ 
+
+ 
+
+ 
+ 
+
+ 
+
+     
+     
+
+ 
+ 
+ 
+
+ 
+ 
+
+ 
+
+ 
+     
+ 
+   
+     
+
+ 
+ 
+
+   
+ 
+ 
+
+     
+ 
+     
+ 
+ 
+
+ 
+ 
+ 
+
+ 
+ 
+
+ 
+ 
+
+   
+
+   
+
+   
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+
+   
+   
+   
+   
+ 
+ 
+ 
+ 
+
+     
+ 
+     
+ 
+ 
+   
+   
+     
+   
+ 
+     
+     
+     
+     
+     
+
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+     
+
+ 
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ cid 
+
+ 
+
+ 
+ 
+ 
+
+The theoretical ceiling on speedup obtainable using these
+matrices is  fold  ignoring the cost of the matrixtensor
+products required when applying   Figure   demonstrates the actual reduction in computations as   function
+of kernels and channels  For   network of just   kernels
+and   channels  it is possible to obtain greater than  fold
+acceleration with respect to direct slidingwindow convolution  This is triple the performance margin that could be
+gained if the network was constrained to   kernels and
+channels due to   lower memory ceiling 
+We can further improve this performance margin by exploiting the sparsity of the matrices themselves  as it
+is comparatively straightforward to implement ef cient
+sparse linear algebra for CPUs  One might worry that the
+transform matrix sparsity is inversely proportional to the
+degree of      However  this simply suggests that our
+
+ channelsspeedup  kernel  kernels  kernelskernels Algorithm   NDimensional Convolution with SIMD
+
+Deep Tensor Convolution on Multicores
+
+for       by   to DN do
+
+for       to   do
+
+ cid 
+
+ cid 
+
+            
+    
+
+              
+
+    
+
+              
+
+    
+
+FMA
+end for
+
+end for
+
+for     kernels  it is considerably more dif cult to implement with high CPU utilization  Consider the elementwise
+product   cid   cid    cid  summed for each channel                
+to produce the Ndimensional tensor   cid  We can compute
+the ratio of computations         multiply and   accumulate
+operation per       pair  to the volume of memory loaded 
+
+computations
+
+memory accesses
+
+ 
+
+ DN  
+ DN  
+
+   
+
+Little   Law shows this is problematic for effective CPU
+utilization  as convolution expressed in this form is bottlenecked by memory bandwidth  Little    To solve this
+problem  recall that   is one of many small  overlapping
+tiles that span the fullsize feature map  Considering   of
+these tiles  we introduce the following matrices 
+
+                     
+
+ 
+where         RT    tilesby channels  and        
+RM    channelsby kernels  Each matrix               DN
+captures   single        coordinate in the earlier   cid   cid    cid 
+elementwise product  which is fused with the channelwise reduction into endto end matrix multiplications 
+
+computations
+
+memory accesses
+
+ 
+
+ DN      
+
+DN            
+
+ 
+
+     
+     
+
+ 
+
+As   can be any number of the small DN input tiles  we
+can select       to demonstrate   computeto memory
+ratio that grows linearly in the number of kernels 
+The fast convolutional form in   is also wellsuited
+to   number of other practical CPU performance optimizations  Vanhoucke et al   
+Foremost among
+these is the effective use of AVX  vectorized  and FMA
+ fused multiplyaccumulate   oatingpoint SIMD operations  Consider the function FMA          which calculates the sum of vector   with the elementwise product
+   cid    and stores the result in    all in   single CPU cycle 
+This function can be leveraged for an ef cient practical implementation of   as presented in Algorithm   for   sint            and an AVX vector of width
+gle tilekernel pair     
+    An illustration of the  dimensional case is provided
+in Figure   On our Xeon CPU with  bit AVX registers and two dedicated FMA units  this optimization alone
+can yield    fold speedup over na ve implementations 
+
+Figure   Illustration of Algorithm   using  dimensional ConvNets as an example  Both the elementwise product   cid   cid    cid 
+and reduction down   channels are captured within matrix multiplication  Multiple elements in         can be calculated simultaneously by  lling AVX registers intothe page  This technique
+generalizes trivially to Ndimensions by substituting    for DN  
+
+This margin is expected to double with the introduction of
+ bit AVX registers for Intel Skylake and Xeon Phi 
+We benchmarked the performance of our fast convolution
+algorithm on     TFLOP   Xeon    CPU and observe that it executes at   maximum utilization  This
+includes all steps from input to output  including all necessary data reshuf ing  As   point of comparison  Intel   own
+MKL convolutional primitive runs at just    excluding
+reshuf ing  on the same processor  The Eigen   linear
+algebra library is lower utilization still  capped at just  
+due to   lack of AVX and FMA support  Both of these libraries have been widely used by popular ConvNet frameworks including Caffe  CNTK  TensorFlow and Torch 
+
+  AVXAware Transform Synthesis
+
+The fully automated nature of our transform generation allows for the synthesis of transform matrices that optimize
+for CPU architectural constraints  From Figure   it is clear
+the full utilization can only be achieved if DN is an integer
+multiple of the AVX vector width     This is an important
+optimization  as data volumes are constantly small  invariant of numbers of channels and kernels  and thus there is
+little opportunity to amortize padding overhead 
+Table   summarizes statistics for example transforms that
+we have generated for square   and  dimensional kernels  enumerated automatically using  Lavin   
+In
+each case  we generate transforms for the smallest possible
+    RD   such that SG       and    mod      
+The matrices are provided in the Supplementary Materials 
+
+  Multicore Scalability
+
+Singlecore utilization is just one dimension of performance optimization  Many modern systems contain both
+multiple CPU chips  with shared access to host RAM  and
+multiple cores per chip  with shared access to faster   
+cache  We adopt   relatively simple parallelization scheme
+where threads simultaneously operate on different subsets
+
+TMTMKKD           reshuffle WDDDeep Tensor Convolution on Multicores
+
+Table   Size  transform sparsity and algorithmic speedup statistics for example transforms matrices  Associated matrices are
+provided in the Supplementary Materials 
+
+size
+
+sparsity
+
+       
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+
+speedup
+  
+  
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+   
+   
+   
+   
+   
+
+of   input tiles  To avoid memory contention and other
+concurrency issues we adopt the Cilk Plus workstealing
+scheduler supported by GCC    Blumofe et al    Robison    simply applying its forkjoin primitive to all
+forloops with no iteration dependencies  The number of
+tiles   per thread is empirically tuned to simultaneously
+maximize    cache utilization    cannot be too large  and
+computeto memory ratio    cannot be too small 
+We observe that even this simple parallelization scheme
+yields nearoptimal linear scalability 
+In Figure   we
+present ConvNet throughput as   function of processor
+cores for both     our fast algorithm  and     our own multicore implementation of na ve convolution  which is comparatively simple to implement  Scalability is measured
+across   single convolution layer for         image with kernels of size       To avoid NUMA issues
+relating to expensive interchip communication  we spawn
+independent instances for each CPU in our  socket sharedmemory server such that all   threads in Figure   are
+bound to   single chip  When using all   cores of our
+Intel Xeon    CPU the scalability of     is   theoretically optimal  As   point of comparison    recent review examined the scalability of popular ConvNet frameworks Caffe  CNTK  TensorFlow and Torch on   similar
+ core Xeon    CPU  Shi et al      They reported multicore scalability ranging from    Caffe  to
+   TensorFlow  which is equivalent to     to  fold
+improvement with our implementation 
+
+  Performance Benchmarking
+
+The most popular ConvNet benchmarks focus exclusively
+on GPU performance  Chintala    The only study we
+could  nd presenting thorough CPU benchmarking is that
+of Shi et al  comparing the throughput of Caffe  CNTK 
+Tensor ow and Torch for the AlexNet and ResNet architectures  Shi et al      Although this is   useful study
+for ballparking our multicore scalability  it is dif cult to
+extrapolate fair comparisons to our overall system throughput for many reasons  Foremost is that the authors do not
+select CPUoptimized implementations  They adopt an ear 
+
+Figure   Multicore scalability of our cacheaware and Cilkoptimized implementations of     fast convolution  and     na ve
+convolution  Dashed line indicates theoretical scalability limit
+with respect to   singlecore implementation  Executed on  
+core Intel Xeon    processor with   MB   cache 
+
+lier version of TensorFlow that uses the Eigen   library
+ no AVX FMA support  and otherwise use the default
+frameworkspeci   implementations of convolution rather
+than linking to optimized packages such as Intel MKL 
+We benchmark    ConvNet performance against two popular frameworks  TensorFlow  using the newer Eigen  
+library  with AVX support  and Caffe  compiled to use Intel   optimized MKL library  We consider the propagation
+time of     ImageNet image through three convolution layers to capture any necessary interlayer reshuf ing 
+We choose this simple architecture over   named network
+because we are not interested in comparing execution times
+of pooling  fullyconnected or other layers  We also select
+an obscure kernel size       for which there have been
+no Winogradstyle fast algorithms published  in order to
+demonstrate the generality of our implementation to arbitrary kernels  Each layer contains   modest   channels
+and   kernels for spreading the cost associated with applying transform matrices  Results presented are the fastest
+across batch sizes of     and   An important innovation of our approach is that it is batch sizeagnostic  making
+it suitable for singleimage autoregressive models common
+in generative modelling and deep reinforcement learning 
+Our performance benchmarks are presented in Figure  
+The singlecore throughput of     our fast algorithm is  
+MVox    compared to       for TensorFlow and      
+for Caffe  Increasing cores from   to   our throughput
+improves to   MVox   compared to   for TensorFlow
+and   for Caffe  This is equivalent to an approximate  
+to  fold improvement in overall performance  In terms
+of multicore scalability  this is       versus       and
+      We note that our performance here is lower than
+the   presented in Figure   for   larger input size        
+is much larger  yielding   better computeto memory ratio 
+
+speedupcores     Deep Tensor Convolution on Multicores
+
+et al      Ef cient CPU implementations of ConvNets
+and other deep learning algorithms will play   fundamental
+role in this transition 
+At the opposite end of the spectrum  some  big data 
+problems in the image processing domain are  counterintuitively  too big to be solved in   distributed setting 
+Consider the emerging  eld of highthroughput connectomics  Meirovitch et al    Multibeam electron microscopes image crosssectional slices of neural tissue at
+nanometerresolution  which are then segmented by ConvNets to reconstruct the  dimensional morphology and interconnectivity of individual neurons  Ronneberger et al 
+  The major issue here is simply one of scale    
+seemingly modest cubic millimeter volume of neural tissue
+takes several months to image at the TB hr pace of modern electron microscopes  which exceeds maximum data
+transfer rates  To avoid introducing communication bottlenecks to the connectomics pipeline  it is necessary that
+segmentation can execute in realtime on   server physically colocated in the same room as the microscope  Lichtman et al    Matveev et al    Sharedmemory
+CPU systems can support hundreds of cores and terabytes
+of memory in   single server  and it is critical that systems
+be implemented to exploit these valuable resources 
+Treating    ConvNets as   special case of tensor convolution  our implementation yields   to  fold improved
+throughput compared to previous stateof theart on CPU 
+This is an important step toward bridging the performance
+gap between CPU and GPU hardware and is particularly
+important in the context of emerging hardware trends      
+Intel announcing that future generations of CPUs will contain dedicated deep learning accelerators  More importantly  we believe that removing constraints on    ConvNet size will herald new opportunities in the machine
+learning community  particularly in the context of generative models  Denton et al    Goodfellow et al 
+  where rich temporal correlations are currently ignored when learning latent manifolds  Ledig et al   
+
+Acknowledgements
+Support is gratefully acknowledged from the National Science Foundation  NSF  under grants IIS  and
+CCF  and the Intelligence Advanced Research
+Projects Activity  IARPA  under grant  
+
+References
+Abadi  Mart    Agarwal  Ashish  Barham  Paul  Brevdo 
+Eugene  Chen  Zhifeng  Citro  Craig  Corrado  Greg   
+Davis  Andy  Dean  Jeffrey  Devin  Matthieu  et al  Tensor ow  Largescale machine learning on heterogeneous
+distributed systems  arXiv preprint arXiv 
+
+Figure   Measured throughput  megavoxels per second  of    
+our fast    convolution implementation  as   special case of our
+Ndimensional algorithm      TensorFlow  using the latest Eigen
+  and     Caffe  using Intel MKL  Throughput is calculated by
+propagating       images through   convolutional layers 
+
+and that the scalability for TensorFlow and Caffe are both
+similar to those reported in  Shi et al     
+
+  Discussion
+Motivated by the recent success of  dimensional ConvNets in video and volumetric image processing  Lee et al 
+  Tran et al    we have proposed   transition to
+CPU hardware to overcome the memory constraints limiting the size and expressivity of these networks  Key to
+this transition is overcoming the impractical performance
+gap between existing CPU and GPU implementations  To
+achieve this  we extended previous algorithms of fast convolution to the Ndimensional case  yielding an orderof 
+magnitude reduction in computations for popular networks
+such as      Importantly  our implementation diverges
+from previous studies that focus on the handcrafting of
+minimal Winogradstyle algorithms  We instead exploit
+the relaxed memory constraints  ef cient sparse access and
+other architectural considerations of CPU hardware to overcome the cost of applying transform matrices 
+The obvious alternative to our approach is to overcome
+memory constraints by splitting large networks across multiple GPU devices  Distributed frameworks such as TensorFlow are valuable for   broad class of machine learning
+problems       many of the data mining tasks faced by large
+organizations where the data itself is often sharded across
+different machines  However  it is important to recognize
+that the horizontal scalability paradigm is not   onesize 
+ tsall solution  Consider the increasing demand for realtime CPU solutions to image and video processing  particularly on mobile devices  Moving forward  we expect
+that intensive ConvNetdriven tasks such as video classi 
+ cation and denoising will continue to migrate from the
+realm of academic research to practical realization  Shi
+
+throughputcores       Deep Tensor Convolution on Multicores
+
+ 
+
+Blumofe  Robert    Joerg  Christopher    Kuszmaul 
+Bradley    Leiserson  Charles    Randall  Keith    and
+Zhou  Yuli  Cilk  An ef cient multithreaded runtime
+system  Journal of parallel and distributed computing 
+   
+
+Chetlur  Sharan  Woolley  Cliff  Vandermersch  Philippe 
+Cohen  Jonathan  Tran  John  Catanzaro  Bryan  and
+Shelhamer  Evan  cudnn  Ef cient primitives for deep
+learning  arXiv preprint arXiv   
+
+Chintala 
+
+Soumith 
+
+Convnet
+
+benchmarks 
+
+github com soumith convnetbenchmarks   
+
+Cong  Jason and Xiao  Bingjun  Minimizing computation in convolutional neural networks  In International
+Conference on Arti cial Neural Networks  pp   
+Springer   
+
+Couprie  Camille  Farabet  Cl ement  Najman  Laurent  and
+LeCun  Yann  Indoor semantic segmentation using depth
+information  arXiv preprint arXiv   
+
+Dean  Jeffrey  Corrado  Greg  Monga  Rajat  Chen  Kai 
+Devin  Matthieu  Mao  Mark  Senior  Andrew  Tucker 
+Paul  Yang  Ke  Le  Quoc    et al  Large scale distributed
+deep networks  In Advances in neural information processing systems  pp     
+
+Denton  Emily    Chintala  Soumith  Fergus  Rob  et al 
+Deep generative image models using   laplacian pyramid
+of adversarial networks  In Advances in neural information processing systems  pp     
+
+Ding  Cunsheng  Pei  Dingyi  and Salomaa  Arto  Chinese
+remainder theorem  applications in computing  coding 
+cryptography  World Scienti     
+
+Dukhan    
+
+Nnpack 
+
+https github com 
+
+Maratyszcza NNPACK   
+
+Glorot  Xavier and Bengio  Yoshua  Understanding the dif 
+ culty of training deep feedforward neural networks  In
+Aistats  volume   pp     
+
+Goodfellow  Ian  PougetAbadie  Jean  Mirza  Mehdi  Xu 
+Bing  WardeFarley  David  Ozair  Sherjil  Courville 
+Aaron  and Bengio  Yoshua  Generative adversarial nets 
+In Advances in Neural Information Processing Systems 
+pp     
+
+Grewe  Dominik and Lokhmotov  Anton  Automatically
+generating and tuning gpu code for sparse matrixvector
+multiplication from   highlevel representation  In Proceedings of the Fourth Workshop on General Purpose
+Processing on Graphics Processing Units  pp    ACM 
+ 
+
+He  Kaiming  Zhang  Xiangyu  Ren  Shaoqing  and Sun 
+Jian  Deep residual learning for image recognition  In
+The IEEE Conference on Computer Vision and Pattern
+Recognition  CVPR  June  
+
+Ji  Shuiwang  Xu  Wei  Yang  Ming  and Yu  Kai     convolutional neural networks for human action recognition 
+IEEE transactions on pattern analysis and machine intelligence     
+
+Jia  Yangqing  Shelhamer  Evan  Donahue  Jeff  Karayev 
+Sergey  Long  Jonathan  Girshick  Ross  Guadarrama 
+Sergio  and Darrell  Trevor  Caffe  Convolutional architecture for fast feature embedding  In Proceedings of
+the  nd ACM international conference on Multimedia 
+pp    ACM   
+
+Karpathy  Andrej  Toderici  George  Shetty  Sanketh  Leung  Thomas  Sukthankar  Rahul  and FeiFei  Li  Largescale video classi cation with convolutional neural networks  In Proceedings of the IEEE conference on Computer Vision and Pattern Recognition  pp   
+ 
+
+Kolda  Tamara   and Bader  Brett    Tensor decompositions and applications  SIAM review   
+ 
+
+Krizhevsky  Alex  Sutskever  Ilya  and Hinton  Geoffrey   
+Imagenet classi cation with deep convolutional neural
+networks  In Advances in neural information processing
+systems  pp     
+
+Lavin    
+
+Wincnn 
+
+https github com 
+
+andravin wincnn   
+
+Lavin  Andrew and Gray  Scott  Fast algorithms for convolutional neural networks  In The IEEE Conference on
+Computer Vision and Pattern Recognition  CVPR  June
+ 
+
+LeCun  Yann  Boser  Bernhard  Denker  John    Henderson  Donnie  Howard  Richard    Hubbard  Wayne  and
+Jackel  Lawrence    Backpropagation applied to handwritten zip code recognition  Neural computation   
+   
+
+LeCun  Yann    Bottou    eon  Orr  Genevieve    and
+  uller  KlausRobert  Ef cient backprop  In Neural networks  Tricks of the trade  pp    Springer   
+
+Ledig  Christian  Theis  Lucas  Husz ar  Ferenc  Caballero 
+Jose  Aitken  Andrew  Tejani  Alykhan  Totz  Johannes 
+Wang  Zehan  and Shi  Wenzhe  Photorealistic single image superresolution using   generative adversarial
+network  arXiv preprint arXiv   
+
+Deep Tensor Convolution on Multicores
+
+Lee  Kisuk  Zlateski  Aleksandar  Ashwin  Vishwanathan 
+and Seung    Sebastian  Recursive training of     
+convolutional networks for neuronal boundary prediction  In Advances in Neural Information Processing Systems  pp     
+
+Lee  Victor    Kim  Changkyu  Chhugani  Jatin  Deisher 
+Michael  Kim  Daehyun  Nguyen  Anthony    Satish 
+Nadathur  Smelyanskiy  Mikhail  Chennupaty  Srinivas 
+Hammarlund  Per  et al  Debunking the    gpu vs  cpu
+myth  an evaluation of throughput computing on cpu and
+gpu  ACM SIGARCH Computer Architecture News   
+   
+
+Lichtman  Jeff      ster  Hanspeter  and Shavit  Nir  The
+big data challenges of connectomics  Nature neuroscience     
+
+Little  John DC    proof for the queuing formula         
+
+Operations research     
+
+Long  Jonathan  Shelhamer  Evan  and Darrell  Trevor 
+Fully convolutional networks for semantic segmentation 
+In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition  pp     
+
+Mathieu  Michael  Henaff  Mikael  and LeCun  Yann  Fast
+training of convolutional networks through FFTs  arXiv
+preprint arXiv   
+
+Matveev  Alexander  Meirovitch  Yaron  Saribekyan 
+Hayk  Jakubiuk  Wiktor  Kaler  Tim  Odor  Gergely 
+Budden  David  Zlateski  Aleksandar  and Shavit  Nir   
+multicore path to connectomicson demand  In Proceedings of the  nd ACM SIGPLAN Symposium on Principles and Practice of Parallel Programming  ACM   
+
+Meirovitch  Yaron  Matveev  Alexander  Saribekyan 
+Hayk  Budden  David  Rolnick  David  Odor  Gergely 
+Jones  Seymour KnowlesBarley Thouis Raymond    ster  Hanspeter  Lichtman  Jeff William  and Shavit 
+Nir    multipass approach to largescale connectomics 
+arXiv preprint arXiv   
+
+Poole  Ben  Lahiri  Subhaneil  Raghu  Maithra  SohlDickstein  Jascha  and Ganguli  Surya  Exponential
+expressivity in deep neural networks through transient
+chaos  arXiv preprint arXiv   
+
+Robison  Arch    Composable parallel patterns with intel
+cilk plus  Computing in Science and Engineering   
+   
+
+Ronneberger  Olaf  Fischer  Philipp  and Brox  Thomas  Unet  Convolutional networks for biomedical image segmentation  In International Conference on Medical Image Computing and ComputerAssisted Intervention  pp 
+  Springer   
+
+Russakovsky  Olga  Deng  Jia  Su  Hao  Krause  Jonathan 
+Satheesh  Sanjeev  Ma  Sean  Huang  Zhiheng  Karpathy  Andrej  Khosla  Aditya  Bernstein  Michael  et al 
+Imagenet large scale visual recognition challenge  International Journal of Computer Vision   
+ 
+
+Shi  Shaohuai  Wang  Qiang  Xu  Pengfei  and Chu  Xiaowen  Benchmarking stateof theart deep learning
+software tools  arXiv preprint arXiv     
+
+Shi  Wenzhe  Caballero  Jose  Husz ar  Ferenc  Totz  Johannes  Aitken  Andrew    Bishop  Rob  Rueckert 
+Daniel  and Wang  Zehan  Realtime single image and
+video superresolution using an ef cient subpixel convolutional neural network  In Proceedings of the IEEE
+Conference on Computer Vision and Pattern Recognition  pp       
+
+Simonyan  Karen and Zisserman  Andrew  Twostream
+convolutional networks for action recognition in videos 
+In Advances in Neural Information Processing Systems 
+pp       
+
+Simonyan  Karen and Zisserman  Andrew  Very deep convolutional networks for largescale image recognition 
+arXiv preprint arXiv     
+
+Szegedy  Christian  Liu  Wei  Jia  Yangqing  Sermanet 
+Pierre  Reed  Scott  Anguelov  Dragomir  Erhan  Dumitru  Vanhoucke  Vincent  and Rabinovich  Andrew 
+In Proceedings of
+Going deeper with convolutions 
+the IEEE Conference on Computer Vision and Pattern
+Recognition  pp     
+
+Tran  Du  Bourdev  Lubomir  Fergus  Rob  Torresani 
+Lorenzo  and Paluri  Manohar  Learning spatiotemporal
+features with    convolutional networks  In   IEEE
+International Conference on Computer Vision  ICCV 
+pp    IEEE   
+
+Vanhoucke  Vincent  Senior  Andrew  and Mao  Mark   
+Improving the speed of neural networks on CPUs   
+
+Vasilache  Nicolas  Johnson  Jeff  Mathieu  Michael  Chintala  Soumith  Piantino  Serkan  and LeCun  Yann  Fast
+convolutional nets with fbfft    gpu performance evaluation  arXiv preprint arXiv   
+
+Winograd  Shmuel  Arithmetic complexity of computations 
+
+volume   Siam   
+
+Zlateski  Aleksandar  Lee  Kisuk  and Seung    Sebastian 
+Znnimaximizing the inference throughput of    convolutional networks on multicore cpus and gpus  arXiv
+preprint arXiv   
+
+

@@ -1,0 +1,935 @@
+Modular Multitask Reinforcement Learning with Policy Sketches
+
+Jacob Andreas   Dan Klein   Sergey Levine  
+
+Abstract
+
+We describe   framework for multitask deep reinforcement learning guided by policy sketches 
+Sketches annotate tasks with sequences of named
+subtasks  providing information about highlevel
+structural relationships among tasks but not how
+to implement them speci cally not providing
+the detailed guidance used by much previous
+work on learning policy abstractions for RL      
+intermediate rewards  subtask completion signals  or intrinsic motivations  To learn from
+sketches  we present   model that associates every subtask with   modular subpolicy  and jointly
+maximizes reward over full taskspeci   policies by tying parameters across shared subpolicies  Optimization is accomplished via   decoupled actor critic training objective that facilitates
+learning common behaviors from multiple dissimilar reward functions  We evaluate the effectiveness of our approach in three environments
+featuring both discrete and continuous control 
+and with sparse rewards that can be obtained only
+after completing   number of highlevel subgoals  Experiments show that using our approach
+to learn policies guided by sketches gives better
+performance than existing techniques for learning taskspeci   or shared policies  while naturally inducing   library of interpretable primitive behaviors that can be recombined to rapidly
+adapt to new tasks 
+
+  Introduction
+This paper describes   framework for learning composable deep subpolicies in   multitask setting  guided only
+by abstract sketches of highlevel behavior  General reinforcement learning algorithms allow agents to solve tasks
+in complex environments  But tasks featuring extremely
+
+ University of California  Berkeley  Correspondence to  Jacob
+
+Andreas  jda cs berkeley edu 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+  make planks
+   get wood
+   use workbench
+
+  
+
+ 
+ 
+ 
+
+  make sticks
+   get wood
+   use toolshed
+
+  
+
+ 
+ 
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+Figure   Learning from policy sketches  The  gure shows simpli ed versions of two tasks  make planks and make sticks  each
+associated with its own policy   and   respectively  These
+policies share an initial highlevel action    both require the
+agent to get wood before taking it to an appropriate crafting station  Even without prior information about how the associated behavior   should be implemented  knowing that the agent should
+initially follow the same subpolicy in both tasks is enough to learn
+  reusable representation of their shared structure 
+
+delayed rewards or other longterm structure are often dif 
+ cult to solve with  at  monolithic policies  and   long
+line of prior work has studied methods for learning hierarchical policy representations  Sutton et al    Dietterich    Konidaris   Barto    Hauser et al   
+While unsupervised discovery of these hierarchies is possible  Daniel et al    Bacon   Precup    practical
+approaches often require detailed supervision in the form
+of explicitly speci ed highlevel actions  subgoals  or behavioral primitives  Precup    These depend on state
+representations simple or structured enough that suitable
+reward signals can be effectively engineered by hand 
+But is such  negrained supervision actually necessary to
+achieve the full bene ts of hierarchy  Speci cally  is it
+necessary to explicitly ground highlevel actions into the
+representation of the environment  Or is it suf cient to
+simply inform the learner about the abstract structure of
+policies  without ever specifying how highlevel behaviors
+should make use of primitive percepts or actions 
+To answer these questions  we explore   multitask reinforcement
+learning setting where the learner is pre 
+
+Modular Multitask Reinforcement Learning with Policy Sketches
+
+sented with policy sketches  Policy sketches are short  ungrounded  symbolic representations of   task that describe
+its component parts  as illustrated in Figure   While symbols might be shared across tasks  get wood appears in
+sketches for both the make planks and make sticks tasks 
+the learner is told nothing about what these symbols mean 
+in terms of either observations or intermediate rewards 
+We present an agent architecture that learns from policy
+sketches by associating each highlevel action with   parameterization of   lowlevel subpolicy  and jointly optimizes over concatenated taskspeci   policies by tying
+parameters across shared subpolicies  We  nd that this
+architecture can use the highlevel guidance provided by
+sketches  without any grounding or concrete de nition  to
+dramatically accelerate learning of complex multistage behaviors  Our experiments indicate that many of the bene ts
+to learning that come from highly detailed lowlevel supervision       from subgoal rewards  can also be obtained
+from fairly coarse highlevel supervision       from policy
+sketches  Crucially  sketches are much easier to produce 
+they require no modi cations to the environment dynamics or reward function  and can be easily provided by nonexperts  This makes it possible to extend the bene ts of
+hierarchical RL to challenging environments where it may
+not be possible to specify by hand the details of relevant
+subtasks  We show that our approach substantially outperforms purely unsupervised methods that do not provide the
+learner with any taskspeci   guidance about how hierarchies should be deployed  and further that the speci   use
+of sketches to parameterize modular subpolicies makes better use of sketches than conditioning on them directly 
+The present work may be viewed as an extension of recent
+approaches for learning compositional deep architectures
+from structured program descriptors  Andreas et al   
+Reed   de Freitas    Here we focus on learning in interactive environments  This extension presents   variety of
+technical challenges  requiring analogues of these methods
+that can be trained from sparse  nondifferentiable reward
+signals without demonstrations of desired system behavior 
+Our contributions are 
+
+    general paradigm for multitask  hierarchical  deep
+reinforcement learning guided by abstract sketches of
+taskspeci   policies 
+
+    concrete recipe for learning from these sketches 
+built on   general family of modular deep policy representations and   multitask actor critic training objective 
+
+The modular structure of our approach  which associates
+every highlevel action symbol with   discrete subpolicy 
+naturally induces   library of interpretable policy fragments
+
+that are easily recombined  This makes it possible to evaluate our approach under   variety of different data conditions    learning the full collection of tasks jointly via
+reinforcement    in   zeroshot setting where   policy
+sketch is available for   heldout task  and   in   adaptation setting  where sketches are hidden and the agent must
+learn to adapt   pretrained policy to reuse highlevel actions in   new task  In all cases  our approach substantially
+outperforms previous approaches based on explicit decomposition of the   function along subtasks  Parr   Russell 
+  Vogel   Jurafsky    unsupervised option discovery  Bacon   Precup    and several standard policy gradient baselines 
+We consider three families of tasks       Minecraftinspired crafting game  Figure     in which the agent must
+acquire particular resources by  nding raw ingredients 
+combining them together in the proper order  and in some
+cases building intermediate tools that enable the agent to alter the environment itself       maze navigation task that
+requires the agent to collect keys and open doors  and     
+locomotion task  Figure     in which   quadrupedal robot
+must actuate its joints to traverse   narrow winding cliff 
+In all tasks  the agent receives   reward only after the  nal
+goal is accomplished  For the most challenging tasks  involving sequences of four or  ve highlevel actions    taskspeci   agent initially following   random policy essentially never discovers the reward signal  so these tasks cannot be solved without considering their hierarchical structure  We have released code at http github com 
+jacobandreas psketch 
+
+  Related Work
+The agent representation we describe in this paper belongs to the broader family of hierarchical reinforcement
+learners  As detailed in Section   our approach may be
+viewed as an instantiation of the options framework  rst
+described by Sutton et al      large body of work
+describes techniques for learning options and related abstract actions  in both singleand multitask settings  Most
+techniques for learning options rely on intermediate supervisory signals       to encourage exploration  Kearns  
+Singh    or completion of prede ned subtasks  Kulkarni et al    An alternative family of approaches employs posthoc analysis of demonstrations or pretrained
+policies to extract reusable subcomponents  Stolle   Precup    Konidaris et al    Niekum et al   
+Techniques for learning options with less guidance than the
+present work include Bacon   Precup   and Vezhnevets et al    and other general hierarchical policy
+learners include Daniel et al    Bakker   Schmidhuber   and Menache et al    We will see that
+the minimal supervision provided by policy sketches re 
+
+Modular Multitask Reinforcement Learning with Policy Sketches
+
+sults in  sometimes dramatic  improvements over fully unsupervised approaches  while being substantially less onerous for humans to provide compared to the grounded supervision  such as explicit subgoals or feature abstraction
+hierarchies  used in previous work 
+Once   collection of highlevel actions exists  agents are
+faced with the problem of learning metalevel  typically
+semiMarkov  policies that invoke appropriate highlevel
+actions in sequence  Precup    The learning problem
+we describe in this paper is in some sense the direct dual
+to the problem of learning these metalevel policies  there 
+the agent begins with an inventory of complex primitives
+and must learn to model their behavior and select among
+them  here we begin knowing the names of appropriate
+highlevel actions but nothing about how they are implemented  and must infer implementations  but not  initially 
+abstract plans  from context  Our model can be combined
+with these approaches to support    mixed  supervision
+condition where sketches are available for some tasks but
+not others  Section  
+Another closely related line of work is the Hierarchical
+Abstract Machines  HAM  framework introduced by Parr
+  Russell   Like our approach  HAMs begin with
+  representation of   highlevel policy as an automaton
+ or   more general computer program  Andre   Russell 
+  Marthi et al    and use reinforcement learning to  ll in lowlevel details  Because these approaches
+attempt to learn   single representation of the   function
+for all subtasks and contexts  they require extremely strong
+formal assumptions about the form of the reward function
+and state representation  Andre   Russell    that the
+present work avoids by decoupling the policy representation from the value function  They perform less effectively
+when applied to arbitrary state representations where these
+assumptions do not hold  Section   We are additionally unaware of past work showing that HAM automata can
+be automatically inferred for new tasks given   pretrained
+model  while here we show that it is easy to solve the corresponding problem for sketch followers  Section  
+Our approach is also inspired by   number of recent efforts
+toward compositional reasoning and interaction with structured deep models  Such models have been previously used
+for tasks involving question answering  Iyyer et al   
+Andreas et al    and relational reasoning  Socher et al 
+  and more recently for multitask  multirobot transfer problems  Devin et al    In the present work as
+in existing approaches employing dynamically assembled
+modular networks taskspeci   training signals are propagated through   collection of composed discrete structures
+with tied weights  Here the composed structures specify timevarying policies rather than feedforward computations  and their parameters must be learned via interaction
+
+rather than direct supervision  Another closely related family of models includes neural programmers  Neelakantan
+et al    and programmer interpreters  Reed   de Freitas    which generate discrete computational structures but require supervision in the form of output actions
+or full execution traces 
+We view the problem of learning from policy sketches as
+complementary to the instruction following problem studied in the natural language processing literature  Existing
+work on instruction following focuses on mapping from
+natural language strings to symbolic action sequences that
+are then executed by   hardcoded interpreter  Branavan
+et al    Chen   Mooney    Artzi   Zettlemoyer 
+  Tellex et al    Here  by contrast  we focus on
+learning to execute complex actions given symbolic representations as   starting point  Instruction following models
+may be viewed as joint policies over instructions and environment observations  so their behavior is not de ned in
+the absence of instructions  while the model described in
+this paper naturally supports adaptation to tasks where no
+sketches are available  We expect that future work might
+combine the two lines of research  bootstrapping policy
+learning directly from natural language hints rather than the
+semistructured sketches used here 
+
+  Learning Modular Policies from Sketches
+We consider   multitask reinforcement
+learning problem arising from   family of in nitehorizon discounted
+Markov decision processes in   shared environment  This
+environment is speci ed by   tuple            with    
+set of states      set of lowlevel actions            
+    transition probability distribution  and     discount factor  Each task      is then speci ed by   pair          
+with             taskspeci   reward function and
+         an initial distribution over states  For    xed
+sequence  si  ai  of states and actions obtained from  
+rollout of   given policy  we will denote the empirical return
+starting in state si as qi                sj  In addition to the components of   standard multitask RL problem 
+we assume that tasks are annotated with sketches      each
+consisting of   sequence                  of highlevel symbolic labels drawn from    xed vocabulary   
+  Model
+We exploit the structural information provided by sketches
+by constructing for each symbol     corresponding subpolicy     By sharing each subpolicy across all tasks annotated
+with the corresponding symbol  our approach naturally
+learns the shared abstraction for the corresponding subtask 
+without requiring any information about the grounding of
+that task to be explicitly speci ed by annotation 
+
+Modular Multitask Reinforcement Learning with Policy Sketches
+
+Algorithm   TRAINSTEP  curriculum 
+      
+  while         do
+  sample task   from curriculum  Section  
+ 
+    curriculum 
+ 
+  do rollout
+ 
+ 
+     si  ai   bi        qi           
+        
+    update parameters
+  for           do
+     si  ai     qi                      
+ 
+  update subpolicy
+ 
+           
+ 
+  update critic
+ 
+         
+ 
+
+DPd   log    ai si qi       si 
+DPd rc   si qi       si 
+
+At each timestep    subpolicy may select either   lowlevel
+action      or   special STOP action  We denote the
+augmented state space         STOP  At   high
+level  this framework is agnostic to the implementation of
+subpolicies  any function that takes   representation of the
+current state onto   distribution over    will do 
+In this paper  we focus on the case where each    is represented as   neural network  These subpolicies may be
+viewed as options of the kind described by Sutton et al 
+  with the key distinction that they have no initiation
+semantics  but are instead invokable everywhere  and have
+no explicit representation as   function from an initial state
+to   distribution over  nal states  instead implicitly using
+the STOP action to terminate 
+Given    xed sketch                  taskspeci   policy  
+is formed by concatenating its associated subpolicies in sequence  In particular  the highlevel policy maintains   subpolicy index    initially   and executes actions from  bi
+until the STOP symbol is emitted  at which point control is
+passed to  bi  We may thus think of   as inducing  
+Markov chain over the state space       with transitions 
+with pr  Pa   bi                  
+    bi        bi 
+Note that   is semiMarkov with respect to projection of
+the augmented state space     onto the underlying state
+space    We denote the complete family of taskspeci  
+policies        and let each    be an arbitrary
+function of the current environment state parameterized by
+some weight vector     The learning problem is to optimize
+  For ease of presentation  this section assumes that these subpolicy networks are independently parameterized  As described in
+Section   it is also possible to share parameters between subpolicies  and introduce discrete subtask structure by way of an
+embedding of each symbol   
+
+      bi  with pr   bi STOP   
+
+Algorithm   TRAINLOOP 
+    initialize subpolicies randomly
+      INIT 
+   max    
+  loop
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+rmin    
+  initialize  maxstep curriculum uniformly
+                  max 
+curriculum    Unif    
+while rmin   rgood do
+
+  update parameters  Algorithm  
+TRAINSTEP  curriculum 
+curriculum                Er        
+rmin   min      Er 
+ max    max    
+
+over all    to maximize expected discounted reward
+
+ iR   si 
+
+Esi Xi
+
+        
+
+      
+across all tasks       
+  Policy Optimization
+Here that optimization is accomplished via   simple decoupled actor critic method  In   standard policy gradient approach  with   single policy   with parameters   we compute gradient steps of the form  Williams   
+
+      Xi     log  ai si qi     si 
+
+ 
+
+where the baseline or  critic    can be chosen independently of the future without introducing bias into the gradient  Recalling our previous de nition of qi as the empirical return starting from si  this form of the gradient corresponds to   generalized advantage estimator  Schulman
+et al      with       Here   achieves close to the
+optimal variance  Greensmith et al    when it is set
+
+  
+
+  
+
+        
+ 
+
+stop
+
+        
+ 
+
+stop
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+Figure   Model overview  Each subpolicy   is uniquely associated with   symbol   implemented as   neural network that maps
+from   state si to distributions over    and chooses an action ai
+by sampling from this distribution  Whenever the STOP action is
+sampled  control advances to the next subpolicy in the sketch 
+
+Modular Multitask Reinforcement Learning with Policy Sketches
+
+exactly equal to the statevalue function   si      qi for
+the target policy   starting in state si 
+The situation becomes slightly more complicated when
+generalizing to modular policies built by sequencing subpolicies  In this case  we will have one subpolicy per symbol but one critic per task  This is because subpolicies   
+might participate in   number of composed policies    
+each associated with its own reward function      Thus individual subpolicies are not uniquely identi ed with value
+functions  and the aforementioned subpolicyspeci   statevalue estimator is no longer wellde ned  We extend the
+actor critic method to incorporate the decoupling of policies from value functions by allowing the critic to vary persample  that is  pertask andtimestep  depending on the
+reward function with which the sample is associated  Not 
+
+gradients of expected rewards across all tasks in which   
+participates  we have 
+
+ing that   bJ    Pt        bJ         the sum of
+               
+    Xi      log             qi            
+
+ 
+
+where each stateaction pair              was selected by the
+subpolicy    in the context of the task  
+Now minimization of the gradient variance requires that
+each    actually depend on the task identity 
+ This follows immediately by applying the corresponding argument
+in Greensmith et al    individually to each term in the
+sum over   in Equation   Because the value function is
+itself unknown  an approximation must be estimated from
+data  Here we allow these    to be implemented with an
+arbitrary function approximator with parameters     This
+is trained to minimize   squared error criterion  with gradients given by
+
+    
+
+ 
+
+ Xi
+
+ qi       si 
+ Xi         si qi       si 
+
+ 
+
+Alternative forms of the advantage estimator       the TD
+residual     si     si     si  or any other member
+of the generalized advantage estimator family  can be easily substituted by simply maintaining one such estimator
+per task  Experiments  Section   show that conditioning on both the state and the task identity results in noticeable performance improvements  suggesting that the variance reduction provided by this objective is important for
+ef cient joint learning of modular policies 
+The complete procedure for computing   single gradient
+step is given in Algorithm    The outer training loop over
+
+these steps  which is driven by   curriculum learning procedure  is speci ed in Algorithm   This is an onpolicy
+algorithm  In each step  the agent samples tasks from   task
+distribution provided by   curriculum  described in the following subsection  The current family of policies   is
+used to perform rollouts in each sampled task  accumulating the resulting tuples of  states  lowlevel actions  highlevel symbols  rewards  and task identities  into   dataset   
+Once   reaches   maximum size    it is used to compute
+gradients        both policy and critic parameters  and the
+parameter vectors are updated accordingly  The step sizes
+  and   in Algorithm   can be chosen adaptively using any
+ rstorder method 
+
+  Curriculum Learning
+For complex tasks  like the one depicted in Figure     it is
+dif cult for the agent to discover any states with positive
+reward until many subpolicy behaviors have already been
+learned  It is thus   better use of the learner   time to focus
+on  easy  tasks  where many rollouts will result in high
+reward from which appropriate subpolicy behavior can be
+inferred  But there is   fundamental tradeoff involved here 
+if the learner spends too much time on easy tasks before
+being made aware of the existence of harder ones  it may
+over   and learn subpolicies that no longer generalize or
+exhibit the desired structural properties 
+To avoid both of these problems  we use   curriculum learning scheme  Bengio et al    that allows the model
+to smoothly scale up from easy tasks to more dif cult
+ones while avoiding over tting  Initially the model is presented with tasks associated with short sketches  Once average reward on all these tasks reaches   certain threshold 
+the length limit is incremented  We assume that rewards
+across tasks are normalized with maximum achievable reward     qi     Let  Er  denote the empirical estimate of
+the expected reward for the current policy on task   Then
+at each timestep  tasks are sampled in proportion to  Er   
+which by assumption must be positive 
+Intuitively  the tasks that provide the strongest learning signal are those in which   the agent does not on average
+achieve reward close to the upper bound  but   many
+episodes result in high reward  The expected reward component of the curriculum addresses condition   by ensuring that time is not spent on nearly solved tasks  while
+the length bound component of the curriculum addresses
+condition   by ensuring that tasks are not attempted until
+highreward episodes are likely to be encountered  Experiments show that both components of this curriculum learning scheme improve the rate at which the model converges
+to   good policy  Section  
+The complete curriculumbased training procedure is speci ed in Algorithm   Initially  the maximum sketch length
+
+Modular Multitask Reinforcement Learning with Policy Sketches
+
+ max is set to   and the curriculum initialized to sample
+length  tasks uniformly 
+ Neither of the environments
+we consider in this paper feature any length  tasks  in
+this case  observe that Algorithm   will simply advance to
+length  tasks without any parameter updates  For each
+setting of  max  the algorithm uses the current collection
+of task policies   to compute and apply the gradient step
+described in Algorithm   The rollouts obtained from the
+call to TRAINSTEP can also be used to compute reward
+estimates  Er    these estimates determine   new task distribution for the curriculum  The inner loop is repeated until the reward threshold rgood is exceeded  at which point
+ max is incremented and the process repeated over    nowexpanded  collection of tasks 
+
+  Experiments
+We evaluate the performance of our approach in three environments    crafting environment    maze navigation environment  and   cliff traversal environment  These environments involve various kinds of challenging lowlevel
+control  agents must learn to avoid obstacles  interact with
+various kinds of objects  and relate  negrained joint activation to highlevel locomotion goals  They also feature
+hierarchical structure  most rewards are provided only after the agent has completed two to  ve highlevel actions in
+the appropriate sequence  without any intermediate goals to
+indicate progress towards completion 
+
+  Implementation
+In all our experiments  we implement each subpolicy as  
+feedforward neural network with ReLU nonlinearities and
+  hidden layer with   hidden units  and each critic as  
+linear function of the current state  Each subpolicy network
+receives as input   set of features describing the current
+state of the environment  and outputs   distribution over
+actions  The agent acts at every timestep by sampling from
+this distribution  The gradient steps given in lines   and  
+of Algorithm   are implemented using RMSPROP  Tieleman    with   step size of   and gradient clipping
+to   unit norm  We take the batch size   in Algorithm   to
+be   and set       in both environments  For curriculum learning  the improvement threshold rgood is  
+
+  Environments
+The crafting environment  Figure     is inspired by the
+popular game Minecraft  but is implemented in   discrete
+   world  The agent may interact with objects in the
+world by facing them and executing   special USE action 
+Interacting with raw materials initially scattered around the
+environment causes them to be added to an inventory  Interacting with different crafting stations causes objects in the
+agent   inventory to be combined or transformed  Each task
+
+ 
+
+ 
+
+ 
+
+ 
+
+  get gold
+   get wood
+   get iron
+   use workbench
+   get gold
+
+   
+
+ 
+
+ 
+
+ 
+
+ 
+
+   
+
+  go to goal
+   north
+   east
+   east
+
+ 
+
+ 
+ 
+
+ 
+
+Figure   Examples from the crafting and cliff environments used
+in this paper  An additional maze environment is also investigated 
+    In the crafting environment  an agent seeking to pick up the
+gold nugget in the top corner must  rst collect wood   and iron
+  use   workbench to turn them into   bridge   and use the
+bridge to cross the water  
+    In the cliff environment  the
+agent must reach   goal position by traversing   winding sequence
+of tiles without falling off  Control takes place at the level of
+individual joint angles  highlevel behaviors like  move north 
+must be learned 
+
+in this game corresponds to some crafted object the agent
+must produce  the most complicated goals require the agent
+to also craft intermediate ingredients  and in some cases
+build tools  like   pickaxe and   bridge  to reach ingredients
+located in initially inaccessible regions of the environment 
+The maze environment  not pictured  corresponds closely
+to the the  light world  described by Konidaris   Barto
+  The agent is placed in   discrete world consisting of   series of rooms  some of which are connected by
+doors  Some doors require that the agent  rst pick up  
+key to open them  For our experiments  each task corresponds to   goal room  always at the same position relative
+to the agent   starting position  that the agent must reach
+by navigating through   sequence of intermediate rooms 
+The agent has one sensor on each side of its body  which
+reports the distance to keys  closed doors  and open doors
+in the corresponding direction  Sketches specify   particular sequence of directions for the agent to traverse between
+rooms to reach the goal  The sketch always corresponds
+to   viable traversal from the start to the goal position  but
+other  possibly shorter  traversals may also exist 
+The cliff environment  Figure     is intended to demonstrate the applicability of our approach to problems involving highdimensional continuous control  In this environment    quadrupedal robot  Schulman et al      is
+placed on   variablelength winding path  and must navi 
+
+Modular Multitask Reinforcement Learning with Policy Sketches
+
+   
+
+   
+
+   
+
+Figure   Comparing modular learning from sketches with standard RL baselines  Modular is the approach described in this paper  while
+Independent learns   separate policy for each task  Joint learns   shared policy that conditions on the task identity    automaton learns
+  single network to map from states and action symbols to   values  and Opt Crit is an unsupervised option learner  Performance
+for the best iteration of the  offpolicy    automaton is plotted  Performance is shown in     the crafting environment      the maze
+environment  and     the cliff environment  The modular approach is eventually able to achieve high reward on all tasks  while the
+baseline models perform considerably worse on average 
+
+gate to the end without falling off  This task is designed to
+provide   substantially more challenging RL problem  due
+to the fact that the walker must learn the lowlevel walking skill before it can make any progress  but has simpler
+hierarchical structure than the crafting environment  The
+agent receives   small reward for making progress toward
+the goal  and   large positive reward for reaching the goal
+square  with   negative reward for falling off the path 
+  listing of tasks and sketches is given in Appendix   
+
+  Multitask Learning
+The primary experimental question in this paper is whether
+the extra structure provided by policy sketches alone is
+enough to enable fast learning of coupled policies across
+tasks  We aim to explore the differences between the
+approach described in Section   and relevant prior work
+that performs either unsupervised or weakly supervised
+multitask learning of hierarchical policy structure  Speci 
+cally  we compare our modular to approach to 
+
+  Structured hierarchical reinforcement learners 
+
+    the fully unsupervised option critic algorithm
+
+of Bacon   Precup  
+
+        automaton that attempts to explicitly represent the   function for each task   subtask combination  essentially   HAM  Andre   Russell 
+  with   deep state abstraction function 
+
+  Alternative ways of incorporating sketch data into
+
+standard policy gradient methods 
+
+    learning an independent policy for each task
+    learning   joint policy across all tasks  conditioning directly on both environment features
+and   representation of the complete sketch
+
+The joint and independent models performed best when
+trained with the same curriculum described in Section  
+while the option critic model performed best with  
+length weighted curriculum that has access to all tasks
+from the beginning of training 
+Learning curves for baselines and the modular model are
+shown in Figure   It can be seen that in all environments 
+our approach substantially outperforms the baselines  it induces policies with substantially higher average reward and
+converges more quickly than the policy gradient baselines 
+It can further be seen in Figure    that after policies have
+been learned on simple tasks  the model is able to rapidly
+adapt to more complex ones  even when the longer tasks
+involve highlevel actions not required for any of the short
+tasks  Appendix   
+Having demonstrated the overall effectiveness of our approach  our remaining experiments explore   the importance of various components of the training procedure  and
+  the learned models  ability to generalize or adapt to
+heldout tasks  For compactness  we restrict our consideration on the crafting domain  which features   larger and
+more diverse range of tasks and highlevel actions 
+
+  Ablations
+In addition to the overall modular parametertying structure
+induced by our sketches  the key components of our training procedure are the decoupled critic and the curriculum 
+Our next experiments investigate the extent to which these
+are necessary for good performance 
+To evaluate the the critic  we consider three ablations   
+removing the dependence of the model on the environment
+state  in which case the baseline is   single scalar per task 
+  removing the dependence of the model on the task  in
+which case the baseline is   conventional generalized advantage estimator  and   removing both  in which case
+
+ Episode avg rewardQautomatonJointIndepModular ours Opt CritCraftingenvironment Episode avg rewardQautomatonModular ours JointIndep Opt CritMazeenvironment Timestep log avg reward ModularJointOpt CritCliffenvironmentModular Multitask Reinforcement Learning with Policy Sketches
+
+Model
+Joint
+Independent
+Option Critic
+Modular  ours 
+
+Multitask
+
+ 
+ 
+ 
+ 
+
+ shot Adaptation
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+Table   Accuracy and generalization of learned models in the
+crafting domain  The table shows the task completion rate for
+each approach after convergence under various training conditions  Multitask is the multitask training condition described in
+Section   while  Shot and Adaptation are the generalization
+experiments described in Section   Our modular approach consistently achieves the best performance 
+
+We hold out two lengthfour tasks from the full inventory
+used in Section   and train on the remaining tasks  For
+zeroshot experiments  we simply form the concatenated
+policy described by the sketches of the heldout tasks  and
+repeatedly execute this policy  without learning  in order to
+obtain an estimate of its effectiveness  For adaptation experiments  we consider ordinary RL over highlevel actions
+  rather than lowlevel actions    implementing the highlevel learner with the same agent architecture as described
+in Section   Note that the Independent and Option 
+Critic models cannot be applied to the zeroshot evaluation 
+while the Joint model cannot be applied to the adaptation
+baseline  because it depends on prespeci ed sketch features  Results are shown in Table   The heldout tasks
+are suf ciently challenging that the baselines are unable to
+obtain more than negligible reward  in particular  the joint
+model over ts to the training tasks and cannot generalize to
+new sketches  while the independent model cannot discover
+enough of   reward signal to learn in the adaptation setting 
+The modular model does comparatively well 
+individual
+subpolicies succeed in novel zeroshot con gurations  suggesting that they have in fact discovered the behavior suggested by the semantics of the sketch  and provide   suitable basis for adaptive discovery of new highlevel policies 
+
+  Conclusions
+We have described an approach for multitask learning
+of deep multitask policies guided by symbolic policy
+sketches  By associating each symbol appearing in   sketch
+with   modular neural subpolicy  we have shown that it is
+possible to build agents that share behavior across tasks in
+order to achieve success in tasks with sparse and delayed
+rewards  This process induces an inventory of reusable and
+interpretable subpolicies which can be employed for zeroshot generalization when further sketches are available  and
+hierarchical reinforcement learning when they are not  Our
+work suggests that these sketches  which are easy to produce and require no grounding in the environment  provide
+an effective scaffold for learning hierarchical policies from
+minimal supervision 
+
+   
+
+   
+
+   
+
+Figure   Training details in the crafting domain      Critics  lines
+labeled  task  include   baseline that varies with task identity 
+while lines labeled  state  include   baseline that varies with state
+identity  Estimating   baseline that depends on both the representation of the current state and the identity of the current task is
+better than either alone or   constant baseline      Curricula  lines
+labeled  len  use   curriculum with iteratively increasing sketch
+lengths  while lines labeled  wgt  sample tasks in inverse proportion to their current reward  Adjusting the sampling distribution
+based on both task length and performance return improves convergence      Individual task performance  Colors correspond to
+task length  Sharp steps in the learning curve correspond to increases of  max in the curriculum 
+
+the baseline is   single scalar  as in   vanilla policy gradient
+approach  Results are shown in Figure     Introducing both
+state and task dependence into the baseline leads to faster
+convergence of the model 
+the approach with   constant
+baseline achieves less than half the overall performance of
+the full critic after   million episodes  Introducing task and
+state dependence independently improve this performance 
+combining them gives the best result 
+We also investigate two aspects of our curriculum learning
+scheme  starting with short examples and moving to long
+ones  and sampling tasks in inverse proportion to their accumulated reward  Experiments are shown in Figure    
+Both components help  prioritization by both length and
+weight gives the best results 
+
+  Zeroshot and Adaptation Learning
+In our  nal experiments  we consider the model   ability to
+generalize beyond the standard training condition  We  rst
+consider two tests of generalization    zeroshot setting  in
+which the model is provided   sketch for the new task and
+must immediately achieve good performance  and   adaptation setting  in which no sketch is provided and the model
+must learn the form of   suitable sketch via interaction in
+the new task 
+
+ Episode avg reward task state task state Critics Episode avg reward len wgt len wgt Curricula Episode avg rewardPerformancebytaskModular Multitask Reinforcement Learning with Policy Sketches
+
+Acknowledgments
+JA is supported by   Facebook fellowship and   Berkeley
+AI   Huawei fellowship 
+
+References
+Andre  David and Russell  Stuart  Programmable reinforcement learning agents  In Advances in Neural Information
+Processing Systems   
+
+Andre  David and Russell  Stuart  State abstraction for programmable reinforcement learning agents  In Proceedings of the Meeting of the Association for the Advancement of Arti cial Intelligence   
+
+Andreas  Jacob  Rohrbach  Marcus  Darrell  Trevor  and
+Klein  Dan  Learning to compose neural networks for
+question answering  In Proceedings of the Annual Meeting of the North American Chapter of the Association for
+Computational Linguistics   
+
+Artzi  Yoav and Zettlemoyer  Luke  Weakly supervised
+learning of semantic parsers for mapping instructions to
+actions  Transactions of the Association for Computational Linguistics     
+
+Bacon  PierreLuc and Precup  Doina  The optioncritic architecture  In NIPS Deep Reinforcement Learning Workshop   
+
+Bakker  Bram and Schmidhuber    urgen  Hierarchical reinforcement learning based on subgoal discovery and subpolicy specialization  In Proc  of the  th Conf  on Intelligent Autonomous Systems  pp     
+
+Bengio  Yoshua  Louradour    er ome  Collobert  Ronan  and
+Weston  Jason  Curriculum learning  pp    ACM 
+ 
+
+Branavan         Chen  Harr  Zettlemoyer  Luke    and
+Barzilay  Regina  Reinforcement learning for mapping
+instructions to actions 
+In Proceedings of the Annual
+Meeting of the Association for Computational Linguistics  pp    Association for Computational Linguistics   
+
+Chen  David    and Mooney  Raymond    Learning to interpret natural language navigation instructions from observations  In Proceedings of the Meeting of the Association
+for the Advancement of Arti cial Intelligence  volume  
+pp     
+
+Daniel  Christian  Neumann  Gerhard  and Peters  Jan  Hierarchical relative entropy policy search  In Proceedings
+of the International Conference on Arti cial Intelligence
+and Statistics  pp     
+
+Devin  Coline  Gupta  Abhishek  Darrell  Trevor  Abbeel 
+Pieter  and Levine  Sergey  Learning modular neural
+network policies for multitask and multirobot transfer 
+arXiv preprint arXiv   
+
+Dietterich  Thomas    Hierarchical reinforcement learning
+with the maxq value function decomposition     Artif 
+Intell  Res   JAIR     
+
+Greensmith  Evan  Bartlett  Peter    and Baxter  Jonathan 
+Variance reduction techniques for gradient estimates in
+reinforcement learning  Journal of Machine Learning
+Research   Nov   
+
+Hauser  Kris  Bretl  Timothy  Harada  Kensuke  and
+Latombe  JeanClaude  Using motion primitives in probabilistic samplebased planning for humanoid robots 
+In Algorithmic foundation of robotics  pp   
+Springer   
+
+Iyyer  Mohit  BoydGraber  Jordan  Claudino  Leonardo 
+Socher  Richard  and Daum   III  Hal    neural network for factoid question answering over paragraphs  In
+Proceedings of the Conference on Empirical Methods in
+Natural Language Processing   
+
+Kearns  Michael and Singh  Satinder  Nearoptimal reinforcement learning in polynomial time  Machine Learning     
+
+Konidaris  George and Barto  Andrew    Building portable
+options  Skill transfer in reinforcement learning  In IJCAI  volume   pp     
+
+Konidaris  George  Kuindersma  Scott  Grupen  Roderic 
+and Barto  Andrew  Robot learning from demonstration
+by constructing skill trees  The International Journal of
+Robotics Research  pp     
+
+Kulkarni  Tejas    Narasimhan  Karthik    Saeedi  Ardavan  and Tenenbaum  Joshua    Hierarchical deep reinforcement learning  Integrating temporal abstraction and
+intrinsic motivation  arXiv preprint arXiv 
+ 
+
+Marthi  Bhaskara  Lantham  David  Guestrin  Carlos  and
+Russell  Stuart  Concurrent hierarchical reinforcement
+learning  In Proceedings of the Meeting of the Association for the Advancement of Arti cial Intelligence   
+
+Menache  Ishai  Mannor  Shie  and Shimkin  Nahum 
+Qcutdynamic discovery of subgoals in reinforcement
+learning 
+In European Conference on Machine Learning  pp    Springer   
+
+Neelakantan  Arvind  Le  Quoc    and Sutskever  Ilya 
+Neural programmer  Inducing latent programs with gradient descent  arXiv preprint arXiv   
+
+Modular Multitask Reinforcement Learning with Policy Sketches
+
+Niekum  Scott  Osentoski  Sarah  Konidaris  George 
+Chitta  Sachin  Marthi  Bhaskara  and Barto  Andrew   
+Learning grounded  nitestate representations from unstructured demonstrations  The International Journal of
+Robotics Research     
+
+Vogel  Adam and Jurafsky  Dan  Learning to follow navigational directions  In Proceedings of the Annual Meeting of the Association for Computational Linguistics 
+pp    Association for Computational Linguistics 
+ 
+
+Parr  Ron and Russell  Stuart  Reinforcement learning with
+hierarchies of machines  In Advances in Neural Information Processing Systems   
+
+Williams  Ronald    Simple statistical gradientfollowing
+learning 
+
+algorithms for connectionist reinforcement
+Machine learning     
+
+Precup  Doina 
+
+Temporal abstraction in reinforcement
+
+learning  PhD thesis   
+
+Reed  Scott and de Freitas  Nando  Neural programmerinterpreters  Proceedings of the International Conference on Learning Representations   
+
+Schulman  John  Moritz  Philipp  Levine  Sergey  Jordan 
+Michael  and Abbeel  Pieter  Highdimensional continuous control using generalized advantage estimation 
+arXiv preprint arXiv     
+
+Schulman  John  Moritz  Philipp  Levine  Sergey  Jordan 
+Michael  and Abbeel  Pieter  Trust region policy optimization     
+
+Socher  Richard  Huval  Brody  Manning  Christopher  and
+Ng  Andrew  Semantic compositionality through recursive matrixvector spaces  In Proceedings of the Conference on Empirical Methods in Natural Language Processing  pp    Jeju  Korea   
+
+Stolle  Martin and Precup  Doina  Learning options in reinforcement learning  In International Symposium on Abstraction  Reformulation  and Approximation  pp   
+  Springer   
+
+Sutton  Richard    Precup  Doina  and Singh  Satinder  Between MDPs and semiMDPs    framework for temporal abstraction in reinforcement learning  Arti cial intelligence     
+
+Tellex  Stefanie  Kollar  Thomas  Dickerson  Steven  Walter  Matthew    Banerjee  Ashis Gopal  Teller  Seth  and
+Roy  Nicholas  Understanding natural language commands for robotic navigation and mobile manipulation 
+In In Proceedings of the National Conference on Arti 
+cial Intelligence   
+
+Tieleman  Tijmen  RMSProp  unpublished   
+
+Vezhnevets  Alexander  Mnih  Volodymyr  Agapiou  John 
+Osindero  Simon  Graves  Alex  Vinyals  Oriol  and
+Kavukcuoglu  Koray  Strategic attentive writer for learning macroactions  arXiv preprint arXiv 
+ 
+
+

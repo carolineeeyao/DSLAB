@@ -1,0 +1,854 @@
+Axiomatic Attribution for Deep Networks
+
+Mukund Sundararajan     Ankur Taly     Qiqi Yan    
+
+Abstract
+
+We study the problem of attributing the prediction of   deep network to its input features 
+  problem previously studied by several other
+works  We identify two fundamental axioms 
+Sensitivity and Implementation Invariance that
+attribution methods ought to satisfy  We show
+that they are not satis ed by most known attribution methods  which we consider to be   fundamental weakness of those methods  We use
+the axioms to guide the design of   new attribution method called Integrated Gradients  Our
+method requires no modi cation to the original
+network and is extremely simple to implement 
+it just needs   few calls to the standard gradient operator  We apply this method to   couple
+of image models    couple of text models and  
+chemistry model  demonstrating its ability to debug networks  to extract rules from   network 
+and to enable users to engage with models better 
+
+  Motivation and Summary of Results
+We study the problem of attributing the prediction of   deep
+network to its input features 
+De nition   Formally  suppose we have   function    
+Rn       that represents   deep network  and an input                 xn    Rn  An attribution of the prediction at input   relative to   baseline input   cid  is   vector
+AF       cid                an    Rn where ai is the contribution of xi to the prediction      
+
+For instance  in an object recognition network  an attribution method could tell us which pixels of the image were
+responsible for   certain label being picked  see Figure  
+The attribution problem was previously studied by various papers  Baehrens et al    Simonyan et al   
+
+ Equal
+
+contribution
+
+Inc  Mountain View 
+USA 
+Mukund
+Sundararajan
+ mukunds google com  Ankur Taly  ataly google com 
+
+Correspondence
+
+ Google
+to 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+Shrikumar et al    Binder et al    Springenberg
+et al   
+The intention of these works is to understand the inputoutput behavior of the deep network  which gives us the
+ability to improve it  Such understandability is critical to
+all computer programs  including machine learning models  There are also other applications of attribution  They
+could be used within   product driven by machine learning to provide   rationale for the recommendation  For instance    deep network that predicts   condition based on
+imaging could help inform the doctor of the part of the image that resulted in the recommendation  This could help
+the doctor understand the strengths and weaknesses of  
+model and compensate for it  We give such an example in
+Section   Attributions could also be used by developers
+in an exploratory sense  For instance  we could use   deep
+network to extract insights that could be then used in   rulebased system  In Section   we give such an example 
+  signi cant challenge in designing an attribution technique is that they are hard to evaluate empirically  As we
+discuss in Section   it is hard to tease apart errors that stem
+from the misbehavior of the model versus the misbehavior
+of the attribution method  To compensate for this shortcoming  we take an axiomatic approach  In Section   we
+identify two axioms that every attribution method must satisfy  Unfortunately most previous methods do not satisfy
+one of these two axioms  In Section   we use the axioms
+to identify   new method  called integrated gradients 
+Unlike previously proposed methods  integrated gradients
+do not need any instrumentation of the network  and can
+be computed easily using   few calls to the gradient operation  allowing even novice practitioners to easily apply the
+technique 
+In Section   we demonstrate the ease of applicability over
+several deep networks  including two images networks  two
+text processing networks  and   chemistry network  These
+applications demonstrate the use of our technique in either
+improving our understanding of the network  performing
+debugging  performing rule extraction  or aiding an end
+user in understanding the network   prediction 
+Remark   Let us brie   examine the need for the baseline in the de nition of the attribution problem    common
+way for humans to perform attribution relies on counter 
+
+Axiomatic Attribution for Deep Networks
+
+factual intuition  When we assign blame to   certain cause
+we implicitly consider the absence of the cause as   baseline for comparing outcomes  In   deep network  we model
+the absence using   single baseline input  For most deep
+networks    natural baseline exists in the input space where
+the prediction is neutral  For instance  in object recognition
+networks  it is the black image  The need for   baseline has
+also been pointed out by prior work on attribution  Shrikumar et al    Binder et al   
+
+  Two Fundamental Axioms
+We now discuss two axioms  desirable characteristics  for
+attribution methods  We  nd that other feature attribution
+methods in literature break at least one of the two axioms 
+These methods include DeepLift  Shrikumar et al   
+  Layerwise relevance propagation  LRP   Binder
+et al    Deconvolutional networks  Zeiler   Fergus 
+  and Guided backpropagation  Springenberg et al 
+  As we will see in Section   these axioms will also
+guide the design of our method 
+
+Gradients  For linear models  ML practitioners regularly
+inspect the products of the model coef cients and the feature values in order to debug predictions  Gradients  of the
+output with respect to the input  is   natural analog of the
+model coef cients for   deep network  and therefore the
+product of the gradient and feature values is   reasonable
+starting point for an attribution method  Baehrens et al 
+  Simonyan et al    see the third column of Figure   for examples  The problem with gradients is that
+they break sensitivity    property that all attribution methods should satisfy 
+
+  Axiom  Sensitivity   
+
+An attribution method satis es Sensitivity    if for every
+input and baseline that differ in one feature but have different predictions then the differing feature should be given
+  nonzero attribution   Later in the paper  we will have  
+part     to this de nition 
+Gradients violate Sensitivity    For   concrete example 
+consider   one variable  one ReLU network             
+ReLU    Suppose the baseline is       and the input is
+      The function changes from   to   but because   becomes  at at       the gradient method gives attribution of
+  to    Intuitively  gradients break Sensitivity because the
+prediction function may  atten at the input and thus have
+zero gradient despite the function value at the input being
+different from that at the baseline  This phenomenon has
+been reported in previous work  Shrikumar et al   
+Practically  the lack of sensitivity causes gradients to focus
+on irrelevant features  see the  reboat  example in Fig 
+
+ure  
+
+Other backpropagation based approaches    second
+set of approaches involve backpropagating the  nal prediction score through each layer of the network down to the
+individual features  These include DeepLift  Layerwise
+relevance propagation  LRP  Deconvolutional networks
+ DeConvNets  and Guided backpropagation  These methods differ in the speci   backpropagation logic for various
+activation functions       ReLU  MaxPool  etc 
+Unfortunately  Deconvolution networks  DeConvNets 
+and Guided backpropagation violate Sensitivity    This
+is because these methods backpropogate through   ReLU
+node only if the ReLU is turned on at the input  This
+makes the method similar to gradients  in that  the attribution is zero for features with zero gradient at the input despite   nonzero gradient at the baseline  We defer the speci   counterexamples to the full version of this paper  Sundararajan et al   
+Methods like DeepLift and LRP tackle the Sensitivity issue
+by employing   baseline  and in some sense try to compute
+ discrete gradients  instead of  instantaeneous  gradients at
+the input   The two methods differ in the speci cs of how
+they compute the discrete gradient  But the idea is that  
+large  discrete step will avoid  at regions  avoiding   breakage of sensitivity  Unfortunately  these methods violate  
+different requirement on attribution methods 
+
+  Axiom  Implementation Invariance
+
+Two networks are functionally equivalent if their outputs
+are equal for all inputs  despite having very different implementations  Attribution methods should satisfy Implementation Invariance       the attributions are always identical
+for two functionally equivalent networks  To motivate this 
+notice that attribution can be colloquially de ned as assigning the blame  or credit  for the output to the input features 
+Such   de nition does not refer to implementation details 
+We now discuss intuition for why DeepLift and LRP break
+Implementation Invariance    concrete example is provided
+in the full version of this paper  Sundararajan et al   
+First  notice that gradients are invariant to implementation 
+In fact  the chainrule for gradients   
+   is essentially about implementation invariance  To see this  think
+of   and   as the input and output of   system  and   being
+some implementation detail of the system  The gradient of
+output   to input   can be computed either directly by   
+    
+ignoring the intermediate function    implementation detail  or by invoking the chain rule via    This is exactly
+how backpropagation works 
+Methods like LRP and DeepLift replace gradients with discrete gradients and still use   modi ed form of backpropa 
+
+       
+
+       
+
+Axiomatic Attribution for Deep Networks
+
+gation to compose discrete gradients into attributions  Unfortunately  the chain rule does not hold for discrete gradients in general  Formally           
+ cid            
+          
+        
+        
+           and therefore these methods fail to satisfy implementation invariance 
+If an attribution method fails to satisfy Implementation Invariance  the attributions are potentially sensitive to unimportant aspects of the models  For instance  if the network
+architecture has more degrees of freedom than needed to
+represent   function then there may be two sets of values
+for the network parameters that lead to the same function 
+The training procedure can converge at either set of values
+depending on the initializtion or for other reasons  but the
+underlying network function would remain the same  It is
+undesirable that attributions differ for such reasons 
+
+  Our Method  Integrated Gradients
+We are now ready to describe our technique  Intuitively 
+our technique combines the Implementation Invariance of
+Gradients along with the Sensitivity of techniques like LRP
+or DeepLift 
+Formally  suppose we have   function     Rn       that
+represents   deep network  Speci cally  let     Rn be the
+input at hand  and   cid    Rn be the baseline input  For image
+networks  the baseline could be the black image  while for
+text models it could be the zero embedding vector 
+We consider the straightline path  in Rn  from the baseline
+  cid  to the input    and compute the gradients at all points
+along the path 
+Integrated gradients are obtained by cumulating these gradients  Speci cally  integrated gradients
+are de ned as the path intergral of the gradients along the
+straightline path from the baseline   cid  to the input   
+The integrated gradient along the ith dimension for an input
+  and baseline   cid  is de ned as follows  Here        
+is the
+gradient of       along the ith dimension 
+
+ xi
+
+  
+ cid 
+
+      cid     cid 
+
+IntegratedGradsi       xi   
+
+  
+ 
+Axiom  Completeness 
+Integrated gradients satisfy an
+axiom called completeness that the attributions add up to
+the difference between the output of   at the input   and
+the baseline   cid  This axiom is identi ed as being desirable
+by Deeplift and LRP  It is   sanity check that the attribution method is somewhat comprehensive in its accounting 
+  property that is clearly desirable if the networks score is
+used in   numeric sense  and not just to pick the top label  for        model estimating insurance premiums from
+credit features of individuals 
+This is formalized by the proposition below  which instanti 
+
+ cid   
+
+ 
+
+ xi
+
+ates the fundamental theorem of calculus for path integrals 
+Proposition   If     Rn     is differentiable almost
+everywhere   then
+
+  IntegratedGradsi                   cid 
+  
+
+For most deep networks  it is possible to choose   baseline such that the prediction at the baseline is near zero
+      cid       For image models  the black image baseline indeed satis es this property  In such cases  there is
+an intepretation of the resulting attributions that ignores the
+baseline and amounts to distributing the output to the individual input features 
+Remark   Integrated gradients satis es Sensivity    because Completeness implies Sensivity    and is thus  
+strengthening of the Sensitivity    axiom  This is because
+Sensitivity    refers to   case where the baseline and the
+input differ only in one variable  for which Completeness
+asserts that the difference in the two output values is equal
+to the attribution to this variable  Attributions generated
+by integrated gradients satisfy Implementation Invariance
+since they are based only on the gradients of the function
+represented by the network 
+
+  Uniqueness of Integrated Gradients
+Prior literature has relied on empirically evaluating the attribution technique  For instance  in the context of an object
+recognition task   Samek et al    suggests that we select the top   pixels by attribution and randomly vary their
+intensities and then measure the drop in score  If the attribution method is good  then the drop in score should be
+large  However  the images resulting from pixel perturbation could be unnatural  and it could be that the scores drop
+simply because the network has never seen anything like it
+in training   This is less of   concern with linear or logistic models where the simplicity of the model ensures that
+ablating   feature does not cause strange interactions 
+  different evaluation technique considers images with
+humandrawn bounding boxes around objects  and computes the percentage of pixel attribution inside the box 
+While for most objects  one would expect the pixels located
+on the object to be most important for the prediction  in
+some cases the context in which the object occurs may also
+contribute to the prediction  The cabbage butter   image
+from Figure   is   good example of this where the pixels
+on the leaf are also surfaced by the integrated gradients 
+Roughly  we found that every empirical evaluation tech 
+
+ Formally  this means the function   is continuous everywhere and the partial derivative of   along each input dimension
+satis es Lebesgue   integrability condition       the set of discontinuous points has measure zero  Deep networks built out of Sigmoids  ReLUs  and pooling operators satisfy this condition 
+
+Axiomatic Attribution for Deep Networks
+
+Attribution methods based on path integrated gradients are
+collectively known as path methods  Notice that integrated
+gradients is   path method for the straightline path speci ed
+      cid               cid  for        
+Remark   All path methods satisfy Implementation Invariance  This follows from the fact that they are de ned
+using the underlying gradients  which do not depend on the
+implementation  They also satisfy Completeness  the proof
+is similar to that of Proposition   and Sensitvity    which
+is implied by Completeness  see Remark  
+
+More interestingly  path methods are the only methods
+that satisfy certain desirable axioms 
+ For formal de nitions of the axioms and proof of Proposition   see Friedman  Friedman   
+
+Axiom  Sensitivity   
+ called Dummy in  Friedman 
+  If the function implemented by the deep network
+does not depend  mathematically  on some variable  then
+the attribution to that variable is always zero 
+This is   natural complement to the de nition of Sensitivity    from Section   This de nition captures desired insensitivity of the attributions 
+
+Axiom  Linearity  Suppose that we linearly composed
+two deep networks modeled by the functions    and    to
+form   third network that models the function         
+       linear combination of the two networks  Then we  
+like the attributions for                 to be the weighted
+sum of the attributions for    and    with weights   and  
+respectively  Intuitively  we would like the attributions to
+preserve any linearity within the network 
+Proposition    Theorem    Friedman    Path methods are the only attribution methods that always satisfy
+Implementation Invariance  Sensitivity    Linearity  and
+Completeness 
+Remark   We note that these path integrated gradients
+have been used within the costsharing literature in economics where the function models the cost of   project as
+  function of the demands of various participants  and the
+attributions correspond to costshares 
+Integrated gradients correspond to   costsharing method called AumannShapley  Aumann   Shapley    Proposition   holds
+for our attribution problem because mathematically the
+costsharing problem corresponds to the attribution problem with the benchmark  xed at the zero vector   Implementation Invariance is implicit in the costsharing literature as the cost functions are considered directly in their
+mathematical form 
+
+  Integrated Gradients is SymmetryPreserving
+
+In this section  we formalize why the straightline path chosen by integrated gradients is canonical  First  observe that
+
+Figure   Three paths between an   baseline        and an input
+       Each path corresponds to   different attribution method 
+The path    corresponds to the path used by integrated gradients 
+
+nique we could think of could not differentiate between artifacts that stem from perturbing the data    misbehaving
+model  and   misbehaving attribution method  This was
+why we turned to an axiomatic approach in designing  
+good attribution method  Section   While our method
+satis es Sensitivity and Implementation Invariance  it certainly isn   the unique method to do so 
+We now justify the selection of the integrated gradients
+method in two steps  First  we identify   class of methods called Path methods that generalize integrated gradients  We discuss that path methods are the only methods
+to satisfy certain desirable axioms  Second  we argue why
+integrated gradients is somehow canonical among the different path methods 
+
+  Path Methods
+
+Integrated gradients aggregate the gradients along the inputs that fall on the straightline between the baseline and
+the input  There are many other  nonstraightline  paths
+that monotonically interpolate between the two points  and
+each such path will yield   different attribution method  For
+instance  consider the simple case when the input is two dimensional  Figure   has examples of three paths  each of
+which corresponds to   different attribution method 
+Formally  let                           Rn be   smooth
+function specifying   path in Rn from the baseline   cid  to the
+input               cid  and       
+Given   path function   path integrated gradients are obtained by integrating the gradients along the path   for
+        Formally  path integrated gradients along the
+ith dimension for an input   is de ned as follows 
+
+ cid   
+
+PathIntegratedGrads 
+
+    
+
+   
+
+ 
+
+       
+
+  
+ 
+is the gradient of   along the ith dimension
+
+   
+
+ 
+
+where       
+ xi
+at   
+
+              Axiomatic Attribution for Deep Networks
+
+it is the simplest path that one can de ne mathematically 
+Second    natural property for attribution methods is to preserve symmetry  in the following sense 
+
+SymmetryPreserving  Two input variables are symmetric          function if swapping them does not change the
+function  For instance    and   are symmetric          if
+and only if                     for all values of   and    An
+attribution method is symmetry preserving  if for all inputs
+that have identical values for symmetric variables and baselines that have identical values for symmetric variables  the
+symmetric variables receive identical attributions 
+     consider the logistic model Sigmoid                  
+   and    are symmetric variables for this model  For an
+input where              say  and baseline where     
+        say    symmetry preserving method must offer
+identical attributions to    and   
+It seems natural to ask for symmetrypreserving attribution
+methods because if two variables play the exact same role
+in the network       they are symmetric and have the same
+values in the baseline and the input  then they ought to receive the same attrbiution 
+Theorem  
+method that is symmetrypreserving 
+
+Integrated gradients is the unique path
+
+The proof is provided in the full version of this paper  Sundararajan et al   
+Remark   If we allow averaging over the attributions
+from multiple paths  then are other methods that satisfy all
+the axioms in Theorem   In particular  there is the method
+by ShapleyShubik  Shapley   Shubik    from the cost
+sharing literature  and used by  Lundberg   Lee   
+Datta et al    to compute feature attributions  though
+they were not studying deep networks  In this method  the
+attribution is the average of those from    extremal paths 
+here   is the number of features  Here each such path considers an ordering of the input features  and sequentially
+changes the input feature from its value at the baseline to
+its value at the input  This method yields attributions that
+are different from integrated gradients  If the function of
+interest is min       the baseline is             and
+the input is               then integrated gradients
+attributes the change in the function value entirely to the
+critical variable    whereas ShapleyShubik assigns attributions of   each  it seems somewhat subjective to prefer
+one result over the other 
+
+We also envision other issues with applying ShapleyShubik
+to deep networks  It is computationally expensive  in an
+object recognition network that takes an     image
+as input    is   and    is   gigantic number  Even
+if one samples few paths randomly  evaluating the attributions for   single path takes   calls to the deep network 
+
+In contrast  integrated gradients is able to operate with  
+to   calls  Further  the ShapleyShubik computation visit
+inputs that are combinations of the input and the baseline 
+It is possible that some of these combinations are very different from anything seen during training  We speculate
+that this could lead to attribution artifacts 
+
+  Applying Integrated Gradients
+
+Selecting   Benchmark    key step in applying integrated
+gradients is to select   good baseline  We recommend that
+developers check that the baseline has   nearzero score 
+as discussed in Section   this allows us to interpret the
+attributions as   function of the input  But there is more to
+  good baseline  For instance  for an object recogntion network it is possible to create an adversarial example that has
+  zero score for   given input label  say elephant  by applying   tiny  carefullydesigned perturbation to an image with
+  very different label  say microscope   cf 
+ Goodfellow
+et al    The attributions can then include undesirable
+artifacts of this adversarially constructed baseline  So we
+would additionally like the baseline to convey   complete
+absence of signal  so that the features that are apparent from
+the attributions are properties only of the input  and not of
+the baseline  For instance  in an object recognition network    black image signi es the absence of objects  The
+black image isn   unique in this sense an image consisting
+of noise has the same property  However  using black as  
+baseline may result in cleaner visualizations of  edge  features  For text based networks  we have found that the allzero input embedding vector is   good baseline  The action
+of training causes unimportant words tend to have small
+norms  and so  in the limit  unimportance corresponds to
+the allzero baseline  Notice that the black image corresponds to   valid input to an object recognition network 
+and is also intuitively what we humans would consider absence of signal  In contrast  the allzero input vector for  
+text network does not correspond to   valid input  it nevertheless works for the mathematical reason described above 
+
+Computing Integrated Gradients  The integral of integrated gradients can be ef ciently approximated via   summation  We simply sum the gradients at points occurring at
+suf ciently small intervals along the straightline path from
+the baseline   cid  to the input   
+
+IntegratedGradsapprox
+      cid 
+
+      cid 
+
+ 
+
+ 
+
+     
+   
+
+ 
+
+ xi     cid 
+
+       
+
+  
+
+ xi
+
+ 
+
+Here   is the number of steps in the Riemman approximation of the integral  Notice that the approximation simply involves computing the gradient in   for loop which
+should be straightforward and ef cient in most deep learning frameworks  For instance  in TensorFlow  it amounts
+
+Axiomatic Attribution for Deep Networks
+
+to calling tf gradients in   loop over the set of inm          cid  for                  which
+puts         cid     
+could also be batched  In practice  we  nd that somewhere
+between   and   steps are enough to approximate the
+integral  within   we recommend that developers check
+that the attributions approximately adds up to the difference beween the score at the input and that at the baseline
+ cf  Proposition   and if not increase the stepsize   
+
+  Applications
+The integrated gradients technique is applicable to   variety
+of deep networks  Here  we apply it to two image models 
+two natural language models  and   chemistry model 
+
+  An Object Recognition Network
+
+We study feature attribution in an object recognition network built using the GoogleNet architecture  Szegedy
+et al    and trained over the ImageNet object recognition dataset  Russakovsky et al    We use the integrated gradients method to study pixel importance in predictions made by this network  The gradients are computed
+for the output of the highestscoring class with respect to
+pixel of the input image  The baseline input is the black
+image       all pixel intensities are zero 
+Integrated gradients can be visualized by aggregating them
+along the color channel and scaling the pixels in the actual image by them  Figure   shows visualizations for  
+bunch of images  For comparison  it also presents the corresponding visualization obtained from the product of the
+image with the gradients at the actual image  Notice that
+integrated gradients are better at re ecting distinctive features of the input image 
+
+  Diabetic Retinopathy Prediction
+
+Diabetic retinopathy  DR  is   complication of the diabetes
+that affects the eyes  Recently    deep network  Gulshan
+et al    has been proposed to predict the severity grade
+for DR in retinal fundus images  The model has good predictive accuracy on various validation datasets 
+We use integrated gradients to study feature importance for
+this network  like in the object recognition case  the baseline is the black image  Feature importance explanations
+are important for this network as retina specialists may use
+it to build trust in the network   predictions  decide the
+grade for borderline cases  and obtain insights for further
+testing and screening 
+Figure   shows   visualization of integrated gradients for  
+retinal fundus image  The visualization method is   bit dif 
+
+ More examples can be found at https github com 
+
+ankurtaly Attributions
+
+Figure   Comparing integrated gradients with gradients at
+the image  Leftto right  original input image  label and softmax
+score for the highest scoring class  visualization of integrated gradients  visualization of gradients image  Notice that the visualizations obtained from integrated gradients are better at re ecting
+distinctive features of the image 
+
+ferent from that used in Figure   We aggregate integrated
+gradients along the color channel and overlay them on the
+actual image in gray scale with positive attribtutions along
+the green channel and negative attributions along the red
+channel  Notice that integrated gradients are localized to  
+few pixels that seem to be lesions in the retina  The interior of the lesions receive   negative attribution while the
+periphery receives   positive attribution indicating that the
+network focusses on the boundary of the lesion 
+
+  Question Classi cation
+
+Automatically answering natural language questions  over
+semistructured data  is an important problem in arti cial
+intelligence  AI    common approach is to semantically
+parse the question to its logical form  Liang    using
+  set of humanauthored grammar rules  An alternative approach is to machine learn an endto end model provided
+there is enough training data  An interesting question is
+whether one could peek inside machine learnt models to derive new rules  We explore this direction for   subproblem
+of semantic parsing  called question classi cation  using
+the method of integrated gradients 
+
+Axiomatic Attribution for Deep Networks
+
+attribute the output probability of every output token  in
+form of wordpieces  to the input tokens  Such attributions
+ align  the output sentence with the input sentence  For
+baseline  we zero out the embeddings of all tokens except
+the start and end markers  Figure   shows an example of
+such an attributionbased alignments  We observed that the
+results make intuitive sense        und  is mostly attributed
+to  and  and  morgen  is mostly attributed to  morning 
+We use       steps  cf  Section   in the integrated
+gradient approximation  we need this because the network
+is highly nonlinear 
+
+Figure   Attributions from   language translation model  Input in English   good morning ladies and gentlemen  Output in
+German   Guten Morgen Damen und Herren  Both input and
+output are tokenized into word pieces  where   word piece pre 
+ xed by underscore indicates that it should be the pre   of   word 
+
+  Chemistry Models
+
+We apply integrated gradients to   network performing
+LigandBased Virtual Screening which is the problem of
+predicting whether an input molecule is active against  
+certain target       protein or enzyme  In particular  we
+consider   network based on the molecular graph convolution architecture proposed by  Kearnes et al   
+The network requires an input molecule to be encoded by
+hand as   set of atom and atompair features describing the
+molecule as an undirected graph  Atoms are featurized using   onehot encoding specifying the atom type            
+   etc  and atompairs are featurized by specifying either
+the type of bond       single  double  triple  etc  between
+the atoms  or the graph distance between them  The baseline input is obtained zeroing out the feature vectors for
+atom and atompairs 
+We visualize integrated gradients as heatmaps over the the
+atom and atompair features with the heatmap intensity depicting the strength of the contribution  Figure   shows
+the visualization for   speci   molecule  Since integrated
+gradients add up to the  nal prediction score  see Proposition   the magnitudes can be use for accounting the contributions of each feature  For instance  for the molecule in
+
+Figure   Attribution for Diabetic Retinopathy grade prediction from   retinal fundus image  The original image is show
+on the left  and the attributions  overlayed on the original image
+in gray scaee  is shown on the right  On the original image we annotate lesions visible to   human  and con rm that the attributions
+indeed point to them 
+
+The goal of question classi cation is to identify the type of
+answer it is seeking  For instance  is the quesiton seeking   yes no answer  or is it seeking   date  Rules for
+solving this problem look for trigger phrases in the question  for         when  in the beginning indicates   date
+seeking question  We train   model for question classi cation using the the text categorization architecture proposed
+by  Kim    over the WikiTableQuestions dataset  Pasupat   Liang    We use integrated gradients to attribute
+predictions down to the question terms in order to identify
+new trigger phrases for answer type  The baseline input is
+the all zero embedding vector 
+Figure   lists   few questions with constituent terms highlighted based on their attribution  Notice that the attributions largely agree with commonly used rules  for     
+ how many  indicates   numeric seeking question  In addition  attributions help identify novel question classi cation rules  for      questions containing  total number  are
+seeking numeric answers  Attributions also point out undesirable correlations  for       charles  is used as trigger for
+  yes no question 
+
+Figure   Attributions from question classi cation model 
+Term color indicates attribution strength Red is positive  Blue is
+negative  and Gray is neutral  zero  The predicted class is speci 
+ ed in square brackets 
+
+  Neural Machine Translation
+
+We applied our technique to   complex  LSTMbased Neural Machine Translation System  Wu et al    We
+
+Axiomatic Attribution for Deep Networks
+
+the  gure  atompairs that have   bond between them cumulatively contribute to   of the prediction score  while
+all other pairs cumulatively contribute to only  
+
+Figure   Attribution for   molecule under the      network  Kearnes et al    The molecules is active on task
+PCBA 
+
+Identifying Degenerate Features  We now discuss how
+attributions helped us spot an anomaly in the      architecture in  Kearnes et al    On applying the integrated gradients method to this network  we found that
+several atoms in the same molecule received identical attribution despite being bonded to different atoms  This is
+surprising as one would expect two atoms with different
+neighborhoods to be treated differently by the network 
+On investigating the problem further  in the network architecture  the atoms and atompair features were not fully
+convolved  This caused all atoms that have the same atom
+type  and same number of bonds of each type to contribute
+identically to the network 
+
+  Other Related work
+We already covered closely related work on attribution in
+Section   We mention other related work  Over the last
+few years  there has been   vast amount work on demystifying the inner workings of deep networks  Most of this
+work has been on networks trained on computer vision
+tasks  and deals with understanding what   speci   neuron computes  Erhan et al    Le    and interpreting the representations captured by neurons during   prediction  Mahendran   Vedaldi    Dosovitskiy   Brox 
+  Yosinski et al    In contrast  we focus on understanding the network   behavior on   speci   input in
+terms of the base level input features  Our technique quanti es the importance of each feature in the prediction 
+One approach to the attribution problem proposed  rst
+by  Ribeiro et al        is to locally approximate the
+behavior of the network in the vicinity of the input being
+explained with   simpler  more interpretable model  An
+appealing aspect of this approach is that it is completely
+
+agnostic to the implementation of the network and satis es
+implemenation invariance  However  this approach does
+not guarantee sensitivity  There is no guarantee that the
+local region explored escapes the  at  section of the prediction function in the sense of Section   The other issue
+is that the method is expensive to implement for networks
+with  dense  input like image networks as one needs to explore   local region of size proportional to the number of
+pixels and train   model for this space 
+In contrast  our
+technique works with   few calls to the gradient operation 
+Attention mechanisms  Bahdanau et al    have gained
+popularity recently  One may think that attention could be
+used   proxy for attributions  but this has issues  For instance  in   LSTM that also employs attention  there are
+many ways for an input token to in uence an output token  the memory cell  the recurrent state  and  attention 
+Focussing only an attention ignores the other modes of in 
+ uence and results in an incomplete picture 
+
+  Conclusion
+The primary contribution of this paper is   method called
+integrated gradients that attributes the prediction of   deep
+network to its inputs  It can be implemented using   few
+calls to the gradients operator  can be applied to   variety
+of deep networks  and has   strong theoretical justi cation 
+  secondary contribution of this paper is to clarify desirable features of an attribution method using an axiomatic
+framework inspired by costsharing literature from economics  Without the axiomatic approach it is hard to tell
+whether the attribution method is affected by data artifacts  network   artifacts or artifacts of the method  The
+axiomatic approach rules out artifacts of the last type 
+While our and other works have made some progress on
+understanding the relative importance of input features in
+  deep network  we have not addressed the interactions
+between the input features or the logic employed by the
+network  So there remain many unanswered questions in
+terms of debugging the     behavior of   deep network 
+
+ACKNOWLEDGMENTS
+
+We would like to thank Samy Bengio  Kedar Dhamdhere 
+Scott Lundberg  Amir Najmi  Kevin McCurley  Patrick Riley  Christian Szegedy  Diane Tang for their feedback  We
+would like to thank Daniel Smilkov and Federico Allocati
+for identifying bugs in our descriptions  We would like to
+thank our anonymous reviewers for identifying bugs  and
+their suggestions to improve presentation 
+
+Axiomatic Attribution for Deep Networks
+
+References
+Aumann        and Shapley        Values of NonAtomic
+Games  Princeton University Press  Princeton  NJ   
+
+Baehrens  David  Schroeter  Timon  Harmeling  Stefan 
+Kawanabe  Motoaki  Hansen  Katja  and   uller  KlausRobert  How to explain individual classi cation decisions  Journal of Machine Learning Research  pp   
+   
+
+Bahdanau  Dzmitry  Cho  Kyunghyun  and Bengio 
+Yoshua  Neural machine translation by jointly learning
+to align and translate  CoRR  abs    URL
+http arxiv org abs 
+
+Binder  Alexander  Montavon  Gr egoire  Bach  Sebastian 
+  uller  KlausRobert  and Samek  Wojciech  Layerwise relevance propagation for neural networks with local renormalization layers  CoRR   
+
+Datta     Sen     and Zick     Algorithmic transparency
+via quantitative input in uence  Theory and experiments
+with learning systems  In   IEEE Symposium on Security and Privacy  SP  pp     
+
+Dosovitskiy  Alexey and Brox  Thomas 
+
+Inverting visual
+
+representations with convolutional networks   
+
+Erhan  Dumitru  Bengio  Yoshua  Courville  Aaron  and
+Vincent  Pascal  Visualizing higherlayer features of  
+deep network  Technical Report   University of
+Montreal   
+
+Friedman  Eric    Paths and consistency in additive cost
+sharing  International Journal of Game Theory   
+   
+
+Goodfellow  Ian  Shlens  Jonathon  and Szegedy  Christian 
+Explaining and harnessing adversarial examIn International Conference on Learning Repreples 
+sentations    URL http arxiv org abs 
+ 
+
+Gulshan  Varun  Peng  Lily  Coram  Marc  and et al  Development and validation of   deep learning algorithm for
+detection of diabetic retinopathy in retinal fundus photographs  JAMA     
+
+Kearnes  Steven  McCloskey  Kevin  Berndl  Marc  Pande 
+Vijay  and Riley  Patrick  Molecular graph convolutions 
+moving beyond  ngerprints  Journal of ComputerAided
+Molecular Design  pp     
+
+Kim  Yoon  Convolutional neural networks for sentence
+
+classi cation  In ACL   
+
+Le  Quoc    Building highlevel features using large scale
+unsupervised learning  In International Conference on
+Acoustics  Speech  and Signal Processing  ICASSP  pp 
+   
+
+Liang  Percy  Learning executable semantic parsers for natural language understanding  Commun  ACM   
+   
+
+Lundberg  Scott and Lee  SuIn  An unexpected unity
+among methods for
+interpreting model predictions 
+CoRR  abs    URL http arxiv 
+org abs 
+
+Mahendran  Aravindh and Vedaldi  Andrea  Understanding deep image representations by inverting them 
+In
+Conference on Computer Vision and Pattern Recognition
+ CVPR  pp     
+
+Pasupat  Panupong and Liang  Percy  Compositional semantic parsing on semistructured tables  In ACL   
+
+Ribeiro  Marco   ulio  Singh  Sameer  and Guestrin  Carlos 
+ why should   trust you  Explaining the predictions of
+any classi er  In  nd ACM International Conference on
+Knowledge Discovery and Data Mining  pp   
+ACM     
+
+Ribeiro  Marco   ulio  Singh  Sameer  and Guestrin  Carlos  Modelagnostic interpretability of machine learning 
+CoRR     
+
+Russakovsky  Olga  Deng  Jia  Su  Hao  Krause  Jonathan 
+Satheesh  Sanjeev  Ma  Sean  Huang  Zhiheng  Karpathy  Andrej  Khosla  Aditya  Bernstein  Michael  Berg 
+Alexander    and FeiFei  Li 
+ImageNet Large Scale
+Visual Recognition Challenge  International Journal of
+Computer Vision  IJCV  pp     
+
+Samek  Wojciech  Binder  Alexander  Montavon  Gr egoire 
+Bach  Sebastian  and   uller  KlausRobert  Evaluating the visualization of what   deep neural network has
+learned  CoRR   
+
+Shapley  Lloyd    and Shubik  Martin  The assignment
+game   the core  International Journal of Game Theory 
+    URL http dx doi org 
+ BF 
+
+Shrikumar  Avanti  Greenside  Peyton  Shcherbina  Anna 
+and Kundaje  Anshul  Not just   black box  Learning
+important features through propagating activation differences  CoRR   
+
+Shrikumar  Avanti  Greenside  Peyton  and Kundaje  Anshul  Learning important features through propagating
+activation differences  CoRR  abs   
+URL http arxiv org abs 
+
+Axiomatic Attribution for Deep Networks
+
+Simonyan  Karen  Vedaldi  Andrea  and Zisserman  Andrew  Deep inside convolutional networks  Visualising
+image classi cation models and saliency maps  CoRR 
+ 
+
+Springenberg  Jost Tobias  Dosovitskiy  Alexey  Brox 
+Thomas  and Riedmiller  Martin    Striving for simplicity  The all convolutional net  CoRR   
+
+Sundararajan  Mukund  Taly  Ankur  and Yan  Qiqi  Axiomatic attribution for deep networks  with proofs and
+examples  CoRR  abs    URL https 
+ arxiv org abs 
+
+Szegedy  Christian  Liu  Wei  Jia  Yangqing  Sermanet 
+Pierre  Reed  Scott    Anguelov  Dragomir  Erhan  Dumitru  Vanhoucke  Vincent  and Rabinovich  Andrew 
+Going deeper with convolutions  CoRR   
+
+Wu  Yonghui  Schuster  Mike  Chen  Zhifeng  Le  Quoc   
+Norouzi  Mohammad  Macherey  Wolfgang  Krikun 
+Maxim  Cao  Yuan  Gao  Qin  Macherey  Klaus 
+Klingner  Jeff  Shah  Apurva  Johnson  Melvin  Liu 
+Xiaobing  Kaiser  Lukasz  Gouws  Stephan  Kato 
+Yoshikiyo  Kudo  Taku  Kazawa  Hideto  Stevens  Keith 
+Kurian  George  Patil  Nishant  Wang  Wei  Young  Cliff 
+Smith  Jason  Riesa  Jason  Rudnick  Alex  Vinyals 
+Oriol  Corrado  Greg  Hughes  Macduff  and Dean  Jeffrey  Google   neural machine translation system  Bridging the gap between human and machine translation 
+CoRR  abs    URL http arxiv 
+org abs 
+
+Yosinski  Jason  Clune  Jeff  Nguyen  Anh Mai  Fuchs 
+Thomas  and Lipson  Hod  Understanding neural networks through deep visualization  CoRR   
+
+Zeiler  Matthew    and Fergus  Rob  Visualizing and understanding convolutional networks  In ECCV  pp   
+   
+
+

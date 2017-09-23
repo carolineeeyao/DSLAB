@@ -1,0 +1,1141 @@
+Constrained Policy Optimization
+
+Joshua Achiam   David Held   Aviv Tamar   Pieter Abbeel    
+
+Abstract
+
+For many applications of reinforcement learning it can be more convenient to specify both
+  reward function and constraints  rather than
+trying to design behavior through the reward
+function  For example  systems that physically
+interact with or around humans should satisfy
+safety constraints  Recent advances in policy
+search algorithms  Mnih et al    Schulman et al    Lillicrap et al    Levine
+et al    have enabled new capabilities in
+highdimensional control  but do not consider
+the constrained setting  We propose Constrained
+Policy Optimization  CPO  the  rst generalpurpose policy search algorithm for constrained
+reinforcement learning with guarantees for nearconstraint satisfaction at each iteration  Our
+method allows us to train neural network policies for highdimensional control while making
+guarantees about policy behavior all throughout
+training  Our guarantees are based on   new theoretical result  which is of independent interest 
+we prove   bound relating the expected returns
+of two policies to an average divergence between
+them  We demonstrate the effectiveness of our
+approach on simulated robot locomotion tasks
+where the agent must satisfy constraints motivated by safety 
+
+  Introduction
+Recently  deep reinforcement learning has enabled neural
+network policies to achieve stateof theart performance
+on many highdimensional control tasks  including Atari
+games  using pixels as inputs   Mnih et al     
+robot locomotion and manipulation  Schulman et al   
+Levine et al    Lillicrap et al    and even Go at
+the human grandmaster level  Silver et al   
+
+ UC Berkeley  OpenAI  Correspondence to  Joshua Achiam
+
+ jachiam berkeley edu 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+In reinforcement learning  RL  agents learn to act by trial
+and error  gradually improving their performance at the
+task as learning progresses  Recent work in deep RL assumes that agents are free to explore any behavior during
+learning  so long as it leads to performance improvement 
+In many realistic domains  however  it may be unacceptable
+to give an agent complete freedom  Consider  for example 
+an industrial robot arm learning to assemble   new product
+in   factory  Some behaviors could cause it to damage itself or the plant around it or worse  take actions that are
+harmful to people working nearby  In domains like this 
+safe exploration for RL agents is important  Moldovan  
+Abbeel    Amodei et al      natural way to incorporate safety is via constraints 
+  standard and wellstudied formulation for reinforcement
+learning with constraints is the constrained Markov Decision Process  CMDP  framework  Altman    where
+agents must satisfy constraints on expectations of auxilliary costs  Although optimal policies for  nite CMDPs
+with known models can be obtained by linear programming  methods for highdimensional control are lacking 
+Currently  policy search algorithms enjoy stateof theart performance on highdimensional control tasks  Mnih
+et al    Duan et al    Heuristic algorithms for
+policy search in CMDPs have been proposed  Uchibe  
+Doya    and approaches based on primaldual methods can be shown to converge to constraintsatisfying policies  Chow et al    but there is currently no approach
+for policy search in continuous CMDPs that guarantees every policy during learning will satisfy constraints  In this
+work  we propose the  rst such algorithm  allowing applications to constrained deep RL 
+Driving our approach is   new theoretical result that bounds
+the difference between the rewards or costs of two different policies  This result  which is of independent interest 
+tightens known bounds for policy search using trust regions
+ Kakade   Langford    Pirotta et al    Schulman
+et al    and provides   tighter connection between the
+theory and practice of policy search for deep RL  Here 
+we use this result to derive   policy improvement step that
+guarantees both an increase in reward and satisfaction of
+constraints on other costs  This step forms the basis for our
+algorithm  Constrained Policy Optimization  CPO  which
+
+Constrained Policy Optimization
+
+computes an approximation to the theoreticallyjusti ed
+update 
+In our experiments  we show that CPO can train neural
+network policies with thousands of parameters on highdimensional simulated robot locomotion tasks to maximize
+rewards while successfully enforcing constraints 
+
+  Related Work
+Safety has long been   topic of interest in RL research  and
+  comprehensive overview of safety in RL was given by
+ Garc     Fern andez   
+Safe policy search methods have been proposed in prior
+work  Uchibe and Doya   gave   policy gradient algorithm that uses gradient projection to enforce active constraints  but this approach suffers from an inability to prevent   policy from becoming unsafe in the  rst place  Bou
+Ammar et al    propose   theoreticallymotivated policy gradient method for lifelong learning with safety constraints  but their method involves an expensive inner loop
+optimization of   semide nite program  making it unsuited
+for the deep RL setting  Their method also assumes that
+safety constraints are linear in policy parameters  which is
+limiting  Chow et al    propose   primaldual subgradient method for riskconstrained reinforcement learning which takes policy gradient steps on an objective that
+trades off return with risk  while simultaneously learning
+the tradeoff coef cients  dual variables 
+Some approaches speci cally focus on application to the
+deep RL setting  Held et al    study the problem for
+robotic manipulation  but the assumptions they make restrict the applicability of their methods  Lipton et al   
+use an  intrinsic fear  heuristic  as opposed to constraints 
+to motivate agents to avoid rare but catastrophic events 
+ShalevShwartz et al    avoid the problem of enforcing constraints on parametrized policies by decomposing
+ desires  from trajectory planning  the neural network policy learns desires for behavior  while the trajectory planning algorithm  which is not learned  selects  nal behavior
+and enforces safety constraints 
+In contrast to prior work  our method is the  rst policy
+search algorithm for CMDPs that both   guarantees constraint satisfaction throughout training  and   works for
+arbitrary policy classes  including neural networks 
+
+decision
+
+  Preliminaries
+  Markov
+tuple 
+               where   is the set of states    is the
+set of actions                    is the reward function 
+                is the transition probability function
+ where            is the probability of transitioning to state
+
+process
+
+ MDP 
+
+is
+
+ 
+
+ 
+   
+ 
+
+   given that the previous state was   and the agent took
+action   in    and             is the starting state
+distribution    stationary policy              is   map
+from states to probability distributions over actions  with
+      denoting the probability of selecting action   in
+state    We denote the set of all stationary policies by  
+In reinforcement learning  we aim to select   policy  
+which maximizes   performance measure     which is
+typically taken to be the in nite horizon discounted to 
+     tR st  at  st  Here
+tal return    
+        is the discount factor    denotes   trajectory
+                and       is shorthand for indicating that the distribution over trajectories depends on  
+       at    st  st       st  at 
+Letting      denote the discounted return of   trajec 
+ 
+tory  we express the onpolicy value function as      
+ 
+              and the onpolicy actionvalue func 
+ 
+tion as        
+                        The
+advantage function is        
+Also of interest is the discounted future state distribution 
+   de ned by             tP  st      It al 
+
+lows us to compactly express the difference in performance
+between two policies     as
+ 
+     
+
+ 
+                 
+
+         
+
+          
+
+ 
+    
+  
+
+ 
+
+where by       we mean         with explicit
+notation dropped to reduce clutter  For proof of   see
+ Kakade   Langford    or Section   in the supplementary material 
+
+  Constrained Markov Decision Processes
+  constrained Markov decision process  CMDP  is an
+MDP augmented with constraints that restrict the set of allowable policies for that MDP  Speci cally  we augment the
+MDP with   set   of auxiliary cost functions       Cm
+ with each one   function Ci                 mapping transition tuples to costs  like the usual reward  and
+limits      dm  Let JCi   denote the expected discounted return of policy   with respect to cost function
+Ci  JCi      
+ 
+feasible stationary policies for   CMDP is then
+ 
+              JCi     di   
+
+     tCi st  at  st  The set of
+
+  
+
+and the reinforcement learning problem in   CMDP is
+
+    arg max
+  
+
+  
+
+The choice of optimizing only over stationary policies is
+justi ed  it has been shown that the set of all optimal policies for   CMDP includes stationary policies  under mild
+
+Constrained Policy Optimization
+
+technical conditions  For   thorough review of CMDPs and
+CMDP theory  we refer the reader to  Altman   
+We refer to JCi as   constraint return  or Cireturn for
+short  Lastly  we de ne onpolicy value functions  actionvalue functions  and advantage functions for the auxiliary
+costs in analogy to        and    with Ci replacing   
+respectively  we denote these by    
+
+Ci  and   
+
+Ci    
+
+Ci 
+
+  Constrained Policy Optimization
+For large or continuous MDPs  solving for the exact optimal policy is intractable due to the curse of dimensionality
+ Sutton   Barto    Policy search algorithms approach
+this problem by searching for the optimal policy within  
+set       of parametrized policies with parameters  
+ for example  neural networks of    xed architecture  In
+local policy search  Peters   Schaal    the policy is
+iteratively updated by maximizing    over   local neighborhood of the most recent iterate    
+
+  
+
+      arg max
+ 
+               
+
+ 
+
+where   is some distance measure  and       is   step
+size  When the objective is estimated by linearizing around
+   as        gT           is the policy gradient  and
+the standard policy gradient update is obtained by choosing
+                  Schulman et al   
+In local policy search for CMDPs  we additionally require
+policy iterates to be feasible for the CMDP  so instead of
+optimizing over   we optimize over        
+
+case performance and worstcase constraint violation with
+values that depend on   hyperparameter of the algorithm 
+To prove the performance guarantees associated with our
+surrogates  we  rst prove new bounds on the difference
+in returns  or constraint returns  between two arbitrary
+stochastic policies in terms of an average divergence between them  We then show how our bounds permit   new
+analysis of trust region methods in general  speci cally 
+we prove   worstcase performance degradation at each update  We conclude by motivating  presenting  and proving
+gurantees on our algorithm  Constrained Policy Optimization  CPO    trust region method for CMDPs 
+
+  Policy Performance Bounds
+In this section  we present the theoretical foundation for
+our approach   new bound on the difference in returns
+between two arbitrary policies  This result  which is of independent interest  extends the works of  Kakade   Langford     Pirotta et al    and  Schulman et al 
+  providing tighter bounds  As we show later  it also
+relates the theoretical bounds for trust region policy improvement with the actual trust region algorithms that have
+been demonstrated to be successful in practice  Duan et al 
+  In the context of constrained policy search  we later
+use our results to propose policy updates that both improve
+the expected return and satisfy constraints 
+The following theorem connects the difference in returns
+ or constraint returns  between two arbitrary policies to an
+average divergence between them 
+Theorem   For any function           and any policies
+ 
+  and   de ne             
+                           
+
+  
+
+      arg max
+ 
+     JCi     di
+          
+
+         
+
+ 
+
+ 
+ 
+
+ 
+  max
+
+ 
+
+This update is dif cult to implement in practice because
+it requires evaluation of the constraint functions to determine whether   proposed point   is feasible  When using
+sampling to compute policy updates  as is typically done in
+highdimensional control  Duan et al    this requires
+offpolicy evaluation  which is known to be challenging
+ Jiang   Li    In this work  we take   different approach  motivated by recent methods for trust region optimization  Schulman et al   
+We develop   principled approximation to   with   particular choice of    where we replace the objective and
+constraints with surrogate functions  The surrogates we
+choose are easy to estimate from samples collected on    
+and are good local approximations for the objective and
+constraints  Our theoretical analysis shows that for our
+choices of surrogates  we can bound our update   worst 
+
+ Ea                   
+                         and
+       
+
+     
+
+ 
+   
+    
+  
+   
+     
+       
+
+ 
+ 
+
+ 
+ 
+       
+    
+
+     
+
+ DT        
+where DT                          is
+
+the total variational divergence between action distributions at    The following bounds hold 
+
+                      
+  
+
+ 
+
+Furthermore  the bounds are tight  when       all three
+expressions are identically zero 
+
+Before proceeding  we connect this result to prior work 
+By bounding the expectation Es     DT       with
+maxs DT       picking         and bounding  
+
+   
+
+Constrained Policy Optimization
+
+to get   second factor of maxs DT       we recover
+ up to assumptiondependent factors  the bounds given by
+Pirotta et al 
+  as Corollary   and by Schulman
+et al    as Theorem    
+The choice of         allows   useful form of the lower
+bound  so we give it as   corollary 
+Corollary   For any policies     with  
+maxs  Ea           the following bound holds 
+       
+DT        
+ 
+ 
+    
+
+           
+
+ 
+     
+
+ 
+     
+
+ 
+
+ 
+ 
+
+The bound   should be compared with equation   The
+term      Es               in   is an approximation to         using the state distribution    instead of    which is known to equal         to  rst
+order in the parameters of   on   neighborhood around  
+ Kakade   Langford    The bound can therefore be
+viewed as describing the worstcase approximation error 
+and it justi es using the approximation as   surrogate for
+       
+Equivalent expressions for the auxiliary costs  based on the
+upper bound  also follow immediately  we will later use
+them to make guarantees for the safety of CPO 
+Corollary   For any policies     and any cost function Ci  with  
+       the followCi
+ing bound holds 
+
+ 
+  maxs  Ea     
+
+Ci
+
+JCi     JCi  
+ 
+
+    
+
+ 
+     
+
+ 
+    
+
+Ci         
+
+ 
+Ci
+     
+
+DT        
+
+ 
+
+The bounds we have given so far are in terms of the
+TVdivergence between policies  but trust region methods
+constrain the KLdivergence between policies  so bounds
+that connect performance to the KLdivergence are desirable  We make the connection through Pinsker   inequality  Csiszar     orner    for arbitrary distributions       the TVdivergence and KLdivergence are related
+
+by DT            DKL      Combining this with
+DKL   
+
+Jensen   inequality  we obtain
+
+      
+ DT          
+   
+
+ DKL   
+
+ 
+    
+
+ 
+    
+
+ 
+
+ 
+
+ 
+
+From   we immediately obtain the following 
+
+Corollary   In bounds     and   make the substitution
+
+ DT          
+
+ 
+
+ 
+    
+
+The resulting bounds hold 
+
+ 
+    
+
+ DKL   
+
+  Trust Region Methods
+Trust region algorithms for reinforcement learning  Schulman et al      have policy updates of the form
+
+           
+
+      arg max
+ 
+      DKL       
+
+ 
+     
+  
+
+ 
+
+where  DKL      Es    DKL      and      
+is the step size  The set          DKL        is
+called the trust region 
+The primary motivation for this update is that it is an approximation to optimizing the lower bound on policy performance given in   which would guarantee monotonic
+performance improvements  This is important for optimizing neural network policies  which are known to suffer
+from performance collapse after bad updates  Duan et al 
+  Despite the approximation  trust region steps usually give monotonic improvements  Schulman et al   
+Duan et al    and have shown stateof theart performance in the deep RL setting  Duan et al    Gu et al 
+  making the approach appealing for developing policy search methods for CMDPs 
+Until now  the particular choice of trust region for   was
+heuristically motivated  with   and Corollary   we are
+able to show that it is principled and comes with   worstcase performance degradation guarantee that depends on  
+Proposition    Trust Region Update Performance  Suppose         are related by   and that         
+lower bound on the policy performance difference between
+   and     is
+
+ 
+
+ 
+
+                 
+     
+where       maxs Ea               
+
+Proof     is   feasible point of   with objective value  
+so Es                           The rest follows by  
+and Corollary   noting that   bounds the average KLdivergence by  
+
+This result is useful for two reasons    it is of independent
+interest  as it helps tighten the connection between theory
+and practice for deep RL  and   the choice to develop CPO
+as   trust region method means that CPO inherits this performance guarantee 
+
+Constrained Policy Optimization
+
+  Trust Region Optimization for Constrained MDPs
+Constrained policy optimization  CPO  which we present
+and justify in this section  is   policy search algorithm for
+CMDPs with updates that approximately solve   with  
+particular choice of    First  we describe   policy search
+update for CMDPs that alleviates the issue of offpolicy
+evaluation  and comes with guarantees of monotonic performance improvement and constraint satisfaction  Then 
+because the theoretically guaranteed update will take toosmall steps in practice  we propose CPO as   practical approximation based on trust region methods 
+By corollaries     and   for appropriate coef cients    
+  the update
+  
+
+      arg max
+ 
+
+     JCi        
+
+                   DKL   
+            
+    DKL      di
+
+      
+
+ 
+     
+  
+
+        
+
+     
+
+Ci
+
+is guaranteed to produce policies with monotonically nondecreasing returns that satisfy the original constraints   Observe that the constraint here is on an upper bound for
+JCi   by   The offpolicy evaluation issue is alleviated  because both the objective and constraints involve expectations over state distributions      which we presume
+to have samples from  Because the bounds are tight  the
+problem is always feasible  as long as   is feasible  However  the penalties on policy divergence are quite steep for
+discount factors close to   so steps taken with this update
+might be small 
+Inspired by trust region methods  we propose CPO  which
+uses   trust region instead of penalties on policy divergence
+to enable larger step sizes 
+
+      arg max
+ 
+
+     JCi      
+
+ 
+     
+  
+ 
+     
+ DKL       
+
+           
+
+ 
+
+       
+
+     
+
+Ci
+
+         di   
+
+ 
+Because this is   trust region method  it inherits the performance guarantee of Proposition   Furthermore  by corollaries   and   we have   performance guarantee for approximate satisfaction of constraints 
+Proposition    CPO Update WorstCase Constraint Violation  Suppose         are related by   and that   in
+  is any set of policies with        An upper bound
+on the Cireturn of     is
+
+where    
+
+Ci
+
+JCi       di  
+
+  maxs Ea      
+
+Ci
+
+Ci
+
+   
+       
+      
+
+  Practical Implementation
+In this section  we show how to implement an approximation to the update   that can be ef ciently computed 
+even when optimizing policies with thousands of parameters  To address the issue of approximation and sampling
+errors that arise in practice  as well as the potential violations described by Proposition   we also propose to tighten
+the constraints by constraining upper bounds of the auxilliary costs  instead of the auxilliary costs themselves 
+
+  Approximately Solving the CPO Update
+For policies with highdimensional parameter spaces like
+neural networks    can be impractical
+to solve directly because of the computational cost  However  for
+small step sizes   the objective and cost constraints are
+wellapproximated by linearizing around     and the KLdivergence constraint is wellapproximated by second order expansion  at        the KLdivergence and its gradient are both zero  Denoting the gradient of the objective
+as    the gradient of constraint   as bi  the Hessian of the
+ 
+  JCi       di  the
+KLdivergence as    and de ning ci
+approximation to   is 
+
+      arg max
+
+ 
+    
+
+gT        
+ci   bT
+ 
+                     
+ 
+
+                       
+
+ 
+Because the Fisher information matrix  FIM    is always positive semide nite  and we will assume it to be
+positivede nite in what follows  this optimization problem is convex and  when feasible  can be solved ef ciently
+using duality   We reserve the case where it is not feasi 
+ 
+        bm  and
+ble for the next subsection  With  
+ 
+
+ 
+        cm       dual to   can be expressed as
+
+ 
+ 
+
+ 
+
+max
+ 
+ 
+
+ 
+
+   gT        rT                   
+
+ 
+  gT       
+
+ 
+ 
+where  
+  BT      This is   convex
+program in    variables  when the number of constraints
+is small by comparison to the dimension of   this is much
+easier to solve than   If     are   solution to the dual 
+the solution to the primal is
+
+        
+
+ 
+ 
+
+            
+
+ 
+
+Our algorithm solves the dual for     and uses it to propose the policy update   For the special case where
+there is only one constraint  we give an analytical solution
+in the supplementary material  Theorem   which removes
+the need for an innerloop optimization  Our experiments
+
+Constrained Policy Optimization
+
+Algorithm   Constrained Policy Optimization
+Input  Initial policy       tolerance  
+for             do
+
+Sample   set of trajectories                 
+Form sample estimates                with  
+if approximate CPO is feasible then
+Solve dual problem   for       
+Compute policy proposal   with  
+
+else
+
+end for
+
+Compute recovery policy proposal   with  
+
+end if
+Obtain     by backtracking linesearch to enforce satisfaction of sample estimates of constraints in  
+
+have only   single constraint  and make use of the analytical solution 
+Because of approximation error  the proposed update may
+not satisfy the constraints in     backtracking line
+search is used to ensure surrogate constraint satisfaction 
+Also  for highdimensional policies  it is impractically expensive to invert the FIM  This poses   challenge for computing     and   bi  which appear in the dual  Like
+ Schulman et al    we approximately compute them
+using the conjugate gradient method 
+
+  Feasibility
+Due to approximation errors  CPO may take   bad step and
+produce an infeasible iterate     Sometimes   will still
+be feasible and CPO can automatically recover from its bad
+step  but for the infeasible case    recovery method is necessary  In our experiments  where we only have one constraint  we recover by proposing an update to purely decrease the constraint value 
+
+          
+
+bT    
+
+    
+
+ 
+
+As before  this is followed by   line search  This approach
+is principled in that it uses the limiting search direction as
+the intersection of the trust region and the constraint region
+shrinks to zero  We give the pseudocode for our algorithm
+ for the singleconstraint case  as Algorithm   and have
+made our code implementation available online 
+
+  Tightening Constraints via Cost Shaping
+Because of the various approximations between   and our
+practical algorithm  it is important to build   factor of safety
+into the algorithm to minimize the chance of constraint violations  To this end  we choose to constrain upper bounds
+
+ https github com jachiam cpo
+
+on the original constraints     
+straints themselves  We do this by cost shaping 
+
+    instead of the original con 
+
+   
+
+              Ci                       
+
+ 
+
+where                     correlates in some useful
+way with Ci 
+In our experiments  where we have only one constraint  we
+partition states into safe states and unsafe states  and the
+agent suffers   safety cost of   for being in an unsafe state 
+We choose   to be the probability of entering an unsafe
+state within    xed time horizon  according to   learned
+model that is updated at each iteration  This choice confers
+the additional bene   of smoothing out sparse constraints 
+
+  Connections to Prior Work
+Our method has similar policy updates to primaldual
+methods like those proposed by Chow et al    but
+crucially  we differ in computing the dual variables  the
+Lagrange multipliers for the constraints 
+In primaldual
+optimization  PDO  dual variables are stateful and learned
+concurrently with the primal variables  Boyd et al   
+In   PDO algorithm for solving   dual variables would
+be updated according to
+
+               JC          
+
+ 
+
+where    is   learning rate  In this approach  intermediary policies are not guaranteed to satisfy constraints only
+the policy at convergence is  By contrast  CPO computes
+new dual variables from scratch at each update to exactly
+enforce constraints 
+
+  Experiments
+In our experiments  we aim to answer the following 
+
+  Does CPO succeed at enforcing behavioral constraints
+when training neural network policies with thousands
+of parameters 
+
+  How does CPO compare with   baseline that uses
+primaldual optimization  Does CPO behave better
+with respect to constraints 
+
+  How much does it help to constrain   cost upper bound
+
+  instead of directly constraining the cost 
+
+  What bene ts are conferred by using constraints in 
+
+stead of  xed penalties 
+
+We designed experiments that are easy to interpret and motivated by safety  We consider two tasks  and train multiple
+different agents  robots  for each task 
+
+Constrained Policy Optimization
+
+Returns 
+
+Constraint values   closer to the limit is better 
+
+    PointCircle
+
+    AntCircle
+
+    HumanoidCircle
+
+    PointGather
+
+    AntGather
+
+Figure   Average performance for CPO  PDO  and TRPO over several seeds   in the Point environments    in all others  the xaxis is
+training iteration  CPO drives the constraint function almost directly to the limit in all experiments  while PDO frequently suffers from
+overor undercorrection  TRPO is included to verify that optimal unconstrained behaviors are infeasible for the constrained problem 
+
+  Circle  The agent is rewarded for running in   wide
+circle  but is constrained to stay within   safe region
+smaller than the radius of the target circle 
+
+  Gather  The agent is rewarded for collecting green
+
+apples  and constrained to avoid red bombs 
+
+For the Circle task  the exact geometry is illustrated in Figure   in the supplementary material  Note that there are
+no physical walls  the agent only interacts with boundaries
+through the constraint costs  The reward and constraint cost
+functions are described in supplementary material  Section
+  In each of these tasks  we have only one constraint 
+we refer to it as   and its upper bound from   as    
+We experiment with three different agents    pointmass
+                 quadruped robot  called an  ant 
+               and   simple humanoid     
+          We train all agenttask combinations except for HumanoidGather 
+For all experiments  we use neural network policies with
+two hidden layers of size     Our experiments are
+implemented in rllab  Duan et al   
+
+  Evaluating CPO and Comparison Analysis
+Learning curves for CPO and PDO are compiled in Figure
+  Note that our constraint value graphs show     return 
+instead of the   return  except for in PointGather  where
+we did not use cost shaping due to that environment   short
+time horizon  because this is what the algorithm actually
+constrains in these experiments 
+For our comparison  we implement PDO with   as the
+
+    HumanoidCircle
+
+    PointGather
+
+Figure   The HumanoidCircle and PointGather environments 
+In HumanoidCircle  the safe area is between the blue panels 
+
+update rule for the dual variables  using   constant learning
+rate   details are available in supplementary material  Section   We emphasize that in order for the comparison to be fair  we give PDO every advantage that is given to
+CPO  including equivalent trust region policy updates  To
+benchmark the environments  we also include TRPO  trust
+region policy optimization   Schulman et al      stateof theart unconstrained reinforcement learning algorithm 
+The TRPO experiments show that optimal unconstrained
+behaviors for these environments are constraintviolating 
+We  nd that CPO is successful at approximately enforcing constraints in all environments 
+In the simpler environments  PointCircle and PointGather  CPO tracks the
+constraint return almost exactly to the limit value 
+By contrast  although PDO usually converges to constraintsatisfying policies in the end 
+is not consistently
+constraintsatisfying throughout training  as expected  For
+example  see the spike in constraint value that it experi 
+
+it
+
+Constrained Policy Optimization
+
+ences in AntCircle  Additionally  PDO is sensitive to the
+initialization of the dual variable  By default  we initialize       which exploits no prior knowledge about the
+environment and makes sense when the initial policies are
+feasible  However  it may seem appealing to set   high 
+which would make PDO more conservative with respect
+to the constraint  PDO could then decrease   as necessary
+after the fact  In the Point environments  we experiment
+with       and show that although this does assure
+constraint satisfaction  it also can substantially harm performance with respect to return  Furthermore  we argue
+that this is not adequate in general  after the dual variable
+decreases  the agent could learn   new behavior that increases the correct dual variable more quickly than PDO
+can attain it  as happens in AntCircle for PDO  observe
+that performance is approximately constraintsatisfying until the agent learns how to run at around iteration  
+We  nd that CPO generally outperforms PDO on enforcing constraints  without compromising performance with
+respect to return  CPO quickly stabilizes the constraint return around to the limit value  while PDO is not consistently able to enforce constraints all throughout training 
+
+  Ablation on Cost Shaping
+In Figure   we compare performance of CPO with and
+without cost shaping in the constraint  Our metric for comparison is the   return  the  true  constraint  The cost shaping does help  almost completely accounting for CPO  
+inherent approximation errors  However  CPO is nearly
+constraintsatisfying even without cost shaping 
+
+  Constraint vs  Fixed Penalty
+In Figure   we compare CPO to    xed penalty method 
+where policies are learned using TRPO with rewards
+                          for          
+We  nd that  xed penalty methods can be highly sensitive
+to the choice of penalty coef cient  in AntCircle    penalty
+coef cient of   results in rewardmaximizing policies that
+accumulate massive constraint costs  while   coef cient of
+   less than an order of magnitude difference  results in
+costminimizing policies that never learn how to acquire
+any rewards  In contrast  CPO automatically picks penalty
+coef cients to attain the desired tradeoff between reward
+and constraint cost 
+
+  Discussion
+In this article  we showed that   particular optimization
+problem results in policy updates that are guaranteed to
+both improve return and satisfy constraints  This enabled
+the development of CPO  our policy search algorithm for
+CMDPs  which approximates the theoreticallyguaranteed
+
+    AntCircle Return
+
+    AntGather Return
+
+    AntCircle   Return
+
+    AntGather   Return
+
+Figure   Using cost shaping  CS  in the constraint while optimizing generally improves the agent   adherence to the true constraint
+on   return 
+
+    AntCircle Return
+
+    AntCircle    Return
+
+Figure   Comparison between CPO and FPO  xed penalty optimization  for various values of  xed penalty 
+
+algorithm in   principled way  We demonstrated that CPO
+can train neural network policies with thousands of parameters on highdimensional constrained control tasks  simultaneously maximizing reward and approximately satisfying
+constraints  Our work represents   step towards applying
+reinforcement learning in the real world  where constraints
+on agent behavior are sometimes necessary for the sake of
+safety 
+
+Acknowledgements
+The authors would like to acknowledge Peter Chen  who
+independently and concurrently derived an equivalent policy improvement bound 
+Joshua Achiam is supported by TRUST  Team for Research in Ubiquitous Secure Technology  which receives
+support from NSF  award number CCF  This
+
+project also received support from Berkeley Deep Drive
+and from Siemens 
+
+Transfer  In Proceedings of the IEEE International Conference on Robotics and Automation  ICRA   
+
+Constrained Policy Optimization
+
+References
+Altman  Eitan  Constrained Markov Decision Processes 
+doi   
+
+ISSN  
+
+pp     
+   
+
+Amodei  Dario  Olah  Chris  Steinhardt  Jacob  Christiano 
+Paul  Schulman  John  and Man    Dan  Concrete Problems in AI Safety  arXiv    URL http arxiv 
+org abs 
+
+Bou Ammar  Haitham  Tutunov  Rasul  and Eaton  Eric 
+Safe Policy Search for Lifelong Reinforcement Learning
+with Sublinear Regret  International Conference on Machine Learning      URL http arxiv 
+org abs 
+
+Boyd  Stephen  Xiao  Lin  and Mutapcic  Almir  Subgradient methods  Lecture Notes of Stanford EE   
+URL
+http xxpt ynjgy com resource 
+data   stanford 
+ subgrad method notes pdf 
+
+Chow  Yinlam  Ghavamzadeh  Mohammad  Janson  Lucas 
+and Pavone  Marco  RiskConstrained Reinforcement
+Learning with Percentile Risk Criteria  Journal of Machine Learning Research   xxxx   
+
+Csiszar    and   orner    
+
+Information Theory  Coding
+Theorems for Discrete Memoryless Systems  Book 
+   
+doi   
+ 
+URL http www getcited org 
+pub 
+
+ISSN  
+
+Duan  Yan  Chen  Xi  Schulman  John  and Abbeel  Pieter 
+Benchmarking Deep Reinforcement Learning for Continuous Control  The  rd International Conference on
+Machine Learning  ICML        
+URL http arxiv org abs 
+
+Garc    Javier and Fern andez  Fernando    Comprehensive
+Survey on Safe Reinforcement Learning  Journal of Machine Learning Research     
+ISSN
+ 
+
+Gu  Shixiang  Lillicrap  Timothy  Ghahramani  Zoubin 
+Turner  Richard    and Levine  Sergey 
+QProp 
+SampleEf cient Policy Gradient with An OffPolicy
+Critic  In International Conference on Learning Representations    URL http arxiv org abs 
+ 
+
+Held  David  Mccarthy  Zoe  Zhang  Michael  Shentu 
+Fred  and Abbeel  Pieter  Probabilistically Safe Policy
+
+Jiang  Nan and Li  Lihong  Doubly Robust Offpolicy
+Value Evaluation for Reinforcement Learning  International Conference on Machine Learning    URL
+http arxiv org abs 
+
+Kakade  Sham and Langford  John 
+
+Approximately
+Learning 
+the  th International Conference
+URL
+
+Optimal Approximate
+Proceedings of
+on Machine Learning  pp     
+http www cs cmu edu afs cs Web 
+People jcl papers aoarl Final pdf 
+
+Reinforcement
+
+Levine  Sergey  Finn  Chelsea  Darrell  Trevor  and
+Abbeel  Pieter  Endto End Training of Deep Visuomotor Policies 
+Journal of Machine Learning Research      ISSN   doi   
+  
+
+Lillicrap  Timothy    Hunt  Jonathan    Pritzel  Alexander 
+Heess  Nicolas  Erez  Tom  Tassa  Yuval  Silver  David 
+and Wierstra  Daan  Continuous control with deep reIn International Conference on
+inforcement learning 
+Learning Representations   
+ISBN  
+doi   
+
+Lipton  Zachary    Gao  Jianfeng  Li  Lihong  Chen 
+Jianshu  and Deng  Li  Combating Deep Reinforcement Learning   Sisyphean Curse with Intrinsic Fear 
+In arXiv   
+ISBN   URL http 
+ arxiv org abs 
+
+Mnih  Volodymyr  Kavukcuoglu  Koray  Silver  David 
+Rusu  Andrei    Veness  Joel  Bellemare  Marc   
+Graves  Alex  Riedmiller  Martin  Fidjeland  Andreas   
+Ostrovski  Georg  Petersen  Stig  Beattie  Charles  Sadik 
+Amir  Antonoglou  Ioannis  King  Helen  Kumaran 
+Dharshan  Wierstra  Daan  Legg  Shane  and Hassabis 
+Demis  Humanlevel control through deep reinforcement learning  Nature      ISSN
+  doi   nature  URL http 
+ dx doi org nature 
+
+Mnih  Volodymyr  Badia  Adri   Puigdom enech  Mirza 
+Mehdi  Graves  Alex  Lillicrap  Timothy    Harley  Tim 
+Silver  David  and Kavukcuoglu  Koray  Asynchronous
+Methods for Deep Reinforcement Learning 
+pp   
+    URL http arxiv org abs 
+ 
+
+Moldovan  Teodor Mihai and Abbeel  Pieter  Safe Exploration in Markov Decision Processes  Proceedings of
+the  th International Conference on Machine Learning    URL http arxiv org abs 
+ 
+
+Constrained Policy Optimization
+
+Ng  Andrew    Harada  Daishi  and Russell  Stuart  Policy invariance under reward transformations   Theory
+and application to reward shaping 
+Sixteenth International Conference on Machine Learning   
+  doi   
+
+Peters  Jan and Schaal  Stefan  Reinforcement learning of
+motor skills with policy gradients  Neural Networks   
+   
+ISSN   doi     
+neunet 
+
+Pirotta  Matteo  Restelli  Marcello  and Calandriello 
+Daniele 
+Safe Policy Iteration  Proceedings of the
+ th International Conference on Machine Learning   
+ 
+
+Schulman  John  Moritz  Philipp  Jordan  Michael  and
+Abbeel  Pieter  Trust Region Policy Optimization  International Conference on Machine Learning   
+
+Schulman  John  Moritz  Philipp  Levine  Sergey  Jordan 
+Michael  and Abbeel  Pieter  HighDimensional Continuous Control Using Generalized Advantage Estimation 
+arXiv   
+
+ShalevShwartz  Shai  Shammah  Shaked  and Shashua 
+Amnon  Safe  MultiAgent  Reinforcement Learning
+for Autonomous Driving  arXiv    URL http 
+ arxiv org abs 
+
+Silver  David  Huang  Aja  Maddison  Chris    Guez 
+Arthur  Sifre  Laurent  van den Driessche  George 
+Schrittwieser  Julian  Antonoglou  Ioannis  Panneershelvam  Veda  Lanctot  Marc  Dieleman  Sander 
+Grewe  Dominik  Nham  John  Kalchbrenner  Nal 
+Sutskever  Ilya  Lillicrap  Timothy  Leach  Madeleine 
+Kavukcuoglu  Koray  Graepel  Thore  and Hassabis 
+Demis  Mastering the game of Go with deep neuNature   
+ral networks and tree search 
+   
+doi   
+URL http dx doi org 
+nature 
+ nature 
+
+ISSN  
+
+Sutton  Richard   and Barto  Andrew    Introduction to
+Reinforcement Learning  Learning     
+ISSN   doi    URL http 
+dl acm org citation cfm id 
+
+Uchibe  Eiji and Doya  Kenji  Constrained reinforcement learning from intrinsic and extrinsic rewards   
+IEEE  th International Conference on Development and
+Learning  ICDL   February    doi   
+ DEVLRN 
+
+

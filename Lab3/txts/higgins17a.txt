@@ -1,0 +1,891 @@
+DARLA  Improving ZeroShot Transfer in Reinforcement Learning
+
+Irina Higgins     Arka Pal     Andrei Rusu   Loic Matthey   Christopher Burgess   Alexander Pritzel  
+
+Matthew Botvinick   Charles Blundell   Alexander Lerchner  
+
+Abstract
+
+Domain adaptation is an important open problem in deep reinforcement
+learning  RL  In
+many scenarios of interest data is hard to obtain  so agents may learn   source policy in  
+setting where data is readily available  with the
+hope that it generalises well to the target domain  We propose   new multistage RL agent 
+DARLA  DisentAngled Representation Learning
+Agent  which learns to see before learning to act 
+DARLA   vision is based on learning   disentangled representation of the observed environment  Once DARLA can see  it is able to acquire
+source policies that are robust to many domain
+shifts   even with no access to the target domain 
+DARLA signi cantly outperforms conventional
+baselines in zeroshot domain adaptation scenarios  an effect that holds across   variety of RL environments  Jaco arm  DeepMind Lab  and base
+RL algorithms  DQN      and EC 
+
+  Introduction
+Autonomous agents can learn how to maximise future
+expected rewards by choosing how to act based on incoming sensory observations via reinforcement learning
+ RL  Early RL approaches did not scale well to environments with large state spaces and highdimensional
+raw observations  Sutton   Barto      commonly
+used workaround was to embed the observations in  
+lowerdimensional space  typically via handcrafted and or
+privilegedinformation features  Recently  the advent of
+deep learning and its successful combination with RL has
+enabled endto end learning of such embeddings directly
+from raw inputs  sparking success in   wide variety of previously challenging RL domains  Mnih et al     
+Jaderberg et al    Despite the seemingly universal
+
+ Equal contribution  DeepMind    Pancras Square  Kings
+Cross  London       AG  UK  Correspondence to  Irina Higgins
+ irinah google com  Arka Pal  arkap google com 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+ef cacy of deep RL  however  fundamental issues remain 
+These include data inef ciency  the reactive nature and general brittleness of learnt policies to changes in input data
+distribution  and lack of model interpretability  Garnelo
+et al    Lake et al    This paper focuses on one
+of these outstanding issues  the ability of RL agents to deal
+with changes to the input distribution    form of transfer
+learning known as domain adaptation  Bengio et al   
+In domain adaptation scenarios  an agent trained on   particular input distribution with   speci ed reward structure
+ termed the source domain  is placed in   setting where the
+input distribution is modi ed but the reward structure remains largely intact  the target domain  We aim to develop
+an agent that can learn   robust policy using observations
+and rewards obtained exclusively within the source domain 
+Here    policy is considered as robust if it generalises with
+minimal drop in performance to the target domain without
+extra  netuning 
+Past attempts to build RL agents with strong domain adaptation performance highlighted the importance of learning good internal representations of raw observations  Finn
+et al    Raf   et al    Pan   Yang    Barreto et al    Littman et al    Typically  these approaches tried to align the source and target domain representations by utilising observation and reward signals
+from both domains  Tzeng et al    Daftry et al   
+Parisotto et al    Guez et al    Talvitie   Singh 
+  Niekum et al    Gupta et al    Finn et al 
+  Rajendran et al    In many scenarios  such as
+robotics  this reliance on target domain information can be
+problematic  as the data may be expensive or dif cult to
+obtain  Finn et al    Rusu et al    Furthermore 
+the target domain may simply not be known in advance 
+On the other hand  policies learnt exclusively on the source
+domain using existing deep RL approaches that have few
+constraints on the nature of the learnt representations often over   to the source input distribution  resulting in poor
+domain adaptation performance  Lake et al    Rusu
+et al   
+We propose tackling both of these issues by focusing instead on learning representations which capture an underlying lowdimensional factorised representation of the world
+and are therefore not task or domain speci    Many nat 
+
+DARLA  Improving ZeroShot Transfer in Reinforcement Learning
+
+DARLA develops its vision  learning to parse the world in
+terms of basic visual concepts  such as objects  positions 
+colours  etc  by utilising   stream of raw unlabelled observations   not unlike human babies in their  rst few months
+of life  Leat et al    Candy et al    In the second
+stage  the agent utilises this disentangled visual representation to learn   robust source policy  In stage three  we
+demonstrate that the DARLA source policy is more robust
+to domain shifts  leading to   signi cantly smaller drop in
+performance in the target domain even when no further policy  netuning is allowed  median   improvement 
+These effects hold consistently across   number of different RL environments  DeepMind Lab and Jaco MuJoCo 
+Beattie et al    Todorov et al    and algorithms
+ DQN      and Episodic Control  Mnih et al     
+Blundell et al   
+
+  Framework
+  Domain adaptation in Reinforcement Learning
+We now formalise domain adaptation scenarios in   reinforcement learning  RL  setting  We denote the source
+and target domains as DS and DT   respectively  Each
+domain corresponds to an MDP de ned as   tuple DS  
+ SS AS TS  RS  or DT    ST  AT  TT   RT    we assume
+  shared  xed discount factor   each with its own state
+space    action space    transition function   and reward
+function    In domain adaptation scenarios the states  
+of the source and the target domains can be quite different 
+while the action spaces   are shared and the transitions  
+and reward functions   have structural similarity  For example  consider   domain adaptation scenario for the Jaco
+robotic arm  where the MuJoCo  Todorov et al    simulation of the arm is the source domain  and the real world
+setting is the target domain  The state spaces  raw pixels 
+of the source and the target domains differ signi cantly due
+to the perceptualreality gap  Rusu et al    that is to
+say  SS   ST   Both domains  however  share action spaces
+ AS   AT   since the policy learns to control the same set
+of actuators within the arm  Finally  the source and target domain transition and reward functions share structural
+similarity  TS      and RS   RT   since in both domains
+transitions between states are governed by the physics of
+the world and the performance on the task depends on the
+relative position of the arm   end effectors        ngertips 
+with respect to an object of interest 
+
+  DARLA
+In order to describe our proposed DARLA framework  we
+assume that there exists   set   of MDPs that is the set
+ For further background on the notation relating to the RL
+paradigm  see Section    in the Supplementary Materials 
+
+Figure   Schematic representation of DARLA  Yellow represents
+the denoising autoencoder part of the model  blue represents the
+ VAE part of the model  and grey represents the policy learning
+part of the model 
+
+uralistic domains such as video game environments  simulations and our own world are well described in terms of
+such   structure  Examples of such factors of variation are
+object properties like colour  scale  or position  other examples correspond to general environmental factors  such as
+geometry and lighting  We think of these factors as   set of
+highlevel parameters that can be used by   world graphics
+engine to generate   particular natural visual scene  Kulkarni et al    Learning how to project raw observations
+into such   factorised description of the world is addressed
+by the large body of literature on disentangled representation learning  Schmidhuber    Desjardins et al   
+Cohen   Welling      Kulkarni et al    Hinton et al    Rippel   Adams    Reed et al   
+Yang et al    Goroshin et al    Kulkarni et al 
+  Cheung et al    Whitney et al    Karaletsos et al    Chen et al    Higgins et al   
+Disentangled representations are de ned as interpretable 
+factorised latent representations where either   single latent
+or   group of latent units are sensitive to changes in single
+ground truth factors of variation used to generate the visual world  while being invariant to changes in other factors
+ Bengio et al    The theoretical utility of disentangled
+representations for supervised and reinforcement learning
+has been described before  Bengio et al    Higgins
+et al    Ridgeway    however  to our knowledge 
+it has not been empirically validated to date 
+We demonstrate how disentangled representations can improve the robustness of RL algorithms in domain adaptation scenarios by introducing DARLA  DisentAngled Representation Learning Agent    new RL agent capable
+of learning   robust policy on the source domain that
+achieves signi cantly better outof thebox performance in
+domain adaptation scenarios compared to various baselines  DARLA relies on learning   latent state representation that is shared between the source and target domains 
+by learning   disentangled representation of the environment   generative factors  Crucially  DARLA does not require target domain data to form its representations  Our
+approach utilises   three stage pipeline    learning to
+see    learning to act    transfer  During the  rst stage 
+
+DARLA  Improving ZeroShot Transfer in Reinforcement Learning
+
+of all natural world MDPs  and each MDP Di is sampled
+from    We de ne   in terms of the state space    that
+contains all possible conjunctions of highlevel factors of
+variation necessary to generate any naturalistic observation
+in any Di        natural world MDP Di is then one
+whose state space   corresponds to some subset of     In
+simple terms  we assume that there exists some shared underlying structure between the MDPs Di sampled from   
+We contend that this is   reasonable assumption that permits inclusion of many interesting problems  including being able to characterise our own reality  Lake et al   
+We now introduce notation for two state space variables
+that may in principle be used interchangeably within the
+source and target domain MDPs DS and DT   the agent
+observation state space      and the agent   internal latent
+state space         
+  in Di consists of raw  pixel  observations so
+  generated by the true world simulator from   sami   Sim si 
+pled set of data generative factors  si       so
+ si is sampled by some distribution or process Gi on    
+ si          
+Using the newly introduced notation  domain adaptation
+scenarios can be described as having different sampling
+processes GS and GT such that  sS           and  sT  
+GT       for the source and target domains respectively  and
+then using these to generate different agent observation
+    Sim sT  Intuitively  constates so
+sider   source domain where oranges appear in blue rooms
+and apples appear in red rooms  and   target domain where
+the object room conjunctions are reversed and oranges appear in red rooms and apples appear in blue rooms  While
+the true data generative factors of variation    remain the
+same   room colour  blue or red  and object type  apples
+and oranges    the particular source and target distributions
+GS and GT differ 
+Typically deep RL agents       Mnih et al     
+operating in an MDP Di    learn an endto end mapto actions
+ping from raw  pixel  observations so
+ai       either directly or via   value function Qi so
+    ai 
+from which actions can be derived  In the process of doing so  the agent implicitly learns   function        
+      
+ 
+that maps the typically highdimensional raw observations
+  to typically lowdimensional latent states sz
+    followed
+so
+by   policy function         
+       that maps the latent
+states sz
+In the context of domain
+to actions ai      
+ 
+adaptation  if the agent learns   naive latent state mapping function FS      
+  on the source domain usS     
+ing reward signals to shape the representation learning  it
+is likely that FS will over   to the source domain and will
+not generalise well to the target domain  Returning to our
+
+    Sim sS  and so
+
+      
+
+ 
+
+ Note that we do not assume these to be Markovian      it is not
+necessarily the case that   so
+ 
+           so
+and similarly for sz  Note the index   here corresponds to time 
+
+        so
+
+  so
+
+  so
+
+    so
+
+   
+    Sz
+
+      sz
+  
+
+     FS so
+
+intuitive example  imagine an agent that has learnt   policy to pick up oranges and avoid apples on the source domain  Such   source policy    is likely to be based on
+an entangled latent state space    
+  of object room conjunctions  oranges blue   good  apples red   bad  since this
+is arguably the most ef cient representation for maximising expected rewards on the source task in the absence of
+extra supervision signals suggesting otherwise    source
+     based on such an entangled latent reppolicy      sz
+resentation sz
+  will not generalise well to the target domain
+    and
+without further  netuning  since FS so
+therefore crucially Sz
+On the other hand  since both  sS           and  sT  
+GT       are sampled from the same natural world state
+space    for the source and target domains respectively  it
+should be possible to learn   latent state mapping function
+             
+  which projects the agent observation state
+  
+space     to   latent state space    
+expressed in terms of
+  
+factorised data generative factors that are representative of
+         Consider again our intuitive
+the natural world      Sz
+example  where    maps agent observations  so
+   orange
+in   blue room  to   factorised or disentangled representation expressed in terms of the data generative factors  sz
+ 
+  
+room type   blue  object type   orange  Such   disentangled latent state mapping function should then directly
+generalise to both the source and the target domains  so that
+   so
+is   disentangled representation of object and room attributes  the source policy
+   can learn   decision boundary that ignores the irrelevant room attributes  oranges   good  apples   bad  Such
+  policy would then generalise well to the target domain
+out of the box  since          so
+       
+    Hence  DARLA is based on the idea that  
+      sz
+  
+good quality    learnt exclusively on the source domain
+DS    will zeroshot generalise to all target domains
+    will
+Di      and therefore the source policy       
+  
+also generalise to all target domains Di    out of the
+box 
+Next we describe each of the stages of the DARLA pipeline
+that allow it to learn source policies    that are robust to
+domain adaptation scenarios  despite being trained with no
+knowledge of the target domains  see Fig    for   graphical
+representation of these steps 
+  Learn to see  unsupervised learning of FU    the task
+    
+of inferring   factorised set of generative factors    
+  
+from observations     is the goal of the extensive disentangled factor learning literature       Chen et al    Higgins et al    Hence  in stage one we learn   mapping
+   stands for  unsuFU      
+pervised  using an unsupervised model for learning disentangled factors that utilises observations collected by an
+agent with   random policy    from   visual pretraining
+
+                 so
+
+   where    
+
+  Since    
+  
+
+        so
+
+      
+  
+
+      
+
+DARLA  Improving ZeroShot Transfer in Reinforcement Learning
+
+     where sz
+
+     sz
+  
+
+ 
+
+MDP DU      Note that we require suf cient variability of factors and their conjunctions in DU in order to have
+Sz
+      
+  
+  Learn to act  reinforcement learning of    in the source
+domain DS utilising previously learned FU    an agent
+that has learnt to see the world in stage one in terms of the
+natural data generative factors is now exposed to   source
+domain DS      The agent is tasked with learning the
+  via
+source policy      sz
+  standard reinforcement learning algorithm  Crucially  we
+do not allow FU to be modi ed       by gradient updates 
+during this phase 
+  Transfer  to   target domain DT     in the  nal step  we
+test how well the policy    learnt on the source domain
+generalises to the target domain DT    in   zeroshot
+domain adaptation setting       the agent is evaluated on the
+target domain without retraining  We compare the performance of policies learnt with   disentangled latent state    
+  
+to various baselines where the latent state mapping function FU projects agent observations so to entangled latent
+state representations sz 
+
+    FU  so
+
+  Learning disentangled representations
+In order to learn FU  DARLA utilises  VAE  Higgins
+et al      stateof theart unsupervised model for automated discovery of factorised latent representations from
+raw image data   VAE is   modi cation of the variational autoencoder framework  Kingma   Welling   
+Rezende et al    that controls the nature of the learnt
+latent representations by introducing an adjustable hyperparameter   to balance reconstruction accuracy with latent
+channel capacity and independence constraints 
+It maximises the objective 
+
+              Eq     log       
+
+     KL           
+
+ 
+where     parametrise the distributions of the encoder and
+the decoder respectively  Wellchosen values of     usually
+larger than one       typically result in more disentangled latent representations   by limiting the capacity of the
+latent information channel  and hence encouraging   more
+ef cient factorised encoding through the increased pressure
+to match the isotropic unit Gaussian prior       Higgins
+et al   
+
+  PERCEPTUAL SIMILARITY LOSS
+The cost of increasing   is that crucial information about
+the scene may be discarded in the latent representation   
+particularly if that information takes up   small proportion
+of the observations   in pixel space  We encountered this
+issue in some of our tasks  as discussed in Section  
+The shortcomings of calculating the loglikelihood term
+
+Eq     log        on   perpixel basis are known and
+have been addressed in the past by calculating the reconstruction cost in an abstract  highlevel feature space given
+by another neural network model  such as   GAN  Goodfellow et al    or   pretrained AlexNet  Krizhevsky
+et al    Larsen et al    Dosovitskiy   Brox 
+  WardeFarley   Bengio    In practice we found
+that pretraining   denoising autoencoder  Vincent et al 
+  on data from the visual pretraining MDP DU   
+worked best as the reconstruction targets for  VAE to
+match  see Fig    for model architecture and Sec     in
+Supplementary Materials for implementation details  The
+new  VAEDAE model was trained according to Eq   
+
+ 
+
+              Eq      kJ            
+     KL           
+
+ 
+where             and     RW       RN is the function that maps images from pixel space with dimensionality
+          to   highlevel feature space with dimensionality   given by   stack of pretrained DAE layers up to  
+certain layer depth  Note that by replacing the pixel based
+reconstruction loss in Eq    with highlevel feature reconstruction loss in Eq    we are no longer optimising the variational lower bound  and  VAEDAE with       loses its
+equivalence to the Variational Autoencoder  VAE  framework as proposed by  Kingma   Welling    Rezende
+et al    In this setting  the only way to interpret   is as
+  mixing coef cient that balances the capacity of the latent
+channel   of  VAEDAE against the pressure to match the
+highlevel features within the pretrained DAE 
+
+  Reinforcement Learning Algorithms
+We used various RL algorithms  DQN      and Episodic
+Control  Mnih et al      Blundell et al    to
+learn the source policy    during stage two of the pipeline
+using the latent states sz acquired by  VAE based models
+during stage one of the DARLA pipeline 
+Deep   Network  DQN   Mnih et al    is   variant of
+the Qlearning algorithm  Watkins    that utilises deep
+learning 
+It uses   neural network to parametrise an approximation for the actionvalue function           using
+parameters  
+Asynchronous Advantage ActorCritic        Mnih et al 
+  is an asynchronous implementation of the advantage
+actorcritic paradigm  Sutton   Barto    Degris   Sutton    where separate threads run in parallel and perform updates to shared parameters  The different threads
+each hold their own instance of the environment and have
+different exploration policies  thereby decorrelating parameter updates without the need for experience replay  Therefore      is an online algorithm  whereas DQN learns its
+policy of ine  resulting in different learning dynamics be 
+
+DARLA  Improving ZeroShot Transfer in Reinforcement Learning
+
+tween the two algorithms 
+ModelFree Episodic Control  EC   Blundell et al   
+was proposed as   complementary learning system to the
+other RL algorithms described above  The EC algorithm
+relies on neardeterminism of state transitions and rewards
+in RL environments  in settings where this holds  it can exploit these properties to memorise which action led to high
+returns in similar situations in the past  Since in its simplest
+form EC relies on   lookup table  it learns good policies
+much faster than valuefunction approximation based deep
+RL algorithms like DQN trained via gradient descent   at
+the cost of generality       potentially poor performance in
+nondeterministic environments 
+We also compared our approach to that of UNREAL  Jaderberg et al      recently proposed RL algorithm which
+also attempts to utilise unsupervised data in the environment  The UNREAL agent takes as   base an LSTM    
+agent  Mnih et al    and augments it with   number of
+unsupervised auxiliary tasks that make use of the rich perceptual data available to the agent besides the  sometimes
+very sparse  extrinsic reward signals  This auxiliary learning tends to improve the representation learnt by the agent 
+See Sec     in Supplementary Materials for further details
+of the algorithms above 
+
+    SimS sS  and so
+
+  Tasks
+We evaluate the performance of DARLA on different task
+and environment setups that probe subtly different aspects
+of domain adaptation  As   reminder  in Sec    we de ned
+   as   state space that contains all possible conjunctions
+of highlevel factors of variation necessary to generate any
+naturalistic observation in any Di      During domain
+adaptation scenarios agent observation states are generated
+according to so
+    SimT sT  for the
+source and target domains respectively  where  sS and  sT
+are sampled by some distributions or processes GS and GT
+according to  sS           and  sT           
+We use DeepMind Lab  Beattie et al    to test   version of domain adaptation setup where the source and target
+domain observation simulators are equal  SimS   SimT 
+but the processes used to sample  sS and  sT are different  GS   GT   We use the Jaco arm with   matching
+MuJoCo simulation environment  Todorov et al    in
+two domain adaptation scenarios  simulation to simulation  sim sim  and simulation to reality  sim real  The
+sim sim domain adaptation setup is relatively similar to
+DeepMind Lab     
+the source and target domains differ
+in terms of processes GS and GT   However  there is   signi cant point of difference  In DeepMind Lab  all values of
+factors in the target domain   sT   are previously seen in the
+source domain  however   sS    sT as the conjunctions of
+
+Figure      DeepMind Lab  Beattie et al    transfer task
+setup  Different conjunctions of  room  object  object  were
+used during different parts of the domain adaptation curriculum 
+During stage one  DU  shown in yellow  we used   minimal set
+spanning all objects and all rooms whereby each object is seen
+in each room  Note there is no extrinsic reward signal or notion
+of  task  in this phase  During stage two  DS  shown in green 
+the RL agents were taught to pick up cans and balloons and avoid
+hats and cakes  The objects were always presented in pairs hat can
+and cake balloon  The agent never saw the hat can pair in the pink
+room  This novel room object conjunction was presented as the
+target domain adaptation condition DT  shown in red  where the
+ability of the agent to transfer knowledge of the objects  value to
+  novel environment was tested      VAE reconstructions  bottom row  using frames from DeepMind Lab  top row  Due to
+the increased     necessary to disentangle the data generative factors of variations the model lost information about objects 
+See Fig    for   model appropriately capturing objects     left  
+sample frames from MuJoCo simulation environments used for
+vision  phase   SU   and source policy training  phase   SS 
+middle   sim sim domain adaptation test  phase   ST   and right
+  sim real domain adaptation test  phase   ST  
+
+these factor values are different  In sim sim  by contrast 
+novel factor values are experienced in the target domain
+ this accordingly also leads to novel factor conjunctions 
+Hence  DeepMind Lab may be considered to be assessing
+domain interpolation performance  whereas sim sim tests
+domain extrapolation 
+The sim real setup  on the other hand  is based on identical
+processes GS   GT   but different observation simulators
+SimS   SimT corresponding to the MuJoCo simulation
+and the real world  which results in the socalled  perceptual reality gap   Rusu et al    More details of the
+tasks are given below 
+
+  DeepMind Lab
+DeepMind Lab is    rst person    game environment with
+rich visuals and realistic physics  We used   standard seekavoid object gathering setup  where   room is initialised
+with an equal number of randomly placed objects of two
+different types  One of the object varieties is  good   its collection is rewarded   while the other is  bad   its collection is punished   The full state space    consisted of all
+conjunctions of two room types  pink and green based on
+the colour of the walls  and four object types  hat  can  cake
+and balloon   see Fig      The source domain DS con 
+
+DARLA  Improving ZeroShot Transfer in Reinforcement Learning
+
+tained environments with hats cans presented in the green
+room  and balloons cakes presented in either the green or
+the pink room  The target domain DT contained hats cans
+presented in the pink room  In both domains cans and balloons were the rewarded objects 
+  Learn to see  we used  VAEDAE to learn the disentangled latent state representation sz that includes both the
+room and the object generative factors of variation within
+DeepMind Lab  We had to use the highlevel feature space
+of   pretrained DAE within the  VAEDAE framework
+ see Section   instead of the pixel space of vanilla  
+VAE   because we found that objects failed to reconstruct
+when using the values of   necessary to disentangle the
+generative factors of variation within DeepMind Lab  see
+Fig     
+ VAEDAE was trained on observations so
+  collected by
+an RL agent with   simple wallavoiding policy     otherwise the training data was dominated by close up images of walls 
+In order to enable the model to learn
+          it is important to expose the agent to at least
+  so
+  minimal set of environments that span the range of values for each factor  and where no extraneous correlations
+are added between different factors see Fig      yellow 
+See Section    in Supplementary Materials for details
+of  VAEDAE training 
+  Learn to act 
+the agent was trained with the algorithms detailed in Section   on   seekavoid task using the source domain  DS  conjunctions of object room
+shown in Fig      green  Pretrained  VAEDAE from
+stage one was used as the  vision  part of various RL algorithms  DQN      and Episodic Control  Mnih et al 
+    Blundell et al    to learn   source policy
+   that picks up balloons and avoids cakes in both the green
+and the pink rooms  and picks up cans and avoids hats in
+the green rooms  See Section    in Supplementary Materials for more details of the various versions of DARLA
+we have tried  each based on   different base RL algorithm 
+  Transfer  we tested the ability of DARLA to transfer the
+seekavoid policy    it had learnt on the source domain in
+stage two using the domain adaptation condition DT illustrated in Figure     red  The agent had to continue picking
+up cans and avoid hats in the pink room  even though these
+objects had only been seen in the green room during source
+policy training  The optimal policy    is one that maintains
+the reward polarity from the source domain  cans are good
+and hats are bad  For further details  see Appendix   
+
+ In our setup of DeepMind Lab domain adaptation task  the
+object and environment factors are supposed to be independent  In
+order to ensure that  VAEDAE learns   factorised representation
+that re ects this ground truth independence  we present observations of all possible conjunctions of room and individual object
+types 
+
+  Jaco Arm and MuJoCo
+We used frames from an RGB camera facing   robotic
+Jaco arm  or   matching rendered camera view from  
+MuJoCo physics simulation environment  Todorov et al 
+  to investigate the performance of DARLA in two
+domain adaptation scenarios    simulation to simulation  sim sim  and   simulation to reality  sim real 
+The sim real setup is of particular importance  since the
+progress that deep RL has brought to control tasks in simulation  Schulman et al    Mnih et al    Levine
+  Abbeel    Heess et al    Lillicrap et al   
+Schulman et al    has not yet translated as well to reality  despite various attempts  Tobin et al    Tzeng
+et al    Daftry et al    Finn et al    Rusu
+et al    Solving control problems in reality is hard due
+to sparse reward signals  expensive data acquisition and the
+attendant danger of breaking the robot  or its human minders  during exploration 
+In both sim sim and sim real  we trained the agent to perform an object reaching policy where the goal is to place
+the end effector as close to the object as possible  While
+conceptually the reaching task is simple  it is   hard control
+problem since it requires correct inference of the arm and
+object positions and velocities from raw visual inputs 
+  Learn to see   VAE was trained on observations collected in MuJoCo simulations with the same factors of
+variation as in DS  In order to enable the model to learn
+            reaching policy was applied to phantom obF so
+jects placed in random positions   therefore ensuring that
+the agent learnt the independent nature of the arm position
+and object position  see Fig      left 
+  Learn to act    feedforwardA   based agent with the
+vision module pretrained in stage one was taught   source
+reaching policy    towards the real object in simulation
+ see Fig      left  for an example frame  and Sec    
+in Supplementary Materials for   fuller description of the
+agent  In the source domain DS the agent was trained on
+  distribution of camera angles and positions  The colour
+of the tabletop on which the arm rests and the object colour
+were both sampled anew every episode 
+  Transfer  sim sim  in the target domain  DT   the agent
+was faced with   new distribution of camera angles and positions with little overlap with the source domain distributions  as well as   completely held out set of object colours
+ see Fig      middle  sim real  in the target domain DT
+the camera position and angle as well as the tabletop colour
+and object colour were sampled from the same distributions as seen in the source domain DS  but the target domain DT was now the real world  Many details present
+in the real world such as shadows  specularity  multiple
+light sources and so on are not modelled in the simulation 
+
+DARLA ImprovingZeroShotTransferinReinforcementLearning             ObjectEnvironmentroom idturn leftdistancerotationleft objectturn right         DisentangledEntangledobject id   Figure Plotoftraversalsofvariouslatentsofanentangledandadisentangledversionof VAEDAEusingframesfromDeepMindLab Beattieetal             ObjectArmclose farleft rightclose farright leftup downwrist turn         DisentangledEntangledFigure Plotoftraversalsof VAEonMuJoCo Usingadisentangled VAEmodel singlelatentsdirectlycontrolforthefactorsresponsiblefortheobjectorarmplacements thephysicsengineisalsonotaperfectmodelofreality Thussim realteststheabilityoftheagenttocrosstheperceptualrealitygapandgeneraliseitssourcepolicy Stotherealworld seeFig   right Forfurtherdetails seeAppendixA ResultsWeevaluatedtherobustnessofDARLA spolicy Slearntonthesourcedomaintovariousshiftsintheinputdatadistribution Inparticular weuseddomainadaptationscenariosbasedontheDeepMindLabseek avoidtaskandtheJacoarmreachingtaskdescribedinSec OneachtaskwecomparedDARLA sperformancetothatofvariousbaselines Weevaluatedtheimportanceoflearning good visionduringstageoneofthepipeline   eonethatmapstheinputobservationssotodisentangledrepresentationssz   Inordertodothis werantheDARLApipelinewithdifferentvisionmodels theencodersofadisentangled VAE theoriginalDARLA anentangled VAE DARLAENT andadenoisingautoencoder DARLADAE Apartfromthenatureofthelearntrepresentationssz DARLAandallversionsofitsbaselineswereequivalentthroughoutthethreestagesofourproposedpipelineintermsofarchitectureandtheobserveddatadistribution seeSec   inSupplementaryMaterialsformoredetails Figs displaythedegreeofdisentanglementlearntbythevisionmodulesofDARLAandDARLAENTonDeepMindLabandMuJoCo DARLA svisionlearnttoindependentlyrepresentenvironmentvariables suchasroomcolourschemeandgeometry andobjectrelatedvariables changeofobjecttype size rotation onDeepMindLab Fig left DisentanglingwasalsoevidentinMuJoCo Fig left showsthatDARLA ssinglelatentunitszilearnttorepresentdifferentaspectsoftheJacoarm theobject andthecamera Bycontrast intherepresentationslearntbyDARLAENT eachlatentisresponsibleforchangestoboththeenvironmentandobjects Fig right inDeepMindLab oramixtureofcamera objectand orarmmovements Fig right inMuJoCo ThetableinFig showstheaverageperformance acrossdifferentseeds intermsofrewardsperepisodeofthevariousagentsonthetargetdomainwithno netuningofthesourcepolicy   ItcanbeseenthatDARLAisabletozeroshot generalisesigni cantlybetterthanDARLAENTorDARLADAE highlightingtheimportanceoflearningadisentangledrepresentationsz sz SduringtheunsupervisedstageoneoftheDARLApipeline Inparticular thisalsodemonstratesthattheimproveddomaintransferperformanceisnotsimplyafunctionofincreasedexposuretotrainingobservations asbothDARLAENTandDARLADAEwereexposedtothesamedata TheresultsaremostlyconsistentacrosstargetdomainsandinmostcasesDARLAissigni cantlybetterthanthesecondbest performingagent Thisholdsinthesim realtask wherebeingabletoperformzero shotpolicytransferishighlyvaluableduetotheparticulardif cultiesofgatheringdataintherealworld DARLA sperformanceisparticularlysurprisingasitactuallypreserveslessinformationabouttherawobservationssothanDARLAENTandDARLADAE Thisisduetothenatureofthe VAEandhowitachievesdisentangling thedisentangledmodelutilisedasigni cantlyhighervalueofthehyperparameter thantheentangledmodel seeAppendixA forfurtherdetails whichconstrainstheca Inthissectionofthepaper weusetheterm VAEtorefertoastandard VAEfortheMuJoCoexperiments anda VAEDAEfortheDeepMindLabexperiments asdescribedinstage ofSec Seehttps youtu be sZqrWFl wQ forexamplesim simandsim realzeroshottransferpoliciesofDARLAandbaselineA Cagent DARLA ImprovingZeroShotTransferinReinforcementLearning Table TransferperformanceDEEPMINDLABJACO     VISIONTYPEDQNA CECSIM SIMSIM REALBASELINEAGENT UNREAL DARLAFT DARLAENT DARLADAE DARLA DARLA SPERFORMANCEISSIGNIFICANTLYDIFFERENTFROMALLBASELINESUNDERWELCH SUNEQUALVARIANCESTTESTWITHp   Figure Table Zeroshotperformance avg rewardperepisode ofthesourcepolicy SintargetdomainswithinDeepMindLabandJaco MuJoCoenvironments BaselineagentreferstovanillaDQN     EC DeepMindLab orA   Jaco agents Seemaintextformoredetailedmodeldescriptions Figure CorrelationbetweenzeroshotperformancetransferperformanceontheDeepMindLabtaskobtainedbyECbasedDARLAandthelevelofdisentanglementasmeasuredbythetransfer disentanglementscore     pacityofthelatentchannel Indeed DARLA   VAEonlyutilises ofitspossible Gaussianlatentstostoreobservationspeci cinformationforMuJoCo Jaco and inDeepMindLab whereasDARLAENTutilisesall forbothenvironments asdoesDARLADAE Furthermore weexaminedwhathappensifDARLA svision     theencoderofthedisentangled VAE isallowedtobe netunedviagradientupdateswhilelearningthesourcepolicyduringstagetwoofthepipeline ThisisdenotedbyDARLAFTinthetableinFig Weseethatitexhibitssigni cantlyworseperformancethanthatofDARLAinzeroshotdomainadaptationusinganA Cbasedagentinalltasks Thissuggeststhatafavourableinitialisationdoesnotmakeupforsubsequentover ttingtothesourcedomainfortheonpolicyA   However theoffpolicyDQN based netunedagentperformsverywell Weleavefurtherinvestigationofthiscuriouseffectforfuturework Finally wecomparedtheperformanceofDARLAtoanUNREAL Jaderbergetal agentwiththesamearchitecture Despitealsoexploitingtheunsuperviseddataavailableinthesourcedomain UNREALperformedworsethanbaselineA ContheDeepMindLabdomainadaptationtask Thisfurtherdemonstratesthatuseofunsuperviseddatainitselfisnotapanaceafortransferper formance itmustbeutilisedinacarefulandstructuredmannerconducivetolearningdisentangledlatentstatessz sz   InordertoquantitativelyevaluateourhypothesisthatdisentangledrepresentationsareessentialforDARLA sperformanceindomainadaptationscenarios wetrainedvariousDARLAswithdifferentdegreesoflearntdisentangle mentinszbyvarying of VAE duringstageoneofthepipeline WethencalculatedthecorrelationbetweentheperformanceoftheECbasedDARLAontheDeep MindLabdomainadaptationtaskandthetransfermetric whichapproximatelymeasuresthequalityofdisentanglementofDARLA slatentrepresentationssz seeSec   inSupplementaryMaterials ThisisshowninthechartinFig ascanbeseen thereisastrongpositivecorrelationbetweenthelevelofdisentanglementandDARLA szeroshotdomaintransferperformance     Havingshowntherobustutilityofdisentangledrepresentationsinagentsfordomainadaptation wenotethatthereisevidencethattheycanprovideanimportantadditionalbene   Wefoundsigni cantlyimprovedspeedoflearningof Sonthesourcedomainitself asafunctionofhowdisentangledthemodelwas Thegainindataef ciencyfromdisentangledrepresentationsforsourcepolicylearningisnotthemainfocusofthispapersoweleaveitoutofthemaintext however weprovideresultsanddiscussioninSectionA inSupplementaryMaterials ConclusionWehavedemonstratedthebene tsofusingdisentangledrepresentationsinadeepRLsettingfordomainadaptation Inparticular wehaveproposedDARLA amultistageRLagent DARLA rstlearnsavisualsystemthatencodestheobservationsitreceivesfromtheenvironmentasdisentangledrepresentations inacompletelyunsupervisedmanner Itthenusestheserepresentationstolearnarobustsourcepolicythatiscapableofzeroshotdomainadaptation Wehavedemonstratedtheef cacyofthisapproachinarangeofdomainsandtasksetups   Dnaturalistic rstpersonenvironment DeepMindLab asimulatedgraphicsandphysicsengine MuJoCo andcrossingthesimulationtorealitygap MuJoCotoJacosim real WehavealsoshownthattheeffectofdisentanglingisconsistentacrossverydifferentRLalgorithms DQN     EC achievingsigni cantimprovementsoverthebaselinealgorithms median timesimprovementinzeroshottransferacrosstasksandalgorithms Tothebestofourknowledge thisisthe rstcomprehensiveempiricaldemonstrationofthestrengthofdisentangledrepresentationsfordomainadaptationinadeepRLsetting DARLA  Improving ZeroShot Transfer in Reinforcement Learning
+
+References
+Abadi  Martin  Agarwal  Ashish  and et al  Paul Barham  Tensor ow  Largescale machine learning on heterogeneous distributed systems  Preliminary White Paper   
+
+Barreto  Andr    Munos    emi  Schaul  Tom  and Silver  David 
+Successor features for transfer in reinforcement
+learning 
+CoRR  abs    URL http arxiv org 
+abs 
+
+Beattie  Charles  Leibo  Joel    Teplyashin  Denis  Ward  Tom 
+
+and et al  Marcus Wainwright  Deepmind lab  arxiv   
+
+Bengio     Courville     and Vincent     Representation learning    review and new perspectives  In IEEE Transactions on
+Pattern Analysis   Machine Intelligence   
+
+Blundell  Charles  Uria  Benigno  Pritzel  Alexander  Li  Yazhe 
+Ruderman  Avraham  Leibo  Joel    Rae  Jack  Wierstra  Daan 
+and Hassabis  Demis  Modelfree episodic control  arXiv 
+ 
+
+Candy     Rowan  Wang  Jingyun  and Ravikumar  Sowmya  Retinal image quality and postnatal visual experience during infancy  Optom Vis Sci     
+
+Chen  Xi  Duan  Yan  Houthooft  Rein  Schulman  John 
+Sutskever  Ilya  and Abbeel  Pieter  Infogan  Interpretable representation learning by information maximizing generative adversarial nets  arXiv   
+
+Cheung  Brian  Levezey  Jesse    Bansal  Arjun    and Olshausen  Bruno    Discovering hidden factors of variation in
+deep networks  In Proceedings of the International Conference
+on Learning Representations  Workshop Track   
+
+Cohen     and Welling     Transformation properties of learned
+
+visual representations  In ICLR   
+
+Cohen  Taco and Welling  Max  Learning the irreducible repre 
+
+sentations of commutative lie groups  arXiv   
+
+Daftry  Shreyansh  Bagnell     Andrew  and Hebert  Martial 
+Learning transferable policies for monocular reactive mav control 
+International Symposium on Experimental Robotics 
+ 
+
+Degris  Thomas  Pilarski Patrick   and Sutton  Richard   
+Modelfree reinforcement learning with continuous action in
+practice  American Control Conference  ACC   
+ 
+
+Desjardins     Courville     and Bengio     Disentangling fac 
+
+tors of variation via generative entangling  arXiv   
+
+Dosovitskiy  Alexey and Brox  Thomas  Generating images with
+perceptual similarity metrics based on deep networks  arxiv 
+ 
+
+Garnelo  Marta  Arulkumaran  Kai  and Shanahan  Murray  To 
+
+wards deep symbolic reinforcement learning  arXiv   
+
+Goodfellow     PougetAbadie     Mirza     Xu     WardeFarley     Ozair     Courville     and Bengio     Generative
+adversarial nets  NIPS  pp     
+
+Goroshin  Ross  Mathieu  Michael  and LeCun  Yann  Learning
+
+to linearize under uncertainty  NIPS   
+
+Guez  Arthur  Silver  David  and Dayan  Peter  Ef cient bayesadaptive reinforcement learning using samplebased search 
+NIPS   
+
+Gupta  Abhishek  Devin  Coline  Liu  YuXuan  Abbeel  Pieter 
+and Levine  Sergey  Learning invariant feature spaces to transfer skills with reinforcement learning  ICLR   
+
+Heess  Nicolas  Wayne  Gregory  Silver  David  Lillicrap  Timothy    Erez  Tom  and Tassa  Yuval  Learning continuous
+control policies by stochastic value gradients  NIPS   
+
+Higgins  Irina  Matthey  Loic  Pal  Arka  Burgess  Christopher 
+Glorot  Xavier  Botvinick  Matthew  Mohamed  Shakir  and
+Lerchner  Alexander  Betavae  Learning basic visual concepts
+with   constrained variational framework  In ICLR   
+
+Hinton     Krizhevsky     and Wang        Transforming autoencoders  International Conference on Arti cial Neural Networks   
+
+Jaderberg  Max  Mnih  Volodymyr  Czarnecki  Wojciech Marian 
+Schaul  Tom  Leibo  Joel    Silver  David  and Kavukcuoglu 
+Koray  Reinforcement learning with unsupervised auxiliary
+tasks  ICLR   
+
+Karaletsos  Theofanis  Belongie  Serge  and Rtsch  Gunnar 
+Bayesian representation learning with oracle constraints 
+ICLR   
+
+Kingma        and Ba  Jimmy  Adam    method for stochastic
+
+optimization  arXiv   
+
+Kingma        and Welling     Autoencoding variational bayes 
+
+ICLR   
+
+Krizhevsky  Alex  Sutskever  Ilya  and Hinton  Geoffrey    Imagenet classi cation with deep convolutional neural networks 
+NIPS   
+
+Kulkarni  Tejas  Whitney  William  Kohli  Pushmeet  and Tenenbaum  Joshua  Deep convolutional inverse graphics network 
+NIPS   
+
+Lake  Brenden    Ullman  Tomer    Tenenbaum  Joshua   
+and Gershman  Samuel    Building machines that learn and
+think like people  arXiv   
+
+Larsen  Anders Boesen Lindbo  Snderby  Sren Kaae  Larochelle 
+Hugo  and Winther  Ole  Autoencoding beyond pixels using  
+learned similarity metric  ICML   
+
+Finn  Chelsea  Tan  Xin Yu  Duan  Yan  Darrell  Trevor  Levine 
+Sergey  and Abbeel  Pieter  Deep spatial autoencoders for visuomotor learning  arxiv   
+
+Leat  Susan    Yadav  Naveen    and Irving  Elizabeth    Development of visual acuity and contrast sensitivity in children 
+Journal of Optometry   
+
+Finn  Chelsea  Yu  Tianhe  Fu  Justin  Abbeel  Pieter  and Levine 
+Sergey  Generalizing skills with semisupervised reinforcement learning  ICLR   
+
+Levine  Sergey and Abbeel  Pieter  Learning neural network
+policies with guided policy search under unknown dynamics 
+NIPS   
+
+DARLA  Improving ZeroShot Transfer in Reinforcement Learning
+
+Lillicrap  Timothy    Hunt  Jonathan    Pritzel  Alexander 
+Heess  Nicolas  Erez  Tom  Tassa  Yuval  Silver  David  and
+Wierstra  Daan  Continuous control with deep reinforcement
+learning  CoRR   
+
+Littman  Michael    Sutton  Richard    and Singh  Satinder  Pre 
+
+dictive representations of state  NIPS   
+
+Marr     Simple memory    theory for archicortex  Philosophical
+Transactions of the Royal Society of London  pp     
+
+McClelland  James    McNaughton  Bruce    and OReilly  Randall    Why there are complementary learning systems in the
+hippocampus and neocortex  insights from the successes and
+failures of connectionist models of learning and memory  Psychological review     
+
+Mnih  Volodymyr  Kavukcuoglu  Koray  Silver  David    and
+Rusu  Andrei    et al  Humanlevel control through deep reinforcement learning  Nature   
+
+Mnih  Volodymyr  Badia  Adri Puigdomnech  Mirza  Mehdi 
+Graves  Alex  Lillicrap  Timothy    Harley  Tim  Silver  David 
+and Kavukcuoglu  Koray  Asynchronous methods for deep reinforcement learning  ICML    URL https arxiv 
+org pdf pdf 
+
+Niekum  Scott  Chitta  Sachin  Barto  Andrew    Marthi 
+Bhaskara  and Osentoski  Sarah 
+Incremental semantically
+grounded learning from demonstration  Robotics  Science and
+Systems   
+
+Norman  Kenneth   and   Reilly  Randall    Modeling hippocampal and neocortical contributions to recognition memory    complementarylearning systems approach  Psychological review     
+
+Pan  Sinno Jialin and Yang  Quiang    survey on transfer learning  IEEE Transactions on Knowledge and Data Engineering 
+ 
+
+Parisotto  Emilio  Ba  Jimmy  and Salakhutdinov  Ruslan  Actormimic  Deep multitask and transfer reinforcement learning 
+CoRR   
+
+Pathak  Deepak  Kr ahenb uhl  Philipp  Donahue  Jeff  Darrell 
+Trevor  and Efros  Alexei    Context encoders  Feature learning by inpainting  CoRR  abs    URL http 
+ arxiv org abs 
+
+Peng     Ef cient dynamic programmingbased learning for con 
+
+trol  PhD thesis  Northeastern University  Boston   
+
+Peng  Jing and Williams  Ronald   
+
+Incremental multistep   
+
+learning  Machine Learning     
+
+Puterman  Martin    Markov Decision Processes  Discrete
+Stochastic Dynamic Programming  John Wiley   Sons  Inc 
+New York  NY  USA   st edition    ISBN  
+
+Raf    Antonin  Hfer  Sebastian  Jonschkowski  Rico  Brock 
+Oliver  and Stulp  Freek  Unsupervised learning of state representations for multiple tasks  ICLR   
+
+Rajendran  Janarthanan  Lakshminarayanan  Aravind  Khapra 
+Mitesh       Prasanna  and Ravindran  Balaraman  Attend 
+adapt and transfer  Attentive deep architecture for adaptive
+transfer from multiple sources in the same domain 
+ICLR 
+ 
+
+Reed  Scott  Sohn  Kihyuk  Zhang  Yuting  and Lee  Honglak 
+Learning to disentangle factors of variation with manifold interaction  ICML   
+
+Rezende  Danilo    Mohamed  Shakir  and Wierstra  Daan 
+Stochastic backpropagation and approximate inference in deep
+generative models  arXiv   
+
+Ridgeway  Karl    survey of inductive biases for factorial
+arXiv    URL http 
+
+RepresentationLearning 
+arxiv org abs 
+
+Rippel  Oren and Adams  Ryan Prescott  Highdimensional prob 
+
+ability estimation with deep density models  arXiv   
+
+Rusu  Andrei    Vecerik  Matej  Rothrl  Thomas  Heess  Nicolas 
+Pascanu  Razvan  and Hadsell  Raia  Simto real robot learning
+from pixels with progressive nets  arXiv   
+
+Schmidhuber    urgen  Learning factorial codes by predictability
+
+minimization  Neural Computation     
+
+Schulman 
+
+John  Levine  Sergey  Moritz  Philipp 
+
+Jordan 
+Michael    and Abbeel  Pieter  Trust region policy optimization  ICML   
+
+Schulman 
+
+John  Moritz  Philipp  Levine  Sergey 
+
+Jordan 
+Michael  and Abbeel  Pieter  Highdimensional continuous
+control using generalized advantage estimation  ICLR   
+
+Sutherland  Robert   and Rudy  Jerry    Con gural association
+theory  The role of the hippocampal formation in learning 
+memory  and amnesia  Psychobiology     
+
+Sutton  Richard    and Barto  Andrew    Reinforcement Learn 
+
+ing  An Introduction  MIT Press   
+
+Talvitie  Erik and Singh  Satinder  An experts algorithm for transfer learning  In Proceedings of the  th international joint conference on Arti cal intelligence   
+
+Tobin  Josh  Fong  Rachel  Ray  Alex  Schneider  Jonas  Zaremba 
+Wojciech  and Abbeel  Pieter  Domain randomization for transferring deep neural networks from simulation to the real world 
+arxiv   
+
+Todorov     Erez     and Tassa     Mujoco    physics engine for
+
+modelbased control  IROS   
+
+Tulving  Endel  Hayman  CA  and Macdonald  Carol    Longlasting perceptual priming and semantic learning in amnesia   
+case experiment  Journal of Experimental Psychology  Learning  Memory  and Cognition     
+
+Tzeng  Eric  Devin  Coline  Hoffman  Judy  Finn  Chelsea 
+Abbeel  Pieter  Levine  Sergey  Saenko  Kate  and Darrell 
+Trevor  Adapting deep visuomotor representations with weak
+pairwise constraints  WAFR   
+
+Vincent  Pascal  Larochelle  Hugo  Lajoie  Isabelle  Bengio 
+Yoshua  and Manzagol  PierreAntoine  Stacked denoising autoencoders  Learning useful representations in   deep network
+with   local denoising criterion  NIPS   
+
+WardeFarley  David and Bengio  Yoshua  Improving generative
+adversarial networks with denoising feature matching  ICLR 
+ 
+
+DARLA  Improving ZeroShot Transfer in Reinforcement Learning
+
+Watkins  Christopher John Cornish Hellaby  Learning from delayed rewards  PhD thesis  University of Cambridge  Cambridge  UK   
+
+Whitney  William    Chang  Michael  Kulkarni  Tejas  and
+Tenenbaum  Joshua    Understanding visual concepts with
+continuation learning  arXiv    URL http arxiv 
+org pdf pdf 
+
+Yang  Jimei  Reed  Scott  Yang  MingHsuan  and Lee  Honglak 
+Weaklysupervised disentangling with recurrent transformations for    view synthesis  NIPS   
+
+

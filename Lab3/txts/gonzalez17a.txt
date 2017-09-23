@@ -1,0 +1,910 @@
+Preferential Bayesian Optimization
+
+Javier Gonz alez   Zhenwen Dai   Andreas Damianou   Neil    Lawrence    
+
+Abstract
+
+Bayesian optimization  BO  has emerged during
+the last few years as an effective approach to optimizing blackbox functions where direct queries
+of the objective are expensive  In this paper we
+consider the case where direct access to the function is not possible  but information about user
+preferences is  Such scenarios arise in problems
+where human preferences are modeled  such as
+    tests or recommender systems  We present
+  new framework for this scenario that we call
+Preferential Bayesian Optimization  PBO  which
+allows us to  nd the optimum of   latent function that can only be queried through pairwise
+comparisons  the socalled duels  PBO extends
+the applicability of standard BO ideas and generalizes previous discrete dueling approaches by
+modeling the probability of the winner of each
+duel by means of   Gaussian process model with
+  Bernoulli likelihood  The latent preference function is used to de ne   family of acquisition functions that extend usual policies used in BO  We
+illustrate the bene ts of PBO in   variety of experiments  showing that PBO needs drastically fewer
+comparisons for  nding the optimum  According
+to our experiments  the way of modeling correlations in PBO is key in obtaining this advantage 
+
+  Introduction
+Let          cid  be   wellbehaved blackbox function
+de ned on   bounded subset      cid    We are interested in
+solving the global optimization problem of  nding
+
+xmin   arg min
+
+        
+
+ 
+
+We assume that   is not directly accessible and that queries
+to   can only be done in pairs of points or duels       cid   
+
+ Amazon Research Cambridge  UK  University of
+Javier Gonz alez  go 
+
+Shef eld  UK  Correspondence to 
+jav amazon com 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright   by
+the author   
+
+      from which we obtain binary feedback     that
+represents whether or not   is preferred over   cid   has lower
+value  We will consider that   is the winner of the duel if
+the output is   and that   cid  wins the duel if the output is
+  The goal here is to  nd xmin by reducing as much as
+possible the number of queried duels 
+Our setup is different to the one typically used in BO where
+direct feedback from   in the domain is available  Jones 
+  Snoek et al    In our context  the objective
+is   latent object that is only accessible via indirect observations  However  although the scenario described in this
+work has not received   wider attention  there exist   variety of real wold scenarios in which the objective function
+needs to be optimized via preferential returns  Most cases
+involve modeling latent human preferences  such as web
+design via     testing  the use of recommender systems
+ Brusilovsky et al    or the ranking of game players
+skills  Herbrich et al    In prospect theory  the models
+used are based on comparisons with some reference point 
+as it has been demonstrated that humans are better at evaluating differences rather than absolute magnitudes  Kahneman
+and Tversky   
+Optimization methods for pairwise preferences have been
+studied in the armedbandits context  Yuea et al   
+Zoghi et al    propose   new method for the Karmed
+duelling bandit problem based on the Upper Con dence
+Bound algorithm  Jamieson et al    study the problem
+by allowing noise comparisons between the duels  Zoghi
+et al      choose actions using contextual information 
+Dud   et al    study the Copeland   dueling bandits 
+  case in which   Condorcet winner  or an arm that uniformly wins the duels with all the other arms may not exist  Sz or enyi et al    study Online Rank Elicitation
+problem in the duelling bandits setting  An analysis on
+Thompson sampling in duelling bandits is done by Wu et al 
+  Yue and Joachims   proposes   method that
+does not need transitivity and comparison outcomes to have
+independent and timestationary distributions 
+Preference learning has also been studied  Chu and Ghahramani    in the context of Gaussian process  GP  models
+by using   likelihood able to model preferential returns  Sim 
+ In this work we use       cid  to represent the vector resulting
+
+from concatenating both elements involved in the duel 
+
+Preferential Bayesian Optimization
+
+Figure   Illustration of the key elements of an optimization problem with pairwise preferential returns in   onedimensional example 
+Topleft  Objective  Forrester  function to minimize  This function is only accessible through pairwise comparisons of inputs   and
+  cid  Right  true preference function          cid  that represents the probability that   will win   duel over   cid  Note that  by symmetry 
+         cid              cid     Bottom left  The normalised Copeland   and softCopeland function whose maximum is located at the
+same point of the minimum of   
+
+ilarly  Brochu   used   probabilistic model to actively
+learn preferences in the context of discovering optimal parameters for simple graphics and animations engines  To
+select new duels  standard acquisition functions like the Expected Improvement  EI   Mockus    are extended on
+top of   GP model with likelihood for duels  Although this
+approach is simple an effective in some cases  new duels are
+selected greedily  which may lead to overexploitation 
+In this work we propose   new approach aiming at combining the good properties of the armbandit methods with the
+advantages of having   probabilistic model able to capture
+correlations across the points in the domain     Following
+the above mentioned literature in the bandits settings  the
+key idea is to learn   preference function in the space of the
+duels by using   Gaussian process  This allows us to select
+the most relevant comparisons nongreedily and improve
+the stateof theart in this domain 
+This paper is organized as follows  In Section   we introduce the point of view that it is followed in this work to
+model latent preferences  We de ne concepts such as the
+Copeland score function and the Condorcet   winner which
+form the basis of our approach  Also in Section   we show
+how to learn these objects from data  In Section   we generalize most commonly used acquisition functions to the
+dueling case  In Section   we illustrate the bene ts of the
+proposed framework compared to stateof the art methods
+in the literature  We conclude in Section   with   discussion
+and some future lines of research 
+
+  Learning latent preferences
+The approach followed in this work is inspired by the work
+of  Ailon et al    in which cardinal bandits are reduced
+to ordinal ones  Similarly  here we focus on the idea of
+reducing the problem of  nding the optimum of   latent
+function de ned on   to determine   sequence of duels on
+       
+We assume that each duel       cid  produces in   joint reward
+        cid  that is never directly observed  Instead  after each
+pair is proposed  the obtained feedback is   binary return    
+    representing which of the two locations is preferred 
+In this work  we assume that         cid        cid        
+but other alternatives are possible  Note that the more   is
+preferred over   cid  the bigger is the reward 
+Since the preferences of humans are often unclear and may
+con ict  we model preferences as   stochastic process  In
+particular  the model of preference is   Bernoulli probability
+function
+
+and
+
+            cid 
+
+             cid 
+
+ 
+
+            cid 
+
+             cid 
+
+ 
+
+where      cid     cid        is an inverse link function  Via
+the latent loss    maps each query       cid  to the probability
+of having   preference on the left input   over the right
+input   cid  The inverse link function has the property that
+      cid                    cid    natural choice for    is
+
+     ObjectivefunctionGlobalminimum   ScorevalueCopelandandsoftCopelandfunctionsCopelandsoft Copeland     Preferencefunction Preferential Bayesian Optimization
+
+the logistic function
+
+         cid 
+
+             cid 
+
+   
+
+ 
+
+             cid   
+
+ 
+
+but others are possible  Note that for any duel       cid  in
+which            cid  it holds that          cid        
+is therefore   preference function that fully speci es the
+problem 
+We introduce here the concept of normalised Copeland
+score  already used in the literature of raking methods
+ Zoghi et al      as
+
+ 
+
+         cid dx cid 
+
+ 
+
+       Vol    
+
+where Vol        cid 
+
+  dx cid  is   normalizing constant that
+bounds      in the interval     If   is    nite set  the
+Copeland score is simply the proportion of duels that   certain element   will win with probability larger than  
+Instead of the Copeland score  in this work we use   soft version of it  in which the probability function    is integrated
+over   without further truncation  Formally  we de ne the
+softCopeland score as
+
+ cid 
+
+ 
+
+ cid 
+
+       Vol    
+
+ 
+
+ 
+
+         cid 
+
+ dx cid 
+
+ 
+
+ 
+
+which aims to capture the  averaged  probability of   being
+the winner of   duel 
+Following the armedbandits literature  we say that xc is
+  Condorcet winner if it is the point with maximal softCopeland score  It is straightforward to see that if xc is  
+Condorcet winner with respect to the softCopeland score 
+it is   global minimum of   in     the integral in   takes
+maximum value for points       such that         cid   
+    cid             for all   cid  which only occurs if xc is  
+minimum of    This implies that if by observing the results
+of   set of duels we can learn the preference function    the
+optimization problem of  nding the minimum of   can be
+addressed by  nding the Condorcet winner of the Copeland
+score  See Figure   for an illustration of this property 
+
+  Learning the preference function          cid  with
+
+Gaussian processes
+
+   yi  
+
+Assume that   duels have been performed so far resulting
+in   dataset      xi    cid 
+   Given    inference over
+the latent function   and its warped version    can be carried out by using Gaussian processes  GP  for classi cation
+ Rasmussen and Williams   
+In   nutshell    GP is   probability measure over functions
+such that any linear restriction is multivariate Gaussian  Any
+GP is fully determined by   positive de nite covariance operator  In standard regression cases with Gaussian likelihoods 
+
+closed forms for the posterior mean and variance are available  In the preference learning  like the one we face here 
+the basic idea behind Gaussian process modeling is to place
+  GP prior over some latent function   that captures the
+membership of the data to the two classes and to squash it
+through the logistic function to obtain some prior probability      In other words  the model for   GP for classi cation
+looks similar to eq    but with the difference that   is an
+stochastic process as it is      The stochastic latent function
+  is   nuisance function as we are not directly interested
+in its values but instead on particular values of    at test
+locations    cid    cid 
+ cid 
+Inference is divided in two steps  First we need to compute
+the distribution of the latent variable corresponding to   test
+case      cid       cid    cid 
+ cid    and later use this distribution over
+the latent   cid  to produce   prediction
+      cid    cid 
+
+ cid            cid              cid 
+
+   
+
+ 
+
+ cid 
+
+ 
+
+   cid     cid       cid    cid 
+
+ cid   df cid 
+
+where the vector   contains the hyperparameters of the
+model that can also be marginalized out  In this scenario 
+GP predictions are not straightforward  in contrast to the regression case  since the posterior distribution is analytically
+intractable and approximations at required  see  Rasmussen
+and Williams    for details  The important message
+here is  however  that given data from the locations and result of the duels we can learn the preference function    by
+taking into account the correlations across the duels  which
+makes the approach to be very data ef cient compared to
+bandits scenarios where correlations are ignored 
+
+  Computing the softCopeland score and the
+
+Condorcet winner
+
+The softCopeland function can be obtained by integrating          cid  over     so it is possible to learn the softCopeland function from data by integrating          cid   
+Unfortunately    closed form solution for
+
+ cid 
+
+ 
+
+Vol    
+
+         cid 
+
+     dx cid 
+
+ 
+
+does not necessarily exist  In this work we use MonteCarlo
+integration to approximate the Copeland score at any      
+via
+
+          
+
+ 
+ 
+
+       xk     
+
+ 
+
+  cid 
+
+  
+
+where            xM are   set of landmark points to perform
+the integration  For simplicity  in this work we select the
+landmark points uniformly  although more sophisticated
+probabilistic approaches can be applied  Briol et al   
+
+Preferential Bayesian Optimization
+
+Figure   Differences between the sources of uncertainty that can be used for the exploration of the duels  The three  gures show different
+elements of   GP used for preferential learning in the context of the optimization of the  latent  Forrester function  The model is learned
+using the result of   duels  Left  Expectation of   cid  which coincides with the expectation of    cid  and that is denoted as       cid    cid 
+ cid 
+Center  Variance of output of the duels   cid  that is computed as       cid    cid 
+ cid  Note that the variance does not necessarily
+decrease in locations where observations are available  Right  Variance of the latent function    cid  The variance of    cid  decreases in
+regions where data are available  which make it appropriate for duels exploration contrast to the variance of   cid 
+
+ cid          cid    cid 
+
+The Condorcet winner can be computed by taking
+
+xc   arg max
+
+            
+
+which can be done using   standard numerical optimizer  xc
+is the point that has  on average  the maximum probability of
+wining most of the duels  given the data set    and therefore
+it is the most likely point to be the optimum of   
+
+  Sequential Learning of the Condorcet
+
+winner
+
+In this section we analyze the case in which   extra duels
+can be carried out to augment the dataset   before we have
+to report   solution to   This is similar to the setup in
+ Brochu    where interactive Bayesian optimization is
+proposed by allowing   human user to sequentially decide
+the result of   number of duels 
+In the sequel  we will denote by Dj the data set resulting
+of augmenting   with   new pairwise comparisons  Our
+goal in this section is to de ne   sequential policy for querying duels        cid Dj    This policy will enable us to
+identify as soon as possible the minimum of the the latent
+function    Note that here  differently to the situation in
+standard Bayesian optimization  the search space of the
+acquisition        is not the same as domain   of the
+latent function that we are optimizing  Our best guess about
+its optimum  however  is the location of the Condorcet  
+winner 
+We approach the problem by proposing three dueling acquisition functions      pure exploration  PE  the Copeland
+Expected improvement  CEI  and duellingThompson sampling  which makes explicitly use of the generative capabilities of our model  We analyze the three approaches in
+
+terms of what the balance explorationexploitation means in
+our context  For simplicity in the notation  in the sequel we
+drop the dependency of all quantities on the parameters  
+
+  Pure Exploration
+
+ cid Dj      cid    cid 
+
+The  rst question that arises when de ning   new acquisition
+for duels  is what exploration means in this context  Given
+  model as described in Section   the output variables   cid 
+follow   Bernoulli distribution with probability given by the
+preference function        straightforward interpretation of
+pure exploration would be to search for the duel of which
+the outcome is most uncertain  has the highest variance of
+  cid  The variance of   cid  is given by
+ cid Dj          cid    cid 
+    cid   cid    cid 
+ cid Dj 
+However  as preferences are modeled with   Bernoulli
+model  the variance of   cid  does not necessarily reduce with
+suf cient observations  For example  according to eq   
+ cid  such that     cid        cid 
+for any two values   cid  and   cid 
+ cid 
+      cid    cid 
+ cid Dj  will tend to be close to   and therefore
+it will have maximal variance even if we have already collected several observations in that region of the duels space 
+Alternatively  exploration can be carried out by searching
+for the duel where GP is most uncertain about the probability
+of the outcome  has the highest variance of    cid  which
+is the result of transforming out epistemic uncertainty about
+   modeled by   GP  through the logistic function  The
+ rst order moment of this distribution coincides with the
+expectation of   cid  but its variance is
+    cid   
+
+ df cid 
+
+   cid        cid      cid          cid 
+   cid     cid          cid 
+
+ df cid        cid 
+
+ cid 
+ cid 
+
+ 
+
+ Expectationofy cid and   cid Varianceofy Varianceof   cid Preferential Bayesian Optimization
+
+generalize the idea to our context we need to  nd   couple
+of duels able to maximally improve the expected score of
+the Condorcet winner 
+Denote by   cid 
+  the value of the Condorcet   winner when  
+duels have been already run  For any new proposed duel
+      cid  two outcomes     are possible that correspond to
+cases wether   or   cid  wins the duel  We denote by the   cid 
+   
+the value of the estimated Condorcet winner resulting of
+augmenting   with       cid    and by   cid 
+  cid   the equivalent
+value but augmenting the dataset with       cid    We de 
+ ne the onelookahead Copeland Expected Improvement at
+iteration   as 
+
+ CEI       cid 
+
+   Dj
+
+ 
+where     max  and the expectation is take over   
+the value at the Condorcet winner given the result of the
+duel  The next duel is selected as the pair that maximizes
+the CEI  Intuitively  the CEI evaluated at       cid  is   weighted
+sum of the total increase of the best possible value of the
+Copeland score in the two possible outcomes of the duel 
+The weights are chosen to be the probability of the two
+outcomes  which are given by      The CEI can be computed
+in closed form as
+ CEI       cid 
+
+ Dj             cid 
+        cid 
+
+ Dj   cid 
+    Dj   cid 
+
+        cid 
+   
+  cid       cid 
+   
+
+ Dj      cid        cid 
+
+ cid 
+
+The computation of this acquisition is computationally demanding as it requires updating of the GP classi cation
+model for every fantasized output at any point in the domain  As we show in the experimental section  and similarly with what is observed in the literature about the EI  this
+acquisition tends to be greedy in certain scenarios leading
+to over exploitation  Hern andezLobato et al    Hennig
+and Schuler    Although nonmyopic generalizations
+of this acquisition are possible to address this issue in the
+same fashion as in  Gonz alez et al      these are be
+intractable 
+
+  DuelingThompson sampling
+
+As we have previously detailed  pure explorative approaches
+that do not exploit the available knowledge about the current best location and CEI is expensive to compute and tends
+to overexploit  In this section we propose an alternative
+acquisition function that is fast to compute and explicitly balances exploration and exploitation  We call this acquisition
+duelingThompson sampling and it is inspired by Thompson
+sampling approaches  It follows   twostep policy for duels 
+
+  Step   selecting    First  generate   sample    from
+the model using continuous Thompson sampling   and
+
+ Approximated continuous samples from   GP with shift 
+
+Figure     continuous samples of the Copeland score function
+ grey  in the Forrester example generated using Thompson sampling  The three plots show the samples obtained once the model
+has been trained with different number of duels     and  
+In black we show the Coplenad function computed using the preference function  The more samples are available more exploitation
+is encouraged in the  rst element of the duel as the probability of
+selecting xnext as the true optimum increases 
+
+which explicitly takes into account the uncertainty over   
+Hence  pure exploration of duels space can be carried out
+by maximizing
+
+ PE      cid 
+
+ Dj        cid   cid    cid 
+
+ cid Dj 
+
+Remark that in this case  duels that have been already visited
+will have   lower chance of being visited again even in cases
+in which the objective takes similar values in both players 
+See Figure   for an illustration of this property 
+In practice  this acquisition requires to compute and intractable integral  that we approximate in practice using
+MonteCarlo 
+
+  Copeland Expected Improvement
+
+An alternative way to de ne an acquisition function is
+by generalizing the idea of the Expected Improvement
+ Mockus    The idea of the EI is to compute  in expectation  the marginal gain with respect to the current best
+observed output  In our context  as we do not have direct
+access to the objective  our only way of evaluating the quality of   single point is by computing its Copeland score  To
+
+ CopelandSamples duels CopelandSamples duels CopelandSamples duels Preferential Bayesian Optimization
+
+Figure   Illustration of the steps to propose   new duel using the duellingThompson acquisition  The duel is computed using the same
+model as in Figure   The white triangle represents the  nal selected duel  Left  Sample from   cid  squashed through the logistic function  
+Center  Sampled softCopeland function  which results from integrating the the sample from    cid  on the left across the vertical axis 
+The  rst element of the duel   is selected as the location of the maximum of the sampled softCopeland function  vertical dotted line 
+Right  The second element of the duel    cid  is selected by maximizing the variance of    cid  marginally given    maximum across the
+vertical dotted line 
+
+compute the associated softCopland   score by integrating over     The  rst element of the new duel 
+xnext  is selected as 
+
+ cid 
+
+xnext   arg max
+   
+
+           cid 
+
+ Dj dx cid 
+
+ 
+
+ 
+
+The term Vol     in the Copeland score has been
+dropped here as it does not change the location of the
+optimum  The goal of this step is to balance exploration
+and exploitation in the selection of the Condorcet winner  it is the same fashion Thompson sampling does 
+it is likely to select   point close to the current Condorcet winner but the policy also allows exploration of
+other locations as we base our decision on   stochastic
+    Also  the more evaluations are collected  the more
+greedy the selection will be towards the Condorcet
+winner  See Figure   for an illustration of this effect 
+  Step   selecting   cid  Given xnext the second element
+of the duel is selected as the location that maximizes
+the variance of    cid  in the direction of xnext  More
+formally    cid 
+  cid 
+next   arg max
+ cid  
+  cid 
+
+    cid   cid    cid 
+
+ cid Dj    cid    xnext 
+
+next is selected as
+
+This second step is purely explorative in the direction
+of xnew and its goal is to  nd informative comparisons
+to run with current good locations identi ed in the
+previous step 
+
+invariant kernel can be obtained by using Bochner   theorem
+ Bochner et al    In   nutshell  the idea is to approximate the
+kernel by means of the inner product of    nite number Fourier features that are sampled according to the measure associated to the
+kernel  Rahimi and Recht    Hern andezLobato et al   
+
+Algorithm   The PBO algorithm 
+Input  Dataset       xi    cid 
+   and number of
+remaining evaluations    acquisition for duels       cid 
+for       to   do
+
+   yi  
+
+  Fit   GP with kernel   to Dj and learn        
+  Compute the acquisition for duels  
+  Next duel   xj    cid 
+     arg max       cid 
+  Run the duel  xj    cid 
+   and obtain yj 
+  Augment Dj     Dj    xj    cid 
+end for
+Fit   GP with kernel   to Dn 
+Returns  Report the current Condorcet   winner   cid 
+  
+
+   yj 
+
+In summary the duelingThompson sampling approach selects the next duel as 
+
+arg max
+     cid 
+
+ DT        cid 
+
+ Dj     xnext    cid 
+
+next 
+
+where xnext and xnext are de ned above  This policy combines   selection of   point with high chances of being the
+optimum with   point whose result of the duel is uncertain
+with respect of the previous one  Note that this has some interesting connections with uncertain sampling as presented
+in  Houlsby et al    See Figure   for   visual illustration of the two steps in toy example  See Algorithm   for  
+full description of the PBO approach 
+
+  Generalizations to multiple returns scenarios
+
+  natural extension of the PBO setup detailed above are
+cases in which multiple comparisons of inputs are simultaneously allowed  This is equivalent to providing   ranking
+over   set of points            xk  Rankings are trivial to map
+to pairwise preferences by using the pairwise ordering to
+
+ Sampleof   cid SampledCopelandFunction Varianceof   cid Preferential Bayesian Optimization
+
+Figure   Averaged results across   latent objective functions and   different methods  The CEI is only computed in the Forrester function
+as it is intractable when the dimension increases  Results are computed over   replicates in which   randomly selected initial points
+are used to initialize the models and that are kept the same across the six methods  The horizontal axis of the plots represents the
+number of evaluation and the vertical axis represent the value  log scale in the second row  of the true objective function at the best
+guess  Condorcet winner  at each evaluation  Note that this is only possible as we know the true objective function The curves are not
+necessarily monotonically decreasing as we do not show the current best solution but the current solution at each iteration  proposed
+location by each method at each step in   real scenario 
+
+obtain the result of the duels  The problem is  therefore 
+equivalent from   modeling perspective  However  from the
+point of view of selecting the   locations to rank in each
+iteration  generalization of the above mentioned acquisitions
+are required  Although this is not the goal of this work  it is
+interesting to remark that this problem has strong connections with the one of computing batches in BO  Gonz alez
+et al     
+
+  Experiments
+We present three experiments which validate our approach
+in terms of performance and illustrate its key properties  The
+setup is as follows  we have   nonlinear blackbox function
+     of which we look for its minimum as described in
+equation   However  we can only query this function
+through pairwise comparisons  The outcome of   pairwise
+comparison is generated as described in Section        the
+outcome is drawn from   Bernoulli distribution of which the
+sample probability is computed according to equation  
+We have considered for      the Forrester  the  sixhump
+
+camel   GoldStein  and  Levy  as latent objective functions to optimize  The Forrester function is  dimensional 
+whereas the rest are de ned in domains of dimension   The
+explicit formulation of these objectives and the domains in
+which they are optimized are available as part of standard
+optimization benchmarks  The PBO framework is applicable in the continuous setting  In this section  however 
+the search of the optimum of the objectives is performed in
+  grid of size   per dimension for all cases  which has
+practical advantages  the integral in eq    can easily be
+treated as   sum and  more importantly  we can compare
+PBO with bandit methods that are only de ned in discrete
+domains  Each comparison starts with   initial  randomly
+selected  duels and   total budget of   duels are run  after
+which  the best location of the optimum should be reported 
+Further  each algorithm runs for   times  trials  with different initial duels  the same for all methods      We report the
+average performance across all trials  which is de ned as
+the value of    known in all cases  evaluated at the current
+
+ https www sfu ca ssurjano optimisation html
+ RAMDOM runs for   trials to give   reliable curve
+ PBOCEI only runs   trials for Forrester as it is very slow 
+
+ iterations   xc ForresterPBOPEPBO DTSPBOCEIRANDOMIBOSPARRING iterations   xc SixHumpCamelPBOPEPBO DTSRANDOMIBO iterations   xc GoldSteinPBOPEPBO DTSRANDOMIBO iterations   xc LevyPBOPEPBO DTSRANDOMIBOPreferential Bayesian Optimization
+
+Figure   shows the performance of the compared methods 
+which is consistent across the four plots  IBO shows   poor
+performance  due to the combination of the greedy nature of
+the acquisitions and the poor calibration of the model  The
+RAMDOM policy converges to   suboptimal result and the
+PBO approaches tend to be the superior ones  In particular 
+we observe that PBODTS is consistently proven as the best
+policy  and it is able to balance correctly exploration and
+exploitation in the duels space  Contrarily  PBOCEI  which
+is only used in the  rst experiment due to the excessive
+computational overload  tends to over exploit  PBOPE obtains reasonable results but tends to work worse in larger
+dimensions where is harder to cover the space 
+Regarding the bandits methods  they need   much larger
+number of evaluations to converge compared to methods
+that model correlations across the arms  They are also heavily affected by an increase of the dimension  number of
+arms  The results of the Sparring method are shown for the
+Forrester function but are omitted in the rest of the plots  the
+number of used evaluations used is smaller than the numbers
+of the arms and therefore no real learning can happen within
+the budget  However  in Figure   we show the comparison
+between Sparring and PBODTS for an horizon in which the
+bandit method has almost converged  The gain obtained by
+modeling correlations among the duels is evident 
+
+  Conclusions
+We have explored   new framework  PBO  for optimizing
+blackbox functions in which only preferential returns are
+available  The fundamental idea is to model comparisons
+of pairs of points with   Gaussian  which leads to the de 
+nition of new policies for augmenting the available dataset 
+We have proposed three acquisitions for duels  PE  CEI and
+DTS  and explored their connections with existing policies
+in standard BO  Via simulation  we have demonstrated the
+superior performance of DTS  both because it  nds   good
+balance between exploration and exploitation in the duels
+space and because it is computationally tractable  In comparison with other alternatives out of the PBO framework 
+such as IBO or other bandit methods  DTS shows the stateof 
+theart performance  There exist several future extensions
+of our current approach like tackling the existing limitation on the dimension of the input space  which is doubled
+with respect to the original dimensionality of the problem 
+Also further theoretical analysis will be carried out on the
+proposed acquisitions 
+
+Acknowledgements
+The authors would like to thank Mike Croucher for the
+inspirational ideas that motivated the development of this
+work during the Gaussian process summer school held in
+Shef eld in September  
+
+Figure   Comparison of the bandits Sparring algorithm and PBODTS on the SixHump Camel for an horizon in which the bandit
+method is run for   iterations  The horizontal line represents
+the solution proposed by PBODTS after   duels  As the plot
+illustrates  modeling correlations across the   arms  points in
+    with   GP drastically improves the speed at which the optimum
+of the function is found  Note that the bandit method needs to visit
+at least each arm before starting to get any improvement while
+PBODTS is able to make   good  initial  guess with the  rst  
+random duels used in the experiment  Similar results are obtained
+for the rest of functions 
+
+Condorcet winner  xc considered to be the best by each
+algorithm at each one of the   steps taken until the end of
+the budget  Note that each algorithm chooses xc differently 
+which leads to different performance at step   Therefore 
+we present plots of  iterations versus   xc 
+We compare   methods  Firstly  the three variants within the
+PBO framework  PBO with pure exploration  PBOPE  see
+section   PBO with the Copeland Expected Improvement
+ PBOCEI  see section   and PBO with dueling Thomson sampling  PBODTS  see section   We also compare against   random policy where duels are drawn from
+  uniform distribution  RAMDOM    and with the interactive Bayesian optimization  IBO  method of  Brochu   
+IBO selects duels by using an extension of Expected Improvement on   GP model that encodes the information of
+the preferential returns in the likelihood  Finally  we compared against all three cardinal bandit algorithms proposed
+by Ailon et al    namely Doubler  MultiSBM and
+Sparring  Ailon et al    observes that Sparring has
+the best performance  and it also outperforms the other two
+banditbased algorithms in our experiments  Therefore  we
+only report the performance for Sparring to keep the plots
+clean  In   nutshell  the Sparring considers two bandit players  agents  one for each element of the duel  which use the
+Upper Con dence Bound criterion and where the input grid
+is acting as the set of arms  The decision for which pair of
+arms to query is according to the strategies and beliefs of
+each agent  In this case  correlations in   are not captured 
+
+ xc is chosen as the location that wins most frequently 
+
+ iterations   xc SixHumpCamelPBODTSSPARRINGPreferential Bayesian Optimization
+
+References
+Nir Ailon  Zohar Shay Karnin  and Thorsten Joachims  Reducing dueling bandits to cardinal bandits  In Proceedings
+of the  th International Conference on Machine Learning  ICML   Beijing  China    June   pages
+   
+
+Salomon Bochner  Monotonic Functions  Stieltjes Integrals 
+Harmonic Analysis  Morris Tenenbaum  and Harry Pollard  Lectures on Fourier Integrals   AM  Princeton
+University Press    ISBN  
+
+Franc oisXavier Briol  Chris    Oates  Mark Girolami  and
+Michael    Osborne  FrankWolfe Bayesian quadrature  Probabilistic integration with theoretical guarantees 
+In Proceedings of the  th International Conference on
+Neural Information Processing Systems  NIPS  pages
+  Cambridge  MA  USA    MIT Press 
+
+Eric Brochu  Interactive Bayesian Optimization  Learning Parameters for Graphics and Animation  PhD thesis 
+University of British Columbia  Vancouver  Canada  December  
+
+Peter Brusilovsky  Alfred Kobsa  and Wolfgang Nejdl  editors  The Adaptive Web  Methods and Strategies of Web
+Personalization  SpringerVerlag  Berlin  Heidelberg 
+  ISBN  
+
+Wei Chu and Zoubin Ghahramani  Preference learning
+with Gaussian processes  In Proceedings of the  Nd
+International Conference on Machine Learning  ICML
+  pages   New York  NY  USA    ACM 
+ISBN  
+
+Ralf Herbrich  Tom Minka  and Thore Graepel  TrueskillTM 
+  bayesian skill rating system  In       Sch olkopf       
+Platt  and    Hoffman  editors  Advances in Neural Information Processing Systems   pages   MIT
+Press   
+
+Jos   Miguel Hern andezLobato  Matthew   Hoffman  and
+Zoubin Ghahramani  Predictive entropy search for ef 
+ cient global optimization of blackbox functions  In
+   Ghahramani     Welling     Cortes        Lawrence 
+and       Weinberger  editors  Advances in Neural Information Processing Systems   pages   Curran
+Associates  Inc   
+
+Neil Houlsby  Ferenc Huszar  Zoubin Ghahramani  and
+  at   Lengyel  Bayesian active learning for classi cation
+and preference learning  CoRR  abs   
+
+Kevin    Jamieson  Sumeet Katariya  Atul Deshpande  and
+Robert    Nowak  Sparse dueling bandits  In Proceedings
+of the Eighteenth International Conference on Arti cial
+Intelligence and Statistics  AISTATS   San Diego 
+California  USA  May      
+
+Donald    Jones    taxonomy of global optimization methods based on response surfaces  Journal of global optimization     
+
+Daniel Kahneman and Amos Tversky  Prospect theory  An
+analysis of decision under risk  Econometrica   
+   
+
+Jonas Mockus  On Bayesian methods for seeking the extremum and their application  In IFIP Congress  pages
+   
+
+Miroslav Dud    Katja Hofmann  Robert    Schapire  Aleksandrs Slivkins  and Masrour Zoghi  Contextual dueling
+bandits  In Proceedings of The  th Conference on Learning Theory  COLT   Paris  France  July    
+pages    
+
+Ali Rahimi and Benjamin Recht  Random features for largescale kernel machines  In       Platt     Koller     Singer 
+and       Roweis  editors  Advances in Neural Information Processing Systems   pages   Curran
+Associates  Inc   
+
+Javier Gonz alez  Zhenwen Dai  Philipp Hennig  and
+   Lawrence  Batch bayesian optimization via local penalization  In Proceedings of the  th International Conference on Arti cial Intelligence and Statistics  AISTATS
+  volume   of JMLR Workshop and Conference
+Proceedings  pages      
+
+Javier Gonz alez  Michael    Osborne  and Neil   
+Lawrence  GLASSES  relieving the myopia of bayesian
+optimisation  In Proceedings of the  th International
+Conference on Arti cial Intelligence and Statistics  AISTATS   Cadiz  Spain  May     pages  
+     
+
+Philipp Hennig and Christian    Schuler  Entropy search
+for informationef cient global optimization  Journal of
+Machine Learning Research     
+
+Carl Edward Rasmussen and Christopher       Williams 
+Gaussian Processes for Machine Learning  Adaptive
+Computation and Machine Learning  The MIT Press 
+ 
+
+Jasper Snoek  Hugo Larochelle  and Ryan    Adams  Practical bayesian optimization of machine learning algorithms 
+In Advances in Neural Information Processing Systems
+  pages      
+
+Bal azs Sz or enyi    obert BusaFekete  Adil Paul  and Eyke
+  ullermeier  Online rank elicitation for plackettluce   
+dueling bandits approach  In Advances in Neural Information Processing Systems   Annual Conference on
+Neural Information Processing Systems   December
+    Montreal  Quebec  Canada  pages  
+ 
+
+Preferential Bayesian Optimization
+
+Huasen Wu  Xin Liu  and    Srikant  Double Thompson
+sampling for dueling bandits  CoRR  abs 
+ 
+
+Yisong Yue and Thorsten Joachims  Beat the mean bandit 
+
+In ICML  pages    
+
+Yisong Yuea  Josef Broderb  Robert Kleinbergc  and
+Thorsten Joachims  The karmed dueling bandits problem  Journal of Computer and System Sciences   
+        ISSN    JCSS  Special
+Issue  Cloud Computing  
+
+Masrour Zoghi  Shimon Whiteson  Remi Munos  and
+Maarten de Rijke  Relative upper con dence bound for
+In ICML  
+the Karmed dueling bandit problem 
+Proceedings of the ThirtyFirst International Conference
+on Machine Learning  pages   June  
+
+Masrour Zoghi  Zohar   Karnin  Shimon Whiteson  and
+Maarten de Rijke  Copeland dueling bandits  In    Cortes 
+      Lawrence        Lee     Sugiyama  and    Garnett 
+editors  Advances in Neural Information Processing Systems   pages   Curran Associates  Inc     
+
+Masrour Zoghi  Zohar    Karnin  Shimon Whiteson  and
+Maarten de Rijke  Copeland dueling bandits  In Advances
+in Neural Information Processing Systems   Annual
+Conference on Neural Information Processing Systems
+  December     Montreal  Quebec  Canada 
+pages      
+
+

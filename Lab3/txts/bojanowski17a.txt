@@ -1,0 +1,1019 @@
+Unsupervised Learning by Predicting Noise
+
+Piotr Bojanowski   Armand Joulin  
+
+Abstract
+
+Convolutional neural networks provide visual
+features that perform well in many computer vision applications  However  training these networks requires large amounts of supervision  this
+paper introduces   generic framework to train
+such networks  endto end  with no supervision 
+We propose to      set of target representations 
+called Noise As Targets  NAT  and to constrain
+the deep features to align to them  This domain
+agnostic approach avoids the standard unsupervised learning issues of trivial solutions and collapsing of features  Thanks to   stochastic batch
+reassignment strategy and   separable square loss
+function  it scales to millions of images  The
+proposed approach produces representations that
+perform on par with stateof theart unsupervised
+methods on ImageNet and PASCAL VOC 
+
+  Introduction
+In recent years  convolutional neural networks  or convnets  Fukushima    LeCun et al    have pushed
+the limits of computer vision  Krizhevsky et al    He
+et al    leading to important progress in   variety of
+tasks  like object detection  Girshick    or image segmentation  Pinheiro et al    Key to this success is
+their ability to produce features that easily transfer to new
+domains when trained on massive databases of labeled images  Razavian et al    Oquab et al    or weaklysupervised data  Joulin et al    However  human annotations may introduce unforeseen bias that could limit
+the potential of learned features to capture subtle information hidden in   vast collection of images 
+Several strategies exist to learn deep convolutional features
+with no annotation  Donahue et al    They either
+try to capture   signal from the source as   form of selfsupervision  Doersch et al    Wang   Gupta    or
+
+ Facebook AI Research  Correspondence to  Piotr Bojanowski
+
+ bojanowski fb com 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+learn the underlying distribution of images  Vincent et al 
+  Goodfellow et al    While some of these approaches obtain promising performance in transfer learning  Donahue et al    Wang   Gupta    they do
+not explicitly aim to learn discriminative features  Some attempts were made with retrieval based approaches  Dosovitskiy et al    and clustering  Yang et al    Liao
+et al    but they are hard to scale and have only been
+tested on small datasets  Unfortunately  as in the supervised
+case    lot of data is required to learn good representations 
+In this work  we propose   discriminative framework designed to learn deep architectures on large datasets  Our
+approach is general  but we focus on convnets since they
+require millions of images to produce good features  Similar to selforganizing maps  Kohonen    Martinetz  
+Schulten    we map deep features to   set of prede 
+ ned representations in   low dimensional space  As opposed to these approaches  we aim to learn the features in  
+endto end fashion  which traditionally suffers from   feature collapsing problem  Our approach deals with this issue by  xing the target representations and aligning them to
+our features  These representations are sampled from   uninformative distribution and we use this Noise As Targets
+ NAT  Our approach also shares some similarities with
+standard clustering approches like kmeans  Lloyd   
+or discriminative clustering  Bach   Harchaoui   
+In addition  we propose an online algorithm able to scale
+to massive image databases like ImageNet  Deng et al 
+ 
+Importantly  our approach is barely less ef cient
+to train than standard supervised approaches and can reuse any optimization procedure designed for them  This
+is achieved by using   quadratic loss as in  Tygert et al 
+  and   fast approximation of the Hungarian algorithm  We show the potential of our approach by training
+endto end on ImageNet   standard architecture  namely
+AlexNet  Krizhevsky et al    with no supervision 
+We test the quality of our features on several image classi 
+ cation problems  following the setting of Donahue et al 
+  We are on par with stateof theart unsupervised
+and selfsupervised learning approaches while being much
+simpler to train and to scale 
+The paper is organized as follows  after   brief review of
+the related work in Section   we present our approach in
+
+Unsupervised Learning by Predicting Noise
+
+Section   We then validate our solution with several experiments and comparisons with standard unsupervised and
+selfsupervised approaches in Section  
+
+  Related work
+Several approaches have been recently proposed to tackle
+the problem of deep unsupervised learning  Coates   Ng 
+  Mairal et al    Dosovitskiy et al    Some
+of them are based on   clustering loss  Xie et al   
+Yang et al    Liao et al    but they are not tested
+at   scale comparable to that of supervised convnet training  Coates   Ng   uses kmeans to pretrain convnets  by learning each layer sequentially in   bottomup
+fashion  In our work  we train the convnet endto end with
+  loss that shares similarities with kmeans  Closer to our
+work  Dosovitskiy et al    proposes to train convnets
+by solving   retrieval problem  They assign   class per image and its transformation 
+In contrast to our work  this
+approach can hardly scale to more than   few hundred of
+thousands of images  and requires   customtailored architecture while we use   standard AlexNet 
+Another traditional approach for learning visual representations in an unsupervised manner is to de ne   parametrized
+mapping between   prede ned random variable and   set
+of images  Traditional examples of this approach are variational autoencoders  Kingma   Welling    generative
+adversarial networks  Goodfellow et al    and to  
+lesser extent  noisy autoencoders  Vincent et al    In
+our work  we are doing the opposite  that is  we map images
+to   prede ned random variable  This allows us to reuse
+standard convolutional networks and greatly simpli es the
+training 
+
+Generative adversarial networks  Among those approaches  generative adversarial networks  GANs   Goodfellow et al    Denton et al    Donahue et al 
+  share another similarity with our approach  namely
+they are explicitly minimizing   discriminative loss to learn
+their features  While these models cannot learn an inverse
+mapping  Donahue et al    recently proposed to add
+an encoder to extract visual features from GANs  Like
+ours  their encoder can be any standard convolutional network  However  their loss aims at differentiating real and
+generated images  while we are aiming directly at differentiating between images  This makes our approach much
+simpler and faster to train  since we do not need to learn the
+generator nor the discriminator 
+
+Selfsupervision  Recently    lot of work has explored
+selfsupervison 
+leveraging supervision contained in the
+input signal  Doersch et al    Noroozi   Favaro 
+  Pathak et al   
+In the same vein as
+
+word vec  Mikolov et al    Doersch et al   
+show that spatial context is   strong signal to learn visual
+features  Noroozi   Favaro   have further extended
+this work  Others have shown that temporal coherence in
+videos also provides   signal that can be used to learn powerful visual features  Agrawal et al    Jayaraman  
+Grauman    Wang   Gupta    In particular  Wang
+  Gupta   show that such features provide promising performance on ImageNet 
+In contrast to our work 
+these approaches are domain dependent since they require
+explicit derivation of weak supervision directly from the
+input 
+
+Autoencoders  Many have also used autoencoders with
+  reconstruction loss  Bengio et al    Ranzato et al 
+  Masci et al    The idea is to encode and decode an image  while minimizing the loss between the decoded and original images  Once trained  the encoder produces image features and the decoder can be used to generate images from codes  The decoder is often   fully connected network  Ranzato et al    or   deconvolutional
+network  Masci et al    Zhao et al    but can
+be more sophisticated  like   PixelCNN network  van den
+Oord et al   
+
+Selforganizing map  This family of unsupervised methods aims at learning   low dimensional representation of
+the data that preserves certain topological properties  Kohonen    Vesanto   Alhoniemi    In particular 
+Neural Gas  Martinetz   Schulten    aligns feature
+vectors to the input data  Each input datum is then assigned
+to one of these vectors in   winnertakes all manner  These
+feature vectors are in spirit similar to our target representations and we use   similar assignment strategy  In contrast
+to our work  the target vectors are not  xed and aligned to
+the input vectors  Since we primarly aim at learning the
+input features  we do the opposite 
+
+Discriminative clustering  Many methods have been
+proposed to use discriminative losses for clustering  Xu
+et al    Bach   Harchaoui    Krause et al   
+Joulin   Bach   
+In particular  Bach   Harchaoui
+  shows that the ridge regression loss could be use
+to learn discriminative clusters 
+It has been successfully
+applied to several computer vision applications  like object discovery  Joulin et al    Tang et al    or
+video text alignment  Bojanowski et al      Ramanathan et al    In this work  we show that   similar
+framework can be designed for neural networks  As opposed to Xu et al    we address the empty assignment
+problems by restricting the set of possible reassignments to
+permutations rather than using global linear constrains the
+assignments  Our assignments can be updated online  allowing our approach to scale to very large datasets 
+
+Unsupervised Learning by Predicting Noise
+
+Choosing the loss function 
+In the supervised setting   
+popular choice for the loss  cid  is the softmax function  However  computing this loss is linear in the number of targets 
+making it impractical for large output spaces  Goodman 
+  While there are workarounds to scale these losses to
+large output spaces  Tygert et al    has recently shown
+that using   squared  cid  distance works well in many supervised settings  as long as the  nal activations are unit
+normalized  This loss only requires access to   single target per sample  making its computation independent of the
+number of targets  This leads to the following problem 
+
+min
+
+ 
+
+min
+
+   Rn  
+
+ cid           cid 
+   
+
+ 
+  
+
+ 
+
+where we still denote by      the unit normalized features 
+
+Using  xed target representations  Directly solving the
+problem de ned in Eq    would lead to   representation
+collapsing problem  all the images would be assigned to
+the same representation  Xu et al    We avoid this
+issue by  xing   set of   prede ned target representations
+and matching them to the visual features  More precisely 
+the matrix   is de ned as the product of   matrix   containing these   representations and an assignment matrix  
+in             
+
+        
+
+ 
+Note that we can assume that   is greater than   with
+no loss of generality  by duplicating representations otherwise  Each image is assigned to   different target and
+each target can only be assigned once  This leads to   set
+  of constraints for the assignment matrices 
+
+                                cid        
+
+ 
+
+This formulation forces the visual features to be diversi ed 
+avoiding the collapsing issue at the cost of  xing the target
+representations  Prede ning these targets is an issue if their
+number   is small  which is why we are interested in the
+case where   is at least as large as the number   of images 
+
+Choosing the target representations  Until now  we
+have not discussed the set of target representations stored
+in      simple choice for the targets would be to take
+  elements of the canonical basis of Rd 
+If   is larger
+than    this formulation would be similar to the framework
+of Dosovitskiy et al    and is impractical for large
+   On the other hand  if   is smaller than    this formulation is equivalent to the discriminative clustering approach
+of Bach   Harchaoui   Choosing such targets makes
+very strong assumptions on the nature of the underlying
+problem  Indeed  it assumes that each image belongs to  
+unique class and that all classes are orthogonal  While this
+assumption might be true for some classi cation datasets  it
+
+Figure   Our approach takes   set of images  computes their deep
+features with   convolutional network and matches them to   set of
+prede ned targets from   low dimensional space  The parameters
+of the network are learned by aligning the features to the targets 
+
+  Method
+In this section  we present our model and discuss its relations with several clustering approaches including kmeans  Figure   shows an overview of our approach  We
+also show that it can be trained on massive datasets using
+an online procedure  Finally  we provide all the implementation details 
+
+  Unsupervised learning
+
+We are interested in learning visual features with no supervision  These features are produced by applying  
+parametrized mapping    to the images  In the presence
+of supervision  the parameters   are learned by minimizing   loss function between the features produced by this
+mapping and some given targets       labels  In absence of
+supervision  there is no clear target representations and we
+thus need to learn them as well  More precisely  given  
+set of   images xi  we jointly learn the parameters   of the
+mapping    and some target vectors yi 
+
+  cid 
+
+  
+
+min
+
+ 
+
+ 
+ 
+
+min
+yi Rd
+
+ cid   xi  yi 
+
+ 
+
+where   is the dimension of target vectors  In the rest of
+the paper  we use matrix notations       we denote by   the
+matrix whose rows are the target representations yi  and by
+  the matrix whose rows are the images xi  With   slight
+abuse of notation  we denote by      the       matrix of
+features whose rows are obtained by applying the function
+   to each image independently 
+
+Target spaceFeaturesAssignmentImagescjPf   CNNUnsupervised Learning by Predicting Noise
+
+does not generalize to large image collections nor capture
+subtle similarities between images belonging to different
+classes 
+Since our features are unit normalized  another natural
+choice is to uniformly sample target vectors on the  cid  unit
+sphere  Note that the dimension   will then directly in uence the level of correlation between representations      
+the correlation is inversely proportional to the square root
+of    Using this Noise As Targets  NAT  Eq    is now
+equivalent to 
+
+    Tr cid   Cf   cid cid   
+
+max
+
+max
+
+ 
+
+ 
+
+This problem can be interpreted as mapping deep features
+to   uniform distribution over   manifold  namely the ddimension  cid  sphere  Using   prede ned representations is
+  discrete approximation of this manifold that justi es the
+restriction of the mapping matrices to the set   of  to 
+assignment matrices  In some sense  we are optimizing  
+crude approximation of the earth mover   distance between
+the distribution of deep features and   given target distribution  Rubner et al   
+
+Relation to clustering approaches  Using the same notations as in Eq    several clustering approaches share
+similarities with our method  In the linear case  spherical
+kmeans minimizes the same loss function          and   
+    
+
+    tr cid   CX   cid   
+
+max
+
+max
+
+ 
+
+The main difference is the set   of assignment matrices 
+
+                            
+
+This set only guarantees that each data point is assigned
+to   single target representation  Once we jointly learn the
+features and the assignment  this set does not prevent the
+collapsing of the data points to   single target representation 
+Another similar clustering approach is Diffrac  Bach  
+Harchaoui    Their loss is equivalent to ours in the
+case of unit normalized features  Their set   of assignment
+matrices  however  is different 
+
+                     cid         
+
+where       is some  xed parameter  While restricting
+the assignment matrices to this set prevents the collapsing
+issue  it introduces global constraints that are not suited
+for online optimization  This makes their approach hard
+to scale to large datasets 
+
+  Optimization
+
+In this section  we describe how to ef ciently optimize the
+cost function described in Eq    In particular  we explore
+
+Algorithm   Stochastic optimization of Eq   
+Require    batches of images       
+
+for                  do
+
+Obtain batch   and representations  
+Compute   Xb 
+Compute     by minimizing Eq            
+Compute     from Eq    with    
+Update              
+
+end for
+
+approximated updates of the assignment matrix that are
+compatible with online optimization schemes  like stochastic gradient descent  SGD 
+
+Updating the assignment matrix     Directly solving
+for the optimal assignment requires to evaluate the distances between all the   features and the   representations 
+In order to ef ciently solve this problem  we  rst reduce
+the number   of representations to    This limits the set  
+to the set of permutation matrices      
+
+                                cid        
+
+ 
+
+Restricting the problem de ned in Eq    to this set  the
+linear assignment problem in   can be solved exactly with
+the Hungarian algorithm  Kuhn    but at the prohibitive cost of     
+Instead  we perform stochastic updates of the matrix  Given
+  batch of samples  we optimize the assignment matrix  
+on its restriction to this batch  Given   subset   of   distinct images  we only update the       square sub matrix
+PB obtained by restricting   to these   images and their
+corresponding targets  In other words  each image can only
+be reassigned to   target that was previously assigned to
+another image in the batch  This procedure has   complexity of      per batch  leading to an overall complexity of
+  nb  which is linear in the number of data points  We
+perform this update before updating the parameters   of our
+features  in an online manner  Note that this simple procedure would not have been possible if        we would have
+had to also consider the       unassigned representations 
+
+Stochastic gradient descent  Apart from the update of
+the assignment matrix     we use the same optimization
+scheme as standard supervised approaches       SGD with
+batch normalization  Ioffe   Szegedy    As noted
+by Tygert et al    batch normalization plays   crucial role when optimizing the    loss  as it avoids exploding
+gradients  For each batch   of images  we  rst perform  
+forward pass to compute the distance between the images
+and the corresponding subset of target representations   
+The Hungarian algorithm is then used on these distances to
+obtain the optimal reassignments within the batch  Once
+
+Unsupervised Learning by Predicting Noise
+
+Softmax
+
+Square loss
+
+ImageNet
+
+ 
+
+ 
+
+Table   Comparison between the softmax and the square loss for
+supervised object classi cation on ImageNet  The architecture
+is an AlexNet  The features are unit normalized for the square
+loss  Tygert et al    We report the accuracy on the validation
+set 
+
+the assignments are updated  we use the chain rule in order
+to compute the gradients of all our parameters  Our optimization algorithm is summarized in Algorithm  
+
+  Implementation details
+
+Our experiments solely focus on learning visual features
+with convnets  All details required to train these architectures with our approach are described below  Most of them
+are standard tricks used in the supervised setting 
+
+Deep features  To ensure   fair empirical comparison
+with previous work  we follow Wang   Gupta   and
+use an AlexNet architecture  We train it end to end using
+our unsupervised loss function  We subsequently test the
+quality of the learned visual feature by retraining   classi 
+ er on top  During transfer learning  we consider the output
+of the last convolutional layer as our features as in Razavian et al    We use the same multilayer perceptron
+ MLP  as in Krizhevsky et al    for the classi er 
+
+in practice
+
+Preprocessing  We observe
+that preprocessing the images greatly helps the quality of our
+learned features  As in Ranzato et al    we use image gradients instead of the images to avoid trivial solutions like clustering according to colors  Using this preprocessing is not surprising since most handmade features
+like SIFT or HoG are based on image gradients  Lowe 
+  Dalal   Triggs   
+In addition to this preprocessing  we also perform all the standard image transformations that are commonly applied in the supervised
+setting  Krizhevsky et al    such as random cropping
+and  ipping of images 
+
+Optimization details  We project the output of the network on the  cid  sphere as in Tygert et al    The network is trained with SGD with   batch size of   During the  rst    batches  we use   constant step size  After    batches  we use   linear decay of the step size      
+  Unless mentioned otherwise  we permute
+lt  
+the assignments within batches every   epochs  For the
+transfer learning experiments  we follow the guideline described in Donahue et al   
+
+     
+
+  
+
+  Experiments
+We perform several experiments to validate different design
+choices in NAT  We then evaluate the quality of our features by comparing them to stateof theart unsupervised
+approaches on several auxiliary supervised tasks  namely
+object classi cation on ImageNet and object classi cation
+and detection of PASCAL VOC    Everingham et al 
+ 
+
+Transfering the features 
+In order to measure the quality
+of our features  we measure their performance on transfer
+learning  We freeze the parameters of all the convolutional
+layers and overwrite the parameters of the MLP classi er
+with random Gaussian weights  We precisely follow the
+training and testing procedure that is speci   to each of the
+datasets following Donahue et al   
+
+Datasets and baselines  We use the training set of ImageNet to learn our convolutional network  Deng et al 
+  This dataset is composed of       images that
+belong to     object categories  For the transfer learning experiments  we also consider PASCAL VOC   In
+addition to fully supervised approaches  Krizhevsky et al 
+  we compare our method to several unsupervised
+approaches       autoencoder  GAN and BiGAN as reported in Donahue et al    We also compare to selfsupervised approaches       Agrawal et al    Doersch
+et al    Pathak et al    Wang   Gupta  
+and Zhang et al    Finally we compare to stateof 
+theart handmade features       SIFT with Fisher Vectors
+ SIFT FV     anchez et al    They reduce the Fisher
+Vectors to       dimensional vector with PCA  and apply
+an     unit  layer MLP on top 
+
+  Detailed analysis
+
+In this section  we validate some of our design choices 
+like the loss function  representations and the in uences of
+some parameters on the quality of our features  All the experiments are run on ImageNet 
+
+Softmax versus square loss  Table   compares the performance of an AlexNet trained with   softmax and  
+square loss  We report the accuracy on the validation set 
+The square loss requires the features to be unit normalized to avoid exploding gradients  As previously observed
+by Tygert et al    the performances are similar  hence
+validating our choice of loss function 
+
+Effect of image preprocessing 
+In supervised classiimage preprocessing is not frequently used 
+ cation 
+and transformations that remove information are usually
+avoided 
+In the unsupervised case  however  we observe
+that is it is preferable to work with simpler inputs as
+
+Unsupervised Learning by Predicting Noise
+
+clean
+ 
+
+highpass
+ 
+
+sobel
+ 
+
+acc 
+
+Table   Performance of supervised models with various image
+preprocessings applied  We train an AlexNet on ImageNet  and
+report classi cation accuracy 
+
+it avoids learning trivial features 
+In particular  we observe that using grayscale image gradients greatly helps our
+method  as mentioned in Sec   
+In order to verify that
+this preprocessing does not destroy crucial information  we
+propose to evaluate its effect on supervised classi cation 
+We also compare with highpass  ltering  Table   shows
+the impact of this preprocessing methods on the accuracy
+of an AlexNet on the validation set of ImageNet  None
+of these preprocessings degrade the perform signi cantly 
+meaning that the information related to gradients are suf 
+ cient for object classi cation  This experiment con rms
+that such preprocessing does not lead to   signi cant drop
+in the upper bound performance for our model 
+
+Continuous versus discrete representations  We compare our choice for target vectors to those commonly used
+for clustering       elements of the canonical basis of    
+dimensional space  Such   representation makes   strong
+assumption on the structure of the problem  that it can be
+linearly separated in   different classes  This holds for ImageNet  giving   fair advantage to this discrete representation  We test this representation with   in      
+which is   range wellsuited for the     classes of ImageNet  The matrix   contains     replications of   elements of the canonical basis  This assumes that the clusters
+are balanced  which is veri ed on ImageNet 
+We compare these clusterlike representations to our continuous target vectors on the transfer task on ImageNet  Using discrete targets achieves an accuracy of   which is
+signi cantly worse that our best performance        
+  possible explanation is that binary vectors induce sharp
+discontinuous distances between representations  Such distances are hard to optimize over and may result in early
+convergence to poorer local minima 
+
+Evolution of the features 
+In this experiment  we are interested in understanding how the quality of our features
+evolves with the optimization of our cost function  During the unsupervised training  we freeze the network every
+  epochs and learn   MLP classi er on top  We report
+the accuracy on the validation set of ImageNet  Figure  
+shows the evolution of the performance on this transfer task
+as we optimize for our unsupervised approach  The training performance improves monotonically with the epochs
+of the unsupervised training  This suggests that optimizing
+
+Figure   On the left  we measure the accuracy on ImageNet after
+training the features with our unsupervised approach as   function
+of the number of epochs  The performance improves with longer
+unsupervised training  On the right  we measure the accuracy on
+ImageNet after training the features with different permutation
+rates There is   clear tradeoff with an optimum at permutations
+performed every   epochs 
+
+our objective function correlates with learning transferable
+features       our features do not destroy useful classlevel
+information  On the other hand  the test accuracy seems
+to saturate after   hundred epochs  This suggests that the
+MLP is over tting rapidly on pretrained features 
+
+Effect of permutations  Assigning images to their target
+representations is   the main feature of our approach  In
+this experiment  we want to understand how frequently we
+should update this assignment  Updating the assignment 
+even partially  is costly and may not be required to achieve
+good performance  Figure   shows the transfer accuracies
+on ImageNet as   function of the frequency of these updates  The model is quite robust to choice of frequency 
+with   test accuracy always above   Interestingly  the
+accuracy actually degrades slightly with high frequency   
+possible explanation is that the network over ts rapidly to
+its own output  leading to relatively worse features  In practice  we observe that updating the assignment matrix every
+  epochs offers   good tradeoff between performance and
+accuracy  When training the network and keeping    xed 
+we obtain   baseline test accuracy of  
+
+Visualizing the  lters  Figure   shows   comparison between the  rst convolutional layer of an AlexNet trained
+with and without supervision  Both take grayscale gradient
+images as input  The visualization are obtained by composing the Sobel  ltering with the  lters of the  rst layer
+of the AlexNet  Unsupervised  lters are slightly less sharp
+than their supervised counterpart  but still maintain edge
+and orientation information 
+
+Nearest neighbor queries  Our loss optimizes   distance
+between features and  xed vectors  This means that looking at the distance between features should provide some
+information about the type of structure that our model cap 
+
+ epochofunsupervisedtraining accuracytransfertrainacctransfertestacc permutationperiod accuracyUnsupervised Learning by Predicting Noise
+
+Figure   Images and their   nearest neighbors in ImageNet according to our model using an  cid  distance  The query images are shown on
+the top row  and the nearest neighbors are sorted from the closer to the further  Our features seem to capture global distinctive structures 
+
+  Comparison with the state of the art
+
+We report results on the transfer task both on ImageNet and
+PASCAL VOC   The model is trained on ImageNet 
+
+ImageNet classi cation 
+In this experiment  we evaluate
+the quality of our features for the object classi cation task
+of ImageNet  In this setup  we build the unsupervised features on images that correspond to prede ned image categories  Even though we do not have access to labels  the
+data itself is biased towards these classes  In order to evaluate the features  we freeze the layers up to the last convolutional layer and train the classi er with supervision  This
+experimental setting follows Noroozi   Favaro  
+We compare our model with several selfsupervised  Wang
+  Gupta    Doersch et al    Zhang et al   
+and one unsupervised approach       Donahue et al   
+Note that selfsupervised approaches use losses speci cally
+designed for visual features  Like BiGANs  Donahue et al 
+  NAT does not make any assumption about the domain but of the structure of its features  Table   compares
+NAT with these approaches 
+Among unsupervised approaches  NAT compares favorably to BiGAN  Donahue et al    Interestingly  the
+performance of NAT are slightly better than selfsupervised
+methods  even though we do not explicitly use domainspeci   clues in images or videos to guide the learning 
+While all the models provide performance in the    
+range  it is not clear if they all learn the same features  Finally  all the unsupervised deep features are outperformed
+
+Figure   Filters form the  rst layer of an AlexNet trained on ImageNet with supervision  left  or with NAT  right  The  lters
+are in grayscale  since we use grayscale gradient images as input 
+This visualization shows the composition of the gradients with the
+ rst layer 
+
+tures  Given   query image    we compute its feature     
+and search for its nearest neighbors according to the  cid  distance  Figure   shows images and their nearest neighbors 
+The features capture relatively complex structures in images  Objects with distinctive structures  like trunks or
+fruits  are well captured by our approach  However  this
+information is not always related to image labels  For example  the image of bird on the sea is matched to images
+more related to the sea or the sky rather than the bird 
+
+Unsupervised Learning by Predicting Noise
+
+Method
+Random  Noroozi   Favaro   
+SIFT FV    anchez et al   
+Wang   Gupta  
+Doersch et al   
+Zhang et al   
+ Noroozi   Favaro  
+BiGAN  Donahue et al   
+NAT
+
+Acc 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Table   Comparison of the proposed approach to stateof theart
+unsupervised feature learning on ImageNet    full multilayer
+perceptron is retrained on top of the features  We compare to several selfsupervised approaches and an unsupervised approach 
+     BiGAN  Donahue et al     Noroozi   Favaro  
+uses   signi cantly larger amount of features than the original
+AlexNet  We report classi cation accuracy 
+
+by handmade features  in particular Fisher Vectors with
+SIFT descriptors  This baseline uses   slightly bigger MLP
+for the classi er and its performance can be improved by
+  by bagging   such models  This difference of  
+in accuracy shows that unsupervised deep features are still
+quite far from the stateof thearts among all unsupervised
+features 
+
+Transferring to PASCAL VOC   We carry out  
+second transfer experiment on the PASCAL VOC dataset 
+on the classi cation and detection tasks  The model is
+trained on ImageNet  Depending on the task  we  netune
+all layers in the network  or solely the classi er  following Donahue et al    In all experiments  the parameters of the convolutional layers are initialized with the ones
+obtained with our unsupervised approach  The parameters of the classi cation layers are initialized with gaussian
+weights  We get rid of batch normalization layers and use
+  datadependent rescaling of the parameters  Kr ahenb uhl
+et al    Table   shows the comparison between our
+model and other unsupervised approaches  The results for
+other methods are taken from Donahue et al    except
+for Zhang et al   
+As with the ImageNet classi cation task  our performance
+is on par with selfsupervised approaches  for both detection and classi cation  Among purely unsupervised
+approaches  we outperform standard approaches like autoencoders or GANs by   large margin  Our model also
+performs slightly better than the best performing BiGAN
+model  Donahue et al    These experiments con rm
+our  ndings from the ImageNet experiments  Despite its
+simplicity  NAT learns feature that are as good as those obtained with more sophisticated and dataspeci   models 
+
+Trained layers
+ImageNet labels
+Agrawal et al   
+Pathak et al   
+Wang   Gupta  
+Doersch et al   
+Zhang et al   
+Autoencoder
+GAN
+BiGAN  Donahue et al   
+NAT
+
+Classi cation Detection
+fc 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+all
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+all
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+
+ 
+ 
+
+Table   Comparison of the proposed approach to stateof theart
+unsupervised feature learning on VOC   Classi cation and detection  We either    the features after conv  or we  netune the
+whole model  We compare to several selfsupervised and an unsupervised approaches  The GAN and autoencoder baselines are
+from Donahue et al    We report mean average prevision as
+customary on PASCAL VOC 
+
+  Conclusion
+This paper presents   simple unsupervised framework to
+learn discriminative features  By aligning the output of  
+neural network to lowdimensional noise  we obtain features on par with stateof theart unsupervised learning approaches  Our approach explicitly aims at learning discriminative features  while most unsupervised approaches target
+surrogate problems  like image denoising or image generation  As opposed to selfsupervised approaches  we make
+very few assumptions about the input space  This makes
+our appproach very simple and fast to train  Interestingly  it
+also shares some similarities with traditional clustering approaches as well as retrieval methods  While we show the
+potential of our approach on visual data  it will be interesting to try other domains  Finally  this work only considers
+simple noise distributions and alignment methods    possible direction of research is to explore target distributions
+and alignments that are more informative  This also would
+strengthen the relation between NAT and methods based on
+distribution matching like the earth mover distance 
+
+Acknowledgement  We greatly thank Herv     egou for
+his help throughout the development of this project  We
+also thank Allan Jabri  Edouard Grave  Iasonas Kokkinos 
+  eon Bottou  Matthijs Douze and the rest of FAIR for their
+support and helpful discussion  Finally  we thank Richard
+Zhang  Jeff Donahue and Florent Perronnin for their help 
+
+Unsupervised Learning by Predicting Noise
+
+References
+Agrawal     Carreira     and Malik     Learning to see by
+
+moving  In ICCV   
+
+Bach     and Harchaoui     Diffrac    discriminative and
+
+ exible framework for clustering  In NIPS   
+
+Bengio     Lamblin     Popovici     and Larochelle    
+Greedy layerwise training of deep networks  In NIPS 
+ 
+
+Bojanowski     Bach     Laptev     Ponce     Schmid    
+and Sivic     Finding actors and actions in movies  In
+ICCV   
+
+Bojanowski     Lajugie     Bach     Laptev     Ponce 
+   Schmid     and Sivic     Weakly supervised action
+labeling in videos under ordering constraints  In ECCV 
+ 
+
+Coates     and Ng     Learning feature representations
+with kmeans  In Neural Networks  Tricks of the Trade 
+Springer   
+
+Dalal     and Triggs     Histograms of oriented gradients
+
+for human detection  In CVPR   
+
+Deng     Dong     Socher     Li        Li     and
+FeiFei     Imagenet    largescale hierarchical image
+database  In CVPR   
+
+Denton        Chintala     and Fergus     Deep generative
+image models using   laplacian pyramid of adversarial
+networks  In NIPS   
+
+Doersch     Gupta     and Efros     Unsupervised visual
+representation learning by context prediction  In CVPR 
+ 
+
+Donahue     Kr ahenb uhl     and Darrell     Adversarial feature learning  arXiv preprint arXiv 
+ 
+
+Dosovitskiy     Springenberg     Riedmiller     and
+Brox     Discriminative unsupervised feature learning
+with convolutional neural networks  In NIPS   
+
+Everingham     Van Gool     Williams           Winn 
+   and Zisserman     The PASCAL visual object classes
+ VOC  challenge  IJCV   
+
+Fukushima     Neocognitron    selforganizing neural
+network model for   mechanism of pattern recognition
+unaffected by shift in position  Biological Cybernetics 
+   
+
+Girshick     Fast rcnn  In CVPR   
+
+Goodfellow     PougetAbadie     Mirza     Xu    
+WardeFarley     Ozair     Courville     and Bengio 
+   Generative adversarial nets  In NIPS   
+
+Goodman     Classes for fast maximum entropy training 
+
+In ICASSP   
+
+He     Zhang     Ren     and Sun     Deep residual learn 
+
+ing for image recognition  In CVPR   
+
+Ioffe     and Szegedy     Batch normalization  Accelerating deep network training by reducing internal covariate
+shift  arXiv preprint arXiv   
+
+Jayaraman     and Grauman     Learning image represen 
+
+tations tied to egomotion  In ICCV   
+
+Joulin     and Bach       convex relaxation for weakly
+
+supervised classi ers  In ICML   
+
+Joulin     Bach     and Ponce     Discriminative clustering
+
+for image cosegmentation  In CVPR   
+
+Joulin     van der Maaten     Jabri     and Vasilache    
+Learning visual features from large weakly supervised
+data  In ECCV   
+
+Kingma     and Welling     Autoencoding variational
+
+bayes  arXiv preprint arXiv   
+
+Kohonen     Selforganized formation of topologically cor 
+
+rect feature maps  Biological cybernetics   
+
+Kr ahenb uhl  Philipp  Doersch  Carl  Donahue 
+
+and Darrell  Trevor 
+of convolutional neural networks 
+arXiv   
+
+Datadependent
+
+Jeff 
+initializations
+arXiv preprint
+
+Krause     Perona     and Gomes        Discriminative
+clustering by regularized information maximization  In
+NIPS   
+
+Krizhevsky     Sutskever     and Hinton    
+
+Imagenet
+classi cation with deep convolutional neural networks 
+In NIPS   
+
+Kuhn        The hungarian method for the assignment
+problem  Naval research logistics quarterly   
+   
+
+LeCun     Boser     Denker        Henderson    
+Howard        Hubbard     and Jackel       Handwritten digit recognition with   backpropagation network 
+In NIPS   
+
+Liao     Schwing     Zemel     and Urtasun     Learning
+
+deep parsimonious representations  In NIPS   
+
+Lloyd     Least squares quantization in pcm  Transactions
+
+on information theory     
+
+Unsupervised Learning by Predicting Noise
+
+Lowe     Object recognition from local scaleinvariant fea 
+
+tures  In ICCV   
+
+Mairal     Koniusz     Harchaoui     and Schmid     Con 
+
+volutional kernel networks  In NIPS   
+
+Martinetz     and Schulten        neuralgas  network
+
+learns topologies   
+
+Masci     Meier     Cires an     and Schmidhuber 
+   Stacked convolutional autoencoders for hierarchical
+feature extraction  In ICANN   
+
+Mikolov     Chen     Corrado     and Dean     Ef cient
+estimation of word representations in vector space  arXiv
+preprint arXiv   
+
+Noroozi     and Favaro     Unsupervised learning of visual
+representations by solving jigsaw puzzles  arXiv preprint
+arXiv   
+
+van den Oord     Kalchbrenner     Espeholt     Vinyals 
+   and Graves     Conditional image generation with
+pixelcnn decoders  In NIPS   
+
+Vesanto     and Alhoniemi     Clustering of the selforganizing map  Transactions on neural networks   
+
+Vincent     Larochelle     Lajoie     Bengio     and Manzagol       Stacked denoising autoencoders  Learning
+useful representations in   deep network with   local denoising criterion  JMLR   Dec   
+
+Wang     and Gupta     Unsupervised learning of visual
+
+representations using videos  In ICCV   
+
+Xie     Girshick     and Farhadi     Unsupervised deep
+
+embedding for clustering analysis  In ICML   
+
+Xu     Neufeld     Larson     and Schuurmans     Maxi 
+
+mum margin clustering  In NIPS   
+
+Oquab     Bottou     Laptev     and Sivic     Learning
+and transferring midlevel image representations using
+convolutional neural networks  In CVPR   
+
+Yang     Parikh     and Batra     Joint unsupervised learning of deep representations and image clusters  In CVPR 
+ 
+
+Zhang     Isola     and Efros     Colorful image coloriza 
+
+tion  In ECCV   
+
+Zhao     Mathieu     Goroshin     and LeCun    
+In Workshop at
+
+Stacked WhatWhere Autoencoders 
+ICLR   
+
+Pathak     Krahenbuhl     Donahue     Darrell     and
+Efros     Context encoders  Feature learning by inpainting  In CVPR   
+
+Pinheiro        Collobert     and Dollar     Learning to
+
+segment object candidates  In NIPS   
+
+Ramanathan     Joulin     Liang     and FeiFei     Linking people in videos with their names using coreference
+resolution  In ECCV   
+
+Ranzato        Huang        Boureau        and LeCun 
+   Unsupervised learning of invariant feature hierarchies
+with applications to object recognition  In CVPR   
+
+Razavian     Sharif  Azizpour     Sullivan     and Carlsson     CNN features offthe shelf  an astounding baseline for recognition  In arXiv    
+
+Rubner     Tomasi     and Guibas          metric for
+In
+
+distributions with applications to image databases 
+ICCV   
+
+  anchez     Perronnin     Mensink     and Verbeek    
+Image classi cation with the  sher vector  Theory and
+practice  IJCV     
+
+Tang     Joulin     Li       and FeiFei     Co 
+
+localization in realworld images  In CVPR   
+
+Tygert     Chintala     Szlam     Tian     and Zaremba 
+   Scaleinvariant learning and convolutional networks 
+Applied and Computational Harmonic Analysis   
+   
+
+

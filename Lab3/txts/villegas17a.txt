@@ -1,0 +1,1031 @@
+Learning to Generate Longterm Future via Hierarchical Prediction
+
+Ruben Villegas     Jimei Yang   Yuliang Zou   Sungryull Sohn   Xunyu Lin   Honglak Lee    
+
+Abstract
+
+We propose   hierarchical approach for making
+longterm predictions of future frames  To avoid
+inherent compounding errors in recursive pixellevel prediction  we propose to  rst estimate highlevel structure in the input frames  then predict
+how that structure evolves in the future  and  
+nally by observing   single frame from the past
+and the predicted highlevel structure  we construct the future frames without having to observe
+any of the pixellevel predictions  Longterm
+video prediction is dif cult to perform by recurrently observing the predicted frames because the
+small errors in pixel space exponentially amplify
+as predictions are made deeper into the future 
+Our approach prevents pixellevel error propagation from happening by removing the need to
+observe the predicted frames  Our model is built
+with   combination of LSTM and analogybased
+encoderdecoder convolutional neural networks 
+which independently predict the video structure
+and generate the future frames  respectively  In
+experiments  our model is evaluated on the Human   and Penn Action datasets on the task of
+longterm pixellevel video prediction of humans
+performing actions and demonstrate signi cantly
+better results than the stateof theart 
+
+  Introduction
+Learning to predict the future has emerged as an important research problem in machine learning and arti cial
+intelligence  Given the great progress in recognition      
+ Krizhevsky et al    Szegedy et al    prediction becomes an essential module for intelligent agents to
+plan actions or to make decisions in realworld application
+scenarios  Jayaraman   Grauman      Finn et al 
+
+  Work completed while at Google Brain   Department of Electrical Engineering and Computer Science  University of Michigan 
+Ann Arbor  MI  USA   Adobe Research  San Jose  CA   Beihang
+University  Beijing  China   Google Brain  Mountain View  CA 
+Correspondence to  Ruben Villegas  rubville umich edu 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright   by
+the author   
+
+  For example  robots can quickly learn manipulation
+skills when predicting the consequences of physical interactions  Also  an autonomous car can brake or slow down
+when predicting   person walking across the driving lane  In
+this paper  we investigate longterm future frame prediction
+that provides full descriptions of the visual world 
+Recent recursive approaches to pixelwise video prediction
+highly depend on observing the generated frames in the
+past to make predictions further into the future  Oh et al 
+  Mathieu et al    Goroshin et al    Srivastava et al    Ranzato et al    Finn et al   
+Villegas et al    Lotter et al    In order to make
+reasonable longterm frame predictions in natural videos 
+these approaches need to be highly robust to pixellevel
+noise  However  the noise ampli es quickly through time
+until it overwhelms the signal  It is common that the  rst
+few prediction steps are of decent quality  but then the prediction degrades dramatically until all the video context is
+lost  Other existing works focus on predicting highlevel semantics  such as motion trajectories or action labels  Walker
+et al    Yuen   Torralba    Lee    driven by
+immediate applications       video surveillance  We note
+that such highlevel representations are the major factors for
+explaining the pixel variations into the future  In this work
+we assume that the highdimensional video data is generated from lowdimensional highlevel structures  which we
+hypothesize will be critical for making longterm visual predictions  Our main contribution is the hierarchical approach
+for video prediction that involves generative modeling of
+video using highlevel structures  Concretely  our algorithm
+ rst estimates highlevel structures of observed frames  and
+then predicts their future states  and  nally generates future
+frames conditioned on predicted highlevel structures 
+The prediction of future structure is performed by an LSTM
+that observes   sequence of structures estimated by   CNN 
+encodes the observed dynamics  and predicts the future sequence of such structures  We note that Fragkiadaki et al 
+  developed an LSTM architecture that can straightforwardly be adapted to our method  However  our main
+contribution is the hierarchical approach for video prediction  so we choose   simpler LSTM architecture to convey our idea  Our approach then observes   single frame
+from the past and predicts the entire future described by
+the predicted structure sequence using an analogymaking
+
+Learning to Generate Longterm Future via Hierarchical Prediction
+
+network  Reed et al    In particular  we propose an
+image generator that learns   shared embedding between
+image and highlevel structure information which allows us
+convert an input image into   future image guided by the
+structure difference between the input image and the future
+image  We evaluate the proposed model on challenging
+realworld human action video datasets  We use    human
+poses as our highlevel structures similar to Reed et al 
+    Thus  our LSTM network models the dynamics of
+human poses while our analogybased image generator network learns   joint imagepose embedding that allows the
+pose difference between an observed frame and   predicted
+frame to be transferred to image domain for future frame
+generation  As   result  this poseconditioned generation
+strategy prevents our network from propagating prediction
+errors through time  which in turn leads to very high quality
+future frame generation for long periods of time  Overall 
+the promising results of our approach suggest that it can be
+greatly bene cial to incorporate proper highlevel structures
+into the generative process 
+The rest of the paper is organized as follows    review of the
+related work is presented in Section   The overview of the
+proposed algorithm is presented in Section   The network
+con gurations and their training algorithms are described
+in Section   and Section   respectively  We present the
+experimental details and results in Section   and conclude
+the paper with discussions of future work in Section  
+  Related Work
+Early work on future frame prediction focused on small
+patches containing simple predictable motions  Sutskever
+et al    Michalski et al    Mittelman et al   
+and motions in real videos  Ranzato et al    Srivastava et al    High resolution videos contain far more
+complicated motion which cannot be modeled in   patchwise manner due to the well known aperture problem  The
+aperture problem causes blockiness in predictions as we
+move forward in time  Ranzato et al    tried to solve
+blockiness by averaging over spatial displacements after
+predicting patches  however  this approach does not work
+for longterm predictions 
+Recent approaches in video prediction have moved from predicting patches to full frame prediction  Oh et al    proposed   network architecture for action conditioned video
+prediction in Atari games  Mathieu et al    proposed
+an adversarial loss for video prediction and   multiscale
+network architecture that results in high quality prediction
+for   few timesteps in natural video  however  the frame prediction quality degrades quickly  Finn et al    proposed
+  network architecture to directly transform pixels from  
+current frame into the next frame by predicting   distribution
+over pixel motion from previous frames  Xue et al   
+proposed   probabilistic model for predicting possible mo 
+
+tions of   single input frame by training   motion encoder in
+  variational autoencoder approach  Vondrick et al   
+built   model that generates realistic looking video by separating background and foreground motion  Villegas et al 
+  improved the convolutional encoder decoder architecture by separating motion and content features  Lotter
+et al    built an architecture inspired by the predictive coding concept in neuroscience literature that predicts
+realistic looking frames 
+All the previously mentioned approaches attempt to perform
+video generation in   pixelto pixel process  We aim to
+perform the prediction of future frames in video by taking  
+hierarchical approach of  rst predicting highlevel structure
+and then using the highlevel structure to predict the future
+in the video from   single frame input 
+To the best of our knowledge  this is the  rst hierarchical
+approach to pixellevel video prediction  Our hierarchical
+architecture makes it possible to generate good quality longterm predictions that outperform current approaches  The
+main success from our algorithm comes from the novel idea
+of  rst making highlevel structure predictions which allows
+us to observe   single image and generate the future video
+by visualstructure analogy  Our image generator learns
+  shared embedding between image and structure inputs
+that allows us to transform highlevel image features into  
+future image driven by the predicted structure sequence 
+  Overview
+This paper tackles the task of longterm video prediction in
+  hierarchical perspective  Given the input highlevel structure sequence     and frame xt  our algorithm is asked to
+predict the future structure sequence pt     and subsequently generate frames xt       The problem with video
+frame prediction originates from modeling pixels directly
+in   sequenceto sequence manner and attempting to generate frames in   recurrent fashion  Current stateof theart
+approaches recurrently observe the predicted frames  which
+causes rapidly increasing error accumulation through time 
+Our objective is to avoid having to observe generated future
+frames at all during the full video prediction procedure 
+Figure   illustrates our hierarchical approach  Our full
+pipeline consists of   performing highlevel structure estimation from the input sequence    predicting   sequence of
+future highlevel structures  and   generating future images
+from the predicted structures by visualstructure analogymaking given an observed image and the predicted structures  We explore our idea by performing pixellevel video
+prediction of human actions while treating human pose as
+the highlevel structure  Hourglass network  Newell et al 
+  is used for pose estimation on input images  Subsequently    sequenceto sequence LSTMrecurrent network
+is trained to read the outputs of hourglass network and to
+
+Learning to Generate Longterm Future via Hierarchical Prediction
+
+Figure   Overall hierarchical approach to pixellevel video prediction  Our algorithm  rst observes frames from the past and estimate the
+highlevel structure  in this case human pose xycoordinates  in each frame  The estimated structure is then used to predict the future
+structures in   sequence to sequence manner  Finally  our algorithm takes the last observed frame  its estimated structure  and the predicted
+structure sequence  in this case represented as heatmaps  and generates the future frames  Green denotes input to our network and red
+denotes output from our network 
+
+predict the future pose sequence  Finally  we generate the
+future frames by analogy making using pose relationship in
+feature space to transform the last observed frame 
+The proposed algorithm makes it possible to decompose the
+task of video frame prediction to subtasks of future highlevel structure prediction and structureconditioned frame
+generation  By doing so  we remove the recursive dependency of generated frames which have caused the compound
+errors of pixellevel prediction in previous methods  which
+allows us to perform very longterm video prediction 
+  Architecture
+This section describes the architecture of the proposed algorithm using human pose as   highlevel structure  Our
+full network is composed of two modules  an encoderdecoder LSTM that observes and outputs xycoordinates 
+and an image generator that performs visual analogybased
+on highlevel structure heatmaps constructed from the xycoordinates output from LSTM 
+  Future Prediction of HighLevel Structures
+Figure   illustrates our pose predictor  Our network  rst
+encodes the observed structure dynamics by
+
+ ht  ct    LSTM  pt  ht  ct   
+
+ 
+where ht   RH represents the observed dynamics up to
+time    ct   RH is the memory cell that retains information
+from the history of pose inputs  pt       is the pose at
+time            coordinate positions of   joints  In order
+to make   reasonable prediction of the future pose  LSTM
+has to  rst observe   few pose inputs to identify the type of
+motion occurring in the pose sequence and how it is changing over time  LSTM also has to be able to remove noise
+present in the input pose  which can come from annotation
+error if using the datasetprovided pose annotation or pose
+estimation error if using   pose estimation algorithm  After
+  few pose inputs have been observed  LSTM generates the
+future pose by
+
+ pt     cid   cid ht
+
+ cid   
+
+ 
+
+Figure   Illustration of our pose predictor  LSTM observes  
+consecutive human pose inputs and predicts the pose for the next
+  timesteps  Note that the human heatmaps are used for illustration
+purposes  but our network observes and outputs xycoordinates 
+
+where   is   projection matrix    is   function on the projection       tanh or identity  and  pt       is the predicted
+pose  In the subsequent predictions  our LSTM does not
+observe the previously generated pose  Not observing generated pose in LSTM prevents errors in the pose prediction
+from being propagated into the future  and it also encourages the LSTM internal representation to contain robust
+highlevel features that allow it to generate the future sequence from only the original observation  As   result  the
+representation obtained in the pose input encoding phase
+must obtain all the necessary information for generating the
+correct action sequence in the decoding phase  After we
+have set the human pose sequence for the future frames  we
+proceed to generate the pixellevel visual future 
+  Image Generation by VisualStructure Analogy
+To synthesize the future frame given its pose structure  we
+make   visualstructure analogy inspired by Reed et al 
+  following pt   pt     xt   xt    read as  pt is to
+pt   as xt is to xt    as illustrated in Figure   Intuitively 
+the future frame xt   can be generated by transferring the
+structure transformation from pt to pt   to the observed
+frame xt  Our image generator instantiates this idea using
+  pose encoder fpose  an image encoder fimg and an image
+decoder fdec  Speci cally  fpose is   convolutional encoder
+that specializes on identifying key pose features from the
+
+Pose EstimationPose PredictionImage Generationt                               LSTMLSTMLSTMLSTMLSTMLSTMLearning to Generate Longterm Future via Hierarchical Prediction
+
+Algorithm   Video Prediction Procedure
+
+Figure   Generating image frames by making analogies between
+highlevel structures and image pixels 
+
+Figure   Illustration of our image generator  Our image generator
+observes an input image  its corresponding human pose  and the
+human pose of the future image  Through analogy making  our
+network generates the next frame 
+
+pose input that re ects highlevel human structure  fimg is
+also   convolutional encoder that acts on an image input by
+mapping the observed appearance into   feature space where
+the pose feature transformations can be easily imposed to
+synthesize the future frame using the convolutional decoder
+fdec  The visualstructure analogy is then performed by
+ xt     fdec  fpose     pt      fpose     pt    fimg  xt   
+ 
+where  xt   and  pt   are the generated image and corresponding predicted pose at time        xt and pt are the
+input image and corresponding estimated pose at time    and
+    is   function that maps the output xycoordinates from
+LSTM into depthconcatenated   heatmaps  Intuitively 
+fpose infers features whose  substractive  relationship is
+the same subtractive relationship between xt   and xt in
+the feature space computed by fimg       fpose   pt     
+fpose   pt    fimg xt      fimg xt  The network diagram is illustrated in in Figure   The relationship discovered by our network allows for highly nonlinear transformations between images to be inferred by   simple addition subtraction in feature space 
+  Training
+In this section  we  rst summarize the multistep video
+prediction algorithm using our networks and then describe
+
+ Each input pose to our image generator is converted to concatenated heatmaps of each landmark before computing features 
+ We independently construct the heatmap with   Gaussian
+
+function around the xycoordinates of each landmark 
+
+input     
+output   xk    
+for    to   do
+
+pt   Hourglass xt 
+ ht  ct    LSTM pt  ht  ct 
+
+end for
+for         to       do
+
+ pt     cid   cid ht
+
+ cid 
+
+ ht  ct    LSTM ht  ct 
+ xt   fdec  fpose     pt    fpose     pk    fimg  xk 
+
+end for
+
+the training strategies of the highlevel structure LSTM and
+of the visualstructure analogy network  We train our highlevel structure LSTM independent from the visualstructure
+analogy network  but both are combined during test time to
+perform video prediction 
+  MultiStep Prediction
+Our algorithm multistep video prediction procedure is described in Algorithm   Given input video frames  we use
+the Hourglass network  Newell et al    to estimate
+the human poses      Highlevel structure LSTM then
+observes      and proceeds to generate   pose sequence
+ pk     where   is the desired number of time steps to
+predict  Next  our visualstructure analogy network takes xk 
+pk  and  pk     and proceeds to generate future frames
+ xk     one by one  Note that the future frame prediction
+is performed by observing pixel information from only xk 
+that is  we never observe any of the predicted frames 
+  HighLevel Structure LSTM Training
+We employ   sequenceto sequence approach to predict
+the future structures       future human pose  Our LSTM
+is unrolled for   timesteps to allow it to observe   pose
+inputs before making any prediction  Then we minimize the
+prediction loss de ned by
+
+  cid 
+
+  cid 
+
+  
+
+  
+
+Lpose  
+
+ 
+   
+
+ ml
+
+    cid pl
+
+      pl
+
+    cid 
+ 
+
+ 
+
+    and pl
+
+where  pl
+    are the predicted and groundtruth
+pose lth landmark  respectively    is the indicator function  and ml
+    tells us whether   landmark is visible or
+not       not present in the groundtruth  Intuitively  the
+indicator function allows our LSTM to make   guess of the
+nonvisible landmarks even when not present at training 
+Even in the absence of   few landmarks during training 
+LSTM is able to internally understand the human structure
+and observed motion  Our training strategy allows LSTM to
+make   reasonable guess of the landmarks not present in the
+training data by using the landmarks available as context 
+
+        pose pose img dec xtptpt nxt  Learning to Generate Longterm Future via Hierarchical Prediction
+
+  VisualStructure Analogy Training
+Training our network to transform an input image into  
+target image that is too close in image space can lead to suboptimal parameters being learned due to the simplicity of
+such task that requires only changing   few pixels  Because
+of this  we train our network to perform random jumps in
+time within   video clip  Speci cally  we let our network
+observe   frame xt and its corresponding human pose pt 
+and force it to generate frame xt   given pose pt    where
+  is de ned randomly for every iteration at training time 
+Training to jump to random frames in time gives our network   clear signal the task at hand due to the large pixel
+difference between frames far apart in time 
+To train our network  we use the compound loss from Dosovitskiy   Brox   Our network is optimized to minimize the objective given by
+
+    Limg   Lfeat   LGen 
+
+where Limg is the loss in image space de ned by
+
+ 
+
+ 
+
+Limg    cid xt      xt   cid 
+ 
+
+where xt   and  xt   are the target and predicted frames 
+respectively  The image loss intuitively guides our network
+towards   rough blurry pixelleven frame prediction that
+re ects most details of the target image  Lfeat is the loss in
+feature space de ne by
+
+Lfeat    cid     xt          xt   cid 
+ 
+   cid     xt          xt   cid 
+ 
+
+ 
+
+where      extracts features representing mostly image
+appearance  and      extracts features representing mostly
+image structure  Combining appearance sensitive features
+with structure sensitive features gives our network   learning
+signal that allows it to make frame predictions with accurate
+appearance while also enforcing correct structure  LGen is
+the term in adversarial loss that allows our model to generate
+realistic looking images and is de ned by
+
+LGen     log    pt     xt     
+
+ 
+
+where xt   is the target image  pt   is the human pose
+corresponding to the target image  and     is the discriminator network in adversarial loss  This subloss allows our
+network to generate images that re ect   similar level of
+detail as the images observed in the training data 
+During the optimization of    we use the mismatch term
+proposed by Reed et al      which allows the discriminator   to become sensitive to mismatch between the generation and the condition  The discriminator loss is de ned
+by
+
+LDisc     log    pt    xt   
+
+    log        pt     xt   
+    log        pt    xt   
+
+ 
+
+while optimizing our generator with respect to the adversarial loss  the mismatchaware term sends   stronger signal to
+our generator resulting in higher quality image generation 
+and network optimization  Essentially  having   discriminator that knows the correct structureimage relationship 
+reduces the parameter search space of our generator while
+optimizing to fool the discriminator into believing the generated image is real  The latter in combination with the rest
+of loss terms allows our network to produce high quality
+image generation given the structure condition 
+  Experiments
+In this section  we present experiments on pixellevel
+video prediction of human actions on the Penn Action
+ Weiyu Zhang   Derpanis    and Human    datasets
+ Ionescu et al    Pose landmarks and video frames
+are normalized to be between   and   and frames are
+cropped based on temporal tubes to remove as much background as possible while making sure the human of interest is in all frames  For the feature similarity loss term
+ Equation   we use we use the last convolutional layer
+in AlexNet  Krizhevsky et al    as    and the last
+layer of the Hourglass Network in Newell et al    as
+   We augmented the available video data by performing horizontal  ips randomly at training time for Penn
+Action  Motionbased pixellevel quantitative evaluation
+using Peak Signalto Noise Ratio  PSNR  analysis  and
+control experiments can be found in the supplementary material  For video illustration of our method  please refer to
+the project website  https sites google com 
+  umich edu rubenevillegas hierch vid 
+We compare our method against two baselines based on
+convolutional LSTM and optical  ow    convolutional
+LSTM baseline  Shi et al    was trained with adversarial loss  Mathieu et al    and the feature similarity loss
+ Equation   An optical  ow based baseline used the last
+observed optical  ow  Farneback    to move the pixels
+of the last observed frame into the future 
+We follow   human psychophysical quantitative evaluation
+metric similar to Vondrick et al    Amazon Mechanical Turk  AMT  workers are given   twoalternative choice
+to indicate which of two videos looks more realistic  Specifically  the workers are shown   pair of videos  generated by
+two different methods  consisting of the same input frames
+indicated by   green box and predicted frames indicated
+by   red box  in addition to the action label of the video 
+The workers are instructed to make their decision based on
+the frames in the red box  Additionally  we train   Twostream action recognition network  Simonyan   Zisserman 
+  on the Penn Action dataset and test on the generated
+videos to evaluate if our network is able to generate videos
+predicting the activities observed in the original dataset 
+We do not perform action classi cation experiments on the
+
+Learning to Generate Longterm Future via Hierarchical Prediction
+
+Method
+
+Temporal Stream Spatial Stream Combined
+
+Real Test Data  
+
+Ours
+
+Convolutional LSTM
+
+Optical Flow
+
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+Table   Activity recognition evaluation 
+
+ Which video is more realistic 
+
+Prefers ours over Convolutional LSTM  
+ 
+
+Prefers ours over Optical Flow
+
+Baseball Clean   jerk Golf
+ 
+ 
+
+ 
+ 
+
+Jumping jacks Jump rope Tennis Mean
+     
+     
+
+ 
+ 
+
+Table   Penn Action Video Generation Preference  We show videos from two methods to Amazon Mechanical Turk workers and ask
+them to indicate which is more realistic  The table shows the percentage of times workers preferred our model against baselines   
+majority of the time workers prefer predictions from our model  We merged baseball pitch and baseball swing into baseball  and tennis
+forehand and tennis serve into tennis 
+
+Human   dataset due to high uncertainty in the human
+movements and high motion similarity amongst actions 
+Architectures  The sequence prediction LSTM is made of
+  single layer encoderdecoder LSTM with tied parameters 
+  hidden units  and tanh output activation  Note that
+the decoder LSTM does not observe any inputs other than
+the hidden units from the encoder LSTM as initial hidden
+units  The image and pose encoders are built with the same
+architecture as VGG   Simonyan   Zisserman    up
+to the pooling layer  except that the pose encoder takes in
+the pose heatmaps as an image made of   channels  and the
+image encoder takes   regular  channel image  The decoder
+is the mirrored architecture of the image encoder where
+we perform unpooling followed by deconvolution  and  
+ nal tanh activation  The convolutional LSTM baseline is
+built with the same architecture as the image encoder and
+decoder  but there is   convolutional LSTM layer with the
+same kernel size and number of channels as the last layer in
+the image encoder connecting them 
+  Penn Action Dataset
+Experimental setting  The Penn Action dataset is composed of   video sequences of   different actions and
+  human joint annotations for each sequence  To train our
+image generator  we use the standard train split provided in
+the dataset  To train our pose predictor  we subsample the
+actions in the standard traintest split due to very noisy joint
+groundtruth  We used videos from the actions of baseball
+pitch  baseball swing  clean and jerk  golf swing  jumping
+jacks  jump rope  tennis forehand  and tennis serve  Our
+pose predictor is trained to observe   inputs and predict  
+steps  and tested on predicting up to   steps  some videos 
+groundtruth end before   steps  Our image generator is
+trained to make single random jumps within   steps into
+the future  Our evaluations are performed on   single clip
+that starts at the  rst frame of each video 
+AMT results  These experiments were performed by  
+unique workers  where   total of   comparisons were
+made   against convolutional LSTM and   against op 
+
+tical  ow baseline  As shown in Table   and Figure   our
+method is capable of generating more realistic sequences
+compared to the baselines  Quantitatively  the action sequences generated by our network are perceptually higher
+quality than the baselines and also predict the correct action
+sequence    relatively small  although still substantial  margin is observed when comparing to convolutional LSTM
+for the jump rope action         for ours vs   for
+Convolutional LSTM  We hypothesize that convolutional
+LSTM is able to do   reasonable job for this action class due
+the highly cyclic motion nature of jumping up and down in
+place  The remainder of the human actions contain more
+complicated nonlinear motion  which is much more complicated to predict  Overall  our method outperforms the
+baselines by   large margin         for ours vs  
+for Convolutional LSTM  and   for ours vs   for
+Optical Flow  Side by side video comparison for all actions
+can be found in our project website 
+Action recognition results  To see whether the generated
+videos contain actions that can fool   CNN trained for action
+recognition  we train   TwoStream CNN on the PennAction dataset  In Table    Temporal Stream  denotes the
+network that observes motion as concatenated optical  ow
+ Farneback   optical  ow  images as input  and  Spatial
+Stream  denotes the network that observes single image as
+input   Combined  denotes the averaging of the output probability vectors from the Temporal and Spatial stream   Real
+test data  denotes evaluation on the groundtruth videos      
+perfect prediction 
+From Table   it is shown that our network is able to generate
+videos that are far more representative of the correct action
+compared to all baselines  in both Temporal and Spatial
+stream  regardless of using   neural network as the judge 
+When combining both Temporal and Spatial streams  our
+network achieves the best quality videos in terms of making
+  pixellevel prediction of the correct action 
+Pixellevel evaluation and control experiments  We
+evaluate the frames generated by our method using PSNR
+
+Learning to Generate Longterm Future via Hierarchical Prediction
+
+ Which video is more realistic 
+
+Prefers ours over Convolutional LSTM  
+ 
+
+Prefers ours over Optical Flow
+ Which video is more realistic 
+
+Prefers ours over Convolutional LSTM    
+   
+
+Prefers ours over Optical Flow
+
+Directions Discussion Eating Greeting Phoning Photo Posing
+           
+           
+Purchases Sitting Sittingdown Smoking Waiting Walking Mean
+       
+       
+
+ 
+ 
+
+Table   Human   Video Generation Preference  We show videos from two methods to Amazon Mechanical Turk workers and ask
+them to indicate which is more realistic  The table shows the percentage of times workers preferred our model against baselines  Most of
+the time workers prefer predictions from our model  We merge baseball pitch and baseball swing into baseball  and tennis forehand and
+tennis serve into tennis 
+
+as measure  and separated the test data based on amount
+of motion  as suggested by Villegas et al    From
+these experiments  we conclude that pixellevel evaluation
+highly depends on predicting the exact future observed in
+the groundtruth  Highest PSNR scores are achieved when
+trajectories of the exact future is used to generate the future frames  Due to space constraints  we ask the reader to
+please refer to the supplementary material for more detailed
+quantitative and qualitative analysis 
+  Human   Dataset
+Experimental
+settings  The Human   dataset
+ Ionescu et al    is composed of   million    human
+poses  we use the provided    pose projections  composed
+of   joints and corresponding images taken from  
+professional actors in   scenarios  For training  we use
+subjects number         and   and test on subjects
+number   and   Our pose predictor is trained to observe
+  inputs and predict   steps  and tested on predicting
+  steps  Our image generator is trained to make single
+random jumps anywhere in the training videos  We evaluate
+on   single clip from each test video that starts at the exact
+middle of the video to make sure there is motion occurring 
+
+AMT results  We collected   total of   comparisons
+  against convolutional LSTM and   against optical
+ ow baseline  from   unique workers  As shown in Table   the videos generated by our network are perceptually
+higher quality and re ect   reasonable future compared to
+the baselines on average  Unexpectedly  our network does
+not perform well on videos where the action involves minimal motion  such as sitting  sitting down  eating  taking  
+photo  and waiting  These actions usually involve the person
+staying still or making very unnoticeable motion which can
+result in   static prediction  by convolutional LSTM and or
+optical  ow  making frames look far more realistic than the
+prediction from our network  Overall  our method outperforms the baselines by   large margin         for ours
+vs   for Convolutional LSTM  and   for ours vs
+  for Optical Flow  Figure   shows that our network
+generates far higher quality future frames compared to the
+convolutional LSTM baseline  Side by side video comparison for all actions can be found in our project website 
+
+Pixellevel evaluation and control experiments  Following the same procedure as Section   we evaluated
+the predicted videos using PSNR and separated the test data
+by motion  Due to the high uncertainty and number of prediction steps in these videos  the predicted future can largely
+deviate from the exact future observed in the groundtruth 
+The highest PSNR scores are again achieved when the exact
+future pose is used to generate the video frames  however 
+there is an even larger gap compared to the results in Section   Due to space constraints  we ask the reader to
+please refer to the supplementary material for more detailed
+quantitative and qualitative analysis 
+  Conclusion and Future Work
+We propose   hierarchical approach of pixellevel video
+prediction  Using human action videos as benchmark  we
+have demonstrated that our hierarchical prediction approach
+is able to predict up to   future frames  which is an order
+of magnitude improvement in terms of effective temporal
+scale of the prediction 
+The success of our approach demonstrates that it can be
+greatly bene cial to incorporate the proper highlevel structure into the generative process  At the same time  an important open research question would be how to automatically
+learn such structures without domain knowledge  We leave
+this as future work 
+Another limitation of this work is that it generates   single
+future trajectory  For an agent to make   better estimation
+of what the future looks like  we would need more than one
+generated future  Future work will involve the generation of
+many futures given using   probabilistic sequence model 
+Finally  our model does not handle background motion  This
+is   highly challenging task since background comes in and
+out of sight  Predicting background motion will require  
+generative model that hallucinates the unseen background 
+We also leave this as future work 
+Acknowledgments
+This work was supported in part by ONR   
+  NSF CAREER IIS  Gift from Bosch Research  and Sloan Research Fellowship  We thank NVIDIA
+for donating     and TITAN   GPUs 
+
+Learning to Generate Longterm Future via Hierarchical Prediction
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+
+Figure   Qualitative evaluation of our network for   step prediction on Penn Action  top rows  and   step prediction on Human  
+ bottom rows  Our algorithm observes   previous input frames  estimates the human pose  predicts the pose sequence of the future  and
+it  nally generates the future frames  Green box denotes input and red box denotes prediction  We show the last   input frames  Side by
+side video comparisons can be found in our project website 
+
+Learning to Generate Longterm Future via Hierarchical Prediction
+
+References
+Dosovitskiy     and Brox     Generating images with perceptual similarity metrics based on deep networks  In
+NIPS     
+
+Farneback     Twoframe motion estimation based on poly 
+
+nomial expansion  In SCIA     
+
+Finn     Goodfellow        and Levine     Unsupervised
+learning for physical interaction through video prediction 
+In NIPS       
+
+Oh     Guo     Lee     Lewis        and Singh     Actionconditional video prediction using deep networks in atari
+games  In NIPS       
+
+Ranzato     Szlam     Bruna     Mathieu     Collobert     and Chopra     Video  language  modeling   
+baseline for generative models of natural videos  arXiv
+preprint       
+
+Reed     Zhang     Zhang     and Lee     Deep visual
+
+analogymaking  In NIPS       
+
+Fragkiadaki     Levine     Felsen     and Malik     Recurrent network models for human dynamics  In ICCV 
+   
+
+Reed     Akata     Mohan     Tenka     Schiele     and
+In NIPS 
+
+Lee     Learning what and where to draw 
+     
+
+Goroshin     Mathieu     and LeCun     Learning to
+
+linearize under uncertainty  In NIPS     
+
+Ionescu     Papava     Olaru     and Sminchisescu    
+Human    Large scale datasets and predictive methods
+IEEE
+for    human sensing in natural environments 
+Transactions on Pattern Analysis and Machine Intelligence    jul      
+
+Jayaraman     and Grauman     Learning image represen 
+
+tations tied to egomotion  In ICCV     
+
+Jayaraman     and Grauman     Lookahead before you
+leap  endto end active recognition by forecasting the
+effect of motion  arXiv preprint     
+
+Krizhevsky     Sutskever     and Hinton        Imagenet
+classi cation with deep convolutional neural networks 
+In NIPS       
+
+Lee     Modeling of Dynamic Environments for Visual
+Forecasting of American Football Plays  PhD thesis 
+Carnegie Mellon University Pittsburgh  PA     
+
+Lotter     Kreiman     and Cox     Deep predictive
+coding networks for video prediction and unsupervised
+learning  In ICLR       
+
+Mathieu     Couprie     and LeCun     Deep multiscale
+In ICLR 
+
+video prediction beyond mean square error 
+       
+
+Michalski     Memisevic     and Konda     Modeling
+deep temporal dependencies with recurrent  grammar
+cells  In NIPS     
+
+Mittelman     Kuipers     Savarese     and Lee     Structured recurrent temporal restricted boltzmann machines 
+In ICML     
+
+Reed     Akata     Yan     Logeswaran     Schiele    
+and Lee     Generative adversarial textto image synthesis  In ICML       
+
+Shi     Chen     Wang     Yeung       Wong      
+and WOO       Convolutional lstm network    machine
+learning approach for precipitation nowcasting  In NIPS 
+   
+
+Simonyan     and Zisserman     Twostream convolutional
+networks for action recognition in videos  In NIPS   
+ 
+
+Simonyan     and Zisserman     Very deep convolutional
+In ICLR 
+
+networks for largescale image recognition 
+   
+
+Srivastava     Mansimov     and Salakhudinov     Unsupervised learning of video representations using lstms  In
+ICML       
+
+Sutskever     Hinton        and Taylor        The recurrent
+temporal restricted boltzmann machine  In NIPS     
+
+Szegedy     Liu     Jia     Sermanet     Reed    
+Anguelov     Erhan     Vanhoucke     and Rabinovich 
+   Going deeper with convolutions  In CVPR     
+
+Villegas     Yang     Hong     Lin     and Lee     Decomposing motion and content for natural video sequence
+prediction  In ICLR         
+
+Vondrick     Pirsiavash     and Torralba     Generating
+
+videos with scene dynamics  In NIPS       
+
+Walker     Gupta      and Hebert      Patch to the future 
+
+Unsupervised visual prediction  In CVPR     
+
+Newell     Yang     and Deng     Stacked hourglass
+networks for human pose estimation  In ECCV     
+   
+
+Weiyu Zhang        and Derpanis     From actemes to
+action    stronglysupervised representation for detailed
+action understanding  In ICCV     
+
+Learning to Generate Longterm Future via Hierarchical Prediction
+
+Xue     Wu     Bouman        and Freeman        Visual
+dynamics  Probabilistic future frame synthesis via cross
+convolutional networks  NIPS     
+
+Yuen     and Torralba       datadriven approach for event
+
+prediction  In ECCV     
+
+

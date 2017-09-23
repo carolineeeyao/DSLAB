@@ -1,0 +1,1135 @@
+Reinforcement Learning with Deep EnergyBased Policies
+
+Tuomas Haarnoja     Haoran Tang     Pieter Abbeel       Sergey Levine  
+
+Abstract
+
+We propose   method for learning expressive
+energybased policies for continuous states and
+actions  which has been feasible only in tabular
+domains before  We apply our method to learning maximum entropy policies  resulting into  
+new algorithm  called soft Qlearning  that expresses the optimal policy via   Boltzmann distribution  We use the recently proposed amortized Stein variational gradient descent to learn
+  stochastic sampling network that approximates
+samples from this distribution  The bene ts of
+the proposed algorithm include improved exploration and compositionality that allows transferring skills between tasks  which we con rm in
+simulated experiments with swimming and walking robots  We also draw   connection to actorcritic methods  which can be viewed performing approximate inference on the corresponding
+energybased model 
+
+  Introduction
+Deep reinforcement learning  deep RL  has emerged as  
+promising direction for autonomous acquisition of complex behaviors  Mnih et al    Silver et al    due
+to its ability to process complex sensory input  Jaderberg
+et al    and to acquire elaborate behavior skills using
+generalpurpose neural network representations  Levine
+et al    Deep reinforcement learning methods can
+be used to optimize deterministic  Lillicrap et al   
+and stochastic  Schulman et al      Mnih et al   
+policies  However  most deep RL methods operate on the
+conventional deterministic notion of optimality  where the
+optimal solution  at least under full observability  is always
+  deterministic policy  Sutton   Barto    Although
+
+ Equal contribution
+
+ UC Berkeley  Department of Elec 
+ UC Berketrical Engineering and Computer Sciences
+ International
+ OpenAI
+ley  Department of Mathematics
+Computer Science Institute 
+Haoran Tang  hrtang math berkeley edu  Tuomas Haarnoja
+ haarnoja berkeley edu 
+
+Correspondence to 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+stochastic policies are desirable for exploration  this exploration is typically attained heuristically  for example by
+injecting noise  Silver et al    Lillicrap et al   
+Mnih et al    or initializing   stochastic policy with
+high entropy  Kakade    Schulman et al      Mnih
+et al   
+In some cases  we might actually prefer to learn stochastic
+behaviors  In this paper  we explore two potential reasons
+for this  exploration in the presence of multimodal objectives  and compositionality attained via pretraining  Other
+bene ts include robustness in the face of uncertain dynamics  Ziebart    imitation learning  Ziebart et al   
+and improved convergence and computational properties
+ Gu et al      Multimodality also has application in
+real robot tasks  as demonstrated in  Daniel et al   
+However  in order to learn such policies  we must de ne an
+objective that promotes stochasticity 
+In which cases is   stochastic policy actually the optimal
+solution  As discussed in prior work    stochastic policy
+emerges as the optimal answer when we consider the connection between optimal control and probabilistic inference
+ Todorov    While there are multiple instantiations of
+this framework  they typically include the cost or reward
+function as an additional factor in   factor graph  and infer the optimal conditional distribution over actions conditioned on states  The solution can be shown to optimize
+an entropyaugmented reinforcement learning objective or
+to correspond to the solution to   maximum entropy learning problem  Toussaint    Intuitively  framing control
+as inference produces policies that aim to capture not only
+the single deterministic behavior that has the lowest cost 
+but the entire range of lowcost behaviors  explicitly maximizing the entropy of the corresponding policy  Instead
+of learning the best way to perform the task  the resulting policies try to learn all of the ways of performing the
+task  It should now be apparent why such policies might
+be preferred  if we can learn all of the ways that   given
+task might be performed  the resulting policy can serve as
+  good initialization for  netuning to   more speci   behavior        rst learning all the ways that   robot could
+move forward  and then using this as an initialization to
+learn separate running and bounding skills    better exploration mechanism for seeking out the best mode in   multimodal reward landscape  and   more robust behavior in the
+
+Reinforcement Learning with Deep EnergyBased Policies
+
+face of adversarial perturbations  where the ability to perform the same task in multiple different ways can provide
+the agent with more options to recover from perturbations 
+Unfortunately  solving such maximum entropy stochastic
+policy learning problems in the general case is challenging    number of methods have been proposed  including Zlearning  Todorov    maximum entropy inverse
+RL  Ziebart et al    approximate inference using message passing  Toussaint     learning  Rawlik et al 
+  and Glearning  Fox et al    as well as more
+recent proposals in deep RL such as PGQ    Donoghue
+et al    but these generally operate either on simple
+tabular representations  which are dif cult to apply to continuous or highdimensional domains  or employ   simple
+parametric representation of the policy distribution  such
+as   conditional Gaussian  Therefore  although the policy
+is optimized to perform the desired skill in many different
+ways  the resulting distribution is typically very limited in
+terms of its representational power  even if the parameters
+of that distribution are represented by an expressive function approximator  such as   neural network 
+How can we extend the framework of maximum entropy
+policy search to arbitrary policy distributions  In this paper  we borrow an idea from energybased models  which in
+turn reveals an intriguing connection between Qlearning 
+actorcritic algorithms  and probabilistic inference  In our
+method  we formulate   stochastic policy as    conditional  energybased model  EBM  with the energy function corresponding to the  soft  Qfunction obtained when
+optimizing the maximum entropy objective 
+In highdimensional continuous spaces  sampling from this policy 
+just as with any general EBM  becomes intractable  We
+borrow from the recent literature on EBMs to devise an approximate sampling procedure based on training   separate
+sampling network  which is optimized to produce unbiased
+samples from the policy EBM  This sampling network can
+then be used both for updating the EBM and for action selection  In the parlance of reinforcement learning  the sampling network is the actor in an actorcritic algorithm  This
+reveals an intriguing connection  entropy regularized actorcritic algorithms can be viewed as approximate Qlearning
+methods  with the actor serving the role of an approximate
+sampler from an intractable posterior  We explore this connection further in the paper  and in the course of this discuss
+connections to popular deep RL methods such as deterministic policy gradient  DPG   Silver et al    Lillicrap
+et al    normalized advantage functions  NAF   Gu
+et al      and PGQ    Donoghue et al   
+The principal contribution of this work is   tractable 
+ef cient algorithm for optimizing arbitrary multimodal
+stochastic policies represented by energybased models  as
+well as   discussion that relates this method to other recent
+
+algorithms in RL and probabilistic inference  In our experimental evaluation  we explore two potential applications of
+our approach  First  we demonstrate improved exploration
+performance in tasks with multimodal reward landscapes 
+where conventional deterministic or unimodal methods are
+at high risk of falling into suboptimal local optima  Second 
+we explore how our method can be used to provide   degree
+of compositionality in reinforcement learning by showing
+that stochastic energybased policies can serve as   much
+better initialization for learning new skills than either random policies or policies pretrained with conventional maximum reward objectives 
+  Preliminaries
+In this section  we will de ne the reinforcement learning
+problem that we are addressing and brie   summarize the
+maximum entropy policy search objective  We will also
+present   few useful identities that we will build on in our
+algorithm  which will be presented in Section  
+  Maximum Entropy Reinforcement Learning
+
+We will address learning of maximum entropy policies with
+approximate inference for reinforcement learning in continuous action spaces  Our reinforcement learning problem can be de ned as policy search in an in nitehorizon
+Markov decision process  MDP  which consists of the tuple       ps     The state space   and action space   are
+assumed to be continuous  and the state transition probability ps                   represents the probability
+density of the next state st      given the current state
+st     and action at      The environment emits   reward              rmin  rmax  on each transition  which
+we will abbreviate as rt  cid    st  at  to simplify notation 
+We will also use  st  and  st  at  to denote the state
+and stateaction marginals of the trajectory distribution induced by   policy  at st 
+Our goal is to learn   policy  at st  We can de ne the
+standard reinforcement learning objective in terms of the
+above quantities as
+
+ 
+std   arg max
+
+ 
+
+  st at     st  at   
+
+ 
+
+ cid 
+
+ 
+
+ cid 
+
+Maximum entropy RL augments the reward with an entropy term  such that the optimal policy aims to maximize
+its entropy at each visited state 
+ 
+  st at     st  at   st   
+ 
+MaxEnt   arg max 
+where   is an optional but convenient parameter that can
+be used to determine the relative importance of entropy and
+reward  Optimization problems of this type have been explored in   number of prior works  Kappen    Todorov 
+
+ 
+
+ In principle    can be folded into the reward function 
+eliminating the need for an explicit multiplier  but in practice  it is
+often convenient to keep   as   hyperparameter 
+
+Reinforcement Learning with Deep EnergyBased Policies
+
+ cid   
+
+ 
+
+exp
+
+and soft value function by
+
+   
+soft st      log
+
+ cid 
+MaxEnt at st    exp cid   
+
+ 
+
+ 
+
+Then the optimal policy for   is given by
+
+  Ziebart et al    which are covered in more detail in Section   Note that this objective differs qualitatively from the behavior of Boltzmann exploration  Sallans   Hinton    and PGQ    Donoghue et al   
+which greedily maximize entropy at the current time step 
+but do not explicitly optimize for policies that aim to reach
+states where they will have high entropy in the future  This
+distinction is crucial  since the maximum entropy objective
+can be shown to maximize the entropy of the entire trajectory distribution for the policy   while the greedy Boltzmann exploration approach does not  Ziebart et al   
+Levine   Abbeel    As we will discuss in Section  
+this maximum entropy formulation has   number of bene 
+ ts  such as improved exploration in multimodal problems
+and better pretraining for later adaptation 
+If we wish to extend either the conventional or the maximum entropy RL objective to in nite horizon problems  it
+is convenient to also introduce   discount factor   to ensure
+that the sum of expected rewards  and entropies  is  nite 
+In the context of policy search algorithms  the use of   discount factor is actually   somewhat nuanced choice  and
+writing down the precise objective that is optimized when
+using the discount factor is nontrivial  Thomas    We
+defer the full derivation of the discounted objective to Appendix    since it is unwieldy to write out explicitly  but
+we will use the discount   in the following derivations and
+in our  nal algorithm 
+
+  Soft Value Functions and EnergyBased Models
+Optimizing the maximum entropy objective in   provides
+us with   framework for training stochastic policies  but we
+must still choose   representation for these policies  The
+choices in prior work include discrete multinomial distributions    Donoghue et al    and Gaussian distributions  Rawlik et al    However  if we want to use  
+very general class of distributions that can represent complex  multimodal behaviors  we can instead opt for using
+general energybased policies of the form
+
+ at st    exp    st  at   
+
+ 
+where   is an energy function that could be represented 
+for example  by   deep neural network 
+If we use  
+universal function approximator for    we can represent
+any distribution  at st  There is   close connection
+between such energybased models and soft versions of
+value functions and Qfunctions  where we set   st  at   
+   
+  Qsoft st  at  and use the following theorem 
+Theorem   Let the soft Qfunction be de ned by
+  
+soft st  at    rt 
+  st   
+
+ cid 
+MaxEnt st   
+
+    rt       
+
+ cid   cid 
+
+ 
+
+ 
+
+  
+
+da cid 
+
+ cid 
+soft st    cid 
+  
+soft st cid   
+
+ 
+
+ 
+
+     
+
+soft st  at    
+
+Proof  See Appendix    as well as  Ziebart   
+
+Theorem   connects the maximum entropy objective in  
+and energybased models  where  
+  Qsoft st  at  acts as the
+  Vsoft st  serves as the logpartition
+negative energy  and  
+function  As with the standard Qfunction and value function  we can relate the Qfunction to the value function at  
+future state via   soft Bellman equation 
+Theorem   The soft Qfunction in   satis es the soft
+Bellman equation
+
+  
+soft st  at    rt     Est ps     
+
+soft st   
+
+ 
+
+where the soft value function    
+Proof  See Appendix    as well as  Ziebart   
+
+soft is given by  
+
+The soft Bellman equation is   generalization of the conventional  hard  equation  where we can recover the more
+standard equation as       which causes   to approach
+  hard maximum over the actions  In the next section  we
+will discuss how we can use these identities to derive  
+Qlearning style algorithm for learning maximum entropy
+policies  and how we can make this practical for arbitrary
+Qfunction representations via an approximate inference
+procedure 
+  Training Expressive EnergyBased Models
+
+via Soft QLearning
+
+In this section  we will present our proposed reinforcement
+learning algorithm  which is based on the soft Qfunction
+described in the previous section  but can be implemented
+via   tractable stochastic gradient descent procedure with
+approximate sampling  We will  rst describe the general
+case of soft Qlearning  and then present the inference procedure that makes it tractable to use with deep neural network representations in highdimensional continuous state
+and action spaces  In the process  we will relate this Qlearning procedure to inference in energybased models
+and actorcritic algorithms 
+  Soft QIteration
+We can obtain   solution to   by iteratively updating estimates of    
+soft and   
+soft  This leads to    xedpoint iteration that resembles Qiteration 
+Theorem   Soft Qiteration  Let Qsoft        and Vsoft   
+
+be bounded and assume that cid 
+
+  Qsoft      cid cid  da cid   
+
+  exp cid   
+
+Reinforcement Learning with Deep EnergyBased Policies
+
+soft     exists  Then the  xedpoint itera 
+
+  and that   
+tion
+Qsoft st  at  rt   Est ps  Vsoft st     st  at
+
+ cid 
+
+ cid 
+
+Vsoft st    log
+
+exp
+ 
+soft and    
+soft  respectively 
+
+ 
+
+converges to   
+Proof  See Appendix    as well as  Fox et al   
+
+Qsoft st    cid 
+
+ cid 
+
+ 
+da cid   st  
+
+We refer to the updates in   and   as the soft Bellman
+backup operator that acts on the soft value function  and
+denote it by     The maximum entropy policy in   can
+then be recovered by iteratively applying this operator until convergence  However  there are several practicalities
+that need to be considered in order to make use of the algorithm  First  the soft Bellman backup cannot be performed
+exactly in continuous or large state and action spaces  and
+second  sampling from the energybased model in   is intractable in general  We will address these challenges in
+the following sections 
+  Soft QLearning
+This section discusses how the Bellman backup in Theorem   can be implemented in   practical algorithm that
+uses    nite set of samples from the environment  resulting
+in   method similar to Qlearning  Since the soft Bellman
+backup is   contraction  see Appendix    the optimal
+value function is the  xed point of the Bellman backup 
+and we can  nd it by optimizing for   Qfunction for which
+the soft Bellman error           is minimized at all states
+and actions  While this procedure is still intractable due to
+the integral in   and the in nite set of all states and actions  we can express it as   stochastic optimization  which
+leads to   stochastic gradient descent update procedure  We
+will model the soft Qfunction with   function approximator with parameters   and denote it as   
+To convert Theorem   into   stochastic optimization
+problem  we  rst express the soft value function in terms
+of an expectation via importance sampling 
+
+soft st  at 
+
+ cid 
+
+exp cid   
+
+soft st    cid cid 
+
+ cid 
+
+soft st      log Eqa cid 
+   
+
+ 
+
+ 
+
+ cid            cid      where   can be any
+
+where qa cid  can be an arbitrary distribution over the action
+space  Second  by noting the identity                 
+    Ex  
+strictly positive density function on    we can express the
+soft Qiteration in an equivalent form as minimizing
+JQ   Est qst  at qat
+   
+where qst   qat are positive over   and   respectively 
+soft st  at    rt    Est ps     
+   
+soft st  is   target Qvalue  with    
+soft st  given by   and   being replaced
+by the target parameters   
+
+soft st  at   
+
+ cid     
+
+ cid cid 
+
+soft st  at 
+
+ cid 
+
+ 
+ 
+
+    
+qa cid   cid 
+
+    
+
+This stochastic optimization problem can be solved approximately using stochastic gradient descent using sampled states and actions  While the sampling distributions qst and qat can be arbitrary  we typically use real
+samples from rollouts of the current policy  at st   
+
+soft st  at cid  For qa cid  we have more options   
+
+exp cid   
+
+convenient choice is   uniform distribution  However  this
+choice can scale poorly to high dimensions    better choice
+is to use the current policy  which produces an unbiased
+estimate of the soft value as can be con rmed by substitution  This overall procedure yields an iterative approach
+that optimizes over the Qvalues  which we summarize in
+Section  
+However 
+still need  
+tractable way to sample from the policy  at st   
+
+soft st  at cid  both to take onpolicy actions and 
+
+exp cid   
+
+in continuous
+
+spaces  we
+
+if so desired  to generate action samples for estimating
+the soft value function  Since the form of the policy is so
+general  sampling from it is intractable  We will therefore
+use an approximate sampling procedure  as discussed in
+the following section 
+  Approximate Sampling and Stein Variational
+
+    
+
+Gradient Descent  SVGD 
+
+In this section we describe how we can approximately sample from the soft Qfunction  Existing approaches that sample from energybased distributions generally fall into two
+categories  methods that use Markov chain Monte Carlo
+ MCMC  based sampling  Sallans   Hinton    and
+methods that learn   stochastic sampling network trained
+to output approximate samples from the target distribution
+ Zhao et al    Kim   Bengio    Since sampling
+via MCMC is not tractable when the inference must be
+performed online       when executing   policy  we will
+use   sampling network based on Stein variational gradient descent  SVGD   Liu   Wang    and amortized
+SVGD  Wang   Liu    Amortized SVGD has several
+intriguing properties  First  it provides us with   stochastic sampling network that we can query for extremely fast
+sample generation  Second  it can be shown to converge
+to an accurate estimate of the posterior distribution of an
+EBM  Third  the resulting algorithm  as we will show later 
+strongly resembles actorcritic algorithm  which provides
+for   simple and computationally ef cient implementation
+and sheds light on the connection between our algorithm
+and prior actorcritic methods 
+Formally  we want to learn   stateconditioned stochastic
+neural network at       st  parametrized by   that
+maps noise samples   drawn from   normal Gaussian  or
+other arbitrary distribution  into unbiased action samples
+from the target EBM corresponding to   
+soft  We denote
+the induced distribution of the actions as  at st  and we
+want to  nd parameters   so that the induced distribution
+
+Reinforcement Learning with Deep EnergyBased Policies
+
+approximates the energybased distribution in terms of the
+KL divergence
+   st   
+
+ 
+
+DKL
+
+ st 
+
+soft st           
+
+soft
+
+ cid cid cid cid  exp
+
+ cid   
+
+ 
+
+ cid   
+
+ cid cid cid 
+
+ 
+
+ cid 
+
+ cid 
+
+ cid 
+
+Suppose we  perturb    set of independent samples     
+   
+      st  in appropriate directions        st  the induced KL divergence can be reduced  Stein variational gradient descent  Liu   Wang    provides the most greedy
+directions as   functional
+       st    Eat 
+
+soft st    cid cid cid   cid at
+ cid 
+
+ at        st   cid   
+
+       cid   cid        st cid cid   cid at
+
+ 
+
+ cid 
+
+ 
+
+where   is   kernel function  typically Gaussian  see details in Appendix    To be precise       is the optimal
+direction in the reproducing kernel Hilbert space of   and
+is thus not strictly speaking the gradient of   but it turns
+       as explained in  Wang  
+out that we can set    
+ at
+Liu    With this assumption  we can use the chain
+rule and backpropagate the Stein variational gradient into
+the policy network according to
+
+    st 
+
+ 
+
+    
+
+     st 
+
+     st 
+
+ 
+
+ 
+
+ 
+
+and use any gradientbased optimization method to learn
+the optimal sampling network parameters  The sampling
+network     can be viewed as an actor in an actorcritic algorithm  We will discuss this connection in Section   but
+ rst we will summarize our complete maximum entropy
+policy learning algorithm 
+  Algorithm Summary
+To summarize  we propose the soft Qlearning algorithm
+for learning maximum entropy policies in continuous domains  The algorithm proceeds by alternating between collecting new experience from the environment  and updating
+the soft Qfunction and sampling network parameters  The
+experience is stored in   replay memory buffer   as standard in deep Qlearning  Mnih et al    and the parameters are updated using random minibatches from this
+memory  The soft Qfunction updates use   delayed version of the target values  Mnih et al    For optimization  we use the ADAM  Kingma   Ba    optimizer and empirical estimates of the gradients  which we
+denote by   The exact formulae used to compute the gradient estimates is deferred to Appendix    which also discusses other implementation details  but we summarize an
+overview of soft Qlearning in Algorithm  
+  Related Work
+Maximum entropy policies emerge as the solution when
+we cast optimal control as probabilistic inference  In the
+
+Algorithm   Soft Qlearning
+
+      some initialization distributions 
+Assign target parameters             
+    empty replay memory 
+for each epoch do
+
+for each   do
+
+ 
+
+      
+ 
+
+      
+ 
+
+       
+
+Collect experience
+Sample an action for st using    
+at       st  where           
+Sample next state from the environment 
+st    ps st st  at 
+Save the new experience in the replay memory 
+         st  at    st  at  st   
+Sample   minibatch from the replay memory
+     
+   
+      
+Update the soft Qfunction parameters
+Sample         
+     qa cid  for each     
+  
+Compute empirical soft values     
+soft     
+   in  
+Compute empirical gradient  JQ of  
+Update   according to  JQ using ADAM 
+Update policy
+Sample       
+            for each     
+Compute actions       
+Compute      using empirical estimate of  
+Compute empiricial estimate of      
+Update   according to     using ADAM 
+
+                
+   
+
+ 
+
+ 
+
+end for
+if epoch mod update interval     then
+
+Update target parameters             
+
+end if
+end for
+
+case of linearquadratic systems  the mean of the maximum entropy policy is exactly the optimal deterministic
+policy  Todorov    which has been exploited to construct practical path planning methods based on iterative
+linearization and probabilistic inference techniques  Toussaint    In discrete state spaces  the maximum entropy
+policy can be obtained exactly  This has been explored in
+the context of linearly solvable MDPs  Todorov    and 
+in the case of inverse reinforcement learning  MaxEnt IRL
+ Ziebart et al    In continuous systems and continuous time  path integral control studies maximum entropy
+policies and maximum entropy planning  Kappen   
+In contrast to these prior methods  our work is focused on
+extending the maximum entropy policy search framework
+to highdimensional continuous spaces and highly multimodal objectives  via expressive generalpurpose energy
+functions represented by deep neural networks    number of related methods have also used maximum entropy
+policy optimization as an intermediate step for optimizing
+policies under   standard expected reward objective  Pe 
+
+Reinforcement Learning with Deep EnergyBased Policies
+
+ters et al    Neumann    Rawlik et al    Fox
+et al    Among these  the work of Rawlik et al   
+resembles ours in that it also makes use of   temporal difference style update to   soft Qfunction  However  unlike
+this prior work  we focus on generalpurpose energy functions with approximate sampling  rather than analytically
+normalizable distributions    recent work  Liu et al   
+also considers an entropy regularized objective  though the
+entropy is on policy parameters  not on sampled actions 
+Thus the resulting policy may not represent an arbitrarily complex multimodal distribution with   single parameter  The form of our sampler resembles the stochastic
+networks proposed in recent work on hierarchical learning  Florensa et al    However this prior work uses
+  taskspeci   reward bonus system to encourage stochastic behavior  while our approach is derived from optimizing
+  general maximum entropy objective 
+  closely related concept to maximum entropy policies is
+Boltzmann exploration  which uses the exponential of the
+standard Qfunction as the probability of an action  Kaelbling et al      number of prior works have also explored representing policies as energybased models  with
+the Qvalue obtained from an energy model such as   restricted Boltzmann machine  RBM   Sallans   Hinton 
+  Elfwing et al    Otsuka et al    Heess
+et al    Although these methods are closely related 
+they have not  to our knowledge  been extended to the
+case of deep network models  have not made extensive use
+of approximate inference techniques  and have not been
+demonstrated on the complex continuous tasks  More recently    Donoghue et al    drew   connection between Boltzmann exploration and entropyregularized policy gradient  though in   theoretical framework that differs
+from maximum entropy policy search  unlike the full maximum entropy framework  the approach of   Donoghue
+et al    only optimizes for maximizing entropy at the
+current time step  rather than planning for visiting future
+states where entropy will be further maximized  This prior
+method also does not demonstrate learning complex multimodal policies in continuous action spaces 
+Although we motivate our method as Qlearning  its structure resembles an actorcritic algorithm 
+It is particularly instructive to observe the connection between our approach and the deep deterministic policy gradient method
+ DDPG   Lillicrap et al    which updates   Qfunction critic according to  hard  Bellman updates  and
+then backpropagates the Qvalue gradient into the actor 
+similarly to NFQCA  Hafner   Riedmiller    Our actor update differs only in the addition of the   term  Indeed 
+without this term  our actor would estimate   maximum  
+posteriori  MAP  action  rather than capturing the entire
+EBM distribution  This suggests an intriguing connection
+between our method and DDPG  if we simply modify the
+
+DDPG critic updates to estimate soft Qvalues  we recover
+the MAP variant of our method  Furthermore  this connection allows us to cast DDPG as simply an approximate
+Qlearning method  where the actor serves the role of an
+approximate maximizer  This helps explain the good performance of DDPG on offpolicy data  We can also make
+  connection between our method and policy gradients  In
+Appendix    we show that the policy gradient for   policy
+represented as an energybased model closely corresponds
+to the update in soft Qlearning  Similar derivation is presented in   concurrent work  Schulman et al   
+  Experiments
+Our experiments aim to answer the following questions 
+  Does our soft Qlearning method accurately capture  
+multimodal policy distribution    Can soft Qlearning
+with energybased policies aid exploration for complex
+tasks that require tracking multiple modes    Can   maximum entropy policy serve as   good initialization for  netuning on different tasks  when compared to pretraining
+with   standard deterministic objective  We compare our
+algorithm to DDPG  Lillicrap et al    which has been
+shown to achieve better sample ef ciency on the continuous control problems that we consider than other recent
+techniques such as REINFORCE  Williams    TRPO
+ Schulman et al      and      Mnih et al    This
+comparison is particularly interesting since  as discussed
+in Section   DDPG closely corresponds to   deterministic
+maximum   posteriori variant of our method  The detailed
+experimental setup can be found in Appendix    Videos
+of all experiments  and example source code  are available
+online 
+  Didactic Example  MultiGoal Environment
+In order to verify that amortized SVGD can correctly
+draw samples from energybased policies of the form
+
+soft      cid  and that our complete algorithm can suc 
+
+exp cid   
+
+cessful learn to represent multimodal behavior  we designed   simple  multigoal  environment  in which the
+agent is      point mass trying to reach one of four symmetrically placed goals  The reward is de ned as   mixture
+of Gaussians  with means placed at the goal positions  An
+optimal strategy is to go to an arbitrary goal  and the optimal maximum entropy policy should be able to choose
+each of the four goals at random  The  nal policy obtained
+with our method is illustrated in Figure   The Qvalues indeed have complex shapes  being unimodal at        
+convex at         and bimodal at         The
+stochastic policy samples actions closely following the energy landscape  hence learning diverse trajectories that lead
+to all four goals 
+In comparison    policy trained with
+DDPG randomly commits to   single goal 
+
+ https sites google com view softqlearning home
+ https github com haarnoja softqlearning
+
+Reinforcement Learning with Deep EnergyBased Policies
+
+Figure   Illustration of the    multigoal environment  Left  trajectories from   policy learned with our method  solid blue lines 
+The   and   axes correspond to    positions  states  The agent
+is initialized at the origin  The goals are depicted as red dots 
+and the level curves show the reward  Right  Qvalues at three
+selected states  depicted by level curves  red  high values  blue 
+low values  The   and   axes correspond to    velocity  actions 
+bounded between   and   Actions sampled from the policy are
+shown as blue stars  Note that  in regions           between
+the goals  the method chooses multimodal actions 
+
+  Learning MultiModal Policies for Exploration
+Though not all environments have   clear multimodal
+reward landscape as in the  multigoal  example  multimodality is prevalent in   variety of tasks  For example 
+  chess player might try various strategies before settling
+on one that seems most effective  and an agent navigating  
+maze may need to try various paths before  nding the exit 
+During the learning process  it is often best to keep trying
+multiple available options until the agent is con dent that
+one of them is the best  similar to   bandit problem  Lai
+  Robbins    However  deep RL algorithms for continuous control typically use unimodal action distributions 
+which are not well suited to capture such multimodality 
+As   consequence  such algorithms may prematurely commit to one mode and converge to suboptimal behavior 
+To evaluate how maximum entropy policies might aid exploration  we constructed simulated continuous control environments where tracking multiple modes is important
+for success  The  rst experiment uses   simulated swimming snake  see Figure   which receives   reward equal
+to its speed along the xaxis  either forward or backward 
+However  once the swimmer swims far enough forward  it
+crosses    nish line  and receives   larger reward  Therefore  the best learning strategy is to explore in both directions until the bonus reward is discovered  and then commit to swimming forward  As illustrated in Figure   in
+Appendix    our method is able to recover this strategy 
+keeping track of both modes until the  nish line is discovered  All stochastic policies eventually commit to swim 
+
+    Swimming snake
+
+    Quadrupedal robot
+
+Figure   Simulated robots used in our experiments 
+
+    Swimmer  higher is better      Quadruped  lower is better 
+
+Figure   Comparison of soft Qlearning and DDPG on the swimmer snake task and the quadrupedal robot maze task      Shows
+the maximum traveled forward distance since the beginning of
+training for several runs of each algorithm  there is   large reward after crossing the  nish line 
+    Shows our method was
+able to reach   low distance to the goal faster and more consistently  The different lines show the minimum distance to the goal
+since the beginning of training  For both domains  all runs of our
+method cross the threshold line  acquiring the more optimal strategy  while some runs of DDPG do not 
+
+ming forward  The deterministic DDPG method shown in
+the comparison commits to   mode prematurely  with only
+  of the policies converging on   forward motion  and
+  choosing the suboptimal backward mode 
+The second experiment studies   more complex task with  
+continuous range of equally good options prior to discovery of   sparse reward goal 
+In this task    quadrupedal
+   robot  adapted from Schulman et al      needs to
+ nd   path through   maze to   target position  see Figure   The reward function is   Gaussian centered at the
+target  The agent may choose either the upper or lower passage  which appear identical at  rst  but the upper passage
+is blocked by   barrier  Similar to the swimmer experiment  the optimal strategy requires exploring both directions and choosing the better one  Figure     compares
+the performance of DDPG and our method  The curves
+show the minimum distance to the target achieved so far
+and the threshold equals the minimum possible distance if
+the robot chooses the upper passage  Therefore  successful
+exploration means reaching below the threshold  All policies trained with our method manage to succeed  while only
+  policies trained with DDPG converge to choosing the
+lower passage 
+
+Reinforcement Learning with Deep EnergyBased Policies
+
+   
+
+   
+
+   
+
+   
+
+Figure   Quadrupedal robot     was trained to walk in random directions in an empty pretraining environment  details in Figure  
+see Appendix    and then  netuned on   variety of tasks  including   wide     narrow     and Ushaped hallway    
+  Accelerating Training on Complex Tasks with
+
+Pretrained Maximum Entropy Policies
+
+  standard way to accelerate deep neural network training is taskspeci   initialization  Goodfellow et al   
+where   network trained for one task is used as initialization for another task  The  rst task might be something
+highly general  such as classifying   large image dataset 
+while the second task might be more speci    such as  negrained classi cation with   small dataset  Pretraining has
+also been explored in the context of RL  Shelhamer et al 
+  However  in RL  nearoptimal policies are often
+neardeterministic  which makes them poor initializers for
+new tasks 
+In this section  we explore how our energybased policies can be trained with fairly broad objectives
+to produce an initializer for more quickly learning more
+speci   tasks 
+We demonstrate this on   variant of the
+quadrupedal robot task  The pretraining
+phase involves learning to locomote in
+an arbitrary direction  with   reward that
+simply equals the speed of the center of
+mass  The resulting policy moves the
+agent quickly to an randomly chosen direction  An overhead plot of the center of mass traces is shown above to
+illustrate this  This pretraining is similar in some ways to
+recent work on modulated controllers  Heess et al   
+and hierarchical models  Florensa et al    However 
+in contrast to these prior works  we do not require any taskspeci   highlevel goal generator or reward 
+Figure   also shows   variety of test environments that we
+used to  netune the running policy for   speci   task  In
+the hallway environments  the agent receives the same reward  but the walls block sideways motion  so the optimal
+solution requires learning to run in   particular direction 
+Narrow hallways require choosing   more speci   direction  but also allow the agent to use the walls to funnel
+itself  The Ushaped maze requires the agent to learn  
+curved trajectory in order to arrive at the target  with the
+reward given by   Gaussian bump at the target location 
+As illustrated in Figure   in Appendix    the pretrained
+policy explores the space extensively and in all directions 
+This gives   good initialization for the policy  allowing it to
+
+Figure   Performance in the downstream task with  netuning
+ MaxEnt  or training from scratch  DDPG  The xaxis shows the
+training iterations  The yaxis shows the average discounted return  Solid lines are average values over   random seeds  Shaded
+regions correspond to one standard deviation 
+learn the behaviors in the test environments more quickly
+than training   policy with DDPG from   random initialization  as shown in Figure   We also evaluated an alternative
+pretraining method based on deterministic policies learned
+with DDPG  However  deterministic pretraining chooses
+an arbitrary but consistent direction in the training environment  providing   poor initialization for  netuning to  
+speci   task  as shown in the results plots 
+  Discussion and Future Work
+We presented   method for learning stochastic energybased policies with approximate inference via Stein variational gradient descent  SVGD  Our approach can be
+viewed as   type of soft Qlearning method  with the additional contribution of using approximate inference to obtain complex multimodal policies  The sampling network
+trained as part of SVGD can also be viewed as tking the role
+of an actor in an actorcritic algorithm  Our experimental
+results show that our method can effectively capture complex multimodal behavior on problems ranging from toy
+point mass tasks to complex torque control of simulated
+walking and swimming robots  The applications of training such stochastic policies include improved exploration
+in the case of multimodal objectives and compositionality
+via pretraining generalpurpose stochastic policies that can
+then be ef ciently  netuned into taskspeci   behaviors 
+While our work explores some potential applications of
+energybased policies with approximate inference  an exciting avenue for future work would be to further study
+their capability to represent complex behavioral repertoires
+and their potential for composability  In the context of linearly solvable MDPs  several prior works have shown that
+policies trained for different tasks can be composed to create new optimal policies  Da Silva et al    Todorov 
+  While these prior works have only explored simple 
+tractable representations  our method could be used to extend these results to complex and highly multimodal deep
+neural network models  making them suitable for composable control of complex highdimensional systems  such as
+humanoid robots  This composability could be used in future work to create   huge variety of nearoptimal skills
+from   collection of energybased policy building blocks 
+
+Reinforcement Learning with Deep EnergyBased Policies
+
+  Acknowledgements
+We thank Qiang Liu for insightful discussion of SVGD 
+and thank Vitchyr Pong and Shane Gu for help with implementing DDPG  Haoran Tang and Tuomas Haarnoja are
+supported by Berkeley Deep Drive 
+
+References
+Da Silva     Durand     and Popovi       Linear Bellman
+combination for control of character animation  ACM
+Trans  on Graphs     
+
+Daniel     Neumann     and Peters     Hierarchical relative entropy policy search  In AISTATS  pp   
+ 
+
+Elfwing     Otsuka     Uchibe     and Doya     Freeenergy based reinforcement learning for visionbased
+navigation with highdimensional sensory inputs  In Int 
+Conf  on Neural Information Processing  pp   
+Springer   
+
+Florensa     Duan     and    Abbeel  Stochastic neural
+networks for hierarchical reinforcement learning  In Int 
+Conf  on Learning Representations   
+
+Fox     Pakman     and Tishby     Taming the noise
+in reinforcement learning via soft updates  In Conf  on
+Uncertainty in Arti cial Intelligence   
+
+Goodfellow  Ian  Bengio  Yoshua  and Courville  Aaron 
+Deep learning  chapter   MIT Press    http 
+ www deeplearningbook org 
+
+Gu     Lillicrap     Ghahramani     Turner        and
+Levine     Qprop  Sampleef cient policy gradient with
+an offpolicy critic  arXiv preprint arXiv 
+   
+
+Gu     Lillicrap     Sutskever     and Levine     Continuous deep Qlearning with modelbased acceleration  In
+Int  Conf  on Machine Learning  pp       
+
+Hafner     and Riedmiller     Reinforcement learning in
+feedback control  Machine Learning   
+ 
+
+Heess     Silver     and Teh        Actorcritic reinforcement learning with energybased policies  In Workshop
+on Reinforcement Learning  pp    Citeseer   
+
+Heess     Wayne     Tassa     Lillicrap     Riedmiller 
+   and Silver     Learning and transfer of modulated
+locomotor controllers  arXiv preprint arXiv 
+ 
+
+Jaderberg     Mnih     Czarnecki        Schaul    
+Leibo        Silver     and Kavukcuoglu     Reinforcement learning with unsupervised auxiliary tasks  arXiv
+preprint arXiv   
+
+Kaelbling        Littman        and Moore        Reinforcement learning    survey  Journal of arti cial intelligence research     
+
+Kakade       natural policy gradient  Advances in Neural
+
+Information Processing Systems     
+
+Kappen        Path integrals and symmetry breaking for
+optimal control theory  Journal of Statistical Mechanics 
+Theory And Experiment       
+
+Kim     and Bengio     Deep directed generative models
+with energybased probability estimation  arXiv preprint
+arXiv   
+
+Kingma     and Ba     Adam    method for stochastic
+
+optimization   
+
+Lai        and Robbins     Asymptotically ef cient adaptive allocation rules  Advances in Applied Mathematics 
+   
+
+Levine     and Abbeel     Learning neural network policies
+with guided policy search under unknown dynamics  In
+Advances in Neural Information Processing Systems  pp 
+   
+
+Levine     Finn     Darrell     and Abbeel     Endto end
+training of deep visuomotor policies  Journal of Machine
+Learning Research     
+
+Lillicrap        Hunt        Pritzel     Heess     Erez 
+   Tassa     Silver     and Wierstra     Continuous
+control with deep reinforcement learning  arXiv preprint
+arXiv   
+
+Liu     and Wang     Stein variational gradient descent 
+  general purpose bayesian inference algorithm  In Advances In Neural Information Processing Systems  pp 
+   
+
+Liu     Ramachandran     Liu     and Peng 
+
+  
+arXiv preprint
+
+Stein variational policy gradient 
+arXiv   
+
+Mnih     Kavukcuoglu     Silver     Graves    
+Antonoglou     Wierstra     and Riedmiller     Playing
+atari with deep reinforcement learning  arXiv preprint
+arXiv   
+
+Mnih     Kavukcuoglu     Silver     Rusu        Veness     Bellemare        Graves     Riedmiller    
+Fidjeland        Ostrovski     et al  Humanlevel control through deep reinforcement learning  Nature   
+   
+
+Reinforcement Learning with Deep EnergyBased Policies
+
+Sutton        and Barto        Reinforcement learning  An
+
+introduction  volume   MIT press Cambridge   
+
+Thomas     Bias in natural actorcritic algorithms  In Int 
+
+Conf  on Machine Learning  pp     
+
+Todorov     Linearlysolvable Markov decision problems 
+In Advances in Neural Information Processing Systems 
+pp    MIT Press   
+
+Todorov     General duality between optimal control and
+estimation  In IEEE Conf  on Decision and Control  pp 
+  IEEE   
+
+Todorov     Compositionality of optimal control laws  In
+Advances in Neural Information Processing Systems  pp 
+   
+
+Toussaint     Robot trajectory optimization using approximate inference  In Int  Conf  on Machine Learning  pp 
+  ACM   
+
+Uhlenbeck        and Ornstein        On the theory of the
+
+brownian motion  Physical review     
+
+Wang     and Liu     Learning to draw samples  With
+application to amortized mle for generative adversarial
+learning  arXiv preprint arXiv   
+
+Williams  Ronald    Simple statistical gradientfollowing
+learning 
+
+algorithms for connectionist reinforcement
+Machine learning     
+
+Zhao 
+
+   Mathieu     and LeCun    
+
+Energybased generative adversarial network  arXiv preprint
+arXiv   
+
+Ziebart        Modeling purposeful adaptive behavior with
+the principle of maximum causal entropy  PhD thesis 
+ 
+
+Ziebart        Maas        Bagnell        and Dey       
+Maximum entropy inverse reinforcement learning 
+In
+AAAI Conference on Arti cial Intelligence  pp   
+   
+
+Mnih     Badia        Mirza     Graves     Lillicrap 
+      Harley     Silver     and Kavukcuoglu     Asynchronous methods for deep reinforcement learning 
+In
+Int  Conf  on Machine Learning   
+
+Neumann     Variational inference for policy search in
+changing situations  In Int  Conf  on Machine Learning 
+pp     
+
+  Donoghue     Munos     Kavukcuoglu     and Mnih 
+   PGQ  Combining policy gradient and Qlearning 
+arXiv preprint arXiv   
+
+Otsuka     Yoshimoto     and Doya     Freeenergy 
+based reinforcement learning in   partially observable
+environment  In ESANN   
+
+Peters       ulling     and Altun     Relative entropy policy search  In AAAI Conf  on Arti cial Intelligence  pp 
+   
+
+Rawlik     Toussaint     and Vijayakumar     On
+stochastic optimal control and reinforcement learning by
+approximate inference  Proceedings of Robotics  Science and Systems VIII   
+
+Sallans     and Hinton        Reinforcement learning with
+factored states and actions  Journal of Machine Learning
+Research   Aug   
+
+Schulman     Levine     Abbeel     Jordan        and
+Moritz     Trust region policy optimization  In Int  Conf
+on Machine Learning  pp       
+
+Schulman     Moritz     Levine     Jordan     and
+Abbeel     Highdimensional continuous control using generalized advantage estimation  arXiv preprint
+arXiv     
+
+Schulman     Abbeel     and Chen     Equivalence
+arXiv
+
+between policy gradients and soft Qlearning 
+preprint arXiv   
+
+Shelhamer     Mahmoudieh     Argus     and Darrell    
+Loss is its own reward  Selfsupervision for reinforcement learning  arXiv preprint arXiv   
+
+Silver     Lever     Heess     Degris     Wierstra    
+and Riedmiller     Deterministic policy gradient algorithms  In Int  Conf on Machine Learning   
+
+Silver     Huang     Maddison        Guez     Sifre    
+van den Driessche     Schrittwieser     Antonoglou    
+Panneershelvam     Lanctot     Dieleman     Grewe 
+   Nham     Kalchbrenner     Sutskever     Lillicrap 
+   Leach     Kavukcuoglu     Graepel     and Hassabis     Mastering the game of go with deep neural
+networks and tree search  Nature   
+Jan   ISSN   Article 
+
+

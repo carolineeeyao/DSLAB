@@ -1,0 +1,702 @@
+Video Pixel Networks
+
+Nal Kalchbrenner     aron van den Oord   Karen Simonyan   Ivo Danihelka  
+
+Oriol Vinyals   Alex Graves   Koray Kavukcuoglu  
+
+Abstract
+
+We propose   probabilistic video model 
+the
+Video Pixel Network  VPN  that estimates the
+discrete joint distribution of the raw pixel values in   video  The model and the neural architecture re ect the time  space and color structure of video tensors and encode it as   fourdimensional dependency chain  The VPN approaches the best possible performance on the
+Moving MNIST benchmark    leap over the previous state of the art  and the generated videos
+show only minor deviations from the ground
+truth  The VPN also produces detailed samples on the actionconditional Robotic Pushing
+benchmark and generalizes to the motion of
+novel objects 
+
+  Introduction
+Video modelling has remained   challenging problem due
+to the complexity and ambiguity inherent in video data 
+Current approaches range from mean squared error models based on deep neural networks  Srivastava et al     
+Oh et al    to models that predict quantized image
+patches  Ranzato et al    incorporate motion priors  Patraucean et al    Finn et al    or use adversarial losses  Mathieu et al    Vondrick et al   
+Despite the wealth of approaches  future frame predictions
+that are free of systematic artifacts       blurring  have been
+out of reach even on relatively simple benchmarks like
+Moving MNIST  Srivastava et al     
+We propose the Video Pixel Network  VPN    generative
+video model based on deep neural networks  that re ects
+the factorization of the joint distribution of the pixel values in   video  The model encodes the fourdimensional
+structure of video tensors and captures dependencies in the
+time dimension of the data  in the two space dimensions of
+
+ Google DeepMind  London  UK  Correspondence to  Nal
+
+Kalchbrenner  nalk google com 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+each frame and in the color channels of   pixel  This makes
+it possible to model the stochastic transitions locally from
+one pixel to the next and more globally from one frame to
+the next without introducing independence assumptions in
+the conditional factors  The factorization further ensures
+that the model stays fully tractable  the likelihood that the
+model assigns to   video can be computed exactly  The
+model operates on pixels without preprocessing and predicts discrete multinomial distributions over raw pixel intensities  allowing the model to estimate distributions of
+any shape 
+The architecture of the VPN consists of two parts  resolution preserving CNN encoders and PixelCNN decoders
+ van den Oord et al      The CNN encoders preserve
+at all layers the spatial resolution of the input frames in
+order to maximize representational capacity  The outputs
+of the encoders are combined over time with   convolutional LSTM that also preserves the resolution  Hochreiter
+  Schmidhuber    Shi et al    The PixelCNN
+decoders use masked convolutions to ef ciently capture
+space and color dependencies and use   softmax layer to
+model the multinomial distributions over raw pixel values 
+The network uses dilated convolutions in the encoders to
+achieve larger receptive  elds and better capture global motion  The network also utilizes newly de ned multiplicative
+units and corresponding residual blocks 
+We evaluate VPNs on two benchmarks  The  rst is the
+Moving MNIST dataset  Srivastava et al      where 
+given   frames of two moving digits  the task is to predict the following   frames 
+In Sect    we show that
+the VPN achieves   nats frame    score that is near the
+lower bound on the loss  calculated to be   nats frame 
+this constitutes   signi cant improvement over the previous best result of   nats frame  Patraucean et al 
+  The second benchmark is the Robotic Pushing
+dataset  Finn et al    where  given two natural video
+frames showing   robotic arm pushing objects  the task is to
+predict the following   frames  We show that the VPN not
+only generalizes to new action sequences with objects seen
+during training  but also to new action sequences involving novel objects not seen during training  Random samples from the VPN preserve remarkable detail throughout
+the generated sequence  We also de ne   baseline model
+
+Video Pixel Networks
+
+Figure   Dependency map  top  and neural network structure  bottom  for the VPN  left  and the baseline model  right   Ft denotes
+the estimated distribution over frame Ft  from which Ft is sampled  Dashed lines denote masked convolutional layers 
+that lacks the space and color dependencies  Through evaluation we con rm that these dependencies are crucial for
+avoiding systematic artifacts in generated videos 
+
+  Model
+In this section we de ne the probabilistic model implemented by Video Pixel Networks  Let   video   be   fourdimensional tensor of pixel values xt        where the  rst
+ temporal  dimension            corresponds to one of
+the frames in the video  the next two  spatial  dimensions
+              index the pixel at row   and column   in
+frame    and the last dimension               denotes one
+of the three RGB channels of the pixel  We let each xt      
+be   random variable that takes values from the RGB color
+intensities of the pixel 
+By applying the chain rule to factorize the video likelihood      as   product of conditional probabilities  we can
+model it in   tractable manner and without introducing independence assumptions 
+
+  cid 
+
+  cid 
+
+  cid 
+
+  
+
+  
+
+  
+
+      
+
+  xt          xt        xt       
+
+    xt          xt         xt         
+
+ 
+Here                      comprises the RGB values of all pixels to the left and above the pixel at position
+
+       in the current frame    as well as the RGB values of
+pixels from all the previous frames  Note that the factorization itself does not impose   unique ordering on the set of
+variables  We choose an ordering according to two criteria 
+The  rst criterion is determined by the properties and uses
+of the data  frames in the video are predicted according to
+their temporal order  The second criterion favors orderings
+that can be computed ef ciently  pixels are predicted starting from one corner of the frame  the top left corner  and
+ending in the opposite corner of the frame  the bottom right
+one  as this allows for the computation to be implemented
+ef ciently  van den Oord et al      The order for the
+prediction of the colors is chosen by convention as     
+and   
+The VPN models directly the four dimensions of video tensors  We use Ft to denote the tth frame xt  in the video
+   Figure   illustrates the fourfold dependency structure
+for the green color channel value of the pixel   in frame Ft 
+which depends on      all pixels in all the previous frames
+      ii  all three colors of the already generated pixels in
+Ft   iii  the already generated red color value of the pixel
+  
+We follow the PixelRNN approach  van den Oord et al 
+    in modelling each conditional factor as   discrete
+multinomial distribution over   raw color values  This
+allows for the predicted distributions to be arbitrarily multimodal 
+
+RGBFtF txF                   RGBFtF txF           BaselineVideo Pixel NetworkPixelCNN DecodersCNN DecodersResolution PreservingCNN Encoders     Video Pixel Networks
+
+Figure   Structure of the residual multiplicative block  RMB  incorporating two multiplicative units  MUs 
+
+  Baseline Model
+
+We compare the VPN model with   baseline model that
+encodes the temporal dependencies in videos from previous frames to the next  but ignores the spatial dependencies
+between the pixels within   frame and the dependencies between the color channels  In this case the joint distribution
+is factorized by introducing independence assumptions 
+
+  cid 
+
+  cid 
+
+  cid 
+
+      
+
+  
+
+  
+
+  
+
+  xt           
+
+Figure   Structure of   multiplicative unit  MU  The squares
+represent the three gates and the update  The circles represent
+componentwise operations 
+
+    xt             xt           
+
+ 
+
+Figure   illustrates the conditioning structure in the baseline model  The green channel value of pixel   only depends on the values of pixels in previous frames  Various
+models have been proposed that are similar to our baseline
+model in that they capture the temporal dependencies only
+ Ranzato et al    Srivastava et al      Oh et al 
+ 
+
+  Remarks on the Factorization
+
+To illustrate the properties of the two factorizations  suppose that   model needs to predict the value of   pixel  
+and the value of the adjacent pixel   in   frame     where
+the transition to the frame   from the previous frames   
+is nondeterministic  For   simple example  suppose the
+previous frames    depict   robotic arm and in the current frame   the robotic arm is about to move either left or
+right  The baseline model estimates        and       
+as distributions with two modes  one for the robot moving
+left and one for the robot moving right  Sampling independently from        and        can lead to two inconsistent pixel values coming from distinct modes  one pixel
+value depicting the robot moving left and the other depicting the robot moving right  The accumulation of these inconsistencies for   few frames leads to known artifacts such
+as blurring of video continuations  By contrast  in this example  the VPN estimates        as the same bimodal
+distribution  but then estimates           conditioned on
+the selected value of    The conditioned distribution is unimodal and  if the value of   is sampled to depict the robot
+moving left  then the value of   is sampled accordingly to
+also depict the robot moving left 
+Generating   video tensor requires sampling           variables  which for   second of video with resolution      
+is in the order of   samples  This  gure is in the order of
+
+  for generating   single image or for   second of audio
+signal  van den Oord et al      and it is in the order of
+  for language tasks such as machine translation  Kalchbrenner   Blunsom   
+
+  Architecture
+In this section we construct   network architecture capable of computing ef ciently the factorized distribution
+in Sect    The architecture consists of two parts  The  rst
+part models the temporal dimension of the data and consists
+of Resolution Preserving CNN Encoders whose outputs are
+given to   Convolutional LSTM  The second part models
+the spatial and color dimensions of the video and consists
+of PixelCNN architectures  van den Oord et al       
+that are conditioned on the outputs of the CNN Encoders 
+
+  Resolution Preserving CNN Encoders
+
+Given   set of video frames      FT   the VPN  rst encodes each of the  rst   frames      FT  with   CNN
+Encoder  These frames form the histories that condition the
+generated frames  Each of the CNN Encoders is composed
+of          in the experiments  residual blocks  Sect   
+and the spatial resolution of the input frames is preserved
+throughout the layers in all the blocks  Preserving the resolution is crucial as it allows the model to condition each
+pixel that needs to be generated without loss of representational capacity  The outputs of the   CNN Encoders  which
+are computed in parallel during training  are given as input
+to   Convolutional LSTM  which also preserves the resolution  This part of the VPN computes the temporal dependencies of the video tensor and is represented in Fig    by
+the shaded blocks 
+
+ MU MU   cccc CONV CONVinputidentity tanhtanh MU     hW       Video Pixel Networks
+
+Model
+ Shi et al   
+ Srivastava et al     
+ Brabandere et al   
+ Cricri et al   
+ Patraucean et al   
+Baseline model
+VPN
+Lower Bound
+
+Test
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Table   Crossentropy results in nats frame on the Moving
+MNIST dataset 
+
+  PixelCNN Decoders
+
+The second part of the VPN architecture computes dependencies along the space and color dimensions  The   outputs of the  rst part of the architecture provide representations for the contexts that condition the generation of  
+portion of the       frames      FT   if one generates all
+the       frames  then the  rst frame    receives no context representation  These context representations are used
+to condition decoder neural networks that are PixelCNNs 
+PixelCNNs are composed of   resolution preserving residual blocks        in the experiments  each in turn formed
+of masked convolutional layers  Since we treat the pixel
+values as discrete random variables  the  nal layer of the
+PixelCNN decoders is   softmax layer over   intensity
+values for each color channel in each pixel 
+Figure   depicts the two parts of the architecture of the
+VPN  The decoder that generates pixel   of frame Ft sees
+the context representation for all the frames up to Ft 
+coming from the preceding CNN encoders  The decoder
+also sees the pixel values above and left of the pixel   in
+the current frame Ft that is itself given as input to the decoder 
+
+  Architecture of Baseline Model
+
+We implement the baseline model by using the same CNN
+encoders to build the context representations  In contrast
+with PixelCNNs  the decoders in the baseline model are
+CNNs that do not use masking on the weights  the frame
+to be predicted thus cannot be given as input  As shown in
+Fig    the resulting neural network captures the temporal
+dependencies  but ignores spatial and color channel dependencies within the generated frames  Just like for VPNs 
+we make the neural architecture of the baseline model resolution preserving in all the layers 
+
+  Network Building Blocks
+In this section we describe two basic operations that are
+used as the building blocks of the VPN  The  rst is the Mul 
+
+Model
+VPN  RMB  No Dilation 
+VPN  Relu  No Dilation 
+VPN  Relu  Dilation 
+VPN  RMB  Dilation 
+Lower Bound
+
+Test
+ 
+ 
+ 
+ 
+ 
+
+Table   Crossentropy results in nats frame on the Moving
+MNIST dataset 
+
+tiplicative Unit  MU  Sect    that contains multiplicative
+interactions inspired by LSTM  Hochreiter   Schmidhuber    gates  The second building block is the Residual
+Multiplicative Block  RMB  Sect    that is composed of
+multiple layers of MUs 
+
+  Multiplicative Units
+
+  multiplicative unit  Fig    is constructed by incorporating LSTMlike gates into   convolutional layer  Given an
+input   of size          where   corresponds to the number of channels  we  rst pass it through four convolutional
+layers to create an update   and three gates    The input  update  and gates are then combined in the following
+manner 
+
+             
+             
+             
+    tanh        
+
+MU             cid  tanh     cid          cid    
+
+ 
+
+where   is the sigmoid nonlinearity and  cid  is componentwise multiplication  Biases are omitted for clarity  In our
+experiments the convolutional weights    use   kernel
+of size   Unlike LSTM networks  there is no distinction
+between memory and hidden states  Also  unlike Highway
+networks  Srivastava et al      and Grid LSTM  Kalchbrenner et al    there is no setting of the gates such
+that MU       simply returns the input    the input is always processed with   nonlinearity 
+
+  Residual Multiplicative Blocks
+
+To allow for easy gradient propagation through many layers of the network  we stack two MU layers in   residual
+multiplicative block  Fig    where the input has   residual
+ additive skip  connection to the output  He et al   
+For computational ef ciency  the number of channels is
+halved in MU layers inside the block  Namely  given an
+input layer   of size            with    channels  we  rst
+apply     convolutional layer that reduces the number of
+
+Video Pixel Networks
+
+channels to    no activation function is used for this layer 
+and it is followed by two successive MU layers each with
+  convolutional kernel of size       We then project the
+feature map back to    channels using another       convolutional layer  Finally  the input   is added to the overall
+output forming   residual connection  Such   layer structure is similar to the bottleneck residual unit of  He et al 
+  Formally  the Residual Multiplicative Block  RMB 
+is computed as follows 
+
+Model
+Baseline model
+VPN  Relu  Dilation 
+VPN  Relu  No Dilation 
+VPN  RMB  Dilation 
+VPN  RMB  No Dilation 
+
+Valid 
+ 
+ 
+ 
+ 
+ 
+
+Test Seen
+
+Test Novel
+
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+
+Table   Negative loglikelihood in nats dimension on the Robotic
+Pushing dataset 
+
+           
+     MU      
+     MU      
+            
+RMB               
+
+ cid 
+
+           
+
+ 
+
+ 
+
+prior work  Srivastava et al      The loss is de ned as 
+
+zi log yi       zi  log    yi 
+
+ 
+
+where zi are the grayscale targets in the Moving MNIST
+frames that are interpreted as probabilities and yi are the
+predictions  The lower bound on         may be nonzero 
+In fact  if we let zi   yi  for the   frames that are predicted in each sequence of the Moving MNIST test data 
+            nats frame 
+
+  Implementation Details
+
+The VPNs with and without dilation  as well as the baseline
+model  have   RMBs in the encoders and   RMBs in the
+decoders  for the network variants that use ReLUs we double the number of residual blocks to   and   respectively 
+in order to equate the size of the receptive  elds in the two
+model variants  The number of channels in the blocks is
+      while the convolutional LSTM has   channels 
+The topmost layer before the output has   channels  We
+train the models for   steps with  frame sequences
+predicting the last   frames of each sequence  Each step
+corresponds to   batch of   sequences  We use RMSProp
+for the optimization with an initial learning rate of      
+and multiply the learning rate by   when learning  atlines 
+
+  Results
+
+Table   reports the results of various recent video models on the Moving MNIST test set  Our baseline model
+achieves   nats frame  which is signi cantly better
+than the previous state of the art  Patraucean et al   
+We attribute these gains to architectural features and  in
+particular  to the resolution preserving aspect of the network  Further  the VPN achieves   nats frame  which
+approaches the lower bound of   nats frame 
+Table   reports results of architectural variants of the VPNs 
+The model with dilated convolutions improves over its nondilated counterpart as it can more easily act on the relatively
+large digits moving in the       frames  In the case of
+Moving MNIST  MUs do not yield   signi cant improvement in performance over just using ReLUs  possibly due
+
+We also experimented with   standard residual block of  He
+et al    which uses ReLU nonlinearities   see Sect   
+and   for details 
+
+  Dilated Convolutions
+
+Having   large receptive  eld helps the model to capture the
+motion of larger objects  One way to increase the receptive  eld without much effect on the computational complexity is to use dilated convolutions  Chen et al   
+Yu   Koltun    which make the receptive  eld grow
+exponentially  as opposed to linearly  in the number of layers  In the variant of VPN that uses dilation  the dilation
+rates are the same within each RMB  but they double from
+one RMB to the next up to   chosen maximum size  and
+then repeat  van den Oord et al      In particular  in
+the CNN encoders we use two repetitions of the dilation
+scheme         for   total of   RMBs  We do not use
+dilation in the decoders 
+
+  Moving MNIST
+The Moving MNIST dataset consists of sequences of  
+frames of size       depicting two potentially overlapping MNIST digits moving with constant velocity and
+bouncing off walls  Training sequences are generated onthe   using digits from the MNIST training set without  
+limit on the number of generated training sequences  our
+models observe    training sequences before convergence  The test set is  xed and consists of   sequences that contain digits from the MNIST test set   
+of the   frames are used as context and the remaining  
+frames are generated 
+In order to make our results comparable  for this dataset
+only we use the same sigmoid crossentropy loss as used in
+
+Video Pixel Networks
+
+to the relatively low complexity of the task    sizeable improvement is obtained from MUs on the Robotic Pushing
+dataset  Tab   
+  qualitative evaluation of video continuations produced
+by the models matches the quantitative results  Figure  
+shows random continuations produced by the VPN and the
+baseline model on the Moving MNIST test set  The frames
+generated by the VPN are consistently sharp even when
+they deviate from the ground truth  By contrast  the continuations produced by the baseline model get progressively
+more blurred with time   as the uncertainty of the model
+grows with the number of generated frames  the lack of
+interframe spatial dependencies leads the model to take the
+expectation over possible trajectories 
+
+  Robotic Pushing
+The Robotic Pushing dataset consists of sequences of  
+frames of size       that represent camera recordings of
+  robotic arm pushing objects in   basket  The data consists
+of   training set of   sequences    validation set  and
+two test sets of   sequences each  one involving   subset of the objects seen during training and the other one involving novel objects not seen during training  Each frame
+in the video sequence is paired with the state of the robot
+at that frame and with the desired action to reach the next
+frame  The transitions are nondeterministic as the robotic
+arm may not reach the desired state in   frame due to occlusion by the objects encountered on its trajectory    frames 
+  states and   actions are used as context  the desired  
+actions in the future are also given  The   frames in the
+future are then generated conditioned on the   actions as
+well as on the   steps of context 
+
+  Implementation Details
+
+For this dataset  both the VPN and the baseline model use
+the softmax crossentropy loss  as de ned in Sect    As for
+Moving MNIST  the models have   RMBs in the encoders
+and   RMBs in the decoders  the ReLU variants have  
+residual blocks in the encoders and   in the decoders  The
+number of channels in the RMBs is       the convolutional LSTM has   channels and the topmost layer before the output has   channels  We use RMSProp with
+an initial learning rate of   We train for   steps
+with   batch size of   sequences per step  Each training
+sequence is obtained by selecting   random subsequence
+of   frames together with the corresponding states and
+actions  We use the  rst   frames in the subsequence as
+context and predict the other   frames  States and actions
+come as vectors of   real values  For the   context frames 
+we condition each layer in the encoders and the decoders
+with the respective state and action vectors  the conditioning is performed by the result of     convolution applied
+
+Figure   Randomly sampled continuations of videos from the
+Moving MNIST test set  For each set of three rows  the  rst
+  frames in the middle row are the given context frames  The
+next three rows of   frames each are as follows  frames generated from the baseline model  top row  frames generated from
+the VPN  middle row  and ground truth frames  bottom row 
+
+to the action and state vectors that are broadcast to all of
+the       positions  For the other   frames  we condition the encoders and decoders with the action vectors only 
+We discard the state vectors for the predicted frames during
+training and do not use them at generation  For generation
+we unroll the models for the entire sequence of   frames
+and generate   frames 
+
+  Results
+
+Table   reports the results of the baseline model and variants of the VPN on the Robotic Pushing validation and test
+sets  The best variant of the VPN has       reduction
+in negative loglikelihood over the baseline model  This
+highlights the importance of space and color dependencies
+in nondeterministic environments  The results on the validation and test datasets with seen objects and on the test
+dataset with novel objects are similar  This shows that the
+models have learned to generalize well not just to new ac 
+
+Video Pixel Networks
+
+tion sequences  but also to new objects  Furthermore  we
+see that using multiplicative interactions in the VPN gives
+  signi cant improvement over using ReLUs 
+Figures   visualize the samples generated by our models  Figure   contains random samples of the VPN on
+the validation set with seen objects  together with the corresponding ground truth  The model is able to distinguish
+between the robotic arm and the background  correctly handling occlusions and only pushing the objects when they
+come in contact with the robotic arm  The VPN generates
+the arm when it enters into the frame from one of the sides 
+The position of the arm in the samples is close to that in the
+ground truth  suggesting the VPN has learned to follow the
+actions  The generated videos remain detailed throughout
+the   frames and few artifacts are present  The samples
+remain good showing the ability of the VPN to generalize
+to new sequences of actions  Figure   evaluates an additional level of generalization  by showing samples from the
+test set with novel objects not seen during training  The
+VPN seems to identify the novel objects correctly and generates plausible movements for them  The samples do not
+appear visibly worse than in the datasets with seen objects 
+Figure   demonstrates the probabilistic nature of the VPN 
+by showing multiple different video continuations that start
+from the same context frames and are conditioned on the
+same sequence of   future actions  The continuations are
+plausible and varied  further suggesting the VPN   ability
+to generalize  Figure   shows samples from the baseline
+model  In contrast with the VPN samples  we see   form
+of high frequency noise appearing in the nondeterministic
+movements of the robotic arm  This can be attributed to
+the lack of space and color dependencies  as discussed in
+Sec    Figure   shows   comparison of continuations of
+the baseline model and the VPN from the same context sequence  Besides artifacts  the baseline model also seems
+less responsive to the actions 
+
+  Conclusion
+We have introduced the Video Pixel Network    deep generative model of video data that models the factorization
+of the joint likelihood of video  We have shown that  despite its lack of speci   motion priors or surrogate losses 
+the VPN approaches the lower bound on the loss on the
+Moving MNIST benchmark that corresponds to   large improvement over the previous state of the art  On the Robotic
+Pushing dataset  the VPN achieves signi cantly better likelihoods than the baseline model that lacks the fourfold
+dependency structure  The fourfold dependency structure
+provides   robust and generic method for generating videos
+without systematic artifacts 
+
+ Supplementary materials attached to the paper submission in 
+
+clude animated GIFs for the videos 
+
+Figure   Randomly sampled continuations of videos from the
+Robotic Pushing validation set  with seen objects  Each set of
+four rows corresponds to   sample of   given context frames and
+  generated frames  In each set of four rows  rows   and   are
+samples from the VPN  Rows   and   are the actual continuation
+in the data 
+
+Video Pixel Networks
+
+Figure   Randomly sampled continuations of videos from the
+Robotic Pushing test set with novel objects not seen during training  Each set of four rows is as in Fig   
+
+Figure   Randomly sampled continuations from the baseline
+model on the Robotic Pushing validation set  with seen objects 
+Each set of four rows is as in Fig   
+
+Figure   Three different samples from the VPN starting from the
+same   context frames on the Robotic Pushing validation set  For
+each set of four rows  top three rows are generated samples  the
+bottom row is the actual continuation in the data 
+
+Figure   Comparison of continuations given the same   context
+frames from the Robotic Pushing validation set for the baseline
+model  rows   and   and   and   for the VPN  rows   and  
+and   and   and for the actual continuation in the data  rows  
+and  
+
+Video Pixel Networks
+
+Srivastava  Nitish  Mansimov  Elman  and Salakhutdinov 
+Ruslan  Unsupervised learning of video representations
+using lstms  In ICML  volume   pp       
+
+Srivastava  Rupesh Kumar  Greff  Klaus  and Schmidhuber    urgen  Highway networks  CoRR  abs 
+   
+
+van den Oord  Aaron  Dieleman  Sander  Zen  Heiga  Simonyan  Karen  Vinyals  Oriol  Graves  Alex  Kalchbrenner  Nal  Senior  Andrew  and Kavukcuoglu  Koray  Wavenet    generative model for raw audio  CoRR 
+abs     
+
+van
+
+den Oord    aron  Kalchbrenner  Nal 
+
+and
+Kavukcuoglu  Koray  Pixel recurrent neural networks 
+In ICML  volume   pp       
+
+van den Oord    aron  Kalchbrenner  Nal  Vinyals  Oriol 
+Espeholt  Lasse  Graves  Alex  and Kavukcuoglu  Koray 
+Conditional image generation with pixelcnn decoders  In
+NIPS     
+
+Vondrick  Carl  Pirsiavash  Hamed  and Torralba  Antonio  Generating videos with scene dynamics  CoRR 
+abs   
+
+Yu  Fisher and Koltun  Vladlen  Multiscale context aggregation by dilated convolutions  CoRR  abs 
+ 
+
+References
+Brabandere  Bert De  Jia  Xu  Tuytelaars  Tinne  and
+Gool  Luc Van  Dynamic  lter networks  CoRR 
+abs   
+
+Chen  LiangChieh  Papandreou  George  Kokkinos  Iasonas  Murphy  Kevin  and Yuille  Alan    Semantic image segmentation with deep convolutional nets and fully
+connected crfs  CoRR  abs   
+
+Cricri  Francesco  Ni  Xingyang  Honkala  Mikko  Aksu 
+Emre  and Gabbouj  Moncef  Video ladder networks 
+CoRR  abs    URL http arxiv 
+org abs 
+
+Finn  Chelsea  Goodfellow  Ian    and Levine  Sergey 
+Unsupervised learning for physical interaction through
+video prediction  CoRR  abs   
+
+He  Kaiming  Zhang  Xiangyu  Ren  Shaoqing  and Sun 
+Identity mappings in deep residual networks 
+
+Jian 
+CoRR  abs   
+
+Hochreiter  Sepp and Schmidhuber    urgen  Long short 
+
+term memory  Neural computation   
+
+Kalchbrenner  Nal and Blunsom  Phil  Recurrent continIn EMNLP  pp   
+
+uous translation models 
+ 
+
+Kalchbrenner  Nal  Danihelka  Ivo  and Graves  Alex  Grid
+International Conference on
+
+long shortterm memory 
+Learning Representations   
+
+Mathieu  Micha el  Couprie  Camille  and LeCun  Yann 
+Deep multiscale video prediction beyond mean square
+error  CoRR  abs   
+
+Oh  Junhyuk  Guo  Xiaoxiao  Lee  Honglak  Lewis 
+Richard    and Singh  Satinder    Actionconditional
+video prediction using deep networks in atari games  In
+NIPS  pp     
+
+Patraucean  Viorica  Handa  Ankur  and Cipolla  Roberto 
+Spatiotemporal video autoencoder with differentiable
+memory  CoRR  abs   
+
+Ranzato  Marc Aurelio  Szlam  Arthur  Bruna  Joan  Mathieu  Micha el  Collobert  Ronan  and Chopra  Sumit 
+Video  language  modeling    baseline for generative
+models of natural videos  CoRR  abs   
+
+Shi  Xingjian  Chen  Zhourong  Wang  Hao  Yeung  DitYan  Wong  WaiKin  and Woo  Wangchun  Convolutional LSTM network    machine learning approach for
+precipitation nowcasting  In NIPS  pp     
+
+

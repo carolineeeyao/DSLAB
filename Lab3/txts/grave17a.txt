@@ -1,0 +1,1069 @@
+Ef cient softmax approximation for GPUs
+
+ Edouard Grave   Armand Joulin   Moustapha Ciss     David Grangier   Herv     egou  
+
+Abstract
+
+We propose an approximate strategy to ef ciently
+train neural network based language models over
+very large vocabularies  Our approach  called
+adaptive softmax  circumvents the linear dependency on the vocabulary size by exploiting the
+unbalanced word distribution to form clusters that
+explicitly minimize the expectation of computation time  Our approach further reduces the
+computational time by exploiting the speci cities of modern architectures and matrixmatrix
+vector operations  making it particularly suited
+for graphical processing units  Our experiments
+carried out on standard benchmarks  such as EuroParl and One Billion Word  show that our approach brings   large gain in ef ciency over standard approximations while achieving an accuracy
+close to that of the full softmax  The code of our
+method is available at https github com 
+facebookresearch adaptivesoftmax 
+
+  Introduction
+This paper considers strategies to learn parametric models
+for language modeling with very large vocabularies  This
+problem is key to natural language processing  with applications in machine translation  Schwenk et al   
+Sutskever et al    Vaswani et al    or automatic
+speech recognition  Graves et al    Hinton et al 
+  In particular  Neural Network Language Models
+ NNLMs  have received   renewed interest in recent years 
+by achieving state of the art performance on standard benchmarks  Jozefowicz et al    Mikolov et al    These
+approaches are more computationally intensive but generalize better than traditional nonparametric models  Bahl
+et al    Kneser   Ney   
+Statistical language models assign   probability to words
+given their history  Bahl et al    They are evaluated
+ Facebook AI Research  Correspondence to   Edouard Grave
+
+ egrave fb com 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright   by
+the author   
+
+by objective criteria such as perplexity  ppl  which directly
+measures the ability of the system to determine proper probabilities for all the words  This potentially makes parametric models prohibitively slow to train on corpora with
+very large vocabulary  For instance  the vocabulary of the
+One Billion Word benchmark  Chelba et al    contains around    words  In standard NNLMs  such as
+feedforward networks  Bengio et al      or recurrent
+networks  Mikolov et al    computing this probability
+over the whole vocabulary is the bottleneck  Many solutions have been proposed to reduce the complexity of this
+expensive step  Bengio et al      Goodman      Gutmann   Hyv arinen    We distinguish     the methods
+that consider the original distribution and aim at providing approximations of the probabilities  or of   subset of
+them  Bengio et al      Ji et al    from  ii  the
+approaches that compute exact probabilities for an approximate model yielding   lower computational time  such as
+the popular hierarchical softmax  Goodman      Mnih
+  Hinton    Morin   Bengio   
+Our approach  called adaptive softmax  belongs to the second category  More speci cally  it is inspired by the hierarchical softmax and its subsequent variants  In contrast to
+previous works and motivated by the trend that GPUs are
+comparatively more and more performant than CPUs  our
+design is oriented towards ef cient processing on GPUs  In
+this context  our paper makes the following points 
+
+  We de ne   strategy to produce an approximate hierarchical model  It departs from previous ones in that it
+explicitly takes into account the computation time of
+matrixmatrix multiplications on modern architectures 
+which is not trivially linear in the dimensions of the
+matrices 
+
+  We conduct an empirical analysis of this model on
+recent GPUs  This leads us to de ne   realistic computation time model that is incorporated in the proposed
+optimization 
+
+  Our approach provides   signi cant acceleration factor compared to the regular softmax         to  
+speedups  Equivalently we improve the accuracy under computational constraints 
+Importantly  on the
+largest corpus  this higher ef ciency empirically comes
+
+Ef cient softmax approximation for GPUs
+
+at no cost in accuracy for   given amount of training
+data  in contrast to concurrent approaches improving
+the ef ciency 
+
+This paper is organized as follows  Section   brie   reviews
+the related work and Section   provides some background
+on the language modeling task that we consider  Section  
+describes our proposal  which is subsequently evaluated in
+Section   on typical benchmarks of the language modeling
+literature  including Text  Europarl and One Billion Word
+datasets 
+
+  Related work
+Many methods have been proposed to approximate the softmax ef ciently  Bengio et al      Goodman     
+Gutmann   Hyv arinen    Morin   Bengio    We
+brie   describe the most popular ones below and point the
+reader to Chen et al    for   comparative study  For
+the sake of completeness  we refer the reader to other strategies that can speedup the training of language models in
+complementary manners  Mikolov et al     
+
+Loss function approximation  The Hierarchical Softmax  HSM  is an approximation of the softmax function
+introduced by Goodman     This approach is generally used with   twolevel tree  Goodman      Mikolov
+et al      but has also been extended to deeper hierarchies  Morin   Bengio    Mnih   Hinton    In
+general  the hierarchy structure is built on word similarities  Brown et al    Le et al    Mikolov et al 
+  or frequency binning  Mikolov et al     
+In
+particular  Mikolov et al    proposes an optimal hierarchy by constructing   Huffman coding based on frequency 
+However this coding scheme does not take into account the
+theoretical complexity reduction offered by matrixmatrix
+multiplication and distributed computation  in particular
+with modern GPUs 
+Similar to our work  Zweig   Makarychev   constructs
+their hierarchy in order to explicitly reduce the computational complexity  They also solve the assignment problem
+with dynamic programming  However  they only consider
+hierarchies where words are kept in the leaves of the tree 
+leading to   signi cant drop of performance  reported to be
+around       forcing them to also optimize for word
+similarity  In our case  allowing classes to be stored in the
+internal node of the tree leads to almost no drop of performance  Also  they assume   linear computational time for
+the vectormatrix operation which signi cantly limits the
+use of their approach on distributed system such as GPU 
+The idea of keeping   shortlist of the most frequent words
+has been explored before  Le et al    Schwenk   
+In particular  Le et al    combines   shortlist with
+
+  hierachical softmax based on word representation 
+In
+contrast  the word hierarchy that we introduce in Section  
+explicitly aims at reducing the complexity 
+Our work also shares similarities with the dsoftmax introduced by Chen et al    They assign capacity to words
+according to their frequency to speed up the training  Less
+frequent words have smaller classi ers than frequent ones 
+Unlike our method  their formulation requires accessing the
+whole vocabulary to evaluate the probability of   word 
+
+Sampling based approximation  Sampling based approaches have been successfully applied to approximate
+the softmax function over large dictionaries in different
+domains  such as language modeling  Jozefowicz et al 
+  machine translation  Jean et al    and computer
+vision  Joulin et al    In particular  importance sampling  Bengio   Sen ecal    Bengio et al      selects
+  subset of negative targets to approximate the softmax normalization  Different schemes have been proposed for sampling  such as the unigram and bigram distribution  Bengio
+et al      or more recently    powerraised distribution
+of the unigram  Ji et al    Mikolov et al    While
+this approach often leads to signi cant speedup at train
+time  it still requires to evaluate the full softmax at test time 
+
+approaches  Selfnormalized
+
+Selfnormalized
+approaches aim at learning naturally normalized classi er 
+to avoid computing the softmax normalization  Popular
+methods are Noise Contrastive Estimation  Gutmann  
+Hyv arinen    Mnih   Teh    Vaswani et al   
+or   penalization on the normalization function  Andreas
+  Klein    Devlin et al    Noise Contrastive
+Estimation  Gutmann   Hyv arinen    replaces the
+softmax by   binary classi er distinguishing the original
+distribution form   noisy one  While the original formulation still requires to compute the softmax normalization 
+Mnih   Teh   shows that good performance can be
+achieved even without it 
+Finally  Vincent et al    have also proposed an ef cient
+way to train model with high dimensional output space 
+Their approach is exact and leads to   promising speedup
+but it cannot be directly applied to the softmax function 
+limiting its potential application to language modeling 
+
+  Preliminaries on language modeling
+The goal of language modeling is to learn   probability distribution over   sequence of words from   given dictionary
+   The joint distribution is de ned as   product of conditional distribution of tokens given their past  Bahl et al 
+  More precisely  the probability of   sequence of  
+
+Ef cient softmax approximation for GPUs
+
+words            wT       is given as
+
+  cid 
+
+              wT    
+
+   wt   wt            
+
+ 
+
+  
+
+This problem is
+traditionally addressed with nonparameteric models based on counting statistics  Goodman 
+    In particular  smoothed Ngram models  Bahl et al 
+  Katz    Kneser   Ney    achieve good performance in practice  Mikolov et al      especially when
+they are associated with cache models  Kuhn   De Mori 
+  More recently  parametric models based on neural networks have gained popularity for language modeling  Bengio et al      Jozefowicz et al    Mikolov
+et al    They are mostly either feedforward networks  Bengio et al      or recurrent networks  Mikolov
+et al   
+
+  Feedforward network 
+
+In   standard feedforward network for language modeling 
+we      window of length   and predict the next words
+according to the words appearing in this window  In the
+simplest case  this probability is represented by    layer
+neural network acting on an input xt         de ned as the
+concatenation of the onehot representation of the   previous words  wt             wt  The state ht of the hidden
+layer and subsequently the vector of scores yt associated
+with the next token wt  are computed as
+
+ht    AP xt 
+yt      Bht 
+
+ 
+ 
+
+where   is   non linearity       the pointwise sigmoid function        exp    and   is the softmax function
+discussed in section   This model is parameterized by the
+weight matrices       and   and is routinely learned with
+an optimization scheme such as stochastic gradient descent
+or Adagrad  Duchi et al   
+
+  Recurrent network 
+
+  Recurrent network  Elman    extends   feedforward
+network in that the current state of the hidden layer also
+depends on its previous state  The hidden state ht is updated
+according to the equation
+
+ht    Awt   Rht 
+
+where   is   weight matrix and xt is the onehot representation of the current word wt  Computing the exact gradient
+for this model is challenging but it is possible to compute
+an ef cient and stable approximation of it  using   truncated
+backpropagation through time  Werbos    Williams  
+Peng    and norm clipping  Mikolov et al   
+
+Since the model introduced by Elman   many extensions have been proposed  such as Longer Short Term Memory  LSTM   Hochreiter   Schmidhuber    Gated recurrent units  Chung et al    or structurally constrained
+network  Mikolov et al    These models have been
+successfully used in the context of language modeling  Jozefowicz et al    Mikolov et al    Mikolov   Zweig 
+  In this work  we focus on the standard word level
+LSTM architecture since it has obtained state of the art
+performance on the challenging One Billion Word Benchmark  Jozefowicz et al   
+
+  Classbased hierarchical softmax 
+
+In neural language modeling  predicting the probability of
+the next word requires computing scores for every word in
+the vocabulary and to normalize them to form   probability
+distribution  This is typically achieved by applying   softmax function to the unnormalized score zw associated with
+each word    where the softmax function is de ned as
+
+ cid 
+
+   zw   
+
+exp zw 
+
+  cid   exp zw cid 
+
+ 
+
+ 
+
+For   vocabulary comprising         words  this function
+requires      operations once the scores are computed  In
+the case of neural networks  the overall complexity is   dk 
+where   is the size of the last hidden layer  When the vocabulary is large  this step is computationally expensive and
+often dominates the computation of the whole model  Jozefowicz et al    Mikolov et al    as discussed in
+introduction and related work    simple approach  Goodman      to reduce this computational cost is to assign
+each word   of the vocabulary to   unique class      and
+to factorize the probability distribution over words as
+  wt   ht        wt    ht      wt     wt  ht 
+
+where    and    are obtained using the softmax function
+ Eq    If each class contains
+  words  the computational
+cost is reduced from   dk  to    
+
+ 
+
+  
+
+ 
+
+  Our approach  the adaptive softmax
+In this section  we propose the adaptive softmax    simple
+speedup technique for the computation of probability distributions over words  The adaptive softmax is inspired by the
+classbased hierarchical softmax  where the word classes
+are built to minimize the computation time  Our method
+is designed to be ef cient for GPUs  which are commonly
+used to train neural networks  For the sake of clarity  we
+ rst present the intuition behind our method in the simple
+case where we simply split our dictionary in two distinct
+clusters  before analyzing   more general case 
+
+Ef cient softmax approximation for GPUs
+
+  Intuition  the twoclusters case
+
+In natural languages  the distribution of the words notoriously follows   Zipf law  Zipf    Most of the probability mass is covered by   small fraction of the dictionary 
+       of the document is covered by only   of the
+vocabulary in the Penn TreeBank  Similar to the frequency
+binning hierarchical softmax  Mikolov et al      this
+information can be exploited to reduce the computation
+time 
+  simple strategy to reduce the overall computation time is
+to partition the dictionary   into two clusters as Vh and Vt 
+where Vh denotes the head of the distribution consisting of
+the most frequent words  and where Vt is the tail associated
+with   large number of rare words  The classi er frequently
+accesses the head  which motivates the fact that it should
+be computed ef ciently  In contrast  the tail occurs less
+frequently and the corresponding computation can be slower 
+This suggests de ning clusters with unbalanced cardinalities
+ Vh   cid   Vt  and probabilities    Vh   cid     Vt  where
+    pi is the probability of   word to occur in
+the set Vi  For instance  one may de ne the head would
+only contain   of the vocabulary  covering for   on
+PennTree Bank  These two clusters can be organized in
+two different ways  either they are both leaves of    level
+tree  Mikolov et al      or the head cluster is kept as  
+shortlist in the root node  Le et al   
+
+       cid 
+
+Compromising between ef ciency and accuracy  We
+observe empirically that putting all the clusters in the
+leaves of the tree leads to   signi cant drop of performance  around       performance drop  Mikolov et al 
+    Zweig   Makarychev    The reason is that
+the probability of every word   belonging to   cluster  
+is multiplied by the probability of its class       it is equal
+to                       while attaching   frequent word
+directly to the root associates it directly to the probability
+          making its inference sharper  For this reason  unless there is   signi cant difference in computation time  we
+favor using   shortlist  over the standard  level hierarchical
+softmax 
+
+Minimizing the computation time  Given   vocabulary
+of   words  we are looking for the number kh    Vh  of
+words from the head of the distribution to be assigned to
+the  rst cluster  These words will cover for ph of the distribution  The tail cluster will then contain the rest of the
+vocabulary  made of kt       kh words and covering for
+pt       ph of the overall distribution  The computation
+time corresponding to the matrix multiplication of the root
+is equal to   kh        while the computation time for the
+tail of the distribution is equal to   kt  ptB  where   is the
+
+Figure   GPU timings for multiplying two matrices  We consider
+matrices of size       and       representing hidden
+states and word representations  We report average timings over
+  measures as   function of    number of words 
+
+  Computation time model of matrixmultiplication
+
+The bottleneck of the model described in the previous section is the matrix multiplication between the matrix representing the hidden states  of size        where   denotes
+the batch size  and the matrix of word representations  of
+size        For    xed size   of the hidden layer  we denote by         the computation time of this multiplication
+ using an ef cient implementation such as cuBLAS  and
+simplify the notation wherever some parameters are  xed 
+Figure   reports empirical timings as   function of   for
+typical parameters of   and   for two GPU models  namely
+   and    We observe that the computation time     
+is constant for low values of    until   certain in ection
+point        and then becomes af ne for values       
+This suggests   computational model of the form
+
+       max                
+
+  cm   max cid         cid 
+
+ 
+ 
+
+Empirically  cm     ms on      and   ms on     
+We observe the same behavior when measuring the timings
+as   function of the batch size         it is inef cient to
+matrixmultiplication when one of the dimensions is small 
+This observation suggests that hierarchical organizations
+of words with   low number of children per node  such as
+binary Huffman codes  are highly suboptimal  Similarly 
+clusters comprising only rare words have   low probabilty
+  and   shrinking batch size of      which also lead to
+inif ent matrixmultiplication  In the following  we propose
+to use the following model of computation time for matrixmultiplication
+
+          max                kB 
+
+ 
+
+While this is   very crude model of computation  it allows
+to explain empirical observations well 
+
+ number of vectors         ms   ms   ms                     Ef cient softmax approximation for GPUs
+
+Vh
+
+Figure   Computational time for the twoclusters adaptive softmax on the Bulgarian Europarl data  as   function of the size of
+the head cluster kh  We report values predicted by our model
+ theoretical  as well as measured on       empirical 
+Even with this very simple hierarchy  we observe more than  
+speedup over the full softmax  The red dotted line indicates the
+value of the parameter kh such that both clusters have equal probability  ph   pt    
+
+batch size  We thus obtain the overall computation time
+
+      kh            kt  ptB 
+
+We can then  nd the size of the head cluster kh which
+minimizes the computation time    We plot the value of  
+as   function of kh in Figure   for the word distribution of
+the Bulgarian Europarl dataset  We observe that the optimal
+splitting between head and tail gives     speedup over the
+full softmax  Another important observation is the fact that
+the optimal size of the head cluster does not correspond to
+two clusters with equal probability 
+
+Adapting the classi er capacity for each cluster  Each
+cluster is accessed independently of each other  they thus do
+not need to have the same capacity  Frequent words need
+high capacity to be predicted correctly  In contrast  rare
+words cannot be learned very well  since we only see them
+  few times  It would then be wasteful to associate them
+with high capacity  Like in Chen et al    we exploit
+this observation to further reduce the computational time
+of our classi er  Unlike Chen et al    we share the
+state of hidden layer across clusters and simply reduce the
+input size of the classi ers by applying   projection matrix 
+Typically  the projection matrix for the tail cluster reduces
+the size from   to dt     
+
+  
+
+  
+
+  
+
+Figure   Our hierarchical model is organized as        rst level that
+includes both the most frequent words and vectors representing
+clusters  and  ii  clusters on the second level that are associated
+with rare words  the largest ones being associated with the less
+frequent words  The sizes are determined so as to minimize our
+computational model on GPU 
+
+the computational cost   of the forward  equivalently  backward  pass of this approximate softmax layer  For the time
+being  we    the batch size   and the dimensionality   of
+the hidden layer  in order to analyze the computation time
+as   function of the subdictionary sizes and probabilities 
+     the probability        Vi 
+and ki    Vi  the cardinality of each cluster 
+The expected computational cost   is decomposed as    
+
+We denote by pi  cid 
+Ch  cid 
+
+  Ci  where
+
+  Vi
+
+Ch         kh    
+
+and
+
+leading to
+
+    Ci     ki  pi   
+
+ cid 
+
+ 
+
+          kh      
+
+  ki  piB 
+
+ 
+
+We add the constraint kB        to ensure that there is no
+penalty induced by the constant part of the computational
+model of Equation   the previous equation simpli es as
+
+ cid 
+               cid     kh  
+
+             kh    
+
+ 
+
+      kipiB 
+
+ cid 
+
+ 
+
+ cid 
+
+pi ki
+
+ 
+
+ 
+
+  General case
+
+Let us now consider the more general case where the dictionary is partitioned as     Vh           VJ  Vi   Vj    
+if    cid     We consider the hierarchical model depicted in
+Figure   where the subdictionary Vh is accessed at the  rst
+level  and the others in the second level  We now investigate
+
+Let us discuss this equation  by  rst considering that the cardinalities of the subvocabularies are  xed  The rightmost
+term is the only one that depends on the word probabilities 
+For two distinct clusters Vi and Vj  we can rewrite pjkj as
+ pi     pi kj  where pi     pi   pj  so that
+
+piki   pjkj   pi ki   kj    pi jkj 
+
+ 
+
+ comp  time  ms theoreticalempiricalEf cient softmax approximation for GPUs
+
+full softmax
+sampling
+HSM  freq 
+HSM  sim 
+Dsoftmax
+Dsoftmax  
+Ours
+
+ppl
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+training time
+  min
+  min
+  min
+  min
+  min
+  min
+  min
+
+Table   Text  perplexity and training time after   epochs  Our
+approach is signi cantly better than other published approximate
+strategies  We also show that improving the baseline Dsoftmax  
+as discussed in text improve the results  but is slower than our
+proposal  Note  approximate strategies are comparatively less
+interesting for small vocabularies such as in this case 
+
+  Experiments
+This section provides   set of experiments aiming at analyzing the tradeoff between actual computation time and
+effectiveness of several strategies  in particular the approach
+presented in the previous section  First we describe our evaluation protocol  then we evaluate some of the properties of
+our model and  nally we compare it on standard benchmark
+against standard baselines 
+
+Datasets  We evaluate our method on standard datasets 
+and use the perplexity  ppl  as an evaluation metric  as the
+function of the training time or of the number of training
+data  epochs  The datasets have varying vocabulary sizes 
+in different languages  which allows us to better understand
+the strengths and weaknesses of the different approaches 
+  Text  is   standard compression dataset containing  
+preprocessed version of the  rst   million characters
+from Wikipedia in English  It has been recently used
+for language modeling  Mikolov et al    and has
+  vocabulary of    words 
+
+  Europarl  is   machine translation corpus  containing
+  languages  Koehn    For most languages  there
+are      tokens and the vocabulary is in between
+   and    words 
+
+  One Billion Word   is   massive corpus introduced by
+Chelba et al    It contains    tokens and  
+vocabulary comprising almost    words 
+
+Implementation details  We use an LSTM with one layer
+in all our experiments  On Text  and Europarl  the models
+
+ http mattmahoney net dc textdata
+ http www statmt org europarl 
+ https code google com archive   billionword language 
+
+modelingbenchmark 
+
+Figure   Computational time for the adaptive softmax on the Bulgarian Europarl data  as   function of the number of clusters 
+
+Without loss of generality  we assume that ki   kj  The
+quantities pi    ki and kj being  xed  the second term of
+the righthand side of this equation is constant  and the best
+strategy is trivially to minimize the probability of the largest
+cluster Vi  In other terms  an optimal solution for Equation   requires that the most frequent words are assigned to
+the smallest cluster  This remark is true for any tuple       
+and we easily see that this point also holds for the head
+cluster  As   consequence  for    xed number of clusters
+of given sizes  the best strategy is to assign the words by
+decreasing probabilities to clusters of increasing size  Note 
+this analysis remains valid as long as the   is monotonically
+increasing in   
+
+Determining ki with    xed  dynamic programming 
+We now assume that the number of clusters is  xed  Following our analysis above  the optimization solely depends
+on the cardinalities ki for all clusters  which perfectly determines how to split the list of words ordered by frequency 
+We solve this problem by dynamic programming 
+
+Finding the number of clusters  The only remaining
+free variable in our optimization is    since the other parameters are then determined by the aforementioned optimizations  We plot in Figure   the optimal computation
+time  as   function of the number of clusters    according
+to our model  We observe that   small number of clusters 
+between   and   gives the best computation time  Moreover  we observe that using more than   clusters does not
+lead to signi cant gains in computational time    couple of
+milliseconds at best  In practice  we thus decide to use  
+small number of clusters  between   and   as it usually
+lead to slightly better perplexity  and we empirically determine the best speed perplexity compromise on training data 
+As shown later by our experiments  using   small number of
+clusters allows to obtain comparable perplexity as the exact
+softmax on large corpora 
+
+  clusters comp  time  ms Ef cient softmax approximation for GPUs
+
+Model
+Interpolated KneserNey  gram  Chelba et al   
+Feedforward NN   DSoftmax  Chen et al   
+ layer IRNN   Le et al   
+RNN    BlackOut sampling  Ji et al   
+Sparse Nonnegative Matrix Language Model  Shazeer et al   
+RNN    MaxEnt  gram  Chelba et al   
+LSTM   Jozefowicz et al   
+ layer LSTM    CNN inputs  Jozefowicz et al   
+Ours  LSTM 
+Ours  layer LSTM 
+
+Test perplexity
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Table   One Billion Word benchmark  Perplexity on the test set for single models  Our result is obtained after   epochs 
+
+bg
+  
+
+cs
+  
+
+da
+  
+
+de
+  
+
+el
+
+  
+
+es
+  
+
+Language 
+  
+
+Method
+Full
+Sampling
+HSM  freq 
+HSM  sim 
+Dsoftmax
+Dsoftmax  
+Ours
+
+ppl
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ppl
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ppl
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ppl
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ppl
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ppl
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Table   Europarl  Perplexity after   epochs for different languages as   function of time    minutes 
+
+have       hidden units and are regularized with weight
+decay       On the One Billion Word benchmark 
+we use       hidden units and no regularization  The
+dimension of the input word embeddings is set to   so
+that large models    in GPU memory  For the backpropagation through time  we unroll the models for   steps  We
+use Adagrad  Duchi et al    with   step size of   and
+  epochs  and we clip the norm of the gradients to   The
+batch size   is set to   except on the Finnish portion of
+Europarl where    due to memory constraints  All the
+experiments were run on the same GPU with the Maxwell
+architecture 
+
+Baselines  Our method is compared to    the full softmax    the hierarchical softmax with frequency binning
+ HSM freq  and similaritybased binning  HSM sim    importance sampling  Bengio et al      Bengio   Sen ecal 
+  and   the differentiated softmax  Chen et al   
+For HSM  we tried different strategies for the binning  We
+observe that using the square root function on the count
+before computing the word bins is the most ef cient for
+frequency binning  For the similaritybased binning  we
+used the Brown clustering algorithm  Brown et al   
+to determine the word classes  For the negative sampling
+method  we used   number of samples equal to   of the
+
+size of the vocabulary  Chen et al    For the differentiated softmax  Dsoftmax  we used the same partitions for
+the vocabulary as for our approach  We tried two version of
+the differentiated softmax  The  rst is the one described by
+Chen et al    where each word cluster uses   disjoint
+subset of the hidden representation  We also present an
+improved version  referred to as Dsoftmax   which uses
+our choice to have the whole hidden representation mapped
+to the different word clusters using projection matrices of
+different sizes 
+
+Comparison with the state of the art  Table   reports the
+results that we achieve on Text  On this small vocabulary 
+approximate methods are comparatively less interesting 
+Our approach is the only one to approach the result of the
+full softmax  below by   points of perplexity  while being
+the fastest  Our improved variant Dsoftmax   of the work
+by Chen et al    obtains similar results but is slower by
+  factor  
+On Europarl  we  rst present the convergence properties of
+our approach compared to other approximate strategies in
+Figure   show the perplexity  ppl  as   function of training
+time  Our approach signi cantly outperforms all competitors by   large margin  For reference  we also show the
+
+Ef cient softmax approximation for GPUs
+
+reasonable time and without the need of   large number of
+GPUs  We believe our approach to be general enough to be
+applied to other parallel computing architectures and other
+losses  as well as to other domains where the distributions
+of the class are unbalanced 
+
+Acknowledgements
+
+The authors would like to thank Jeff Johnson for his help
+with GPU benchmarking as well as Tomas Mikolov  Rob
+Fergus and Jeff Johnson for insightful discussions 
+
+References
+Andreas  Jacob and Klein  Dan  When and why are loglinear
+
+models selfnormalizing  In ACL   
+
+Bahl  Lalit    Jelinek  Frederick  and Mercer  Robert      maximum likelihood approach to continuous speech recognition 
+PAMI   
+
+Bengio  Yoshua and Sen ecal  JeanS ebastien  Adaptive importance
+sampling to accelerate training of   neural probabilistic language
+model  Neural Networks   
+
+Bengio  Yoshua  Ducharme    ejean  Vincent  Pascal  and Jauvin 
+Christian    neural probabilistic language model  JMLR     
+
+Bengio  Yoshua  Sen ecal  JeanS ebastien  et al  Quick training of
+probabilistic neural nets by importance sampling  In AISTATS 
+   
+
+Brown  Peter    Desouza  Peter    Mercer  Robert    Pietra  Vincent   Della  and Lai  Jenifer    Classbased ngram models of
+natural language  Computational linguistics   
+
+Chelba  Ciprian  Mikolov  Tomas  Schuster  Mike  Ge  Qi  Brants 
+Thorsten  Koehn  Phillipp  and Robinson  Tony  One billion
+word benchmark for measuring progress in statistical language
+modeling  arXiv preprint arXiv   
+
+Chen  Welin  Grangier  David  and Auli  Michael  Strategies
+for training large vocabulary neural language models  arXiv
+preprint arXiv   
+
+Chung  Junyoung  Gulcehre  Caglar  Cho  KyungHyun  and Bengio  Yoshua  Empirical evaluation of gated recurrent neural networks on sequence modeling  arXiv preprint arXiv 
+ 
+
+Devlin  Jacob  Zbib  Rabih  Huang  Zhongqiang  Lamar  Thomas 
+Schwartz  Richard    and Makhoul  John  Fast and robust
+neural network joint models for statistical machine translation 
+In ACL   
+
+Duchi  John  Hazan  Elad  and Singer  Yoram  Adaptive subgradient methods for online learning and stochastic optimization 
+JMLR   
+
+Elman  Jeffrey    Finding structure in time  Cognitive science 
+
+ 
+
+Goodman  Joshua  Classes for fast maximum entropy training  In
+
+ICASSP     
+
+Figure   Finnish Europarl  perplexity  on validation  as the function of time for our method and baselines  We represent the result
+after each epoch by   point  Our method favorably compares with
+all other approaches       
+the tradeoff perplexity and training
+time Similar conclusions are drawn for the other languages 
+
+performance  Dsoftmax   obtained by improving the Dsoftmax  to make it more comparable to our method  Our
+method is   to   faster than this improved competitor 
+which demonstrates how critical is our optimization strategy  Similar conclusions are drawn from Table   for other
+languages from the Europal corpus 
+Table   gives the test perplexity on One Billion Word benchmark  Our method achieves   perplexity of   after  ve
+epochs  taking less than three days to train on   single GPU 
+In comparison  only Jozefowicz et al    achieves  
+lower perplexity  but with   model   bigger than ours and
+trained over   GPUs during   weeks  We also note that for
+models of similar size  we achieve similar perplexity than
+the method introduced by Jozefowicz et al    As far
+as we know  ours the  rst method to achieve   perplexity
+lower than   on   single GPU 
+
+  Conclusion
+In this paper  we have proposed   simple yet ef cient approximation of the softmax classi er  To our knowledge 
+it is the  rst speed optimizing approximation that obtains
+performance on par with the exact model  This is achieved
+by explicitly taking into account the computation time of
+matrixmultiplication on parallel systems and combining it
+with   few important observations  namely keeping   shortlist of frequent words in the root node  Schwenk   
+and reducing the capacity of rare words  Chen et al   
+In all our experiments on GPU  our method consistently
+maintains   low perplexity while enjoying   speedup going
+from   to   compared to the exact model  This type
+of speedup allows to deal with extremely large corpora in
+
+ Time  min PerplexityFullSamplingHSMDSoftmax OursEf cient softmax approximation for GPUs
+
+Goodman  Joshua      bit of progress in language modeling 
+
+Computer Speech   Language     
+
+Graves  Alan  Mohamed  Abdelrahman  and Hinton  Geoffrey 
+Speech recognition with deep recurrent neural networks  In
+ICASSP   
+
+Gutmann  Michael and Hyv arinen  Aapo  Noisecontrastive estimation    new estimation principle for unnormalized statistical
+models  In International Conference on Arti cial Intelligence
+and Statistics   
+
+Hinton  Geoffrey  Deng  Li  Yu  Dong  Dahl  George    Mohamed 
+Abdelrahman  Jaitly  Navdeep  Senior  Andrew  Vanhoucke 
+Vincent  Nguyen  Patrick  Sainath  Tara    et al  Deep neural networks for acoustic modeling in speech recognition  The
+shared views of four research groups  Signal Processing Magazine   
+
+Hochreiter  Sepp and Schmidhuber    urgen  Long shortterm mem 
+
+ory  Neural computation   
+
+Jean  Sebastien  Cho  Kyunghyun  Memisevic  Roland  and Bengio  Yoshua  On using very large target vocabulary for neural
+machine translation   
+
+Ji  Shihao  Vishwanathan  SVN  Satish  Nadathur  Anderson 
+Michael    and Dubey  Pradeep  Blackout  Speeding up recurrent neural network language models with very large vocabularies  arXiv preprint arXiv   
+
+Joulin  Armand  van der Maaten  Laurens  Jabri  Allan  and Vasilache  Nicolas  Learning visual features from large weakly
+supervised data  arXiv preprint arXiv   
+
+Jozefowicz  Rafal  Vinyals  Oriol  Schuster  Mike  Shazeer  Noam 
+and Wu  Yonghui  Exploring the limits of language modeling 
+arXiv preprint arXiv   
+
+Katz  Slava    Estimation of probabilities from sparse data for the
+language model component of   speech recognizer  ICASSP 
+ 
+
+Kneser  Reinhard and Ney  Hermann  Improved backingoff for
+
+mgram language modeling  In ICASSP   
+
+Koehn  Philipp  Europarl    parallel corpus for statistical machine
+
+translation  In MT summit   
+
+Kuhn  Roland and De Mori  Renato    cachebased natural lan 
+
+guage model for speech recognition  PAMI   
+
+Le  HaiSon  Oparin  Ilya  Allauzen  Alexandre  Gauvain  JeanLuc  and Yvon  Franc ois  Structured output layer neural network
+language model  In ICASSP   
+
+Le  Quoc    Jaitly  Navdeep  and Hinton  Geoffrey      simple
+way to initialize recurrent networks of recti ed linear units 
+arXiv preprint arXiv   
+
+Mikolov  Tomas and Zweig  Geoffrey  Context dependent recurrent
+
+neural network language model  In SLT   
+
+Mikolov  Tomas  Kara at  Martin  Burget  Lukas  Cernock    Jan 
+and Khudanpur  Sanjeev  Recurrent neural network based language model  In INTERSPEECH   
+
+Mikolov  Tomas  Deoras  Anoop  Kombrink  Stefan  Burget 
+Lukas  and Cernock    Jan  Empirical evaluation and combination of advanced language modeling techniques  In INTERSPEECH     
+
+Mikolov  Tom      Deoras  Anoop  Povey  Daniel  Burget  Luk     
+and  Cernock    Jan  Strategies for training large scale neural
+network language models  In ASRU     
+
+Mikolov  Tom      Kombrink  Stefan  Burget  Luk       Cernock   
+Jan Honza  and Khudanpur  Sanjeev  Extensions of recurrent
+neural network language model  In ICASSP     
+
+Mikolov  Tomas  Chen  Kai  Corrado  Greg  and Dean  Jeffrey 
+Ef cient estimation of word representations in vector space 
+arXiv preprint arXiv   
+
+Mikolov  Tomas  Joulin  Armand  Chopra  Sumit  Mathieu 
+Michael  and Ranzato  Marc Aurelio  Learning longer memory
+in recurrent neural networks  arXiv preprint arXiv 
+ 
+
+Mnih  Andriy and Hinton  Geoffrey      scalable hierarchical
+
+distributed language model  In NIPS   
+
+Mnih  Andriy and Teh  Yee Whye    fast and simple algorithm for
+training neural probabilistic language models  arXiv preprint
+arXiv   
+
+Morin  Frederic and Bengio  Yoshua  Hierarchical probabilistic
+
+neural network language model  In Aistats   
+
+Schwenk  Holger  Continuous space language models  Computer
+
+Speech   Language  pp     
+
+Schwenk  Holger  Rousseau  Anthony  and Attik  Mohammed 
+Large  pruned or continuous space language models on   gpu
+for statistical machine translation  In NAACLHLT Workshop 
+ 
+
+Shazeer  Noam  Pelemans  Joris  and Chelba  Ciprian  Sparse
+In
+
+nonnegative matrix language modeling for skipgrams 
+Proceedings of Interspeech  pp     
+
+Sutskever  Ilya  Vinyals  Oriol  and Le  Quoc    Sequence to
+sequence learning with neural networks  In Advances in neural
+information processing systems   
+
+Vaswani  Ashish  Zhao  Yinggong  Fossum  Victoria  and Chiang  David  Decoding with largescale neural language models
+improves translation  In EMNLP   
+
+Vincent  Pascal  de Br ebisson  Alexandre  and Bouthillier  Xavier 
+Ef cient exact gradient update for training deep networks with
+very large sparse targets  In NIPS   
+
+Werbos  Paul    Backpropagation through time  what it does and
+
+how to do it   
+
+Williams  Ronald   and Peng  Jing  An ef cient gradientbased
+algorithm for online training of recurrent network trajectories 
+Neural computation   
+
+Zipf  George Kingsley  Human behavior and the principle of least
+
+effort   
+
+Zweig  Geoffrey and Makarychev  Konstantin  Speed regulariza 
+
+tion and optimality in word classing  In ICASSP   
+
+

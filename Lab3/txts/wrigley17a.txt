@@ -1,0 +1,1385 @@
+Tensor Belief Propagation
+
+Andrew Wrigley   Wee Sun Lee   Nan Ye  
+
+Abstract
+
+We propose   new approximate inference algorithm for graphical models  tensor belief propagation  based on approximating the messages
+passed in the junction tree algorithm  Our algorithm represents the potential functions of the
+graphical model and all messages on the junction
+tree compactly as mixtures of rank  tensors  Using this representation  we show how to perform
+the operations required for inference on the junction tree ef ciently  marginalisation can be computed quickly due to the factored form of rank 
+tensors while multiplication can be approximated
+using sampling  Our analysis gives suf cient
+conditions for the algorithm to perform well  including for the case of hightreewidth graphs  for
+which exact inference is intractable  We compare our algorithm experimentally with several
+approximate inference algorithms and show that
+it performs well 
+
+  Introduction
+Probabilistic graphical models provide   general framework to conveniently build probabilistic models in   modular and compact way  They are commonly used in statistics 
+computer vision  natural language processing  machine
+learning and many related  elds  Wainwright   Jordan 
+  The success of graphical models depends largely
+on the availability of ef cient inference algorithms  Unfortunately  exact inference is intractable in general  making
+approximate inference an important research topic 
+Approximate inference algorithms generally adopt   variational approach or   sampling approach  The variational
+approach formulates the inference problem as an optimi 
+
+ Australian National University  Canberra  Australia 
+ National University of Singapore  Singapore 
+ Queensland
+University of Technology  Brisbane  Australia  Correspondence
+to  Andrew Wrigley  andrew wrigley anu edu au  Wee Sun
+Lee  leews comp nus edu sg  Nan Ye    ye qut edu au 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+sation problem and constructs approximations by solving
+relaxations of the optimisation problem    number of wellknown inference algorithms can be seen as variational algorithms  such as loopy belief propagation  mean eld variational inference  and generalized belief propagation  Wainwright   Jordan    The sampling approach uses sampling to approximate either the underlying distribution or
+key quantities of interest  Commonly used sampling methods include particle  lters and Markovchain Monte Carlo
+ MCMC  algorithms  Andrieu et al   
+Our proposed algorithm  tensor belief propagation  TBP 
+can be seen as   samplingbased algorithm  Unlike particle  lters or MCMC methods  which sample states  also
+known as particles  TBP samples functions in the form of
+rank  tensors  Speci cally  we use   data structure commonly used in exact inference  the junction tree  and perform approximate message passing on the junction tree using messages represented as mixtures of rank  tensors 
+We assume that each factor in the graphical model is originally represented as   tensor decomposition  mixture of
+rank  tensors  Under this assumption  all messages and
+intermediate factors also have the same representation  Our
+key observation is that marginalisation can be performed
+ef ciently for mixtures of rank  tensors  and multiplication can be approximated by sampling  This leads to an approximate message passing algorithm where messages and
+intermediate factors are approximated by lowrank tensors 
+We provide analysis  giving conditions under which the
+method performs well  We compare TBP experimentally
+with several existing approximate inference methods using
+Ising models  random MRFs and two realworld datasets 
+demonstrating promising results 
+
+  Related Work
+Exact inference on treestructured graphical models can
+be performed ef ciently using belief propagation  Pearl 
+    dynamic programming algorithm that involves
+passing messages between nodes containing the results of
+intermediate computations  For arbitrary graphical models 
+the wellknown junction tree algorithm  Shafer   Shenoy 
+  Lauritzen   Spiegelhalter    Jensen et al   
+is commonly used  The model is  rst compiled into   junc 
+
+Tensor Belief Propagation
+
+tion tree data structure and   similar message passing algorithm is then run over the junction tree  Unfortunately  for
+nontree models the time and space complexity of the junction tree algorithm grows exponentially with   property of
+the graph called its treewidth  For hightreewidth graphical
+models  exact inference is intractable in general 
+Our work approximates the messages passed in the junction tree algorithm to avoid the exponential runtime caused
+by exact computations in hightreewidth models  Various
+previous work has taken the same approach  Expectation
+propagation  EP   Minka    approximates messages by
+minimizing the KullbackLeiber  KL  divergence between
+the actual message and its approximation  Structured message passing  Gogate   Domingos    can be considered as   special case of EP where structured representations  in particular algebraic decision diagrams  ADDs  and
+sparse hash tables  are used so that EP can be performed
+ef ciently 
+In contrast to ADDs  the tensor decompositions used for TBP may provide   more compact representation for some problems  An ADD partitions   tensor into
+axisaligned hyperrectangles   it is possible to represent
+  hyperrectangle using   rank  tensor but   rank  tensor is generally not representable as an axisaligned rectangle  Furthermore  the supports of the rank  tensors in the
+mixture may overlap  However  ADD compresses hyperrectangles that share substructures and this may result in
+the methods having different strengths  Sparse tables  on
+the other hand  work well for cases with extreme sparsity 
+Several methods use sampled particles to approximate messages  Koller et al    Ihler   McAllester    Sudderth et al    To allow their algorithms to work well
+on problems with less sparsity  Koller et al    and Sudderth et al    use nonparametric methods to smooth
+the particle representation of messages  In contrast  we decompose each tensor into   mixture of rank  tensors and
+sample the rank  tensors directly  instead of through the
+intermediate step of sampling particles  Another approach 
+which presamples the particles at each node and passes
+messages between these presampled particles was taken
+by Ihler   McAllester   The methods of Ihler  
+McAllester   and Sudderth et al    were also applied on graphs with loops using loopy belief propagation 
+Xue et al    use discrete Fourier representations for inference via the elimination algorithm  The discrete Fourier
+representation is   special type of tensor decomposition  Instead of sampling  the authors perform approximations by
+truncating the Fourier coef cients  giving different approximation properties  Other related works include  Darwiche 
+  Park   Darwiche    Chavira   Darwiche   
+where belief networks are compiled into compact arithmetic circuits  ACs  On the related problem of MAP inference  McAuley   Caetano   show that junction tree
+
+clusters that factor over subcliques or consist only of latent
+variables yield improved complexity properties 
+
+  Preliminaries
+For simplicity we limit our discussion to Markov random  elds  MRFs  but our results apply equally to
+Bayesian networks and general factor graphs  We focus
+only on discrete models    Markov random  eld   is
+an undirected graph representing   probability distribution               XN   such that   factorises over the maxcliques in        
+
+              XN    
+
+ 
+ 
+
+   Xc 
+
+ 
+
+ cid 
+
+  cl   
+
+ cid 
+
+ 
+
+ cid 
+
+where cl    is the set of maxcliques in   and    
+  cl       Xc  ensures normalisation  We call the
+
+factors    clique potentials or potentials 
+TBP is based on the junction tree algorithm  see     
+ Koller   Friedman      junction tree is   special
+type of cluster graph       an undirected graph with nodes
+called clusters that are associated with sets of variables
+rather than single variables  Speci cally    junction tree is  
+cluster graph that is   tree and which also satis es the running intersection property  The running intersection property states that if   variable is in two clusters  it must also be
+in every cluster on the path that connects the two clusters 
+The junction tree algorithm is essentially the wellknown
+belief propagation algorithm applied to the junction tree
+after the cluster potentials have been initialized  At initialisation  each clique potential is  rst associated with  
+cluster  Each cluster potential    Xt  is computed by multiplying all the clique potentials    Xc  associated with the
+cluster Xt  Thereafter  the algorithm is de ned recursively
+in terms of messages passed between neighbouring clusters    message is always   function of the variables in the
+receiving cluster  and represents an intermediate marginalisation over   partial set of factors  The message mt   Xs 
+sent from   cluster   to   neighbouring cluster   is de ned
+recursively by
+
+mt   Xs   
+
+   Xt 
+
+mu   Xt 
+
+ 
+
+Xt Xs
+
+         
+
+where       is the set of neighbours of    Since the junction tree is singly connected  this recursion is wellde ned 
+After all messages have been computed  the marginal distribution on   cluster of variables Xs is computed using
+
+Ps Xs       Xs 
+
+mt   Xs 
+
+ 
+
+ cid 
+
+       
+
+and univariate marginals can be computed by summation
+over cluster marginals  The space and time complexity of
+
+ cid 
+
+ cid 
+
+the junction tree inference algorithm is exponential in the
+induced width of the graph       the number of variables in
+the largest tree cluster minus    Koller   Friedman   
+The lowest possible induced width  over all possible junction trees for the graph  is de ned as the treewidth of the
+graph 
+
+  Tensor Belief Propagation
+The TBP algorithm we propose  Algorithm   is the same
+as the junction tree algorithm except for the approximations
+at line   and line   which we describe below 
+
+  For each cluster Xt  compute    Xt     cid 
+
+Algorithm   Tensor Belief Propagation
+input Clique potentials    Xc  junction tree   
+output Approximate cluster marginals    Ps Xs  for all   
+     Xc 
+where the product is over all cliques   associated with
+  
+
+  while there is any unsent message do
+ 
+
+Pick an unsent message mt   Xs  with all messages to   from neighbours other than   sent 
+
+ 
+
+Send  mt   Xs   cid 
+  return  Ps Xs       Xs cid 
+
+  end while
+
+Xt Xs
+
+   Xt 
+
+ mu   Xt 
+
+         
+
+         mt   Xs 
+
+ cid 
+
+There are two challenges in applying the junction tree algorithm to hightreewidth graphical models  representing
+the intermediate potential functions  and computing them 
+For representation  using tables to represent the cluster potentials and messages requires space exponential in the induced width  For computation  the two operations relevant
+to the complexity of the algorithm are marginalisation over
+  subset of variables in   cluster and multiplication of multiple factors  When clusters become large  these operations
+become intractable unless additional structure can be exploited 
+TBP alleviates these dif culties by representing all potential functions as mixtures of rank  tensors  We show how
+to perform exact marginalisation of   mixture  required in
+line   ef ciently  and how to perform approximate multiplication of mixtures using sampling  used for approximation in lines   and  
+
+  Mixture of Rank  Tensors
+
+As we are concerned with discrete distributions  each potential    can be represented by   multidimensional array         tensor  Furthermore    ddimensional tensor
+    RN Nd can be decomposed into   weighted sum
+ Finding the treewidth of   graph is NPhard  in practice we
+
+use various heuristics to construct the junction tree 
+
+  cid 
+  cid 
+
+  
+
+  cid 
+ cid 
+
+Tensor Belief Propagation
+
+ 
+
+  
+
+ 
+
+id
+
+ 
+
+  
+
+ 
+
+ cid 
+
+ cid 
+
+   
+
+  id
+
+wk   
+
+      
+
+ cid   
+
+        ad
+  
+
+   cid   
+
+     cid ad
+
+of outer products of vectors as
+      
+
+  cid 
+ cid 
+    RNi and   is the outer product      
+where wk      ai
+        ad
+  We
+denote the vector of weights  wk  as    The smallest  
+for which an exact rterm decomposition exists is called
+the rank of   and   decomposition   using this   is   tensor rank decomposition  This decomposition is known by
+several names including CANDECOMP PARAFAC  CP 
+decomposition and Hitchcock decomposition  Kolda  
+Bader   
+In this paper  we assume without loss of
+generality that the weights are nonnegative and sum to  
+giving   mixture of rank  tensors  Such   mixture forms
+  probability distribution over rank  tensors  which we refer to as   tensor belief  We also assume that the decomposition is nonnegative      
+the rank  tensors are nonnegative  although the method can be extended to allow
+negative values 
+For    clique or cluster  potential function    Xs  over
+ Xs    Ns variables    is equivalent to decomposing   
+into   sum of fullyfactorised terms      
+
+   Xs   
+
+ 
+
+ws
+
+    
+
+  Xs 
+
+ws
+
+    
+
+  Xs      
+
+  Ns
+
+ XsNs
+
+ 
+
+ 
+
+  
+
+This observation allows us to perform marginalisation and
+multiplication operations ef ciently 
+
+  Marginalisation
+
+Marginalising out   variable Xi from   cluster Xs simpli 
+ es in the same manner as if the distribution was fullyfactorised  namely
+
+ cid cid 
+
+ cid 
+
+ 
+
+ cid 
+
+Xi
+
+   Xs   
+
+ws
+ 
+
+Xi
+
+  
+  
+  Xs    
+
+where we simply push the sum cid 
+
+  
+    Xi 
+  Xs      
+
+ cid cid 
+
+excluding   
+
+     Xi 
+
+  Ns
+
+ 
+
+ cid 
+
+ 
+
+ XsNs
+
+inside and only evalXi
+uate it over the univariate factor   
+    Xi  We can then
+absorb this sum into the weights  ws
+   and the result stays
+in decomposed form   To marginalise over multiple variables  we evaluate   for each variable in turn 
+
+  Multiplication
+
+The key observation for multiplication is that   mixture of
+rank  tensors can be treated as   probability distribution
+
+Tensor Belief Propagation
+
+  cid 
+
+  
+
+over the rank  tensors with expectation equal to the true
+function  by considering the weight of each rank  term
+wk as its probability 
+To multiply two potentials    and     we repeatedly sample rank  terms from each multiplicand to build the product  We draw   sample of   pairs of indices  kr  lr  
+  
+independently from wi and wj respectively  and use the
+approximation
+
+   Xi       Xj     
+ 
+
+  
+kr
+
+ Xi      
+
+lr
+
+ Xj 
+
+ 
+
+lr
+
+ Xi      
+
+The approximation is also   mixture of rank  tensors  with
+the rank  tensors being the   
+ Xj  and their
+kr
+weights being the frequencies of the sampled  kr  lr  pairs 
+This process is equivalent to drawing   sample of the same
+size from the distribution representing    Xi     Xj  and
+hence provides an unbiased estimate of the product function  Multiplication of each pair   
+ Xj  can
+kr
+be performed ef ciently due to their factored forms  It is
+possible to extend the method to allow multiplication of
+more potential functions simultaneously but we only use
+pairwise multiplication in this paper  repeating the process
+as necessary to multiply more functions 
+
+ Xi      
+
+lr
+
+  Theoretical Analysis
+
+      cid 
+
+  cl       Xc  Let Di Xi   cid 
+
+For simplicity  we give results for binary MRFs  Extension
+to nonbinary variables is straightforward  We assume that
+exact tensor decompositions are given for all initial clique
+potentials 
+Theorem   Consider   binary MRF with   maxcliques
+with potential functions represented as nonnegative tensor
+decompositions  Consider the unnormalised distribution
+    
+be the unnormalised marginal for variable Xi  Assume that
+the values of the rank  tensors in any mixture resulting
+from pairwise multiplication is upper bounded by    and
+that the approximation target for any cell in any multiplication operation is lower bounded by    Let  Di Xi  be the
+estimates produced by TBP using   junction tree with an
+induced width     With probability at least       for all  
+and xi 
+
+  Xi
+
+     Di xi     Di xi         Di xi 
+
+if the sample size used for all multiplication operations is
+at least
+
+ cid 
+
+ cid     
+
+ 
+
+Kmin       
+
+ 
+ 
+
+log         log
+
+ 
+ 
+
+ cid cid 
+
+ 
+
+Furthermore   Di Xi  remains   consistent estimator for
+Di Xi  if      
+
+Proof  We give the proof for the case    cid    here  The
+consistency proof for the case       can be found in the
+supplementary material 
+The errors in the unnormalised marginals are due to the
+errors in approximate pairwise multiplication de ned by
+Equation   We  rst give bounds for the errors in all the
+pairwise multiplication by sampling operations  then derive
+the bounds for the errors in the unnormalised marginals 
+Recall that by the multiplicative Chernoff bound  see     
+ Koller   Friedman    for          random variables
+           YK in range       with expected value   we have
+
+Yi              
+
+    exp
+
+ cid 
+
+ cid 
+
+      
+  
+
+ cid 
+
+ 
+
+ cid 
+
+ 
+
+ 
+ 
+
+  cid 
+
+  
+
+The number of pairwise multiplications required to initialize the cluster potentials      Xt  is at most    line  
+The junction tree has at most   clusters  and thus at most
+       messages need to be computed  Each message
+requires at most   pairwise multiplications  line   Hence
+the total number of pairwise multiplications needed is at
+most      Each pairwise multiplication involves functions de ned on at most   binary variables  and thus it simultaneously estimates at most    values  Hence at most
+        values are estimated by sampling in the algorithm 
+Since each estimate satis es the Chernoff bound  we can
+apply   union bound to bound the probability that the estimate for any    is outside                 giving
+
+ cid 
+
+  
+
+ 
+ 
+
+  cid 
+
+  
+
+                    for
+ cid 
+   
+
+ cid 
+
+          exp
+
+any estimate  
+
+ cid 
+
+ 
+
+     BK
+  
+
+where   is   lower bound on the minimum value of all cells
+estimated during the algorithm  If we set an upperbound
+on this error probability of   and rearrange for    we have
+that with probability at least   all estimates are within  
+factor of       of their true values when
+
+     
+   
+
+ 
+ 
+
+ln
+
+       
+
+ 
+
+ 
+
+ 
+
+We now seek an expression for the sample size required
+for the unnormalised marginals to have small errors  First
+we argue that at most           pairwise multiplications
+are used in the process of constructing the marginals at any
+node    where   is the number of clusters  This is true
+for the base case of   tree of size   as no messages need
+to be passed  As the inductive hypothesis  assume that the
+statement is true for trees of size less than    The node   is
+
+Tensor Belief Propagation
+
+considered as the root of the tree and by the inductive hypothesis the number of multiplications used in each subtree
+  is at most Ci   Qi     where Ci and Qi are the number
+of clique potentials and clusters associated with subtree   
+Summing them up and noting that we need to perform at
+most one additional multiplication for each clique potential
+associated with   for initialisation  and one additional multiplication for each subtree  gives us the required result  To
+simplify analysis  we bound           by    from here
+onwards 
+At worst  each pairwise multiplication results in an extra
+      factor in the bound  Since we are using   multiplicative bound  marginalisation operations have no effect
+on the bound  As we do no more than    multiplications 
+the  nal marginal estimates are all within   factor   
+of their true value 
+To bound the marginal so that it is within   factor      
+of its true value for   chosen       we note that choosing
+implies                and         
+    ln 
+     
+
+  
+
+ 
+
+ 
+
+        
+
+    ln     
+
+ cid 
+ cid 
+ cid 
+
+ cid  
+ cid          
+ cid  
+
+  
+
+     
+  
+ln     
+
+  
+
+  exp  ln             
+
+        
+
+   
+
+In   we use Bernoulli   inequality together with ln   
+      and in   we use           exp rx 
+Substituting this   into   we have that all marginal estimates are accurate within factor       with probability at
+least       when
+   
+
+ 
+Using the fact that ln            ln   for           and
+ln       we can relax this bound to
+
+ ln     
+
+       
+
+    
+
+ 
+ 
+
+ln
+
+ 
+
+ 
+
+ cid 
+
+        
+ 
+
+ 
+ 
+
+log         log
+
+ 
+ 
+
+ cid 
+
+ 
+
+Corollary   Under the same conditions as Theorem  
+with probability at least       the normalised marginal estimates  pi xi  satisfy
+
+     pi xi     pi xi         pi xi 
+
+for all   and xi  if the sample size used for all multiplication
+operations is at least
+min       
+  cid 
+
+ cid     
+
+log         log
+
+ cid cid 
+
+ cid 
+
+ 
+
+ 
+ 
+
+ 
+
+ 
+ 
+
+ cid cid 
+
+ 
+
+ cid 
+
+ cid     
+
+ 
+
+Proof  Suppose the unnormalised marginals have relative
+error bounded by           
+
+for all   and xi  Then we have
+
+     Di xi     Di xi         Di xi 
+ cid 
+
+       Di xi 
+
+     Di xi 
+
+ cid 
+
+ Di xi 
+
+     
+     
+
+ Di xi 
+
+ 
+
+xi
+
+xi
+
+ pi xi   
+
+pi xi 
+
+To bound the relative error on  pi xi  to       we set
+
+     
+     
+
+ cid   
+
+ cid 
+
+             
+
+ cid   
+
+ cid 
+
+    cid   
+
+ 
+
+     
+
+ 
+
+ cid 
+
+ 
+
+ 
+
+   
+
+Since  
+for       the
+increase in Kmin required to bound the normalised estimates rather than the unnormalised estimates is at most  
+constant  Thus 
+
+ 
+
+ 
+
+min       
+  cid 
+
+ 
+ 
+
+log         log
+
+ 
+ 
+
+as required  The negative side of the bound is similar 
+
+error when sampling   mixture        cid  
+
+Interestingly 
+the sample size does not grow exponentially with the induced width  and hence the treewidth
+of the graph  As the inference problem is NPhard 
+we expect the ratio     to be large in dif cult problems  The     ratio comes from bounding the relative
+   wk     
+  more re ned bound can be obtained by bounding
+maxk maxx         instead 
+this bound would not
+grow as quickly if       is always small whenever    
+is small  Understanding the properties of function classes
+where these bounds are small may help us understand when
+TBP works well 
+Theorem   suggests that that it may be useful to reweight
+the rank  tensors in   multiplicand to give   smaller
+    ratio  The following proposition gives   reweighting
+scheme that minimises the maximum value of the rank 
+tensors in   multiplicand  which leads to   smaller   with
+   xed  Theorem   still holds with this reweighting 
+   wk      where wk  
+   wk     and           for all    Conk    where
+   
+   
+
+Proposition   Let      cid  
+   cid  
+sider   reweighted representation cid  
+
+    cid 
+     is minimized when   cid 
+
+      and  cid 
+
+ cid 
+       wk
+  cid 
+  Then maxk maxx  cid 
+wk maxx      
+
+      each   cid 
+
+     cid 
+
+  cid 
+
+ 
+
+Proof  Let ak   wk maxx      
+and let    
+have      cid 
+  For any choice of   cid  we
+maxk maxx  cid 
+       maxk
+  ak cid 
+  ak  The  rst inequality holds bek   cid 
+    ak for any   by the de nition of    Since
+
+ cid 
+
+cause vw cid 
+
+ak
+  cid 
+
+ 
+
+ 
+
+Tensor Belief Propagation
+
+ cid 
+
+  ak is   constant lower bound for    and this is clearly
+    ak  we have the claimed re 
+
+achieved by setting   cid 
+sult 
+
+Note that with       represented as   rank  tensor  the
+maximum value over   can be computed quickly with the
+help of the factored structure 
+Reweighting the rank  tensors as described in Proposition   and then sampling gives   form of importance sampling 
+Importance sampling is often formulated instead
+with the objective of minimizing the variance of the estimates  Since we expect lowering the variance of intermediate estimates to lead to lower variance on the  nal
+marginal estimates  we also examine the following alternative reweighting scheme 
+   wk      where wk  
+ cid  
+   wk     Consider   reweighted representak    cid 
+      each
+       wk
+  cid 
+  cid 
+    cid 
+      Let        
+   
+Ki
+be an estimator for     where each Ki is drawn independently from the categorical distribution with paramer  Then     is unbiased  and the toters    cid 
+   
+  Var   cid    is minimized when   cid 
+
+Proposition   Let      cid  
+   cid  
+tion  cid  
+      and cid 
+tal variance  cid 
+ cid cid 
+
+     where  cid 
+    cid 
+
+            cid 
+
+  cid 
+
+ 
+
+ 
+
+wk
+
+       
+
+Proof  Clearly     is an unbiased estimator for     The
+variance of this estimator is
+Var cid 
+  cid 
+
+Var       
+
+The factored forms of rank  tensors again allows the importance reweighting to be computed ef ciently 
+Propositions   and   could be applied directly to the algorithm by multiplying two potential functions fully before sampling  If each potential function has   terms  the
+multiplication would result in     terms which is computationally expensive  We only partially exploit the results of
+Propositions   and   in our algorithm  When multiplying
+two potential functions  we draw   pairs of rank  tensors from their respective distributions and multiply them
+as described earlier but reweight the resulting mixture using either Proposition   or   We call the former maxnorm
+reweighting  and the latter minvariance reweighting 
+
+  Experiments
+We present experiments on gridstructured Ising models 
+random graphs with pairwise Ising potentials  and two
+realworld datasets from the UAI   Inference Competition  Gogate    We test our algorithm against commonly used approximate inference methods  namely loopy
+belief propagation  labelled BP  mean eld  MF  treereweighted BP  TRW  and Gibbs sampling using existing
+implementations from the libDAI package  Mooij   
+TBP was implemented in    inside the libDAI framework using Eigen  Guennebaud et al    and all tests
+were executed on   single core of     GHz Intel Core   
+processor  In each experiment  we time the execution of
+TBP and allow Gibbs sampling the same wallclock time 
+We run the other algorithms until convergence  which occurs quickly in each case  hence only the  nal performance
+is shown  Parameters used for BP  MF  TRW and Gibbs are
+given in the supplementary material  To build the junction
+tree  we use the min ll heuristic  implemented in libDAI 
+
+  Gridstructured Ising Models
+Figure   gives results for     Ising models  The      
+Ising model is   planar gridstructured MRF described by
+the joint distribution
+
+ cid 
+
+ cid 
+
+ 
+
+             xN    
+
+ 
+ 
+
+exp
+
+wijxixj  
+
+bixi
+
+     
+
+ 
+
+where        runs over all edges in the grid  Each variable Xi takes value either   or  
+In our experiments 
+we choose the wij uniformly from      mixed interactions  or      attractive interactions  and the   uniformly
+from     We use   symmetric rank  tensor decomposition for the pairwise potentials  We measure performance
+
+ Min ll repeatedly eliminates variables that result in the lowest number of additional edges in the graph  Koller   Friedman 
+ 
+
+   cid 
+ cid 
+
+   
+        cid 
+Ki
+
+  cid 
+  cid 
+
+          
+
+ cid 
+
+ cid 
+
+           
+
+           
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+Ki
+
+ 
+ 
+
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+
+ cid   cid 
+ cid cid 
+ cid cid 
+ cid cid 
+ cid 
+ cid 
+     cid 
+  argmin
+   cid 
+  
+    cid 
+ cid 
+
+  cid 
+   
+
+wk
+  wl
+
+ 
+
+ 
+
+  cid 
+
+ 
+
+  
+ 
+  cid 
+
+ 
+
+  
+ 
+  cid 
+
+ 
+
+ cid 
+
+ 
+
+ cid cid 
+ cid cid 
+
+Since   and     are constant  we have
+Var   cid   
+
+   cid 
+
+     argmin
+  
+   cid 
+
+ 
+
+where each   cid 
+cation of the method of Lagrange multipliers yields
+
+        straightforward appli 
+
+ 
+  cid 
+
+ 
+
+ wk     
+
+       
+       
+
+ 
+
+Tensor Belief Propagation
+
+Figure   Marginal error of TBP for various sample sizes   on       Ising models compared with other approximate
+inference methods  NONE   no reweighting  MAX   maxnorm reweighting  VAR   minvariance reweighting 
+
+by the mean    error of marginal estimates over the    
+variables 
+
+ Pexact Xi       Papprox Xi    
+
+   cid 
+
+  
+
+ 
+   
+
+Exact marginals were obtained using the exact junction tree
+algorithm  possible because the grid size is small  Results
+are all averages over   model instances generated randomly with the speci ed parameters  error bars show standard error  We give   description of the tensor decomposition and additional results for   range of grid sizes   and
+interaction strengths wij in the supplementary material 
+As we increase the number of samples used for multiplication    and hence running time  the performance of TBP
+improves as expected  On both attractive and mixed interaction models  loopy BP  mean eld and treereweighted
+BP perform poorly  Gibbs sampling performs poorly on
+models with attractive interactions but performs better on
+models with mixed interactions  This is expected since
+models with mixed interactions mix faster  Reweighting
+gives   noticeable improvement over not using reweighting 
+both maxnorm reweighting and minvariance reweighting
+give very similar results  in Figure   they not easily differentiated  For the remainder of our experiments  we show
+results for maxnorm reweighting only 
+
+  Random Pairwise MRFs
+
+bi are chosen uniformly from    
+Figure    shows the performance of TBP with increasing sample size   on  node models  Similar to gridstructured Ising models  TBP performs well as the sample
+size is increased  Notably  TBP performs very well on attractive models where other methods perform poorly 
+Figure    shows the performance of the algorithms as the
+graph size is increased to   nodes 
+Interestingly  TBP
+starts to fail for mixed interaction models as the graph size
+is increased but remains very effective for attractive interaction models while other methods perform poorly 
+
+  UAI Competition Problems
+
+Finally  we show results of TBP on two realworld datasets
+from the UAI   Inference Competition  namely the
+Promedus and Linkage datasets  We chose these two problems following Zhu   Ermon   To compute the initial tensor rank decompositions  we use the nonnegative
+cp nmu method from Bader et al    an iterative optimisation method based on  Lee   Seung    The initial potential functions are decomposed into mixtures with
+  components  We show results for       and       We
+measure performance by the mean    error over all states
+and all variables
+
+ Pexact Xi   xi    Papprox Xi   xi 
+
+  cid 
+
+ cid 
+
+  
+
+xi
+
+ 
+
+  Si
+
+We also test TBP on random binary Nnode MRFs with
+pairwise Ising potentials  We construct the graphs by independently adding each edge        with probability   with
+the requirement that the resulting graph is connected  Pairwise potentials are of the same form as Ising models      
+exp wijxixj  where interaction strengths wij are chosen
+uniformly from      attractive  or      mixed  and the
+
+where Si is the number of states of variable Xi  Results are
+averages over all problem instances in  Gogate   
+We see that TBP outperforms Gibbs sampling on both
+problems  On the Linkage dataset  using       mix 
+
+ We omit results for BP  MF and TRW for these problems be 
+
+cause the libDAI package was unable to run them 
+
+ Sample size    TBP  matched running time  Gibbs Marginal errorAttractive interactionsTBP  NONE TBP  MAX TBP  VAR MFBPTRWGibbs Sample size    TBP  matched running time  Gibbs Marginal errorMixed interactionsTBP  NONE TBP  MAX TBP  VAR MFBPTRWGibbsTensor Belief Propagation
+
+    Effect of sample size   for       nodes
+
+    Effect of graph size  
+
+Figure   Performance of TBP on random pairwise MRFs compared with other approximate inference algorithms 
+
+Figure   Marginal error of TBP vs Gibbs sampling on UAI   Inference Competition problems for various sample sizes
+  
+
+ture components for the initial decompositions performs
+best and increasing   does not improve performance  On
+the Promedus dataset       performs better  in this case 
+increasing   may improve the accuracy of the decomposition of the initial potential functions  For reference  the
+marginal error achieved by the random projection method
+of Zhu   Ermon   is       for Linkage and
+      for Promedus  TBP with       achieved
+error of   for Linkage and   for Promedus despite using substantially less running time  
+
+  Conclusion and Future Work
+We proposed   new samplingbased approximate inference
+algorithm  tensor belief propagation  which uses   mixtureof rank tensors representation to approximate cluster potentials and messages in the junction tree algorithm 
+It
+
+ TBP with       takes an average across all problem
+instances of approximately   minutes  Linkage  and   minutes
+ Promedus  per problem on our machine  and does not differ substantially for       vs       The results described by Zhu  
+Ermon   were comparable in running time to   million iterations of Gibbs sampling  which we estimate would take several
+hours on our machine without parallelism 
+
+gives consistent estimators  and performs well on   range
+of problems against wellknown algorithms 
+In this paper  we have not addressed how to perform the initial tensor decomposition  There exist wellknown optimisation algorithms for this problem to minimize Euclidean
+error  Kolda   Bader    though it is not clear that this
+is the best objective for the purpose of TBP  We are currently investigating the best way of formulating and solving
+this optimisation problem to yield accurate results during
+inference  Further  when constructing the junction tree  it
+is not clear whether min ll and other wellknown heuristics remain appropriate for TBP  In particular  these cost
+functions aim to minimise the induced width of the junction tree which is no longer directly relevant to the performance of the algorithm  Further work may investigate other
+heuristics  for example with the goal of minimising cluster
+variance 
+Finally  approximate inference algorithms have applications in learning  for example  in the gradient computations when training restricted Boltzmann machines  and
+thus TBP may improve learning as well as inference in
+some applications 
+
+ Sample size    TP  matched running time  Gibbs Marginal errorAttractive interactionsTBP  MAX MFBPTRWGibbs Sample size    TP  matched running time  Gibbs Marginal errorMixed interactionsTBP  MAX MFBPTRWGibbs Number of variables Marginal errorAttractive interactionsTBP  MFBPTRWGibbs Number of variables Marginal errorMixed interactionsTBP  MFBPTRWGibbs Sample size    TBP  matched running time  Gibbs Marginal errorLinkagegibbsTBP    TBP    Sample size    TBP  matched running time  Gibbs Marginal errorPromedusgibbsTBP    TBP    Tensor Belief Propagation
+
+Acknowledgements
+We thank the anonymous reviewers for their helpful comments  This work is supported by NUS AcRF Tier  
+grant    and   QUT ViceChancellor  
+Research Fellowship Grant 
+
+References
+Andrieu  Christophe  De Freitas  Nando  Doucet  Arnaud 
+and Jordan  Michael    An introduction to MCMC
+for machine learning  Machine learning   
+ 
+
+Bader  Brett    Kolda  Tamara    et al  MATLAB Tensor
+Toolbox Version   http www sandia gov 
+ tgkolda TensorToolbox  February  
+
+Chavira  Mark and Darwiche  Adnan  Compiling Bayesian
+
+Networks with Local Structure  In IJCAI   
+
+Darwiche  Adnan    Differential Approach to Inference in
+Bayesian Networks  In Uncertainty in Arti cial Intelligence  UAI   
+
+Gogate  Vibhav 
+
+UAI   Inference Competition 
+http www hlt utdallas edu vgogate 
+uai competition index html   
+
+Gogate  Vibhav and Domingos  Pedro  Structured Message
+Passing  In Uncertainty in Arti cial Intelligence  UAI 
+ 
+
+Guennebaud  Ga el  Jacob  Beno    et al  Eigen    http 
+
+ eigen tuxfamily org   
+
+Ihler  Alexander   and McAllester  David    Particle Belief
+
+Propagation  In AISTATS  pp     
+
+Jensen  Finn Verner  Olesen  Kristian    and Andersen 
+Stig Kjaer  An algebra of Bayesian belief universes for
+knowledgebased systems  Networks   
+ 
+
+Kolda  Tamara   and Bader  Brett    Tensor decompositions and applications  SIAM review   
+ 
+
+Koller     and Friedman     Probabilistic Graphical Models  Principles and Techniques  Adaptive Computation
+and Machine Learning  MIT Press   
+
+Koller  Daphne  Lerner  Uri  and Angelov  Dragomir   
+general algorithm for approximate inference and its apIn Proceedings of the
+plication to hybrid Bayes nets 
+Fifteenth conference on Uncertainty in arti cial intelligence  pp    Morgan Kaufmann Publishers Inc 
+ 
+
+Lauritzen  Steffen   and Spiegelhalter  David    Local computations with probabilities on graphical structures and
+their application to expert systems  Journal of the Royal
+Statistical Society  Series    Methodological  pp   
+   
+
+Lee  Daniel   and Seung    Sebastian  Algorithms for
+nonnegative matrix factorization  In Advances in Neural
+Information Processing Systems  NIPS  pp   
+ 
+
+McAuley  Julian    and Caetano  Tib erio    Faster Algorithms for MaxProduct MessagePassing  Journal of
+Machine Learning Research     
+
+Minka  Thomas    Expectation propagation for approxIn Proceedings of the Sevimate Bayesian inference 
+enteenth conference on Uncertainty in Arti cial Intelligence  pp    Morgan Kaufmann Publishers Inc 
+ 
+
+Mooij  Joris   
+
+libDAI    Free and Open Source   
+Library for Discrete Approximate Inference in Graphical Models  Journal of Machine Learning Research   
+  August  
+
+Park  James    and Darwiche  Adnan    Differential Semantics for Jointree Algorithms  In Advances in Neural
+Information Processing Systems  NIPS   
+
+Pearl  Judea  Reverend Bayes on inference engines    disIn AAAI  pp   
+
+tributed hierarchical approach 
+ 
+
+Shafer  Glenn   and Shenoy  Prakash    Probability propagation  Annals of Mathematics and Arti cial Intelligence     
+
+Sudderth  Erik    Ihler  Alexander    Isard  Michael  Freeman  William    and Willsky  Alan    Nonparametric
+Belief Propagation  Communications of the ACM   
+   
+
+Wainwright  Martin   and Jordan  Michael    Graphical
+models  exponential families  and variational inference 
+Foundations and Trends in Machine Learning   
+   
+
+Xue  Yexiang  Ermon  Stefano  Lebras  Ronan  Gomes 
+Carla    and Selman  Bart  Variable Elimination in
+Fourier Domain  In Proc   rd International Conference
+on Machine Learning   
+
+Zhu  Michael and Ermon  Stefano    Hybrid Approach
+for Probabilistic Inference using Random Projections  In
+ICML  pp     
+
+

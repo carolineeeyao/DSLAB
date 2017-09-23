@@ -1,0 +1,978 @@
+Probabilistic Path Hamiltonian Monte Carlo
+
+Vu Dinh     Arman Bilge       Cheng Zhang     Frederick    Matsen IV  
+
+Abstract
+
+Hamiltonian Monte Carlo  HMC  is an ef cient
+and effective means of sampling posterior distributions on Euclidean space  which has been extended to manifolds with boundary  However 
+some applications require an extension to more
+general spaces  For example  phylogenetic  evolutionary  trees are de ned in terms of both  
+discrete graph and associated continuous parameters  although one can represent these aspects
+using   single connected space  this rather complex space is not suitable for existing HMC algorithms  In this paper  we develop Probabilistic
+Path HMC  PPHMC  as    rst step to sampling
+distributions on spaces with intricate combinatorial structure  We de ne PPHMC on orthant
+complexes  show that the resulting Markov chain
+is ergodic  and provide   promising implementation for the case of phylogenetic trees in opensource software  We also show that   surrogate
+function to ease the transition across   boundary on which the logposterior has discontinuous
+derivatives can greatly improve ef ciency 
+
+  Introduction
+Hamiltonian Monte Carlo is   powerful sampling algorithm which has been shown to outperform many existing MCMC algorithms  especially in problems with highdimensional and correlated distributions  Duane et al 
+  Neal    The algorithm mimics the movement of
+  body balancing potential and kinetic energy by extending
+the state space to include auxiliary momentum variables
+and using Hamiltonian dynamics  By traversing long isoprobability contours in this extended state space  HMC is
+able to move long distances in state space in   single up 
+
+ Equal contribution
+
+ Program in Computational Biology 
+Fred Hutchison Cancer Research Center  Seattle  WA  USA
+ Department of Statistics  University of Washington  Seattle 
+WA  USA  Correspondence to  Frederick     Matsen IV  matsen fredhutch org 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+date step  and thus has proved to be more effective than
+standard MCMC methods in   variety of applications  The
+method has gained   lot of interest from the scienti   community and since then has been extended to tackle the problem of sampling on various geometric structures such as
+constrained spaces  Lan et al    Brubaker et al   
+Hartmann and Sch utte    on general Hilbert space
+ Beskos et al    and on Riemannian manifolds  Girolami and Calderhead    Wang et al   
+However  these extensions are not yet suf cient to apply to
+all sampling problems  such as in phylogenetics  the inference of evolutionary trees  Phylogenetics is the study of
+the evolutionary history and relationships among individuals or groups of organisms  In its statistical formulation
+it is an inference problem on hypotheses of shared history
+based on observed heritable traits under   model of evolution  Phylogenetics is an essential tool for understanding
+biological systems and is an important discipline of computational biology  The Bayesian paradigm is now commonly used to assess support for inferred tree structures
+or to test hypotheses that can be expressed in phylogenetic
+terms  Huelsenbeck et al   
+Although the last several decades have seen an explosion
+of advanced methods for sampling from Bayesian posterior
+distributions  including HMC  phylogenetics still uses relatively classical Markov chain Monte Carlo  MCMC  based
+methods  This is in part because the number of possible tree
+topologies  the labeled graphs describing the branching
+structure of the evolutionary history  explodes combinatorially as the number of species increases  Also  to represent
+the phylogenetic relation among    xed number of species 
+one needs to specify both the tree topology    discrete object  and the branch lengths  continuous distances  This
+composite structure has thus far limited sampling methods
+to relatively classical Markov chain Monte Carlo  MCMC 
+based methods  One path forward is to use   construction
+of the set of phylogenetic trees as   single connected space
+composed of Euclidean spaces glued together in   combinatorial fashion  Kim    Moulton and Steel   
+Billera et al    Gavryushkin and Drummond   
+and try to de ne an HMClike algorithm thereupon 
+Experts in HMC are acutely aware of the need to extend
+HMC to such spaces with intricate combinatorial structure 
+Betancourt   describes the extension of HMC to dis 
+
+Probabilistic Path Hamiltonian Monte Carlo
+
+different between topologies  In fact  there is no general
+notion of differentiability of the posterior function on the
+whole tree space and any scheme to approximate Hamiltonian dynamics needs to take this issue into account 
+In this paper  we develop Probabilistic Path Hamiltonian
+Monte Carlo  PPHMC  as    rst step to sampling distributions on spaces with intricate combinatorial structure  Figure   After reviewing how the ensemble of phylogenetic
+trees is naturally described as   geometric structure we
+identify as an orthant complex  Billera et al    we de 
+ ne PPHMC for sampling posteriors on orthant complexes
+along with   probabilistic version of the leapfrog algorithm 
+This algorithm generalizes previous HMC algorithms by
+doing classical HMC on the Euclidean components of the
+orthant complex  but making random choices between alternative paths available at   boundary  We establish that
+the integrator retains the good theoretical properties of
+Hamiltonian dynamics in classical settings  namely probabilistic equivalents of timereversibility  volume preservation  and accessibility  which combined together result in
+  proof of ergodicity for the resulting Markov chain  Although   direct application of the integrator to the phylogenetic posterior does work  we obtain signi cantly better performance by using   surrogate function near the
+boundary between topologies to control approximation error  This approach also addresses   general problem in using Re ective HMC  RHMC  Afshar and Domke   
+for energy functions with discontinuous derivatives  for
+which the accuracy of RHMC is of order    instead of
+the standard local error    of HMC on Rn  We provide  validate  and benchmark two independent implementations in opensource software 
+
+  Mathematical framework
+  Bayesian learning on phylogenetic tree space
+
+  phylogenetic tree      is   tree graph   with   leaves 
+each of which has   label  and such that each edge   is
+associated with   nonnegative number qe  Trees will be
+assumed to be bifurcating  internal nodes of degree   unless otherwise speci ed  We denote the number of edges of
+such   tree by            Any edge incident to   leaf
+is called   pendant edge  and any other edge is called an
+internal edge  Let TN be the set of all Nleaf phylogenetic
+trees for which the lengths of pendant edges are bounded
+from below by some constant         This lower bound
+on branch lengths is   technical condition for theoretical
+development and can be relaxed in practice 
+We will use nearest neighbor interchange  NNI  moves
+ Robinson    to formalize what tree topologies that are
+ near  to each other  An NNI move is   transformation
+that collapses an internal edge to zero and then expands
+
+Figure   PPHMC on the orthant complex of tree space  in which
+each orthant       Rn  represents the continuous branch length
+parameters of one tree topology  PPHMC uses the leapfrog algorithm to approximate Hamiltonian dynamics on each orthant 
+but can move between tree topologies by crossing boundaries between orthants        single PPHMC step moving through three
+topologies  each topology change along the path is one NNI move 
+    Because three orthants meet at every topdimensional boundary  the algorithm must make   choice as to which topology to select  PPHMC uniformly selects   neighboring tree topology when
+the algorithm hits such   boundary  Here we show three potential
+outcomes       and    of running   single step of PPHMC started
+at position   with momentum   
+
+crete and tree spaces as   major outstanding challenge for
+the area  However  there are several challenges to de ning
+  continuous dynamicsbased sampling methods on such
+spaces  These tree spaces are composed of Euclidean components  one for each discrete tree topology  which are
+glued together in   way that respects natural similarities between trees  These similarities dictate that more than two
+such Euclidean spaces should get glued together along  
+common lowerdimensional boundary  The resulting lack
+of manifold structure poses   problem to the construction of
+an HMC sampling method on tree space  since up to now 
+HMC has just been de ned on spaces with differential geometry  Similarly  while the posterior function is smooth
+within each topology  the function   behavior may be very
+
+     pq      Probabilistic Path Hamiltonian Monte Carlo
+
+the resulting degree   vertex into an edge and two degree  
+vertices in   new way  Figure     Two tree topologies  
+and   are called adjacent topologies if there exists   single
+NNI move that transforms   into  
+We will parameterize TN as BilleraHolmes Vogtmann
+ BHV  space  Billera et al    which we describe as
+follows  An orthant of dimension   is simply Rn  each
+ndimensional orthant is bounded by   collection of lower
+dimensional orthant faces  An orthant complex is   geometric object   obtained by gluing various orthants of the
+same dimension    indexed by   countable set   such that 
+    the intersection of any two orthants is   face of both
+orthants  and  ii  each       belongs to    nite number
+of orthants  Each state of   is thus represented by   pair
+     where       and     Rn  Generalizing the de nitions from phylogenetics  we refer to   as its topology and
+to   as the vector of attributes  The topology of   point in
+an orthant complex indexes discrete structure  while the attributes formalize the continuous components of the space 
+For phylogenetics  the complex is constructed by taking
+one ndimensional orthant for each of the        possible tree topologies  and gluing them together along their
+common faces  The geometry can also be summarized as
+follows  In BHV space  each of these orthants parameterizes the set of branch lengths for   single topology  as  
+technical point  because we are bounding pendant branch
+lengths below by    we can take the corresponding entries
+in the orthant to parameterize the amount of branch length
+above    Topdimensional orthants of the complex sharing   facet         codimension   face  correspond to  NNI 
+adjacent topologies 
+For    xed phylogenetic tree      the phylogenetic likelihood is de ned as follows and will be denoted by      
+ see Kenney and Gu    for   full exposition  Let
+                     be the observed sequences
+ with characters in   of length   over   leaves  The likelihood of observing   given the tree has the form
+
+  cid 
+
+ cid 
+
+ cid 
+
+       
+
+ as
+ 
+
+  
+
+as
+
+         
+
+  uv
+as
+uas
+ 
+
+ quv 
+
+where   is any internal node of the tree  as ranges over all
+extensions of    to the internal nodes of the tree  as
+  denotes the assigned state of node   by as        denotes
+the set of tree edges  Pij    denotes the transition probability from character   to character   across an edge of
+length   de ned by   given evolutionary model and   is
+the stationary distribution of this evolutionary model  For
+this paper we will assume the simplest Jukes and Cantor
+  model of   homogeneous continuoustime Markov
+chain on   with equal transition rates  noting that inferring
+parameters of complex substitution models is   vibrant yet
+separate subject of research       Zhao et al   
+
+Given   proper prior distribution with density   imposed
+on the branch lengths and on tree topologies  the posterior
+distribution can be computed as                 
+
+  Bayesian learning on orthant complexes
+
+With the motivation of phylogenetics in mind  we now describe how the phylogenetic problem sits as   speci   case
+of   more general problem of Bayesian learning on orthant
+complexes  and distill the criteria needed to enable PPHMC
+on these spaces  This generality will also enable applications of Bayesian learning on similar spaces in other settings  For example in robotics  the state complex can be
+described by   cubical complexes whose vertices are the
+states  whose edges correspond to allowable moves  and
+whose cubes correspond to collections of moves which can
+be performed simultaneously  Ardila et al    Similarly  in learning on spaces of treelike shapes  the attributes
+are open curves translated to start at the origin  described by
+   xed number of landmark points  Feragen et al   
+An orthant complex  being   union of Euclidean orthants 
+naturally inherits the Lebesgue measure which we will denote hereafter by   Orthant complexes are typically not
+manifolds  thus to ensure consistency in movements across
+orthants  we assume that local coordinates of the orthants
+are de ned in such   way that there is   natural oneto one
+correspondence between the sets of attributes of any two
+orthants sharing   common face 
+Assumption    Consistency of local coordinates  Given
+two topologies    cid      and state               cid    cid 
+on the boundary of the orthants for   and  cid  then        cid 
+
+We show that BHV tree space can be given such coordinates in the Appendix  For the rest of the paper  we de ne
+for each state          the set        of all neighboring
+topologies  cid  such that  cid  orthant contains      Note that
+       always includes   and if all coordinates of   are
+positive         is exactly   Moreover  if  cid          
+ cid    we say that   and  cid  are joined by      If
+and  cid 
+the intersection of orthants for two topologies is   facet of
+each  we say that the two topologies are adjacent 
+Finally  let   be the adjacency graph of the orthant complex
+    that is  the graph with vertices representing the topologies and edges connecting adjacent topologies  Recalling
+that the diameter of   graph is the maximum value of the
+graph distance between any two vertices  we assume that
+Assumption   The adjacency graph   of   has  nite
+diameter  hereafter denoted by   
+For phylogenetics    is of order     log      Li et al 
+ 
+We seek to sample from   posterior distribution       on
+    Assume that the negative logarithm of the posterior dis 
+
+Probabilistic Path Hamiltonian Monte Carlo
+
+tribution            log        satis es 
+Assumption          is   continuous function on    
+and is smooth up to the boundary of each orthant      
+
+In the Appendix  we prove that if the logarithm of the phylogenetic prior distribution      satis es Assumption
+  then so does the phylogenetic posterior distribution 
+It is also worth noting that while        is smooth within
+each orthant  the function   behavior may be very different
+between orthants and we do not assume any notion of differentiability of the posterior function on the whole space 
+
+  Hamiltonian dynamics on orthant complexes
+
+The HMC state space includes auxiliary momentum variables in addition to the usual state variables  In our framework  the augmented state of this system is represented by
+the position      and the momentum    an ndimensional
+vector  We will denote the set of all possible augmented
+state         of the system by   
+The Hamiltonian is de ned as in the traditional HMC set 
+ cid   cid 
+ting                           where         
+We will refer to        and      as the potential energy
+function and the kinetic energy function of the system at
+the state         respectively 
+Our stochastic Hamiltoniantype system of equations is 
+
+dpi
+dt
+
+      
+ qi
+
+    
+
+pi    pi              
+
+if qi    
+
+if qi    
+
+ 
+
+dqi
+dt
+
+  pi
+
+where      denotes the uniform distribution on the set   
+If all coordinates of   are positive  the system behaves as
+in the traditional Hamiltonian setting on Rn  When some
+attributes hit zero  however  the new orthant is picked randomly from the orthants of neighboring topologies  including the current one  and the momenta corresponding to
+nonpositive attributes are negated 
+Assumption   implies that despite the nondifferentiable
+changes in the governing equation across orthants 
+the
+Hamiltonian of the system along any path is constant 
+Lemma     is conserved along any system dynamics 
+
+    probabilistic  leapprog  algorithm
+
+In practice  we approximate Hamiltonian dynamics by the
+following integrator with step size   which we call  leapprog  as   probabilistic analog of the usual leapfrog algorithm  This extends previous work of  Afshar and Domke 
+  on RHMC where particles can re ect against planar
+surfaces of Rn 
+
+In the RHMC formulation  one breaks the step size   into
+smaller substeps  each of which correspond to an event
+when some of the coordinates cross zero  We adapt this
+idea to HMC on orthant complexes as follows  Every time
+such an event happens  we reevaluate the values of the position and the momentum vectors  update the topology  uniformly at random from the set of neighboring topologies 
+reverse the momentum of crossing coordinates and continue the process until   total step size   is achieved  Algorithm   We note that several topologies might be visited
+in one leapprog step 
+If there are no topological changes in the trajectory to time
+  this procedure is equivalent to classical HMC  Moreover 
+since the algorithm only reevaluates the gradient of the energy function at the end of the step when the  nal position
+has been  xed  changes in topology on the path have no
+effect on the changes of position and momentum  Thus 
+the projection of the particles  in   single leapprog step  to
+the        space is identical to   leapfrog step of RHMC on
+Rn 
+
+Algorithm   Leapprog algorithm with step size  
+
+               
+if FirstUpdateEvent              then
+
+else
+
+          
+     
+while FirstUpdateEvent                cid    do
+            FirstUpdateEvent              
+         
+            
+pI    pI
+
+end while
+               
+
+end if
+               
+
+Here FirstUpdateEvent           returns    the position of
+the  rst event for which the line segment         tp  crosses
+zero     the time when this event happens  and    the indices
+of the coordinates crossing zero during this event  If qi and
+pi are both zero before FirstUpdateEvent is called    is not
+considered as   crossing coordinate  If no such an event
+exists    is returned 
+
+  Hamiltonian Monte Carlo on orthant
+
+complexes
+
+Probabilistic Path Hamiltonian Monte Carlo  PPHMC 
+with leapprog dynamics iterates three steps  similar to that
+of classical HMC  First  new values for the momentum
+variables are randomly drawn from their Gaussian distribution  independently of the current values of the posi 
+
+Probabilistic Path Hamiltonian Monte Carlo
+
+tion variables  Second  starting with the current augmented
+state              the Hamiltonian dynamics is run for  
+ xed number of steps   using the leapprog algorithm with
+ xed step size   The momentum at the end of this trajectory is then negated  giving   proposed augmented state
+             Finally  this proposed augmented state is
+accepted as the next augmented state of the Markov chain
+with probability           min   exp            
+PPHMC has two natural advantages over MCMC methods for phylogenetic inference  jumps between topologies
+are guided by the potential surface  and many jumps can
+be combined into   single proposal with high acceptance
+probability  Indeed  rather than completely random jumps
+as used for MCMC  the topological modi cations of HMC
+are guided by the gradient of the potential  This is important because there are an enormous number of phylogenetic
+trees  namely        trees with   leaves  Secondly 
+HMC can combine   great number of tree modi cations
+into   single step  allowing for large jumps in tree space
+with high acceptance probability  These two characteristics are analogs of why HMC is superior to conventional
+MCMC in continuous settings and what we aimed to extend to our problem 
+
+  Theoretical properties of the leapprog integrator
+
+To support the use of this leapprog integrator for MCMC
+sampling  we establish that integrator retains analogs of
+the good theoretical properties of Hamiltonian dynamics
+in classical settings  namely 
+timereversibility  volume
+preservation and accessibility  proofs in Appendix 
+We formulate probabilistic reversibility as 
+Lemma    Reversibility  For    xed  nite time horizon
+    we denote by         cid  the probability that the integrator
+moves   to   cid  in   single update step  We have
+
+           cid    cid    cid       cid    cid   cid        
+
+for any augmented states  cid    cid    cid  and             
+
+The central part of proving the detailed balance condition
+of PPHMC is to verify that Hamiltonian dynamics preserves volume  Unlike the traditional HMC setting where
+the proposal distribution is   single point mass  in our probabilistic setting  if we start at one augmented state    we
+may end up at countably many end points due to stochastic
+HMC integration  The equation describing volume preservation in this case needs to be generalized to the form of
+Equation   where the summations account for the discreteness of the proposal distribution 
+Lemma    Volume preservation  For every pair of measurable sets          and elements      cid       we denote
+by         cid  the probability that the integrator moves   to   cid 
+
+in   single update step and de ne
+
+          cid                cid     
+
+and
+
+Then cid 
+
+ cid 
+
+    cid                     cid     
+
+ cid 
+
+ cid 
+
+        cid  ds  
+
+     cid     ds cid 
+
+ 
+
+ 
+
+  cid     
+
+ 
+
+      cid 
+
+If we restrict to the case of trajectories staying in   single
+topology       and     cid  are singletons and we get back
+the traditional equation of volume preservation  We also
+note that the measure ds in Equation   is the Lebesgue
+measure  when there is no randomness in the Hamiltonian
+paths    becomes the standard volume preservation condition  where volumes are expressed by the Lebesgue measure 
+Typically  accessibility poses no major problem in various settings of HMC since it is usually clear that one
+can go between any two positions in   single HMC step 
+In the case of PPHMC  however  the composition of discrete and continuous structure  along with the possible
+nondifferentiability of the potential energy across orthants 
+make it challenging to verify this condition  Here we show
+instead that the PPHMC algorithm can go between any two
+states with   steps  where   denotes the diameter of adjacency graph   the space   and each PPHMC step consists
+of   leapprog steps of size  
+Lemma    kaccessibility  For    xed starting state
+       any state  cid    cid      can be reached from
+       by running   steps of PPHMC 
+
+The proof of this Lemma is based on Assumption  
+which asserts that the adjacency graph   of   has  nite
+diameter  and that classical HMC allows the particles to
+move freely in each orthant by   single HMC step 
+To show that Markov chains generated by PPHMC are ergodic  we also need to prove that the integrator can reach
+any subset of positive measure of the augmented state space
+with positive probability  To enable such   result  we show 
+Lemma   For every sequence of
+topologies    
+                      and every set with positive measure
+        let    be the set of all  cid    cid      such that
+ cid    cid  can be reached from        in   PPHMC steps
+and such that the sequence of topologies crossed by the trajectory is   We denote by IB  the set of all sequences of
+initial momenta for each PPHMC step                  that
+make such   path possible 
+Then  if  IB      then        
+
+Probabilistic Path Hamiltonian Monte Carlo
+
+We also need certain sets to be countable 
+Lemma   Given        we denote by      the set of
+all augmented states   cid  such that there is    nitesize leapprog step with path   connecting   and   cid  and by     
+the set of all such leapprog paths   connecting   and   cid   
+     Then      and      are countable  Moreover  the
+probability        cid  of moving from   to   cid  via paths with
+in nite number of topological changes is zero 
+
+  Ergodicity of Probabilistic Path HMC
+
+In this section  we establish that   Markov chain generated by PPHMC is ergodic with stationary distribution
+       exp        To do so  we need to verify that
+the Markov chain generated by PPHMC is aperiodic  because we have shown kaccessibility of the integrator rather
+than  accessibility  Throughout this section  we will use
+the notation           to denote the onestep proposal
+distribution of PPHMC starting at augmented state        
+and        to denote the onestep proposal distribution
+of PPHMC starting at position      and with   momentum
+vector drawn from   Gaussian as described above 
+We  rst note that 
+Lemma   PPHMC preserves the target distribution  
+
+Given probabilistic volume preservation   the proof is
+standard and is given in the Appendix 
+Theorem    Ergodic  The Markov chain generated by
+PPHMC is ergodic 
+
+Proof of Theorem   For every sequence of topologies
+                           nite by Lemma   and every set with positive measure         we de ne    and
+IB  as in the previous section  By Lemma   we have
+
+ cid 
+
+ 
+
+   
+
+  
+
+Assume that  IB      for all   From Lemma   we
+deduce that         for all   This makes        
+which is   contradiction  Hence  IB      for some  
+and                is at least the positive quantity
+                  exp     dp
+
+ cid 
+
+ 
+ 
+
+  IB 
+
+where   is the normalizing constant  This holds for all sets
+with positive measure         so PPHMC is irreducible 
+Now assume that   Markov chain generated by the leapfrog
+algorithm is periodic  The reversibility of Hamiltonian dynamics implies that the period   must be equal to  
+In
+other words  there exist two disjoint subsets       of  
+such that         and
+                     and                     
+
+Consider        with all positive attributes  There exists  
+neighborhood Ux around   such that any     Ux is reachable from   by Hamiltonian dynamics  Since       are
+disjoint  we deduce that  Ux          Since the neighborhood Ux exists for almost every        this implies
+that         and hence  that         which is  
+contradiction  We conclude that any Markov chain generated by the leapfrog algorithm is aperiodic 
+Lemma   shows that PPHMC preserves the target distribution   This  along with  irreducibility and aperiodicity 
+completes the proof  Roberts and Rosenthal   
+
+  An ef cient surrogate smoothing strategy
+
+One major advantage of HMC methods over traditional approaches is that HMCproposed states may be distant from
+the current state but nevertheless have   high probability of
+acceptance  This partially relies on the fact that the leapfrog
+algorithm with smooth energy functions has   local approximation error of order     which leads to global
+error       where   is the number of leapfrog steps in  
+Hamiltonian path 
+However  when the potential energy function        is not
+differentiable on the whole space this low approximation
+error can break down  Indeed  although PPHMC inherits
+many nice properties from vanilla HMC and RHMC  Afshar and Domke    this discontinuity of the derivatives of the potential energy across orthants may result in
+nonnegligible loss of accuracy during numerical simulations of the Hamiltonian dynamics    careful analysis of
+the local approximation error of RHMC for potential energy functions with discontinuous  rst derivatives reveals
+that it only has an local error rate of order at least    see
+proof in Appendix 
+Proposition   Given   potential function     we denote
+by     and     the restrictions of   on the halfspaces
+        and         and assume that     and    
+If the
+are smooth up to the boundary of their domains 
+ rst derivative with respect to the  rst component of the
+potential energy       are discontinuous across the hyperplane                      and        are
+not identical on this set  then RHMC on this hyperplane
+has   local error of order at least  
+
+Since PPHMC uses RHMC  when the  rst derivatives of
+the potential energy are discontinuous  it also has   global
+error of order            which depends on the number
+of critical events   along   Hamiltonian path  that is  the
+number of re ection refraction events  This makes it dif 
+cult to tune the step size   for optimal acceptance rate  and
+requires small   limiting topology exploration 
+To alleviate this issue  we propose the use of   surrogate
+induced Hamiltonian dynamics  Strathmann et al   
+
+Probabilistic Path Hamiltonian Monte Carlo
+
+Zhang et al    with the Hamiltonian            
+               where the surrogate potential energy is
+
+tion error and allows for high acceptance probability with
+relatively large step size 
+
+                                          qn 
+
+ cid    
+
+ 
+
+and      is some positive and smooth approximation of    
+with vanishing gradient at       One simple example
+which will be used for the rest of this paper is
+
+      
+
+         
+
+     
+         
+where   will be called the smoothing threshold 
+Due to the vanishing gradient of       now has continuous
+derivatives across orthants  However     is no longer continuous across orthants since     cid    and we thus employ
+the refraction technique introduced in Afshar and Domke
+   see Algorithm   for more details  The proposed
+state   
+  at the end of the trajectory is accepted with probability according to the original Hamiltonian  that is  min  exp            
+By following the same framework proposed in previous
+sections  we can prove that the resulting sampler still samples from the exact posterior distribution         complete treatment  however  requires more technical adjustments and is beyond the scope of the paper  We will leave
+this as   subject of future work 
+
+ 
+
+     
+
+      
+
+      
+
+Algorithm   Refractive Leapprog with surrogate
+
+                 
+if FirstUpdateEvent              then
+
+          
+     
+while FirstUpdateEvent               cid    do
+
+else
+
+            FirstUpdateEvent              
+         
+ cid            
+         cid              
+if  cid pI cid       then
+
+pI  cid cid pI cid          pI cid pI cid 
+
+     cid 
+pI    pI
+
+else
+
+end if
+
+end while
+               
+
+end if
+                 
+
+As we will illustrate later  compared to the exact potential
+energy  the continuity of the derivative of the surrogate potential across orthants dramatically reduces the discretiza 
+
+  Experiments
+In this section  we demonstrate the validity and ef ciency
+of our PPHMC method by an application to Bayesian
+phylogenetic inference  We compared our PPHMC implementations to industrystandard MrBayes   which
+uses MCMC to sample phylogenetic trees  Ronquist et al 
+  We concentrated on the most challenging part  sampling jointly for the branch lengths and tree topologies 
+and assumed other parameters       substitution model 
+hyperparameters for the priors  are  xed  More speci 
+cally  for all of our experiments we continued to assume
+the JukesCantor model of DNA substitution and placed  
+uniform prior on the tree topology        TN   with branch
+lengths        qi   Exponential       as done by others
+when measuring the performance of MCMC algorithms for
+Bayesian phylogenetics       Whidden and Matsen   
+As mentioned earlier  although in the theoretical development we assumed that the lengths of the pendant edges are
+bounded from below by   positive constant    to ensure
+that the likelihood stays positive on the whole tree space 
+this condition is not necessary in practice since the Hamiltonian dynamics guide the particles away from regions with
+zero likelihood       the region with       We validate
+the algorithm through two independent implementations in
+opensource software 
+
+    Scala version available at https github com 
+armanbilge phyloHMC that uses the Phylogenetic
+Likelihood Library   Flouri et al    and
+
+    Python version available at https github 
+com zcrabbit PhyloInfer that uses the ETE
+toolkit  HuertaCepas et al    and Biopython
+ Cock et al   
+
+  Simulated data
+
+As   proof of concept  we  rst tested our PPHMC method
+on   simulated data set  We used   random unrooted tree
+with       leaves sampled from the aforementioned
+prior    nucleotide observations for each leaf were
+then generated by simulating the continuoustime Markov
+model along the tree  This moderate data set provided
+enough information for model inference while allowing for
+  relatively rich posterior distribution to sample from 
+We ran MrBayes for   iterations and sampled every  
+iterations after   burnin period of the  rst   iterations
+to establish   ground truth for the posterior distribution 
+
+ https github com xflouris libpll
+
+Probabilistic Path Hamiltonian Monte Carlo
+
+For PPHMC  we set the step size       and smoothing threshold       to give an overall acceptance rate
+of about       and set the number of leapprog steps
+      We then ran PPHMC for     iterations with
+  burnin of   We saw that PPHMC indeed samples
+from the correct posterior distribution  see Figure    in the
+Appendix 
+
+  Empirical data
+
+We also analyzed an empirical data set labeled DS  by
+Whidden and Matsen   that has become   standard
+benchmark for MCMC algorithms for Bayesian phylogenetics since Lakner et al    DS  consists of  
+nucleotide observations per leaf from       leaves representing different species of fungi  Notably  only   of
+these observations are complete  the remaining   are
+missing   character for one or more leaves so the likelihood is marginalized over all possible characters  Whidden
+and Matsen   observed that the posterior distribution
+for DS  features highprobability trees separated by paths
+through lowprobability trees and thus denoted it    peaky 
+data set that was dif cult to sample from using MrBayes 
+To  nd the optimal choice of tuning parameters for DS 
+we did   grid search on the space of step size   and the
+smoothing threshold step size ratio   The number of
+leapprog steps   was adjusted to keep the total simulation
+time     xed  For each choice of parameters  we estimated
+the expected acceptance rate   by averaging over   proposals from the PPHMC transition kernel per state for  
+states sampled from the posterior in   previous  wellmixed
+run  This strategy enabled us to obtain an accurate estimate
+of the average acceptance rate without needing to account
+for the different mixing rates in   full PPHMC run due to
+the various settings for the tuning parameters 
+The results suggest that choosing       maximizes the acceptance probability  Figure     Furthermore  when aiming for the optimal acceptance rate of        Neal 
+  the use of the surrogate function enables   choice of
+step size   nearly   times greater than otherwise  In practice  this means that an equivalent proposal requires less
+leapprog steps and gives   more ef cient sampling algorithm 
+To see the difference this makes in practice  we ran long
+trajectories for exact and surrogatesmoothed PPHMC with
+  relatively large step size       Indeed  we found
+that the surrogate enables very long trajectories and large
+number of topology transformations  Figure      
+
+  Conclusion
+Sophisticated techniques for sampling posteriors using
+HMC have thus far been restricted to manifolds with
+
+      hexbin plot comparison showing that
+
+Figure  
+the
+surrogatesmoothed PPHMC achieves much higher acceptance
+rate and longer paths than exact PPHMC on the DS  data set 
+    Average acceptance rate   for different choices of step size  
+and smoothing threshold   for phylogenetic HMC applied to DS 
+where        The black series       is equivalent to
+exact PPHMC  The dashed red line indicates the acceptance rate
+          Expected number of NNI moves made by both
+exact and surrogatesmoothed PPHMC  Results are obtained by
+averaging   HMC iterations with long trajectories       
+starting from the same posterior sample 
+
+boundary  To address this limitation  we have developed
+ PPHMC  which is the  rst extension of HMC to   space
+with intricate combinatorial structure  The corresponding integrator makes   random choice among alternatives
+when encountering   boundary  To prove ergodicity  we
+extend familiar elements of HMC proofs to this probabilistic path setting  We develop   smoothing surrogate function
+that enables long HMC paths with many boundary transitions across which the posterior is not differentiable  Our
+surrogate method enables high acceptance probability for
+RHMC  Afshar and Domke    in the case of potential
+functions with discontinuous derivatives  this aspect of our
+work is independent of the probabilistic nature of PPHMC 
+Our implementation shows good performance on both simulated and real data  There are many opportunities for future development  including extending the theory to other
+classes of combinatoriallydescribed spaces and surrogate
+functions  developing adaptive path length algorithms  as
+well as extending our implementation for phylogenetics to
+sample other mutation model and demographic parameters
+along with topologies 
+
+  of critical events acceptance probabilityPPHMC surrogate acceptance probability PPHMC exact       Probabilistic Path Hamiltonian Monte Carlo
+
+Acknowledgements
+This work supported by National Science Foundation
+grants DMS  DMS  and CISE 
+The research of Frederick Matsen was supported in part by
+  Faculty Scholar grant from the Howard Hughes Medical
+Institute and the Simons Foundation  The authors are grateful to Alex Gavryushkin for helpful discussions about this
+work 
+
+References
+Hadi Mohasel Afshar and Justin Domke  Re ection  refraction 
+and Hamiltonian Monte Carlo  In Advances in Neural Information Processing Systems  pages    
+
+Federico Ardila  Tia Baker  and Rika Yatchak  Moving robots
+ef ciently using the combinatorics of cat   cubical complexes  SIAM Journal on Discrete Mathematics   
+   
+
+Alexandros Beskos  Frank   Pinski  Jes us Mar   SanzSerna  and
+Andrew   Stuart  Hybrid Monte Carlo on Hilbert spaces 
+Stochastic Processes and their Applications   
+   
+
+Michael Betancourt    conceptual introduction to Hamiltonian
+
+Monte Carlo  arXiv preprint arXiv   
+
+Louis   Billera  Susan   Holmes  and Karen Vogtmann  Geometry of the space of phylogenetic trees  Advances in Applied
+Mathematics     
+
+Marcus   Brubaker  Mathieu Salzmann  and Raquel Urtasun   
+family of MCMC methods on implicitly de ned manifolds  In
+International Conference on Arti cial Intelligence and Statistics  pages    
+
+David Bryant 
+
+The splits
+
+in the neighborhood of  
+tree 
+ISSN  
+  URL http link springer com article 
+     
+
+Ann  Comb     
+
+  Peter Buneman  The recovery of trees from measures of dissimilarity  Mathematics in the archaeological and historical sciences    URL http ci nii ac jp naid 
+ 
+
+Eric Cances  Fr ed eric Legoll  and Gabriel Stoltz  Theoretical and
+numerical comparison of some sampling methods for molecular dynamics  ESAIM  Mathematical Modelling and Numerical
+Analysis     
+
+      Cock     Antao        Chang        Chapman        Cox 
+   Dalke     Friedberg     Hamelryck     Kauff     Wilczynski  and          de Hoon  Biopython  freely available python
+tools for computational molecular biology and bioinformatics 
+Bioinformatics     
+
+   Duane        Kennedy       Pendleton  and    Roweth  Hybrid
+
+Monte Carlo  Physics Letters           
+
+Lawrence Craig Evans and Ronald   Gariepy  Measure theory
+
+and  ne properties of functions  CRC press   
+
+Aasa Feragen  Francois Lauze  Pechin Lo  Marleen de Bruijne 
+and Mads Nielsen  Geometries on spaces of treelike shapes 
+In Asian Conference on Computer Vision  pages  
+Springer   
+
+   Flouri     IzquierdoCarrasco     Darriba       Aberer    
+   Nguyen       Minh     Von Haeseler  and    Stamatakis 
+The phylogenetic likelihood library  Syst  Bio   
+  doi   sysbio syu 
+
+Alex Gavryushkin and Alexei   Drummond  The space of ultrametric phylogenetic trees     Theor  Biol      August   ISSN     doi     jtbi 
+  URL http dx doi org   
+jtbi 
+
+Mark Girolami and Ben Calderhead  Riemann manifold Langevin
+and Hamiltonian Monte Carlo methods  Journal of the Royal
+Statistical Society  Series    Statistical Methodology   
+   
+
+Carsten Hartmann and Christof Sch utte    constrained hybrid
+Monte Carlo algorithm and the problem of calculating the free
+energy in several variables  ZAMMJournal of Applied Mathematics and Mechanics     
+
+    Huelsenbeck    Ronquist    Nielsen  and     Bollback 
+Bayesian inference of phylogeny and its impact on evolutionary biology  Science      December
+  ISSN   doi   science  URL
+http dx doi org science 
+
+Jaime HuertaCepas  Francois Serra  and Peek Bork  ETE  Reconstruction  analysis and visualization of phylogenomic data 
+Mol  Biol  Evol   
+
+Thomas    Jukes and Charles    Cantor  Evolution of proIn       Munro  editor  Mammalian protein
+tein molecules 
+metabolism  pages   Academic Press  New York   
+
+Toby Kenney and Hong Gu  Hessian calculation for phylogenetic
+likelihood based on the pruning algorithm and its applications 
+Stat  Appl  Genet  Mol  Biol   Article     September
+  ISSN   doi    URL
+http dx doi org 
+
+Junhyong Kim  Slicing hyperdimensional oranges  the geometry of phylogenetic estimation  Molecular phylogenetics and
+evolution     
+
+Clemens Lakner  Paul van der Mark  John   Huelsenbeck  Bret
+Larget  and Fredrik Ronquist  Ef ciency of markov chain
+monte carlo tree proposals in bayesian phylogenetics  Syst 
+Biol    February   ISSN   doi   
+  URL http dx doi org 
+ 
+
+Shiwei Lan  Bo Zhou  and Babak Shahbaba  Spherical Hamiltonian Monte Carlo for constrained target distributions 
+In
+Proceedings of the  st International Conference on Machine
+Learning  ICML  pages    
+
+  Li    Tromp  and   Zhang  On the nearest neighbour interchange distance between evolutionary trees     Theor  Biol 
+    October  
+ISSN   doi 
+ jtbi  URL http dx doi org 
+ jtbi 
+
+Probabilistic Path Hamiltonian Monte Carlo
+
+Vincent Moulton and Mike Steel  Peeling phylogenetic oranges 
+
+Advances in Applied Mathematics     
+
+Radford   Neal  MCMC using Hamiltonian dynamics  Hand 
+
+book of Markov Chain Monte Carlo     
+
+Gareth   Roberts and Jeffrey   Rosenthal  General state space
+Markov chains and MCMC algorithms  Probability Surveys 
+   
+
+David   Robinson  Comparison of labeled trees with valency
+three  Journal of Combinatorial Theory  Series     
+   
+
+Fredrik Ronquist  Maxim Teslenko  Paul van der Mark  Daniel  
+Ayres  Aaron Darling  Sebastian   ohna  Bret Larget  Liang
+Liu  Marc   Suchard  and John   Huelsenbeck  MrBayes
+ 
+ef cient bayesian phylogenetic inference and model
+choice across   large model space  Syst  Biol   
+    February  
+ISSN   doi   
+sysbio sys  URL http dx doi org 
+sysbio sys 
+
+  Semple and   Steel  Phylogenetics  Oxford University Press 
+
+New York  NY   
+
+Heiko Strathmann  Dino Sejdinovic  Samuel Livingstone  Zoltan
+Szabo  and Arthur Gretton  Gradientfree Hamiltonian Monte
+Carlo with ef cient kernel exponential families  In Advances in
+Neural Information Processing Systems  pages    
+
+Ziyu Wang  Shakir Mohamed  and Nando de Freitas  Adaptive
+Hamiltonian and Riemann manifold monte carlo  In Proceedings of the  th International Conference on Machine Learning
+ ICML  pages    
+
+Chris Whidden and IV Matsen  Frederick    Quantifying MCMC
+exploration of phylogenetic tree space  Syst  Biol   
+   
+
+Cheng Zhang  Babak Shahbaba  and Hongkai Zhao  Hamiltonian
+Monte Carlo acceleration using surrogate functions with random bases  Statistics and Computing  pages    
+
+Tingting Zhao  Ziyu Wang  Alexander Cumberworth  Joerg
+Gsponer  Nando de Freitas  and Alexandre BouchardC ot   
+Bayesian analysis of continuous time markov chains with
+Bayesian Anal 
+application to phylogenetic modelling 
+ 
+ISSN    
+URL http 
+projecteuclid org euclid ba 
+
+

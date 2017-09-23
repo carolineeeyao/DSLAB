@@ -1,0 +1,1031 @@
+Forward and Reverse GradientBased Hyperparameter Optimization
+
+Luca Franceschi     Michele Donini   Paolo Frasconi   Massimiliano Pontil    
+
+Abstract
+
+We study two procedures  reversemode and
+forwardmode  for computing the gradient of the
+validation error with respect to the hyperparameters of any iterative learning algorithm such as
+stochastic gradient descent  These procedures
+mirror two methods of computing gradients for
+recurrent neural networks and have different
+tradeoffs in terms of running time and space requirements  Our formulation of the reversemode
+procedure is linked to previous work by Maclaurin et al    but does not require reversible
+dynamics  The forwardmode procedure is suitable for realtime hyperparameter updates  which
+may signi cantly speed up hyperparameter optimization on large datasets  We present experiments on data cleaning and on learning task interactions  We also present one largescale experiment where the use of previous gradientbased
+methods would be prohibitive 
+
+  Introduction
+The increasing complexity of machine learning algorithms
+has driven   large amount of research in the area of hyperparameter optimization  HO    see        Hutter et al 
+  for   review  The core idea is relatively simple  given
+  measure of interest       the misclassi cation error  HO
+methods use   validation set to construct   response function of the hyperparameters  such as the average loss on
+the validation set  and explore the hyperparameter space to
+seek an optimum 
+Early approaches based on grid search quickly become impractical as the number of hyperparameters grows and are
+even outperformed by random search  Bergstra   Bengio 
+  Given the high computational cost of evaluating the
+
+ Computational Statistics and Machine Learning  Istituto Italiano di Tecnologia  Genoa  Italy  Department of Computer Science  University College London  UK  Department of Information Engineering  Universit  degli Studi di Firenze  Italy  Correspondence to  Luca Franceschi  luca franceschi iit it 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+response function  Bayesian optimization approaches provide   natural framework and have been extensively studied
+in this context  Snoek et al    Swersky et al   
+Snoek et al    Related and faster sequential modelbased optimization methods have been proposed using random forests  Hutter et al    and tree Parzen estimators  Bergstra et al    scaling up to   few hundreds of
+hyperparameters  Bergstra et al   
+In this paper  we follow an alternative direction  where
+gradientbased algorithms are used to optimize the performance on   validation set with respect to the hyperparameters  Bengio    Larsen et al    In this setting  the
+validation error should be evaluated at   minimizer of the
+training objective  However  in many current learning systems such as deep learning  the minimizer is only approximate  Domke   speci cally considered running an iterative algorithm  like gradient descent or momentum  for
+  given number of steps  and subsequently computing the
+gradient of the validation error by   backoptimization algorithm  Maclaurin et al    considered reversemode
+differentiation of the response function  They suggested the
+idea of reversing parameter updates to achieve space ef 
+ciency  proposing an approximation capable of addressing
+the associated loss of information due to  nite precision
+arithmetics  Pedregosa   proposed the use of inexact gradients  allowing hyperparameters to be updated before reaching the minimizer of the training objective  Both
+ Maclaurin et al    and  Pedregosa    managed to
+optimize   number of hyperparameters in the order of one
+thousand 
+In this paper  we illustrate two alternative approaches to
+compute the hypergradient       the gradient of the response function  which have different tradeoffs in terms
+of running time and space requirements  One approach
+is based on   Lagrangian formulation associated with
+the parameter optimization dynamics 
+It encompasses
+the reversemode differentiation  RMD  approach used by
+Maclaurin et al    where the dynamics corresponds
+to stochastic gradient descent with momentum  We do
+not assume reversible parameter optimization dynamics   
+wellknown drawback of RMD is its space complexity  we
+need to store the whole trajectory of training iterates in order to compute the hypergradient  An alternative approach
+that we consider overcomes this problem by computing
+
+Forward and Reverse GradientBased Hyperparameter Optimization
+
+the hypergradient in forwardmode and it is ef cient when
+the number of hyperparameters is much smaller than the
+number of parameters  To the best of our knowledge  the
+forwardmode has not been studied before in this context 
+As we shall see  these two approaches have   direct correspondence to two classic alternative ways of computing gradients for recurrent neural networks  RNN   Pearlmutter    the Lagrangian  reverse  way corresponds
+to backpropagation through time  Werbos    while
+the forward way corresponds to realtime recurrent learning  RTRL   Williams   Zipser    As RTRL allows
+one to update parameters after each time step  the forward
+approach is suitable for realtime hyperparameter updates 
+which may signi cantly speed up the overall hyperparameter optimization procedure in the presence of large datasets 
+We give experimental evidence that the realtime approach
+is ef cient enough to allow for the automatic tuning of crucial hyperparameters in   deep learning model  In our experiments  we also explore constrained hyperparameter optimization  showing that it can be used effectively to detect
+noisy examples and to discover the relationships between
+different learning tasks 
+The paper is organized in the following manner  In Section   we introduce the problem under study  In Section  
+we derive the reversemode computation  In Section   we
+present the forwardmode computation of the hypergradient  and in Section   we introduce the idea of realtime
+hyperparameter updates  In Section   we discuss the time
+and space complexity of these methods  In Section   we
+present empirical results with both algorithms  Finally in
+Section   we discuss our  ndings and highlight directions
+of future research 
+
+  Hyperparameter Optimization
+We focus on training procedures based on the optimization of an objective function      with respect to        
+the regularized average training loss for   neural network
+with weights    We see the training procedure by stochastic gradient descent  or one of its variants like momentum 
+RMSProp  Adam  etc  as   dynamical system with   state
+st   Rd that collects weights and possibly accessory variables such as velocities and accumulated squared gradients 
+The dynamics are de ned by the system of equations
+
+st      st                   
+
+ 
+
+where   is the number of iterations     contains initial
+weights and initial accessory variables  and  for every    
+            
+
+      Rd   Rm    Rd
+
+is   smooth mapping that represents the operation performed by the tth step of the optimization algorithm      
+
+on minibatch    Finally      Rm is the vector of hyperparameters that we wish to tune 
+As simple example of these dynamics occurs when training   neural network by gradient descent with momentum
+ GDM  in which case st    vt  wt  and
+vt    vt     Jt wt 
+wt   wt     vt     Jt wt 
+
+ 
+
+where Jt is the objective associated with the tth minibatch    is the rate and   is the momentum  In this example 
+       
+Note that the iterates            sT implicitly depend on the
+vector of hyperparameters   Our goal is to optimize the
+hyperparameters according to   certain error function  
+evaluated at the last iterate sT   Speci cally  we wish to
+solve the problem
+
+   
+
+min
+ 
+
+ 
+where the set     Rd incorporates constraints on the hyperparameters  and the response function     Rm     is
+de ned at     Rm as
+
+        sT  
+
+ 
+
+We highlight the generality of the framework  The vector of hyperparameters   may include components associated with the training objective  and components associated with the iterative algorithm  For example  the training
+objective may depend on hyperparameters used to design
+the loss function as well as multiple regularization parameters  Yet other components of   may be associated with
+the space of functions used to    the training objective      
+number of layers and weights of   neural network  parameters associated with the kernel function used within   kernel
+based method  etc  The validation error   can in turn be
+of different kinds  The simplest example is to choose   as
+the average of   loss function over   validation set  We may
+however consider multiple validation objectives  in that the
+hyperparameters associated with the iterative algorithm  
+and   in the case of momentum mentioned above  may
+be optimized using the training set  whereas the regularization parameters would typically require   validation set 
+which is distinct from the training set  in order to avoid
+over tting 
+
+  Hypergradient Computation
+In this section  we review the reversemode computation
+of the gradient of the response function  or hypergradient 
+under   Lagrangian perspective and introduce   forwardmode strategy  These procedures correspond to the reversemode and the forwardmode algorithmic differentiation
+schemes  Griewank   Walther    We  nally introduce   realtime version of the forwardmode procedure 
+
+Forward and Reverse GradientBased Hyperparameter Optimization
+
+Algorithm   REVERSEHG
+
+Algorithm   FORWARDHG
+
+Input    current values of the hyperparameters     initial optimization state
+Output  Gradient of validation error         
+for       to   do
+
+st      st   
+
+end for
+        sT  
+     
+for           downto   do
+
+           Bt 
+        At 
+
+end for
+return  
+
+  ReverseMode
+
+The reversemode computation leads to an algorithm
+closely related to the one presented in  Maclaurin et al 
+    major difference with respect to their work is that
+we do not require the mappings    de ned in Eq    to
+be invertible  We also note that the reversemode calculation is structurally identical to backpropagation through
+time  Werbos   
+We start by reformulating problem   as the constrained
+optimization problem
+
+   sT
+
+  sT  
+
+min
+subject to st      st                    
+
+ 
+
+This formulation closely follows   classical Lagrangian approach used to derive the backpropagation algorithm  LeCun    Furthermore  the framework naturally allows
+one to incorporate constraints on the hyperparameters 
+The Lagrangian of problem   is
+
+  cid 
+
+Input    current values of the hyperparameters     initial optimization state
+Output  Gradient of validation error         
+      
+for       to   do
+
+st      st   
+Zt   AtZt    Bt
+
+end for
+return      ZT
+
+where for every                  we de ne the matrices
+
+At  
+
+   st   
+
+ st 
+
+  Bt  
+
+   st   
+
+ 
+
+ 
+
+ 
+
+Note that At   Rd   and Bt   Rd   
+The optimality conditions are then obtained by setting each
+derivative to zero  In particular  setting the right hand side
+of Equations   and   to zero gives
+
+    
+
+   sT  AT   At 
+
+if       
+
+if                  
+
+Combining these equations with Eq    we obtain that
+
+ cid 
+
+ cid    cid 
+
+  cid 
+
+  
+
+    
+
+As
+
+Bt 
+
+  
+ 
+
+     sT  
+
+As we shall see this coincides with the expression for
+the gradient of   in Eq    derived in the next section 
+Pseudocode of REVERSEHG is presented in Algorithm
+ 
+
+   sT  
+
+             sT    
+
+     st      st 
+
+ 
+
+  ForwardMode
+
+  
+
+where  for each                       Rd is   row vector
+of Lagrange multipliers associated with the tth step of the
+dynamics 
+The partial derivatives of the Lagrangian are given by
+
+  
+  
+  
+ st
+  
+ sT
+  
+ 
+
+     st      st 
+     At       
+     sT       
+
+  cid 
+
+  
+
+ 
+
+ tBt 
+
+                
+ 
+                   
+
+ 
+
+ 
+
+The second approach to compute the hypergradient appeals
+to the chain rule for the derivative of composite functions 
+to obtain that the gradient of   at   satis es 
+
+dsT
+  
+
+          sT  
+
+ 
+   is the     matrix formed by the total derivative
+where dsT
+of the components of sT  regarded as rows  with respect to
+the components of    regarded as columns 
+Recall that st      st    The operators    depends on
+the hyperparameter   both directly by its expression and
+indirectly through the state st  Using again the chain
+
+ Remember that the gradient of   scalar function is   row vec 
+
+tor 
+
+Forward and Reverse GradientBased Hyperparameter Optimization
+
+rule we have  for every                  that
+
+dst
+  
+
+ 
+
+   st   
+
+   st   
+
+dst 
+  
+
+ 
+
+ 
+
+ 
+
+ st 
+   for every                  and recalling
+
+ 
+
+De ning Zt   dst
+Eq    we can rewrite Eq    as the recursion
+                
+
+Zt   AtZt    Bt 
+
+ 
+
+Using Eq    we obtain that
+          sT  ZT
+
+     sT  AT ZT    BT  
+     sT  AT AT ZT    AT BT    BT  
+ 
+     sT  
+
+ cid    cid 
+
+  cid 
+
+ cid 
+
+ 
+
+As
+
+Bt 
+
+  
+
+    
+
+Note that the recurrence   on the Jacobian matrix is
+structurally identical to the recurrence in the RTRL procedure described in  Williams   Zipser    eq   
+From the above derivation it is apparent that      can be
+computed by an iterative algorithm which runs in parallel
+to the training algorithm  Pseudocode of FORWARDHG
+is presented in Algorithm   At  rst sight  the computation of the terms in the right hand side of Eq    seems
+prohibitive  However  in Section   we observe that if  
+is much smaller than    the computation can be done ef 
+ciently 
+
+  RealTime ForwardMode
+For every                  let ft   Rm     be the response function at time    ft      st  Note that
+fT coincides with the de nition of the response function
+in Eq      major difference between REVERSEHG and
+FORWARDHG is that the partial hypergradients
+
+ ft   
+
+dE st 
+
+  
+
+     st Zt
+
+ 
+
+are available in the second procedure at each time step  
+and not only at the end 
+The availability of partial hypergradients is signi cant
+since we are allowed to update hyperparameters several
+times in   single optimization epoch  without having to
+wait until time     This is reminiscent of the realtime updates suggested by Williams   Zipser   for RTRL 
+The realtime approach may be suitable in the case of  
+data stream             where REVERSEHG would
+be hardly applicable  Even in the case of  nite  but large 
+datasets it is possible to perform one hyperparameter update after   hyperbatch of data         set of minibatches 
+
+has been processed  Algorithm   can be easily modi ed
+to yield   partial hypergradient when   mod        for
+some hyperbatch size   and letting   run from   to  
+reusing examples in   circular or random way  We use this
+strategy in the phone recognition experiment reported in
+Section  
+
+  Complexity Analysis
+We discuss the time and space complexity of Algorithms  
+and   We begin by recalling some basic results from the
+algorithmic differentiation  AD  literature 
+Let     Rn  cid  Rp be   differentiable function and suppose it can be evaluated in time         and requires space
+        Denote by JF the       Jacobian matrix of    
+Then the following facts hold true  Griewank   Walther 
+   see also Baydin et al    for   shorter account 
+    For any vector     Rn  the product JF   can be evaluated in time           and requires space          
+using forwardmode AD 
+
+ ii  For any vector     Rp  the product  
+
+ cid 
+    has time and
+space complexities           using reversemode
+AD 
+
+ iii  As   corollary of item    
+
+the whole JF can be
+computed in time   nc       and requires space
+          using forwardmode AD  just use unitary
+vectors     ei for                 
+
+ iv  Similarly  JF can be computed in time   pc      
+and requires space           using reversemode
+AD 
+
+Let         and         denote time and space  respectively  required to evaluate the update map    de ned by
+Eq    Then the response function     Rm  cid    de ned
+in Eq    can be evaluated in time              assuming
+the time required to compute the validation error    does
+not affect the bound  and requires space           since
+variables st may be overwritten at each iteration  Then   
+direct application of Fact     above shows that Algorithm  
+runs in time     mg       and space           The
+same results can also be obtained by noting that in Algorithm   the product AtZt  requires   Jacobianvector
+products  each costing            from Fact     while
+computing the Jacobian Bt takes time   mg        from
+Fact  iii 
+Similarly    direct application of Fact  ii  shows that
+Algorithm   has both time and space complexities
+            Again the same results can be obtained by
+
+ This is indeed realistic since the number of validation exam 
+
+ples is typically lower than the number of training iterations 
+
+Forward and Reverse GradientBased Hyperparameter Optimization
+
+noting that    At  and  tBt are transposedJacobian 
+vector products that
+in reversemode take both time
+           from Fact  ii  Unfortunately in this case
+variables st cannot be overwritten  explaining the much
+higher space requirement 
+As an example  consider training   neural network with
+  weights  using classic iterative optimization algorithms
+such as SGD  possibly with momentum  or Adam  where
+the hyperparameters are just learning rate and momentum
+terms  In this case           and        Moreover 
+        and         are both      As   result  Algorithm   runs in time and space        while Algorithm  
+runs in time        and space      which would typically
+make   dramatic difference in terms of memory requirements 
+
+  Experiments
+In this section  we present numerical simulations with
+the proposed methods  All algorithms were implemented
+in TensorFlow and the software package used to reproduce our experiments is available at https github 
+com lucfra RFHO  In all the experiments  hypergradients were used inside the Adam algorithm  Kingma   Ba 
+  in order to minimize the response function 
+
+  Data Hypercleaning
+
+The goal of this experiment is to highlight one potential advantage of constraints on the hyperparameters  Suppose we
+have   dataset with label noise and due to time or resource
+constraints we can only afford to cleanup  by checking and
+correcting the labels    subset of the available data  Then
+we may use the cleaned data as the validation set  the rest
+as the training set  and assign one hyperparameter to each
+training example  By putting   sparsity constraint on the
+vector of hyperparameters   we hope to bring to zero the
+in uence of noisy examples  in order to generate   better
+model  While this is the same kind of data sparsity observed in support vector machines  SVM  our setting aims
+to get rid of erroneously labeled examples  in contrast to
+SVM which puts zero weight on redundant examples  Although this experimental setup does not necessarily re ect
+  realistic scenario  it aims to test the ability of our HO
+method to effectively make use of constraints on the hyperparameters 
+We instantiated the above setting with   balanced subset of
+      examples from the MNIST dataset  split into
+three subsets  Dtr of Ntr     training examples    of
+ This includes linear SVM and logistic regression as special
+
+cases 
+
+ We note that   related approach based on reinforcement learn 
+
+ing is presented in  Fan et al   
+
+Nval     validation examples and   test set containing
+the remaining samples  Finally  we corrupted the labels of
+  training examples  selecting   random subset Df  
+Dtr 
+We considered   plain softmax regression model with parameters    weights  and    bias  The error of   model
+       on an example   was evaluated by using the crossentropy  cid          both in the training objective function  Etr  and in the validation one  Eval  We added in
+Etr an hyperparameter vector        Ntr that weights
+each example in the training phase       Etr        
+ 
+Ntr
+According to the general HO framework  we    the parameters        to minimize the training loss and the hyperparameters   to minimize the validation error  The sparsity
+constraint was implemented by bounding the   norm of
+  resulting in the optimization problem
+
+  Dtr    cid       xi 
+
+ cid 
+
+min
+ 
+
+Eval WT   bT  
+
+ PHO 
+
+where                Ntr cid cid       and  WT   bT  
+are the parameters obtained after   iterations of gradient
+descent on the training objective  Given the high dimensionality of   we solved  PHO  iteratively computing the
+hypergradients with REVERSEHG method and projecting
+Adam updates on the set  
+We are interested in comparing the following three test set
+accuracies 
+
+  Oracle  the accuracy of the minimizer of Etr trained
+on clean examples only        Dtr Df     this setting
+is effectively taking advantage of an oracle that tells
+which examples have   wrong label 
+
+  Baseline  the accuracy of the minimizer of Etr trained
+
+on all available data       
+
+  DHR  the accuracy of the data hypercleaner with
+  given value of the    radius     In this case  we
+ rst optimized hyperparameters and then constructed
+  cleaned training set Dc   Dtr  keeping examples
+with        we  nally trained on Dc     
+
+We are also interested in evaluating the ability of the hypercleaner to detect noisy samples  Results are shown in Table   The data hypercleaner is robust with respect to the
+choice of   and is able to identify corrupted examples  recovering   model that has almost the same accuracy as  
+model produced with the help of an oracle 
+Figure   shows how the accuracy of DH  improves
+with the number of hyperiterations and the progression of
+the amount of discarded examples  The data hypercleaner
+starts by discarding mainly corrupted examples  and while
+
+Forward and Reverse GradientBased Hyperparameter Optimization
+
+Table   Test accuracies for the baseline  the oracle  and DHR
+for four different values of    The reported    measure is the
+performance of the hypercleaner in correctly identifying the corrupted training examples 
+
+Accuracy  
+
+  
+
+Oracle
+Baseline
+DH 
+DH 
+DH 
+DH 
+
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+
+ 
+
+ 
+ 
+ 
+ 
+
+examples as training set  different   examples as validation set and the remaining for testing  From CIFAR 
+we selected   examples as training set    as validation
+set and the remaining for testing  Finally  we used   onehot encoder of the labels obtaining   set of labels in     
+       or      
+The choice of small training set sizes is due to the strong
+discriminative power of the selected features  In fact  using
+larger sample sizes would not allow to appreciate the advantage of MTL  In order to leverage information among
+the different classes  we employed   multitask learning
+ MTL  regularizer  Evgeniou et al   
+
+  cid 
+
+        
+
+  cid 
+
+Cj   cid wj   wk cid 
+
+     
+
+ cid wk cid 
+
+    
+
+  
+
+where wk are the weights for class      is the number of classes  and the symmetric nonnegative matrix  
+models the interactions between the classes tasks  We
+used   regularized training error de ned as Etr      
+  Dtr  cid   xi      yi           where  cid  is the categorical crossentropy and                 bK  is the vector
+of thresholds associated with each linear model  We wish
+solve the following optimization problem 
+
+ cid 
+min cid Eval WT   bT   subject to            
+
+       cid 
+
+ cid 
+
+where  WT   bT   is the    th iteration obtained by running
+gradient descent with momentum  GDM  on the training
+objective  We solve this problem using REVERSEHG and
+optimizing the hyperparameters by projecting Adam updates on the set                   
+       
+We compare the following methods 
+
+ cid 
+
+  SLT  single task learning             using   valida 
+
+tion set to tune the optimal value of   for each task 
+
+  NMTL  we considered the naive MTL scenario in
+which the tasks are equally related  that is Cj      
+for every               In this case we learn the two
+nonnegative hyperparameters   and  
+
+  HMTL  our hyperparameter optimization method
+
+REVERSEHG to tune   and  
+
+the constraint that cid 
+
+  HMTLS  Learning the matrix   with only few examples per class could bring the discovery of spurious relationships  We try to remove this effect by imposing
+    Cj        where       
+In this case  Adam updates are projected onto the set
+    Cj       
+                  
+
+         cid 
+
+ cid 
+
+Results of  ve repetitions with different splits are presented
+in Table   Note that HMTL gives   visible improvement in
+
+ We observed that      
+
+  yielded very similar results 
+
+Figure   Right vertical axis  accuracies of DH  on validation and test sets  Left vertical axis  number of discarded examples among noisy  True Positive  TP  and clean  False Positive 
+FP  ones 
+
+the optimization proceeds  it begins to remove also   portion of cleaned one  Interestingly  the test set accuracy continues to improve even when some of the clean examples
+are discarded 
+
+  Learning Task Interactions
+
+This second set of experiments is in the multitask learning
+ MTL  context  where the goal is to  nd simultaneously
+the model of multiple related tasks  Many MTL methods
+require that   task interaction matrix is given as input to
+the learning algorithm  However  in real applications  this
+matrix is often unknown and it is interesting to learn it from
+data  Below  we show that our framework can be naturally
+applied to learning the task relatedness matrix 
+We used CIFAR  and CIFAR   Krizhevsky   Hinton    two object recognition datasets with   and  
+classes  respectively  As features we employed the preactivation of the second last layer of InceptionV  model
+trained on ImageNet  From CIFAR  we extracted  
+
+ Available at tinyurl com     wws
+
+ Hyperiterations Numberofdiscardedexamples Accuracy Hyperiterations NumberofdiscardedexamplesAccuracyandsparsityof ValidationTestTPFPForward and Reverse GradientBased Hyperparameter Optimization
+
+Figure   Relationship graph of CIFAR  classes  Edges represent interaction strength between classes 
+Table   Test accuracy standard deviation on CIFAR  and
+CIFAR  for single task learning  STL  naive MTL  NMTL 
+and our approach without  HMTL  and with  HMTLS  the   
+norm constraint on matrix   
+
+CIFAR 
+ 
+ 
+ 
+ 
+
+CIFAR 
+ 
+ 
+ 
+ 
+
+STL
+NMTL
+HMTL
+HMTLS
+
+performance  and adding the constraint that cid 
+
+    Cj      
+further improves performance in both datasets  The matrix
+  can been interpreted as an adjacency matrix of   graph 
+highlighting the relationships between the classes  Figure
+  depicts the graph for CIFAR  extracted from the algorithm HMTLS  Although this result is strongly in uenced
+by the choice of the data representations  we can note that
+animals tends to be more related to themselves than to vehicles and vice versa 
+
+  Phone Classi cation
+
+The aim of the third set of experiments is to assess the ef 
+cacy of the realtime FORWARDHG algorithm  RTHO 
+We run experiments on phone recognition in the multitask framework proposed in  Badino    and references therein  Data for all experiments was obtained from
+the TIMIT phonetic recognition dataset  Garofolo et al 
+  The dataset contains   sentences corresponding to around   million speech acoustic frames  Training 
+validation and test sets contain respectively     and
+  of the data  The primary task is   framelevel phone
+state classi cation with   classes and it consists in learning   mapping fP from acoustic speech vectors to hidden
+Markov model monophone states  Each  ms speech frame
+is represented by    dimensional vector containing  
+Mel frequency scale cepstral coef cients and energy  augmented with their deltas and deltadeltas  We used   window of eleven frames centered around the prediction target
+to create the  dimensional input to fP   The secondary
+ or auxiliary  task consists in learning   mapping fS from
+acoustic vectors to  dimensional real vectors of contextdependent phonetic embeddings de ned in  Badino   
+
+Table   Frame level phonestate classi cation accuracy on standard TIMIT test set and execution time in minutes on one Titan  
+GPU  For RS  we set   time budget of   minutes 
+
+Accuracy   Time  min 
+
+Vanilla
+RS
+RTHO
+RTHONT
+
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+As in previous work  we assume that the two mappings fP
+and fS share inputs and an intermediate representation  obtained by four layers of   feedforward neural network with
+  units on each layer  We denote by   the parameter
+vector of these four shared layers  The network has two
+different output layers with parameter vectors     and    
+each relative to the primary and secondary task  The network is trained to jointly minimize Etot                
+EP              ES         where the primary error EP
+is the average crossentropy loss on the primary task  the
+secondary error ES is given by mean squared error on the
+embedding vectors and       is   design hyperparameter  Since we are ultimately interested in learning fP   we
+formulate the hyperparameter optimization problem as
+
+    subject to                  cid 
+
+min cid Eval WT      
+
+where Eval is the cross entropy loss computed on   validation set after   iterations of stochastic GDM  and   and
+  are de ned in   In all the experiments we      minibatch size of   We compare the following methods 
+
+  Vanilla  the secondary target is ignored         and
+  are set to   and   respectively as in  Badino 
+ 
+
+  RS  random search with                  exponential distribution with scale parameter   and
+          Bergstra   Bengio   
+
+  RTHO  realtime hyperparameter optimization with
+initial learning rate and momentum factor as in Vanilla
+and initial   set to    best value obtained by gridsearch in Badino  
+
+  RTHONT  RTHO with  null teacher       when the
+initial values of     and   are set to   We regard
+this experiment as particularly interesting  this initial
+setting  while clearly not optimal  does not require any
+background knowledge on the task at hand 
+
+We also tried to run FORWARDHG for    xed number of
+epochs  not in realtime mode  Results are not reported
+
+Forward and Reverse GradientBased Hyperparameter Optimization
+
+since the method could not make any appreciable progress
+after running   hours on   Titan   GPU 
+Test accuracies and execution times are reported in Table  
+Figure   shows learning curves and hyperparameter evolutions for RTHONT  In Experiments   and   we employ  
+standard early stopping procedure on the validation accuracy  while in Experiments   and     natural stopping time
+is given by the decay to   of the learning rate  see Figure  
+leftbottom plot  In Experiments   and   we used   hyperbatch size of        see Eq    and   hyperlearning
+rate of  
+
+Figure   Learning curves and hyperparameter evolutions for
+RTHONT  the horizontal axis runs with the hyperbatches  Topleft  frame level accuracy on minibatches  Training  and on  
+randomly selected subset of the validation set  Validation  Topright  validation error Eval on the same subset of the validation
+set  Bottomleft  evolution of optimizer hyperparameters   and
+  Bottomright  evolution of design hyperparameter  
+
+The best results in Table   are very similar to those obtained in stateof theart recognizers using multitask learning  Badino      In spite of the small number of
+hyperparameters  random search yields results only slightly
+better than the vanilla network  the result reported in Table   are an average over   trials  with   minimum and maximum accuracy of   and   respectively  Within
+the same time budget of   minutes  RTHONT is able
+to  nd hyperparameters yielding   substantial improvement
+over the vanilla version  thus effectively exploiting the auxiliary task  Note that the model trained has more that
+    parameters for   corresponding state of more than
+      variables  To the best of our knowledge  reversemode  Maclaurin et al    or approximate  Pedregosa 
+  methods have not been applied to models of this size 
+
+  Discussion
+We studied two alternative strategies for computing the hypergradients of any iterative differentiable learning dynam 
+
+ics  Previous work has mainly focused on the reversemode
+computation  attempting to deal with its space complexity 
+that becomes prohibitive for very large models such as deep
+networks 
+Our  rst contribution is the de nition and the application of
+forwardmode computation to HO  Our analysis suggests
+that for large models the forwardmode computation may
+be   preferable alternative to reversemode if the number of
+hyperparameters is small  Additionally  forwardmode is
+amenable to realtime hyperparameter updates  which we
+showed to be an effective strategy for large datasets  see
+Section   We showed experimentally that even starting
+from   farfrom optimal value of the hyperparameters  the
+null teacher  our RTHO algorithm  nds good values at  
+reasonable cost  whereas other gradientbased algorithms
+could not be applied in this context 
+Our second contribution is the Lagrangian derivation of the
+reversemode computation 
+It provides   general framework to tackle hyperparameter optimization problems involving   wide class of response functions  including those
+that take into account the whole parameter optimization dynamics  We have also presented in Sections   and   two
+nonstandard learning problems where we speci cally take
+advantage of   constrained formulation of the HO problem 
+We close by highlighting some potential extensions of our
+framework and direction of future research  First  the relatively low cost of our RTHO algorithm could suggest to
+make it   standard tool for the optimization of realvalued
+critical hyperparameters  such as learning rates  regularization factors and error function design coef cient  in
+context where no previous or expert knowledge is available       novel domains  Yet  RTHO must be thoroughly validated on diverse datasets and with different
+models and settings to empirically asses its robustness and
+its ability to  nd good hyperparameter values  Second 
+in order to perform gradientbased hyperparameter optimization  it is necessary to set   descent procedure over
+the hyperparameters  In our experiments we have always
+used Adam with   manually adjusted value for the hyperlearning rate  Devising procedures which are adaptive in
+these hyperhyperparameters is an important direction of
+future research  Third  extensions of gradientbased HO
+techniques to integer or nominal hyperparameters  such as
+the depth and the width of   neural network  require additional design efforts and may not arise naturally in our
+framework  Future research should instead focus on the integration of gradientbased algorithm with Bayesian optimization and or with emerging reinforcement learning hyperparameter optimization approaches  Zoph   Le   
+   nal important problem is to study the converge properties of RTHO  Results in Pedregosa   may prove
+useful in this direction 
+
+ TrainingandvalidationaccuraciesTrainingValidation Validationerror Plotof Plotof Forward and Reverse GradientBased Hyperparameter Optimization
+
+References
+Badino  Leonardo  Phonetic context embeddings for dnnhmm phone recognition  In Proceedings of Interspeech 
+pp     
+
+Badino  Leonardo  Personal communication   
+
+Baydin  Atilim Gunes  Pearlmutter  Barak    Radul 
+Alexey Andreyevich  and Siskind  Jeffrey Mark  Automatic differentiation in machine learning    survey 
+arXiv preprint arXiv   
+
+Bengio  Yoshua  Gradientbased optimization of hyperparameters  Neural computation     
+
+Bergstra  James and Bengio  Yoshua  Random search
+for hyperparameter optimization  Journal of Machine
+Learning Research     
+
+Bergstra  James  Yamins  Daniel  and Cox  David    Making   Science of Model Search  Hyperparameter Optimization in Hundreds of Dimensions for Vision Architectures  ICML     
+
+Bergstra  James    Bardenet    mi  Bengio  Yoshua  and
+  gl  Bal zs  Algorithms for hyperparameter optimization  In Advances in Neural Information Processing Systems  pp     
+
+Domke  Justin  Generic methods for optimizationbased
+modeling  In AISTATS  volume   pp     
+
+Evgeniou  Theodoros  Micchelli  Charles    and Pontil 
+Massimiliano  Learning multiple tasks with kernel methods     Mach  Learn  Res     
+
+Fan  Yang  Tian  Fei  Qin  Tao  Bian  Jiang  and Liu 
+TieYan  Learning what data to learn  arXiv preprint
+arXiv   
+
+Garofolo  John    Lamel  Lori    Fisher  William    Fiscus  Jonathon    and Pallett  David    DARPA TIMIT
+acousticphonetic continous speech corpus CDROM 
+NIST speech disc   NASA STI Recon technical report     
+
+Griewank  Andreas and Walther  Andrea 
+
+Evaluating
+Derivatives  Principles and Techniques of Algorithmic
+Differentiation  Society for Industrial and Applied Mathematics  second edition   
+
+Hutter  Frank  Hoos  Holger    and LeytonBrown  Kevin 
+Sequential modelbased optimization for general algorithm con guration  In Int  Conf  on Learning and Intelligent Optimization  pp    Springer   
+
+Hutter  Frank    cke    rg  and SchmidtThieme  Lars  Beyond Manual Tuning of Hyperparameters  KI     nstliche Intelligenz     
+
+Kingma  Diederik and Ba  Jimmy  Adam    Method for
+
+Stochastic Optimization  arXiv   
+
+Krizhevsky  Alex and Hinton  Geoffrey  Learning multiple
+
+layers of features from tiny images   
+
+Larsen  Jan  Hansen  Lars Kai  Svarer  Claus  and Ohlsson 
+   Design and regularization of neural networks  the
+optimal use of   validation set  In Neural Networks for
+Signal Processing  pp    IEEE   
+
+  Theoretical Framework for BackLeCun  Yann 
+Propagation 
+In Hinton  Geoffrey and Sejnowski  Terrence  eds  Proc  of the   Connectionist models
+summer school  pp    Morgan Kaufmann   
+
+Maclaurin  Dougal  Duvenaud  David    and Adams 
+Ryan    Gradientbased hyperparameter optimization
+In ICML  pp   
+through reversible learning 
+ 
+
+Pearlmutter  Barak    Gradient calculations for dynamic
+recurrent neural networks    survey  IEEE Transactions
+on Neural networks     
+
+Pedregosa  Fabian  Hyperparameter optimization with ap 
+
+proximate gradient  In ICML  pp     
+
+Snoek  Jasper  Larochelle  Hugo  and Adams  Ryan   
+Practical bayesian optimization of machine learning algorithms  In Advances in Neural Information Processing
+Systems  pp     
+
+Snoek  Jasper  Rippel  Oren  Swersky  Kevin  Kiros  Ryan 
+Satish  Nadathur  Sundaram  Narayanan  Patwary  Md
+Mostofa Ali  Prabhat  Mr  and Adams  Ryan    Scalable
+Bayesian Optimization Using Deep Neural Networks  In
+ICML  pp     
+
+Swersky  Kevin  Snoek  Jasper  and Adams  Ryan    Multitask bayesian optimization  In Advances in Neural Information Processing Systems  pp     
+
+Werbos  Paul    Backpropagation through time  what it
+does and how to do it  Proceedings of the IEEE   
+   
+
+Williams  Ronald    and Zipser  David    learning algorithm for continually running fully recurrent neural networks  Neural computation     
+
+Zoph  Barret and Le  Quoc   
+
+search with reinforcement learning 
+arXiv   
+
+Neural architecture
+arXiv preprint
+
+

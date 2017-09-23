@@ -1,0 +1,792 @@
+Neural Optimizer Search with Reinforcement Learning
+
+Irwan Bello     Barret Zoph     Vijay Vasudevan   Quoc    Le  
+
+Abstract
+
+We present an approach to automate the process
+of discovering optimization methods  with   focus on deep learning architectures  We train  
+Recurrent Neural Network controller to generate
+  string in   speci   domain language that describes   mathematical update equation based on
+  list of primitive functions  such as the gradient  running average of the gradient  etc  The
+controller is trained with Reinforcement Learning to maximize the performance of   model after   few epochs  On CIFAR  our method discovers several update rules that are better than
+many commonly used optimizers  such as Adam 
+RMSProp  or SGD with and without Momentum
+on   ConvNet model  These optimizers can also
+be transferred to perform well on different neural
+network architectures  including Google   neural
+machine translation system 
+
+  Introduction
+The choice of the right optimization method plays   major role in the success of training deep learning models 
+Although Stochastic Gradient Descent  SGD  often works
+well out of the box  more advanced optimization methods
+such as Adam  Kingma   Ba    or Adagrad  Duchi
+et al    can be faster  especially for training very deep
+networks  Designing optimization methods for deep learning  however  is very challenging due to the nonconvex
+nature of the optimization problems 
+In this paper  we consider an approach to automate the process of designing update rules for optimization methods 
+especially for deep learning architectures  The key insight
+is to use   controller in the form of   recurrent network to
+generate an update equation for the optimizer  The recur 
+
+ Equal contribution
+
+ Google Brain  Correspondence to 
+Irwan Bello  ibello google com  Barret Zoph  barretzoph google com  Vijay Vasudevan  vrv google com 
+Quoc    Le  qvl google com 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+Figure   An overview of Neural Optimizer Search 
+
+rent network controller is trained with reinforcement learning to maximize the accuracy of   particular model architecture  being trained for    xed number of epochs by the
+update rule  on   heldout validation set  This process is
+illustrated in Figure  
+On CIFAR  our approach discovers several update rules
+that are better than many commonly used optimizers such
+as Adam  RMSProp  or SGD with and without Momentum
+on   small ConvNet model  Many of the generated update
+equations can be easily transferred to new architectures and
+datasets  For instance  update rules found on   small ConvNet architecture  when applied to the Wide ResNet architecture  Zagoruyko   Komodakis    improved accuracy over Adam  RMSProp  Momentum  and SGD by  
+margin up to   on the test set  The same update rules also
+work well for Google   Neural Machine Translation system  Wu et al    giving an improvement of up to  
+BLEU on the WMT   English to German task 
+
+  Related Work
+Neural networks are dif cult and slow to train  and
+many methods have been designed to tackle this dif culty
+      Riedmiller   Braun   LeCun et al   
+Schraudolph   Martens   Le et al   
+Duchi et al    Zeiler   Martens   Sutskever
+  Schaul et al    Pascanu   Bengio  
+Pascanu et al    Kingma   Ba   Ba et al 
+  More recent optimization methods combine insights from both stochastic and batch methods in that they
+use   small minibatch  similar to SGD  yet they implement
+many heuristics to estimate diagonal secondorder informa 
+
+Neural Optimizer Search with Reinforcement Learning
+
+tion  similar to Hessianfree or LBFGS  Liu   Nocedal 
+  This combination often yields faster convergence
+for practical problems  Duchi et al    Dean et al 
+  Kingma   Ba    For example  Adam  Kingma
+  Ba      commonlyused optimizer in deep learning  implements simple heuristics to estimate the mean and
+variance of the gradient  which are used to generate more
+stable updates during training 
+Many of the above update rules are designed by borrowing ideas from convex analysis  even though optimization
+problems in neural networks are nonconvex  Recent empirical results with nonmonotonic learning rate heuristics  Loshchilov   Hutter    suggest that there are still
+many unknowns in training neural networks and that many
+ideas in nonconvex optimization can be used to improve
+it 
+The goal of our work is to search for better update rules
+for neural networks in the space of well known primitives  In other words  instead of handdesigning new update
+rules from scratch  we use   machine learning algorithm to
+search the update rules  This goal is shared with recentlyproposed methods by Andrychowicz et al    Ravi  
+Larochelle   Wichrowska et al    which employ an LSTM to generate numerical updates for training
+neural networks  The key difference is that our approach
+generates   mathematical equation for the update instead
+of numerical updates  The main advantage of generating an
+equation is that it can easily be transferred to larger tasks
+and does not require training any additional neural networks for   new optimization problem  Finally  although
+our method does not aim to optimize the memory usage of
+update rules  our method discovers update rules that are on
+par with Adam or RMSProp while requiring less memory 
+The concept of using   Recurrent Neural Network for
+metalearning has been attempted in the past  either via
+genetic programming or gradient descent  Schmidhuber 
+  Hochreiter et al    Similar to the above recent
+methods  these approaches only generate the updates  but
+not the update equations  as proposed in this paper 
+  related approach is using genetic programming to evolve
+update equations for neural networks       Bengio et al 
+  Runarsson   Jonsson   Orchard   Wang
+  Genetic programming however is often slow and
+requires many heuristics to work well  For that reason 
+many prior studies in this area have only experimented with
+very smallscale neural networks  For example  the neural
+networks used for experiments in Orchard   Wang  
+have around   weights  which is quite small compared to
+today   standards 
+Our approach is reminiscent of recent work in automated
+model discovery with Reinforcement Learning  Baker
+
+et al    especially Neural Architecture Search  Zoph
+  Le    in which   recurrent network is used to generate the con guration string of neural architectures instead 
+In addition to applying the key ideas to different applications  this work presents   novel scheme to combine primitive inputs in   much more  exible manner  which makes
+the search for novel optimizers possible 
+Finally  our work is also inspired by the recent studies
+by Keskar et al    Zhang et al    in which it was
+found that SGD can act as   regularizer that helps generalization  In our work  we use the accuracy on the validation
+set as the reward signal  thereby implicitly searching for
+optimizers that can help generalization as well 
+
+  Method
+    simple domain speci   language for update rules
+
+In our framework  the controller generates strings corresponding to update rules  which are then applied to   neural network to estimate the update rule   performance  this
+performance is then used to update the controller so that the
+controller can generate improved update rules over time 
+To map strings sampled by the controller to an update
+rule  we design   domain speci   language that relies on  
+parenthesisfree notation  in contrast to the classic in   notation  Our choice of domain speci   language  DSL  is
+motivated by the observation that the computational graph
+of most common optimizers can be represented as   simple binary expression tree  assuming input primitives such
+as the gradient or the running average of the gradient and
+basic unary and binary functions 
+We therefore express each update rule with   string describing   the  rst operand to select    the second operand to
+select    the unary function to apply on the  rst operand 
+  the unary function to apply on the second operand and
+  the binary function to apply to combine the outputs of
+the unary functions  The output of the binary function is
+then either temporarily stored in our operand bank  so that
+it can be selected as an operand in subsequent parts of the
+string  or used as the  nal weight update as follows 
+
+             op    op 
+
+where op  op        and      are the operands 
+the unary functions and the binary function corresponding
+to the string    is the parameter that we wish to optimize
+and   is the learning rate 
+With   limited number of iterations  our DSL can only represent   subset of all mathematical equations  However we
+note that it recovers common optimizers within one iteration assuming access to simple primitives  Figure   shows
+
+Neural Optimizer Search with Reinforcement Learning
+
+Figure   Computation graph of some commonly used optimizers  SGD  RMSProp  Adam  Here  we show the computation of Adam in
+  step and   steps  Blue boxes correspond to input primitives or temporary outputs  yellow boxes are unary functions and gray boxes
+represent binary functions    is the gradient     is the biascorrected running estimate of the gradient  and    is the biascorrected running
+estimate of the squared gradient 
+
+Figure   Overview of the controller RNN  The controller iteratively selects subsequences of length   It  rst selects the  st and  nd
+operands op  and op  then   unary functions    and    to apply to the operands and  nally   binary function   that combines the
+outputs of the unary functions  The resulting     op    op  then becomes an operand that can be selected in the subsequent group
+of predictions or becomes the update rule  Every prediction is carried out by   softmax classi er and then fed into the next time step as
+input 
+
+how some commonly used optimizers can be represented in
+the DSL  We also note that multiple strings in our prediction scheme can map to the same underlying update rule 
+including strings of different lengths      
+the two representations of Adam in Figure   This is both   feature
+of our action space corresponding to mathematical expressions  addition and multiplication are commutative for example  and our choice of domain speci   language  We
+argue that this makes for interesting exploration dynamics
+because   competitive optimizer may be obtained by expressing   standard optimizer in an expanded fashion and
+modifying it slightly 
+
+  Controller optimization with policy gradients
+
+Our controller is implemented as   Recurrent Neural Network which samples strings of length    where   is   number of iterations  xed during training  see Figure   Since
+the operand bank grows as more iterations are computed 
+we use different softmax weights at every step of prediction 
+The controller is trained to maximize the performance of
+its sampled update rules on   speci ed model  The training
+objective is formulated as follows 
+
+           
+
+ 
+
+where    corresponds to the accuracy on   heldout val 
+
+Neural Optimizer Search with Reinforcement Learning
+
+idation set obtained after training   target network with update rule  
+Zoph   Le   train their controller using   vanilla policy gradient obtained via REINFORCE  Williams   
+which is known to exhibit poor sample ef ciency  We  nd
+that using the more sample ef cient Trust Region Policy
+Optimization  Schulman et al    algorithm speeds up
+convergence of the controller  For the baseline function in
+TRPO  we use   simple exponential moving average of previous rewards 
+
+  Accelerated Training
+
+To further speed up the training of the controller RNN  we
+employ   distributed training scheme 
+In our distributed
+training scheme the samples generated from the controller
+RNN are added to   queue  and run on   set of distributed
+workers that are connected across   network  This scheme
+is different from  Zoph   Le    in that now   parameter server and controller replicas are not needed for the
+controller RNN  which simpli es training  At each iteration  the controller RNN samples   batch of update rules
+and adds them to the global worker queue  Once the training of the child network is complete  the accuracy on  
+heldout validation set is computed and returned to the controller RNN  whose parameters get updated with TRPO 
+New samples are then generated and this same process continues 
+Ideally  the reward fed to the controller would be the performance obtained when running   model with the sampled optimizer until convergence  However  such   setup
+requires signi cant computation and time  To help deal
+with these issues  we propose the following tradeoffs to
+greatly reduce computational complexity  First  we  nd
+that searching for optimizers with   small two layer convolutional network provides enough of   signal for whether
+an optimizer would do well on much larger models such
+as the Wide ResNet model  Second  we train each model
+for   modest   epochs only  which also provides enough
+signal for whether   proposed optimizer is good enough
+for our needs  These techniques allow us to run experiments more quickly and ef ciently compared to Zoph  
+Le   with our controller experiments typically converging in less than   day using   CPUs  compared to
+  GPUs over several weeks 
+
+  Experiments
+We aim to answer the following questions 
+
+  Can the controller discover update rules that outper 
+
+form other stochastic optimization methods 
+
+  Do the discovered update rules transfer well to other
+
+architectures and tasks 
+
+In this section  we will focus on answering the  rst question by performing experiments with the optimizer search
+framework to  nd optimizers on   small ConvNet model
+and compete with the existing optimizers  In the next section  we will transfer the found optimizers to other architectures and tasks thereby answering the second question 
+
+  Search space
+
+The operands  unary functions and binary functions that are
+accessible to our controller are as follows  details below 
+
+  Operands                     sign    sign       
+small constant noise                 
+ADAM and RMSProp 
+
+  Unary functions which map input   to         ex 
+log     clip      clip      clip     
+drop      drop      drop      and sign   
+  Binary functions which map        to      addition 
+    divi 
+
+       subtraction         multiplication   
+sion  or    keep left 
+
+Here            are running exponential moving averages of
+      and    obtained with decay rates     and   respectively  drop    sets its inputs to   with probability  
+and clip    clips its input to        All operations are
+applied elementwise 
+In our experiments  we use binary trees with depths of  
+  and   which correspond to strings of length     and  
+respectively  The above list of operands  unary functions
+and binary function is quite large  so to address this issue 
+we  nd it helpful to only work with subsets of the operands
+and functions presented above  This leads to typical search
+space sizes ranging from   to   possible update rules 
+We also experiment with several constraints when sampling
+an update rule  such as forcing the left and right operands to
+be different at each iteration  and not using addition as the
+ nal binary function  An additional constraint added is to
+force the controller to reuse one of the previously computed
+operands in the subsequent iterations  The constraints are
+implemented by manually setting the logits corresponding
+to the forbidden operands or functions to  
+
+  Experimental details
+
+Across all experiments  our controller RNN is trained with
+the ADAM optimizer with   learning rate of   and  
+minibatch size of   The controller is   singlelayer LSTM
+with hidden state size   and weights are initialized uniformly at random between   and   We also use an
+
+Neural Optimizer Search with Reinforcement Learning
+
+entropy penalty to aid in exploration  This entropy penalty
+coef cient is set to  
+The child network architecture that all sampled optimizers
+are run on is   small two layer     ConvNet  This ConvNet
+has    lters with ReLU activations and batch normalization applied after each convolutional layer  These child networks are trained on the CIFAR  dataset  one of the most
+benchmarked datasets in deep learning 
+The controller is trained on   CPU and the child models are
+trained using   distributed workers which also run on
+CPUs  see Section   Once   worker receives an optimizer to run from the controller  it performs   basic hyperparameter sweep on the learning rate     with   ranging
+from   to   with each learning rate being tried for   epoch
+of   CIFAR  training examples  The best learning
+rate after   epoch is then used to train our child network
+for   epochs and the  nal validation accuracy is reported
+as   reward to the controller  The child networks have  
+batch size of   and evaluate the update rule on    xed
+heldout validation set of   examples 
+In this setup 
+training   child model with   sampled optimizer generally
+takes less than   minutes  Experiments typically converge
+within   day  All experiments are carried out using TensorFlow  Abadi et al   
+The hyperparameter values for the update rules are inspired
+by standard values used in the literature  We set   to  
+  to   and       to   Preliminary experiments
+indicate that the update rules are robust to slight changes in
+the hyperparameters they were searched over 
+
+  Experimental results
+
+Our results show that the controller discovers many different updates that perform well during training and the maximum accuracy also increases over time  In Figure   we
+show the learning curve of the controller as more optimizers are sampled 
+
+Figure   Controller reward increasing over time as more optimizers are sampled 
+
+Figure   Comparison of two of the best optimizers found with
+Neural Optimizer Search using    layer ConvNet as the architecture  Optimizer   refers to  esign   sign      clip         
+and Optimizer   refers to drop              
+
+optimizers being run for   epochs on the full CIFAR 
+  dataset  From the plots we observe that our optimizers slightly outperform Momentum and SGD  while greatly
+outperforming RMSProp and Adam 
+The controller discovered update rules that work well  but
+also produced update equations that are fairly intuitive  For
+instance  among the top candidates is the following update
+function 
+
+  esign   sign       
+
+Because esign   sign    is positive  in each dimension the
+update follows the direction of   with some adjustments to
+the scale  The term esign   sign    means that if the signs
+of the gradient and its running average agree  we should
+make an update to the coordinate with the scale of    otherwise make an update with the scale of     This expression
+appears in many optimizers that the model found  showing
+up in   of the top   candidate update rules 
+
+The plots in Figure   show the results of two of our best
+
+   esign   sign      clip         
+
+ Number of sampled optimizers Validation accuracyController reward Epoch AccuracyTest accuracy comparison with Small ConvNet modeladammomrmspropsgdoptimizer Epoch AccuracyTest accuracy comparison with Small ConvNet modeladammomrmspropsgdoptimizer Neural Optimizer Search with Reinforcement Learning
+
+is run for   iterations with   different learning rates on
+  logarithmic scale and and the best performance is plotted 
+The update rule we test is the intuitive     esign   sign   
+The results in Figure   show that our optimizer outperforms
+Adam  RMSProp  SGD  and is close to matching the performance of Momentum on this task 
+
+  CIFAR  with Wide ResNet
+
+  drop        esign   sign   
+  ADAM   esign   sign   
+  drop        esign   sign   
+
+  Transferability experiments
+  key advantage of our method of discovering update equations compared to the previous approach  Andrychowicz
+et al    is that update equations found by our method
+can be easily transferred to new tasks  In the following experiments  we will exercise some of the update equations
+found in the previous experiment on different network architectures and tasks  The controller is not trained again 
+and the update rules are simply reused 
+
+  Control Experiment with Rosenbrock function
+
+Figure   Comparison of an optimizer found with Neural Optimizer Search to the other wellknown optimizers on the Rosenbrock function  Optimizer   refers to esign   sign         The
+black dot is the optimum 
+
+We  rst test one of the optimizers we found in the previous experiment on the famous Rosenbrock function against
+the commonly used deep learning optimizers in TensorFlow  Abadi et al    Adam  SGD  RMSProp and Momentum  and tune the value of   in Adam in   log scale between   and   In this experiment  each optimizer
+
+Figure   Comparison of two of the best optimizers found with
+Neural Optimizer Search using Wide ResNet as the architecture 
+Optimizer   refers to  esign   sign      clip          and
+Optimizer   refers to drop              
+
+We further investigate the generalizability of the found update rules on   different and much larger model  the Wide
+ResNet architecture  Zagoruyko   Komodakis    Our
+controller  nds many optimizers that perform well when
+run for   epochs on the small ConvNet  To  lter optimizers that do well when run for many more epochs  we
+run dozens of our top optimizers for   epochs and aggressively stop optimizers that show less promise  The top
+optimizers identi ed by this process are also the top optimizers for the small ConvNet and the GNMT experiment 
+
+ Adam Momentum SGD RMSProp Optimizer Epoch AccuracyTest accuracy comparison with Wide ResNet modelmomrmspropadamsgdoptimizer Epoch AccuracyTest accuracy comparison with Wide ResNet modelmomrmspropadamsgdoptimizer Optimizer
+
+SGD
+Momentum
+ADAM
+RMSProp
+ esign   sign      clip         
+clip             
+        
+    esign   sign   
+drop        esign   sign   
+     eg 
+drop       eg 
+drop        esign   sign   
+clip RMSProp      drop       
+ADAM   esign   sign   
+ADAM       
+    drop       
+drop          eg 
+    clip     
+eg       
+drop             
+
+   
+
+Final Val
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Final Test
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Neural Optimizer Search with Reinforcement Learning
+
+Best Val Best Test
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Table   Performance of Neural Search Search and standard optimizers on the WideResNet architecture  Zagoruyko   Komodakis 
+  on CIFAR  Final Val and Final Test refer to the  nal validation and test accuracy after for training for   epochs  Best Val
+corresponds to the best validation accuracy over the   epochs and Best Test is the test accuracy at the epoch where the validation
+accuracy was the highest  For each optimizer we report the best results out of seven learning rates on   logarithmic scale according to
+the validation accuracy 
+
+Figure   shows the comparison between SGD  Adam  RMSProp  Momentum and two of the top candidate optimizers  The plots reveal that these two optimizers outperform
+the other optimizers by   sizeable margin on   competitive
+CIFAR  model 
+Table   shows more details of the comparison between our
+top   optimizers against the commonly used SGD  RMSProp  Momentum  and Adam optimizers  We note that
+although Momentum was used and tuned by Zagoruyko  
+Komodakis   many of our updates outperform that
+setup  The margin of improvement is around   Our
+method is also better than other optimizers  with   margin
+up to  
+
+  Neural Machine Translation
+
+   
+We run one particularly promising optimizer 
+esign   sign    on the WMT   English   German
+task  Our goal is to test the transferability of this optimizer
+on   completely different model and task  since before our
+optimizers were run on convolutional networks and the
+translation models are RNNs  Our optimizer in this experiment is compared against the Adam optimizer  Kingma
+  Ba    The architecture of interest is the Google
+
+Neural Machine Translation  GNMT  model  Wu et al 
+  which was shown to achieve competitive translation quality on the English   German task  The GNMT
+network comprises   LSTM layers for both its encoder and
+decoder  Hochreiter   Schmidhuber    with the  rst
+layer of the encoder having bidirectional connections  This
+GNMT model also employs attention in the form of    
+layer neural network 
+The model is trained in   distributed fashion using   parameter server  Twelve workers are used  with each worker
+using   GPUs and   minibatch size of   Further details
+for this model can be found in Wu et al   
+In our experiments  the only change we make to training is
+to replace Adam with the new update rule  We note that the
+GNMT model   hyperparameters  such as weight initialization  were previously tuned to work well with Adam  Wu
+et al    so we expect more tuning can further improve
+the results of this new update rule 
+The results in Table   show that our optimizer does indeed
+generalize well and achieves an improvement of   perplexity  which is considered to be   decent gain on this task 
+This gain in training perplexity enables the model to obtain
+
+Neural Optimizer Search with Reinforcement Learning
+
+    BLEU improvement over the Adam optimizer on the
+test set Wu et al    On the validation set  the averaged
+improvement of   points near the peak values is   BLEU 
+
+Optimizer
+
+Adam
+    esign   sign   
+
+Train perplexity Test BLEU
+
+ 
+ 
+
+ 
+ 
+
+Table   Performance of our optimizer versus ADAM in   strong
+baseline GNMT model on WMT   English   German 
+
+Finally  the update rule is also more memory ef cient as it
+only keeps one running average per parameter  compared to
+two running averages for Adam  This has practical implications for much larger translation models where Adam cannot currently be used due to memory constraints  Shazeer
+et al   
+
+  Conclusion
+This paper considers an approach for automating the discovery of optimizers with   focus on deep neural network
+architectures  We evaluate our discovered optimizers on
+widely used CIFAR  and NMT models for which we obtain competitive performance against common optimizers
+and validate to some extent that the optimizers generalize
+across architectures and datasets 
+One strength of our approach is that it naturally encompasses the environment in which the optimization process
+happens  One may for example use our method for discovering optimizers that perform well in scenarios where computations are only carried out using   bits  or   distributed
+setup where workers can only communicate   few bits of
+information to   shared parameter server  Unlike previous
+approaches in learning to learn  the update rules in the form
+of equations can be easily transferred to other optimization
+tasks 
+Finally  one of the update rules found by our method 
+   esign   sign    is surprisingly intuitive and particularly
+promising  Our experiments show that it performs well on  
+range of tasks that we have tried  from image classi cation
+with ConvNets to machine translation with LSTMs  In addition to opening up new ways to design update rules  this
+new update rule can now be used to improve the training of
+deep networks 
+
+Acknowledgements
+We thank Samy Bengio  Jeff Dean  Vishy Tirumalashetty
+and the Google Brain team for the help with the project 
+
+References
+Abadi  Mart    Barham  Paul  Chen  Jianmin  Chen 
+Zhifeng  Davis  Andy  Dean  Jeffrey  Devin  Matthieu 
+Ghemawat  Sanjay  Irving  Geoffrey  Isard  Michael 
+Kudlur  Manjunath  Levenberg  Josh  Monga  Rajat 
+Moore  Sherry  Murray  Derek    Steiner  Benoit 
+Tucker  Paul  Vasudevan  Vijay  Warden  Pete  Wicke 
+Martin  Yu  Yuan    and Zheng  Xiaoqiang  Tensor ow 
+  system for largescale machine learning  Proceedings
+of the  th USENIX Symposium on Operating Systems
+Design and Implementation  OSDI   
+
+Andrychowicz  Marcin  Denil  Misha  Gomez  Sergio 
+Hoffman  Matthew    Pfau  David  Schaul  Tom  and
+de Freitas  Nando  Learning to learn by gradient descent
+by gradient descent  In Advances in Neural Information
+Processing Systems  pp     
+
+Ba  Jimmy  Grosse  Roger  and Martens  James  Distributed secondorder optimization using Kroneckerfactored approximations  In International Conference on
+Learning Representations   
+
+Baker  Bowen  Gupta  Otkrist  Naik  Nikhil 
+
+and
+Raskar  Ramesh  Designing neural network architectures using reinforcement learning  arXiv preprint
+arXiv   
+
+Bengio  Samy  Bengio  Yoshua  and Cloutier  Jocelyn  Use
+of genetic programming for the search of   new learning
+rule for neural networks  In Evolutionary Computation 
+  IEEE World Congress on Computational Intelligence  Proceedings of the First IEEE Conference on  pp 
+  IEEE   
+
+Dean  Jeffrey  Corrado  Greg  Monga  Rajat  Chen  Kai 
+Devin  Matthieu  Mao  Mark  Senior  Andrew  Tucker 
+Paul  Yang  Ke  Le  Quoc    et al  Large scale distributed
+deep networks  In Advances in Neural Information Processing Systems  pp     
+
+Duchi  John  Hazan  Elad  and Singer  Yoram  Adaptive
+subgradient methods for online learning and stochastic
+optimization  Journal of Machine Learning Research 
+ 
+
+Hochreiter  Sepp and Schmidhuber    urgen  Long shortterm memory  Neural Computation   
+ 
+
+Hochreiter  Sepp  Younger    Steven  and Conwell  Peter    Learning to learn using gradient descent  In International Conference on Arti cial Neural Networks  pp 
+  Springer   
+
+Keskar  Nitish Shirish  Mudigere  Dheevatsa  Nocedal 
+Jorge  Smelyanskiy  Mikhail  and Tang  Ping Tak Peter 
+
+Neural Optimizer Search with Reinforcement Learning
+
+On largebatch training for deep learning  Generalization gap and sharp minima  In International Conference
+on Learning Representations   
+
+Kingma  Diederik and Ba 
+
+Jimmy 
+method for stochastic optimization 
+arXiv   
+
+Adam 
+
+ 
+arXiv preprint
+
+Kingma  Diederik    and Ba  Jimmy  Adam    method for
+stochastic optimization  In International Conference on
+Learning Representations   
+
+Le  Quoc    Ngiam  Jiquan  Coates  Adam  Lahiri  Ahbik 
+Prochnow  Bobby  and Ng  Andrew    On optimization
+methods for deep learning  In Proceedings of the  th
+International Conference on Machine Learning   
+
+LeCun  Yann    Bottou    eon  Orr  Genevieve    and
+  uller  KlausRobert  Ef cient backprop  In Neural networks  Tricks of the trade  Springer   
+
+Liu  Dong   and Nocedal  Jorge  On the limited memory
+BFGS method for large scale optimization  Mathematical programming     
+
+Loshchilov  Ilya and Hutter  Frank  SGDR  stochastic gradient descent with restarts  In International Conference
+on Learning Representations   
+
+Martens  James  Deep learning via Hessianfree optimizaIn Proceedings of the  th International Confer 
+
+tion 
+ence on Machine Learning  pp     
+
+Martens  James and Sutskever  Ilya  Training deep and
+recurrent networks with Hessianfree optimization 
+In
+Neural networks  Tricks of the trade  pp   
+Springer   
+
+Orchard  Jeff and Wang  Lin  The evolution of   generalIn   International Joint
+ized neural learning rule 
+Conference on Neural Networks  IJCNN  pp   
+   
+
+Pascanu  Razvan and Bengio  Yoshua  Revisiting natarXiv preprint
+
+for deep networks 
+
+ural gradient
+arXiv   
+
+Pascanu  Razvan  Mikolov  Tomas  and Bengio  Yoshua 
+On the dif culty of training recurrent neural networks  In
+International Conference on Machine Learning   
+
+Ravi  Sachin and Larochelle  Hugo  Optimization as  
+In International Confer 
+
+model for fewshot learning 
+ence on Learning Representations   
+
+Riedmiller  Martin and Braun  Heinrich  RPROP     fast
+adaptive learning algorithm  In Proc  of ISCIS VII  Universitat  Citeseer   
+
+Runarsson  Thomas    and Jonsson  Magnus    Evolution
+and design of distributed learning rules  In IEEE Symposium on Combinations of Evolutionary Computation and
+Neural Networks   
+
+Schaul  Tom  Zhang  Sixin  and LeCun  Yann  No more
+pesky learning rates  In International Conference on Machine Learning   
+
+Schmidhuber  Juergen  Steps towards  selfreferential  neural learning    thought experiment  Technical report 
+University of Colorado Boulder   
+
+Schraudolph  Nicol    Fast curvature matrixvector products for secondorder gradient descent  Neural Computation     
+
+Schulman  John  Levine  Sergey  Abbeel  Pieter  Jordan 
+Michael    and Moritz  Philipp  Trust region policy
+optimization  In International Conference on Machine
+Learning  pp     
+
+Shazeer  Noam  Mirhoseini  Azalia  Maziarz  Krzysztof 
+Davis  Andy  Le  Quoc  Hinton  Geoffrey  and Dean 
+Jeff  Outrageously large neural networks  The sparselygated mixtureof experts layer  In International Conference on Learning Representations   
+
+Wichrowska  Olga  Maheswaranathan  Niru  Hoffman 
+Matthew    Colmenarejo  Sergio Gomez  Denil  Misha 
+de Freitas  Nando  and SohlDickstein  Jascha  Learned
+In International
+optimizers that scale and generalize 
+Conference on Machine Learning   
+
+Williams  Ronald    Simple statistical gradientfollowing
+algorithms for connectionist reinforcement learning  In
+Machine Learning   
+
+Wu  Yonghui  Schuster  Mike  Chen  Zhifeng  Le  Quoc   
+Norouzi  Mohammad  Macherey  Wolfgang  Krikun 
+Maxim  Cao  Yuan  Gao  Qin  Macherey  Klaus 
+Klingner  Jeff  Shah  Apurva  Johnson  Melvin  Liu 
+Xiaobing  Kaiser  Lukasz  Gouws  Stephan  Kato 
+Yoshikiyo  Kudo  Taku  Kazawa  Hideto  Stevens  Keith 
+Kurian  George  Patil  Nishant  Wang  Wei  Young  Cliff 
+Smith  Jason  Riesa  Jason  Rudnick  Alex  Vinyals 
+Oriol  Corrado  Greg  Hughes  Macduff  and Dean  Jeffrey  Google   neural machine translation system  Bridging the gap between human and machine translation 
+arXiv preprint arXiv   
+
+Zagoruyko  Sergey and Komodakis  Nikos  Wide residual
+
+networks  arXiv preprint arXiv   
+
+Zeiler  Matthew    Adadelta  an adaptive learning rate
+
+method  arXiv preprint arXiv   
+
+Neural Optimizer Search with Reinforcement Learning
+
+Zhang  Chiyuan  Bengio  Samy  Hardt  Moritz  Recht  Benjamin  and Vinyals  Oriol  Understanding deep learning
+requires rethinking generalization  In International Conference on Learning Representations   
+
+Zoph  Barret and Le  Quoc    Neural Architecture Search
+In International Confer 
+
+with reinforcement learning 
+ence on Learning Representations   
+
+

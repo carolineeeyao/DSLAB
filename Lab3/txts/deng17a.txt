@@ -1,0 +1,1083 @@
+Imageto Markup Generation with Coarseto Fine Attention
+
+Yuntian Deng   Anssi Kanervisto   Jeffrey Ling   Alexander    Rush  
+
+Abstract
+
+We present   neural encoderdecoder model to
+convert images into presentational markup based
+on   scalable coarseto ne attention mechanism 
+Our method is evaluated in the context of imageto LaTeX generation  and we introduce   new
+dataset of realworld rendered mathematical expressions paired with LaTeX markup  We show
+that unlike neural OCR techniques using CTCbased models  attentionbased approaches can
+tackle this nonstandard OCR task  Our approach outperforms classical mathematical OCR
+systems by   large margin on indomain rendered data  and  with pretraining  also performs
+well on outof domain handwritten data  To reduce the inference complexity associated with
+the attentionbased approaches  we introduce  
+new coarseto ne attention layer that selects  
+support region before applying attention 
+
+  Introduction
+Optical character recognition  OCR  is most commonly
+used to recognize natural language from an image  however  as early as the work of Anderson   there has
+been research interest in converting images into structured
+language or markup that de nes both the text itself and
+its presentational semantics  The primary target for this
+research is OCR for mathematical expressions  and how
+to handle presentational aspects such as sub and superscript notation  special symbols  and nested fractions  Belaid   Haton    Chan   Yeung    The most effective systems combine specialized character segmentation with grammars of the underlying mathematical layout
+language  Miller   Viola      prime example of this
+approach is the INFTY system that is used to convert printed
+mathematical expressions to LaTeX and other markup formats  Suzuki et al    Other  mostly proprietary sys 
+
+ Harvard University  University of Eastern Finland  Correspondence to  Yuntian Deng  dengyuntian seas harvard edu 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+tems  have competed on this task as part of the CROHME
+handwritten mathematics challenge  Mouchere et al   
+ 
+Problems like OCR that require joint processing of image
+and text data have recently seen increased research interest due to the re nement of deep neural models in these
+two domains  For instance  advances have been made in
+the areas of handwriting recognition  Ciresan et al   
+OCR in natural scenes  Jaderberg et al      Wang
+et al    and image caption generation  Karpathy   FeiFei    Vinyals et al    At   highlevel  each of
+these systems learn an abstract encoded representation of
+the input image which is then decoded to generate   textual
+output  In addition to performing quite well on standard
+tasks  these models are entirely data driven  which makes
+them adaptable to   wide range of datasets without requiring heavy preprocessing or domain speci   engineering 
+However  we note that tasks such as image captioning differ from the traditional mathematical OCR task in two respects   rst  unlike image captioning  the traditional OCR
+task assumes   leftto right ordering  so neural systems addressing this problem have primarily relied on Connectionist Temporal Classi cation  CTC   Graves et al    or
+strokebased approaches  Second  the image captioning
+task theoretically allows for systems to focus their attention anywhere  and thus does not directly test   system  
+ability to maintain consistent tracking with its attention 
+In this work  we explore the use of attentionbased imageto text models  Xu et al    for the problem of generating structured markup  We consider whether   supervised
+model can learn to produce correct presentational markup
+from an image  without requiring   textual or visual grammar of the underlying markup language  Our model incorporates   multilayer convolutional network over the image
+with an attentionbased recurrent neural network decoder 
+To adapt this model to the OCR problem and capture the
+document   layout  we also incorporate   new source encoder layer in the form of   multirow recurrent model as
+part of the encoder 
+Our modeling contributions are twofold  First  we show
+that assumptions like the leftto right ordering inherent in
+CTCbased models are not required for neural OCR  since
+generalpurpose encoders can provide the necessary track 
+
+Imageto Markup Generation with Coarseto Fine Attention
+
+Figure   Example of the model generating mathematical markup  The model generates one LaTeX symbol   at   time based on the
+input image    The gray lines highlight the       grid features   formed by the row encoder from the CNN   output  The dotted lines
+indicate the center of mass of   for each token  only nonstructural tokens are shown  The blue cell indicates the support set selected
+by the coarselevel attention for the symbol   while the red cells indicate its  nelevel attention  White space around the image has
+been trimmed for visualization  The actual size of the blue mask is       See http lstm seas harvard edu latex  for
+  complete interactive version of this visualization over the test set 
+
+ing for accurate attention  example shown in Figure  
+Second  in order to reduce attention computation overhead 
+we introduce   novel twolayer hardsoft approach to attention  which we call coarseto ne attention  inspired
+by coarseto ne inference  Raphael    from graphical models  Sparse memory and conditional computation
+with neural networks have also been explored with various
+levels of success in several previous works  Bengio et al 
+  Shazeer et al    Rae et al    Andrychowicz
+  Kurach    We demonstrate here that this coarseto 
+ ne method  when trained with REINFORCE  signi cantly
+reduces the overhead of attention  and leads to only   small
+drop in accuracy 
+To make these experiments possible  we also construct  
+new public dataset  IM LATEX    which consists of
+  large collection of rendered realworld mathematical expressions collected from published articles  This dataset
+provides   challenging testbed for the imageto markup
+task based on reconstructing mathematical markup from
+rendered images  originally written by scientists    model
+is trained to generate LaTeX markup with the goal of rendering to the exact source image 
+Experiments compare the output of the model with several research and commercial baselines  as well as ablations of these models  The full system for mathematical
+expression generation is able to reproduce the same image on more than   of realworld test examples  Additionally  the use of   multirow encoder leads to   signi cant increase in performance  We also experiment with
+training on   simulated handwritten version of the dataset
+to recognize handwritten textual expressions  Even with
+only   small indomain training set  the model is able to
+
+ Note that ideas with the same name have been proposed in
+previous work  Mei et al    albeit in   different formulation
+without the goal of reducing computation 
+
+ This dataset is based on the challenge originally proposed as
+
+an OpenAI Request for Research under the title Im Latex 
+
+produce over   exact match output  All data  models  and evaluation scripts are publicly available at http 
+ lstm seas harvard edu latex 
+
+  Problem  Imageto Markup Generation
+We de ne the imageto markup problem as converting  
+rendered source image to target presentational markup that
+fully describes both its content and layout  The source    
+consists of an image  The target     consists of   sequence
+of tokens         yT where   is the length of the output  and each   is   token in the markup language  The
+rendering is de ned by   possibly unknown  manyto one 
+compile function  compile  In practice this function may
+be quite complicated        browser  or illspeci ed      
+the LaTeX language 
+The supervised task is to learn to approximately invert the
+compile function using supervised examples of its behavior  We assume that we are given instances        with
+possibly differing dimensions and that  compile        
+for all training pairs         assuming possible noise 
+At test time  the system is given   raw input   rendered
+from groundtruth   
+It generates   hypothesis    that
+can then be rendered by the blackbox function     
+compile    Evaluation is done between    and         the
+aim is to produce similar rendered images while    may or
+may not be similar to the groundtruth markup   
+
+  Model
+Contrary to most past work on neural OCR  our model uses
+  full grid encoder over the input image  so that it can
+support non leftto right order in the generated markup 
+The base model is adapted from the encoder of Xu et al 
+  developed for image captioning  Notably  though 
+our model also includes   row encoder which helps the performance of the system 
+
+Imageto Markup Generation with Coarseto Fine Attention
+
+Row Encoder
+In image captioning  the CNN features are
+used as is  For OCR  however  it is important for the encoder to localize the relative positions within the source
+image  In past work this localization has been handled by
+CTC  which in effect partitions the source into regions  We
+instead implicitly allow the encoder to localize its input by
+running RNNs over each of the rows of CNN features  This
+extension turns out to be crucial for performance 
+Formally    recurrent neural network  RNN  is   parameterized function RNN that recursively maps an input vector
+and   hidden state to   new hidden state  At time    the hidden state is updated with an input vt in the following manner  ht   RNN ht  vt    with    an initial state  In
+practice there are many different variants of RNN  however  long shortterm memory networks  LSTMs   Hochreiter   Schmidhuber    have been shown to be very effective for most NLP tasks  For simplicity we will describe
+the model as an RNN  but all experiments use LSTM networks 
+In this model  the new feature grid   is created from
+   by running an RNN across each row of that input 
+Recursively for all rows                  and columns
+                 the new features are de ned as Vhw  
+RNN Vh    Vhw  In order to capture the sequential
+order information in vertical direction  we use   trainable
+initial hidden state Vh  for each row  which we refer to as
+positional embeddings 
+
+Decoder The target markup tokens  yt  are then generated by   decoder based only on the grid    The decoder
+is trained as   conditional language model to give the probability of the next token given the history and the annotations  This language model is de ned on top of   decoder
+RNN 
+
+  yt            yt       softmax Woutot 
+
+where ot   tanh Wc ht  ct  and Wout  Wc are learned
+linear transformations  The vector ht is used to summarize
+the decoding history  ht   RNN ht   yt  ot 
+The context vector ct is used to capture the context information from the annotation grid  We describe how to
+compute ct in the next section 
+
+  Attention in Markup Generation
+The accuracy of the model is dependent on being able to
+track the next current position of the image for generating markup  which is conveyed through an attentive context
+vector ct  Formally  we de ne   latent categorical variable
+zt                   to denote which cell the
+model is attending to  If we assume access to an attention
+distribution zt     zt  then the context is de ned as an
+
+Figure   Network structure  Given an input image    CNN is
+applied to extract   feature map     For each row in the feature
+map  we employ an RNN to encode spatial layout information 
+The encoded  ne features   are then used by an RNN decoder
+with   visual attention mechanism to produce  nal outputs  For
+clarity we only show the RNN encoding at the  rst row and the
+decoding at one step  In Section   we consider variants of the
+model where another CNN and row encoder are applied to the
+feature map to extract coarse features   cid  which are used to select
+  support region in the  negrained features  as indicated by the
+blue masks 
+
+The model  rst extracts image features using   convolutional neural network  CNN  and arranges the features in
+  grid  Each row is then encoded using   recurrent neural
+network  RNN  These encoded features are then used by
+an RNN decoder with   visual attention mechanism  The
+decoder implements   conditional language model over the
+vocabulary  and the whole model is trained to maximize
+the likelihood of the observed markup  The full structure is
+illustrated in Figure  
+
+Convolutional Network The visual features of an image
+are extracted with   multilayer convolutional neural network interleaved with maxpooling layers  This network
+architecture is now standard  we model it speci cally after the network used by Shi et al    for OCR from
+images  speci cation is given in Table   Unlike some recent OCR work  Jaderberg et al    Lee   Osindero 
+  we do not use  nal fullyconnected layers  Ioffe  
+Szegedy    since we want to preserve the locality of
+CNN features in order to use visual attention  The CNN
+takes the raw input and produces   feature grid    of size
+            where   denotes the number of channels and
+  and   are the resulted feature map height and width 
+
+Row EncoderDecoderx VRow EncoderVV Imageto Markup Generation with Coarseto Fine Attention
+
+expectation of source side features 
+
+ cid 
+
+ct  
+
+  zt         Vhw
+
+   
+
+In practice  the attention distribution is parameterized as
+part of the model  We consider three forms of attention 
+standard  hierarchical  and coarseto ne 
+
+Standard Attention In standard attention  Bahdanau
+et al    we use   neural network to approximate the
+attention distribution   zt 
+
+  zt    softmax   ht Vhw 
+
+where    is   neural network to produce unnormalized
+attention weights  Note there are different choices for
+    we follow past empirical work and use at      
+   tanh   ht     Vhw   Luong et al   
+Figure   shows an example of the attention distribution at
+each step of the model  Note several key properties about
+the attention distribution for the imageto text problem   
+It is important for the grid to be relatively small for attention to localize around the current symbol  For this reason
+we use    ne grid with   large   and       In practice  the
+support of the distribution is quite small as   single markup
+symbol is in   single region    As noted above  attention
+is run every time step and requires an expectation over all
+cells  Therefore the decoding complexity of such an attention mechanism is     HW   which can be prohibitive
+when applied to large images 
+
+Hierarchical Attention When producing   target symbol
+from an image  we can infer the rough region where it is
+likely to appear from the last generated symbol with high
+probability  In addition to the  ne grid  we therefore also
+impose   grid over the image  such that each cell belongs
+to   larger region  When producing the markup  we  rst
+attend to the coarse grid to get the relevant coarse cell   
+and then attend to the inside  ne cells to get the context
+vector    method known as hierarchical attention 
+For this problem  de ne   cid  as   coarse grid of size   cid   
+   cid  which we construct by running additional convolution
+and pooling layers and row encoders on top of     We
+also introduce   latent attention variable   cid   that indicates
+the parent level cell of the attended cell  and write   zt 
+    cid     zt   cid    where we  rst generate  
+coarselevel cell   cid   followed by    nelevel cell zt only
+from within it 
+We parameterize     cid    and   zt   cid    as part of the model 
+For     cid    we employ   standard attention mechanism over
+  cid  to approximate the probability in time     cid    cid  For
+the conditional   zt   cid    we also employ   standard attention mechanism to get as before  except that we only consider the  nelevel cells within coarselevel cell   cid    Note
+
+as   zt     cid 
+
+  cid 
+
+ 
+
+that computing   zt   cid    takes time     
+   cid    However to
+compute the   zt  even with this hierarchical attention  still
+requires   HW   as in standard attention 
+
+  cid   
+
+Coarseto Fine Attention Ideally we could consider  
+reduced set of possible coarse cells in hierarchical attention
+to reduce time complexity  Borrowing the name coarseto 
+ ne inference  Raphael    we experiment with methods to construct   coarse attention     cid    with   sparse support to reduce the number of  ne attention cells we consider  We use two different approaches for training this
+sparse coarse distribution 
+For the  rst approach we use sparsemax attention  Martins   Astudillo    where instead of using   softmax
+for     cid    at the coarselevel  we substitute   Euclidean projection onto the simplex  The sparsemax function is de 
+ ned as  sparsemax      argminq     cid     cid  where
+    is the probability simplex and   denotes the number of classes  The sparsemax function can be computed
+ef ciently and as   projection and can be shown to produce
+  sparser output than the standard softmax  If there are    
+nonzero entries returned by sparsemax  then the attention
+   cid    In
+time complexity for one step is     cid    cid         
+practice  we  nd     to be suitably small 
+For the second approach we use  hard  attention for   cid   
+an approach which has been shown to work in several image tasks  Xu et al    Mnih et al    Ba et al 
+  Here we take   hard sample from     cid    as opposed
+to considering the full distribution  Due to this stochasticity  the objective is no longer differentiable  However 
+stochastic networks can be trained using the REINFORCE
+algorithm  Williams    We pose the problem in the
+framework of reinforcement learning by treating   cid   as our
+agent   stochastic action at time   and the loglikelihood of
+the symbol produced as the reward rt  We aim to maximize the total expected reward Ez cid 
+   rt  or equivalently minimize the negative expected reward as our loss 
+For parameters   that precede the nondifferentiable   cid   in the
+stochastic computation graph  we backpropagate   gradient
+of the form rt     log     cid 
+  This gives us an unbiased estimate of the loss function gradient  Schulman et al   
+Since our decoder RNN takes previous context vectors as
+input at each time step  each action   cid   in uences later rewards rt  rt          rT   Hence  we assume   multiplicative
+discount rate of   for future rewards  and we use the reward
+
+ cid  
+
+  cid   
+
+  
+
+ 
+
+ 
+
+ rt  cid  
+
+     srs in place of rt 
+
+In practice  this gradient estimator is noisy and slow to converge  Following Xu et al    we include   moving
+average reward baseline for each timestep   that we update
+as bt    bt      rt  where   is   tunable learning rate 
+We subtract these baselines from our rewards to reduce the
+
+Imageto Markup Generation with Coarseto Fine Attention
+
+Conv
+
+Pool
+
+coarse features
+            bn
+            bn
+ ne features
+            bn
+            bn
+           
+            bn
+           
+           
+
+ 
+po       
+
+ 
+po       
+po       
+ 
+po       
+po       
+
+Table   CNN speci cation   Conv  convolution layer   Pool 
+maxpooling layer      number of  lters      kernel size     
+stride size      padding size   po     bn  with batch normalization  The sizes are in order  height  width 
+
+variance  giving  nal gradient update
+
+  
+ 
+
+   rt   bt      log     cid     
+
+ 
+
+ 
+
+At train time  we sample   cid   and update the network with
+stochastic gradients  At test time  we take an argmax over
+the coarselevel attentions to choose   cid    The attention time
+   cid     cid    cid 
+complexity for   single time step is thus     
+If we take   cid   
+HW  
+attention complexity per decoding step 
+
+ 
+    we get   
+
+      cid   
+
+ 
+
+ 
+
+  cid   
+
+  Dataset Construction
+To experiment on this task we constructed   new public
+dataset  IM LATEX    which collects   largecorpus
+of realworld mathematical expressions written in LaTeX 
+This dataset provides   dif cult testbed for learning how
+to reproduce naturally occurring rendered LaTeX markup 
+
+Corpus The IM LATEX   dataset provides  
+different LaTeX math equations along with rendered pictures  We extract formulas by parsing LaTeX sources of
+papers from tasks   and II of the   KDD cup  Gehrke
+et al    which contain over   papers 
+We extract formulas from the LaTeX sources with regular
+expressions  and only keep matches whose number of characters fall in the range from   to   to avoid single symbols or text sentences  With these settings we extract over
+  different formulas  out of which around  
+are rendered in   vanilla LaTeX environment  Rendering is
+done with pd atex  and formulas that fail to compile are excluded  The rendered PDF  les are then converted to PNG
+format  The  nal dataset we provide contains   images of resolution       and the corresponding LaTeX formulas 
+The dataset is separated into training set   equa 
+
+ LaTeX  version  
+  We use the ImageMagick convert tool with parameters
+
+ density    quality  
+
+tions  validation set   equations  and test set  
+equations  for   standardized experimental setup  The LaTeX formulas range from   to   characters  with mean
+  and median  
+
+Tokenization Training the model requires settling on  
+token set  One option is to use   purely characterbased
+model  While this method requires fewer assumptions 
+characterbased models would be signi cantly more memory intensive than wordbased models due to longer target
+sequences  Therefore original markup is simply split into
+minimal meaningful LaTeX tokens       for observed characters  symbols such as  sigma  modi er characters such
+as   functions  accents  environments  brackets and other
+miscellaneous commands 
+Finally we note that naturally occurring LaTeX contains
+many different expressions that produce identical output 
+We therefore experiment with an optional normalization
+step to eliminate spurious ambiguity  prior to training  For
+normalization  we wrote   LaTeX parser  to convert the
+markup to an abstract syntax tree  We then apply   set of
+safe normalizing tree transformation to eliminate common
+spurious ambiguity  such as  xing the order of subsuper 
+scripts and transforming matrices to arrays  Surprisingly
+we  nd this additional step gives only   small accuracy
+gain  and is not necessary for strong results 
+
+Synthetic Data for Handwriting Recognition Our main
+results focus on rendered markup  but we also considered
+the problem of recognizing handwritten math  As there is
+very little labeled data for this task  we also synthetized  
+handwritten corpus of the IM LATEX   dataset  We
+created this data set by replacing all individual symbols
+with handwritten symbols taken from Detexify   training
+data  We use the same set of formulas as in the original
+dataset  but when rendering each symbol we randomly pick
+  corresponding handwritten symbol from Detexify  An
+example of synthesized handwriting is shown in Figure  
+Note that although the images in this dataset look like handwritten formulas  they do not capture certain aspects such
+as varying baselines  Nagabhushan   Alaei    We use
+this dataset as   pretraining step for handwritten formulas
+recognition on   small labeled dataset 
+
+Figure   An example synthetic handwritten image from
+IM LATEX   dataset 
+
+ Based on KaTeX parser https khan github io 
+
+KaTeX 
+
+ http detexify kirelabs org classify html
+
+Imageto Markup Generation with Coarseto Fine Attention
+
+  Experiments
+Experiments compare the proposed model  which we refer to as IM TEX to classical OCR baselines  neural models  and model ablations on the imageto LaTeX task 
+We also compare the proposed model against commercial  OCRbased mathematical expression recognition system InftyReader  InftyReader is an implementation of the
+INFTY system of  Suzuki et al    combining symbol
+recognition and structural analysis phases 
+For neural models    natural comparison is to standard image captioning approaches  Xu et al    and CTCbased approaches  Shi et al    We simulate the image
+captioning setup with   model CAPTION which removes
+the row encoder       replacing   with     and increases
+the number of CNN  lters such that the number of parameters is the same  For CTC we use the implementation of
+Shi et al    designed for natural image OCR 
+To better understand the role of attention in the model 
+we run several baseline experiments with different attention styles  To examine if  nelevel features are necessary 
+we experiment with   standard attention system with the
+coarse feature maps only  coarseonly  and also with   twolayer hierarchical model  Additionally we experiment with
+different coarseto ne       mechanisms  hard reinforcement learning  and sparsemax 
+Finally  we run additional experiments comparing our approach to other models for handwritten mathematical expressions on the CROHME   and   shared tasks 
+The training set is same for both years  consisting of  
+training expressions  although teams also used external
+data  The dataset is in   different domain from our rendered images and is designed for strokebased OCR  To
+handle these differences  we employ two extensions   
+We convert the data to images by rendering the strokes
+and also augment data by randomly resizing and rotating
+symbols    We also employ the simulated IM LATEX 
+   handwriting dataset to pretrain   large outof domain
+model and then  netune it on this CROHME dataset 
+Our core evaluation method is to check the accuracy of the
+rendered markup output image    compared to the true image    The main evaluation reports exact match rendering between the gold and predicted images  and we additionally check the exact match accuracy with the original image as well as the value after eliminating whitespace
+columns  We also include standard intrinsic text generation metrics  conditional language model perplexity and
+BLEU score  Papineni et al    on both tokenized and
+normalized gold data 
+
+  In practice we found that the LaTeX renderer often misaligns
+identical expressions by several pixels  To correct for this  only
+misalignments of     pixels wide are  exact  match errors 
+
+  cid     
+
+Implementation Details The CNN speci cations are
+   cid      The
+summarized in Table   Note that  
+model uses singlelayer LSTMs for all RNNs  We use  
+bidirectional RNN for the encoder  The hidden state of
+the encoder RNN is of size   decoder RNN of   and
+token embeddings of size   The model with standard attention has   million parameters  and the models with
+hierarchical or coarseto ne attention have   million
+parameters due to the additional convolution layers and row
+encoders  We use minibatch stochastic gradient descent to
+learn the parameters 
+For the standard attention models  we use batch size of  
+The initial learning rate is set to   and we halve it once
+the validation perplexity does not decrease  We train the
+model for   epochs and use the validation perplexity to
+choose the best model  For the hierarchical and coarseto ne attention models  we use batch size of   For hard
+attention  we use the pretrained weights of hierarchical to
+initialize the parameters  Then we use initial learning rate
+  average reward baseline learning rate       reward discount rate      
+The complete model is trained endto end to maximize the
+likelihood of the training data  Beyond the training data 
+the model is given no other information about the markup
+language or the generating process  To generate markup
+from unseen images  we use beam search with beam size  
+at test time  No further hard constraints are employed 
+The system is built using Torch  Collobert et al   
+based on the OpenNMT system  Klein et al    Experiments are run on    GB Nvidia Titan   GPU  Maxwell 
+Original images are cropped to only the formula area  and
+padded with   pixels to the top  left  right and bottom  For
+ef ciency we downsample all images to half of their original sizes  To facilitate batching  we group images into similar sizes and pad with whitespace  All images of larger
+sizes  LaTeX formulas with more than   tokens  or those
+that cannot be parsed are ignored during training and validation  but included during testing 
+
+  Results
+The main experimental results  shown at the top of Table  
+compare different systems on the imageto markup task 
+The INFTY system is able to do quite well in terms of text
+accuracy  but performs poorly on exact match image metrics  The poor results of the neural CTC system validate
+our expectation that the strict leftto right order assumption is unsuitable in this case  Our reimplementation of im 
+
+  WidthHeight groups used are          
+                       
+                       
+                 
+
+Imageto Markup Generation with Coarseto Fine Attention
+
+Dataset
+
+Im latex  
+
+CROHME 
+
+CROHME 
+
+Model
+INFTY
+CTC
+CAPTION
+IM TEXTOK
+IM TEX
+IM TEX
+
+IM TEXC  
+
+MYSCRIPT 
+UPV
+  NATES
+TUAT
+IM TEX
+IM TEX
+IM TEXC  
+
+MYSCRIPT 
+  VALENCIA
+TUAT
+USP
+IM TEX
+IM TEX
+IM TEXC  
+
+Attention
+   
+   
+standard
+standard
+standard
+coarseonly
+hierarchical
+hard
+sparsemax
+   
+   
+   
+   
+standard
+hierarchical
+hard
+sparsemax
+   
+   
+   
+   
+standard
+hierarchical
+hard
+sparsemax
+
+BLEU  tok  BLEU  norm  Match Match  ws 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+Table    Top  Main experimental results on the IM LATEX   dataset  Reports the BLEU score compared to the tokenized formulas
+ BLEU  tok  BLEU score compared to the normalized formulas  BLEU  norm  exact match accuracy  and exact match accuracy after
+deleting whitespace columns  All systems except IM TEXTOK are trained on normalized data   Bottom  Results on the CROHME
+handwriting datasets  We list the best   systems in   and   competition  MyScript    Valencia  TUAT  USP  and MyScript  UPV 
+  Nates  TUAT  All Im Tex systems use outof domain synthetic data as well as the small given training set   Note that the proprietary
+MyScript system uses   large corpus of private indomain handwritten training data 
+
+Model
+NGRAM
+LSTMLM
+IM TEX
+IM TEX
+IM TEX
+IM TEXC    hard 
+
+Ablation
+
+ Enc
+ RowEnc
+ PosEmbed
+
+Train
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+
+Test Match
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+Table   Imageto LaTeX ablation experiments  Compares simple LM approaches and versions of the full model on train and test
+perplexity  and image match accuracy 
+
+age captioning CAPTION does better  pushing the number
+above   Our standard attention system IM TEX with
+RNN encoder increases this value above   achieving
+high accuracy on this task  The LaTeX normalizer provides
+  few points of accuracy gain and achieves high normalized
+BLEU  This indicates that the decoder LM is able to learn
+well despite the ambiguities in realworld LaTeX 
+We next compare the different hierarchical and coarseto 
+ ne extensions to the system  We  rst note that the use of
+the coarseonly system leads to   large drop in accuracy 
+
+indicating that  ne attention is crucial to performance  On
+the other hand  the high performance of hierarchical indicates that two layers of softattention do not hurt the performance of the model  Table   shows the average number
+of cells being attended to at both the coarse and  ne layers
+by each of the models  Both the hard REINFORCE system
+and sparsemax reduce lookups at   small cost in accuracy 
+Hard is the most aggressive  selecting   single coarse cell 
+Sparsemax achieves higher accuracy  at the cost of selecting multiple coarse cells  Depending on the application 
+these are both reasonable alternatives to reduce the number
+of lookups in standard attention 
+Our  nal experiments look at the CROHME   and  
+datasets  which were designed as   stroke recognition task 
+but are the closest existing dataset to our task  For this
+dataset we  rst train with our synthetic handwriting dataset
+and then  netune on the CROHME training set  We  nd
+our models achieve comparable performance to all best systems excepting MyScript    commercial system with access to additional indomain data  Note that our synthetic
+dataset does not contain variation in baselines  font sizes 
+
+Imageto Markup Generation with Coarseto Fine Attention
+
+Model
+IM TEX
+
+IM TEXC  
+
+Attn
+standard
+coarseonly
+hierarchical
+hard
+sparsemax
+
+   
+ 
+ 
+ 
+ 
+ 
+
+    Match
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Table   Average number of coarse     and  ne     attention computations for all models throughout the test set  standard
+and hierarchical provide an upperbound and coarseonly   lowerboard  whereas hard always does the minimal            ne
+lookups  Test accuracy is shown for ease of comparison 
+
+or other noise  which are common in real data  We expect
+increased performance from the system when trained with
+wellengineered data  For these datasets we also use the hierarchical and coarseto ne models  and  nd that they are
+similarly effective  Interestingly  contrary to the full data
+for some problems hard performs better than sparsemax 
+
+Analysis To better understand the contribution of each
+part of the standard IM TEX model  we run ablation experiments removing different features from the model  which
+are shown in Table   The simplest model is   basic  nonconditional  NGRAM LM on LaTeX which achieves   perplexity of around   Simply switching to an LSTMLM reduces the value to   likely due to its ability to count parentheses and nestinglevels  These values are quite low  indicating strong regularity just in the LaTeX alone  Adding
+back the image data with   CNN further reduces the perplexity down to   Adding the encoder LSTM adds  
+small gain to   but makes   large difference in  nal accuracy  Adding the positional embeddings  trainable initial
+states for each row  provides   tiny gain  Hard attention
+leads to   small increase in perplexity  We also consider
+the effect of training data on performance  Figure   shows
+accuracy of the system with different training set size using standard attention  As with many neural systems  the
+model is quite data hungry  In order for the model to reach
+    accuracy  at least    training examples are needed 
+Finally Figure   illustrates several common errors  Qualitatively the system is quite accurate on dif cult LaTeX
+constructs  Typically the structure of the expression is preserved with one or two symbol recognition errors  We  nd
+that the most common presentationaffecting errors come
+from font or sizing issues  such as using small parentheses
+instead of large ones  using standard math font instead of
+escaping or using mathcal 
+
+  Conclusion
+We have presented   visual attentionbased model for OCR
+of presentational markup  We also introduce   new dataset
+IM LATEX   that provides   testbed for this task  In
+
+Figure   Test accuracy  Match  of the model        training set
+size 
+
+order to reduce the attention complexity  we propose  
+coarseto ne attention layer  which selects   region by using   coarse view of the image  and use the  negrained
+cells within  These contributions provide   new view on the
+task of structured text OCR  and show datadriven models
+can be effective without any knowledge of the language 
+The coarseto ne attention mechanism is general and directly applicable to other domains  including applying the
+proposed coarseto ne attention layer to other tasks such
+as document summarization  or combining the proposed
+model with neural inference machines such as memory networks 
+
+Figure   Typical reconstruction errors on aligned images  Red
+denotes gold image and blue denotes generated image 
+
+Acknowledgements
+
+We would like to thank Daniel Kirsch for providing us Detexify
+data  and Sam Wiseman and Yoon Kim for the helpful feedback
+on this paper  This research is supported by   Bloomberg Data
+Science Research Award 
+
+Imageto Markup Generation with Coarseto Fine Attention
+
+References
+Anderson  Robert    Syntaxdirected recognition of handprinted twodimensional mathematics  In Symposium on
+Interactive Systems for Experimental Applied Mathematics  Proceedings of the Association for Computing Machinery Inc  Symposium  pp    ACM   
+
+Andrychowicz  Marcin and Kurach  Karol  Learning Ef 
+ cient Algorithms with Hierarchical Attentive Memory 
+CoRR  abs   
+
+Ba  Jimmy  Mnih  Volodymyr  and Kavukcuoglu  Koray 
+Multiple Object Recognition with Visual Attention  Proceedings of the International Conference on Learning
+Representations  ICLR   
+
+Bahdanau  Dzmitry  Cho  Kyunghyun  and Bengio 
+Yoshua  Neural machine translation by jointly learning
+to align and translate  arXiv preprint arXiv 
+ 
+
+Belaid  Abdelwaheb and Haton  JeanPaul    syntactic approach for handwritten mathematical formula recogniIEEE Transactions on Pattern Analysis and Mation 
+chine Intelligence     
+
+Bengio  Emmanuel  Bacon  PierreLuc  Pineau  Joelle  and
+Precup  Doina  Conditional Computation in Neural Networks for faster models  CoRR  abs   
+URL http arxiv org abs 
+
+Chan  KamFai and Yeung  DitYan  Mathematical expression recognition    survey  IJDAR      doi 
+ PL  URL http dx doi org 
+ PL 
+
+Ciresan  Dan Claudiu  Meier  Ueli  Gambardella 
+Luca Maria  and Schmidhuber    urgen  Deep  big  simple neural nets for handwritten digit recognition  Neural
+computation     
+
+Collobert  Ronan  Kavukcuoglu  Koray  and Farabet 
+Cl ement  Torch    matlablike environment for maIn BigLearn  NIPS Workshop  number
+chine learning 
+EPFLCONF   
+
+Gehrke  Johannes  Ginsparg  Paul  and Kleinberg  Jon 
+Overview of the   kdd cup  ACM SIGKDD Explorations Newsletter     
+
+Graves  Alex  Fern andez  Santiago  Gomez  Faustino  and
+Schmidhuber    urgen  Connectionist temporal classi 
+cation  labelling unsegmented sequence data with recurrent neural networks  In Proceedings of the  rd international conference on Machine learning  pp   
+ACM   
+
+Hochreiter  Sepp and Schmidhuber    urgen  Long shortterm memory  Neural computation   
+ 
+
+Ioffe  Sergey and Szegedy  Christian  Batch normalization 
+Accelerating deep network training by reducing internal
+covariate shift  In Proceedings of The  nd International
+Conference on Machine Learning  pp     
+
+Jaderberg  Max  Simonyan  Karen  Vedaldi  Andrea  and
+Zisserman  Andrew  Deep structured output learning for
+unconstrained text recognition  ICLR   
+
+Jaderberg  Max  Simonyan  Karen  Vedaldi  Andrea  and
+Zisserman  Andrew  Reading text in the wild with convolutional neural networks  International Journal of Computer Vision     
+
+Karpathy  Andrej and FeiFei  Li  Deep visualsemantic
+In Proalignments for generating image descriptions 
+ceedings of the IEEE Conference on Computer Vision
+and Pattern Recognition  pp     
+
+Klein  Guillaume  Kim  Yoon  Deng  Yuntian  Senellart 
+Jean  and Rush  Alexander    Opennmt  Opensource
+toolkit for neural machine translation  arXiv preprint
+arXiv   
+
+Lee  ChenYu and Osindero  Simon  Recursive recurrent
+nets with attention modeling for ocr in the wild  arXiv
+preprint arXiv   
+
+Luong  MinhThang  Pham  Hieu  and Manning  Christopher    Effective approaches to attentionbased neural
+machine translation  EMNLP   
+
+Martins  Andr   FT and Astudillo  Ram on Fernandez  From
+softmax to sparsemax    sparse model of attention and
+multilabel classi cation  CoRR  abs   
+
+Mei  Hongyuan  Bansal  Mohit  and Walter  Matthew   
+What to talk about and how  Selective Generation using
+LSTMs with Coarseto Fine Alignment  Proceedings of
+NAACLHLT  pp     
+
+Miller  Erik   and Viola  Paul    Ambiguity and constraint
+in mathematical expression recognition  In AAAI IAAI 
+pp     
+
+Mnih  Volodymyr  Heess  Nicolas  Graves  Alex  and koray Kavukcuoglu  Recurrent models of visual attention 
+Advances in Neural Information Processing Systems  pp 
+   
+
+Mouchere  Harold  ViardGaudin  Christian  Zanibbi 
+Richard  Garain  Utpal  Kim  Dae Hwan  and Kim 
+Jin Hyung  Icdar   crohme  Third international competition on recognition of online handwritten mathematical expressions  In    th International Conference
+
+Imageto Markup Generation with Coarseto Fine Attention
+
+Suzuki  Masakazu  Tamari  Fumikazu  Fukuda  Ryoji 
+Uchida  Seiichi  and Kanahori  Toshihiro  Infty  an integrated ocr system for mathematical documents  In Proceedings of the   ACM symposium on Document engineering  pp    ACM   
+
+Vinyals  Oriol  Toshev  Alexander  Bengio  Samy  and Erhan  Dumitru  Show and tell    neural image caption
+In Proceedings of the IEEE Conference on
+generator 
+Computer Vision and Pattern Recognition  pp   
+   
+
+Wang  Tao  Wu  David    Coates  Andrew  and Ng  Andrew    Endto end text recognition with convolutional
+neural networks  In Pattern Recognition  ICPR   
+ st International Conference on  pp    IEEE 
+ 
+
+Williams  Ronald    Simple statistical gradientfollowing
+learning 
+
+algorithms for connectionist reinforcement
+Machine learning     
+
+Xu  Kelvin  Ba  Jimmy  Kiros  Ryan  Cho  Kyunghyun 
+Courville  Aaron  Salakhudinov  Ruslan  Zemel  Rich 
+and Bengio  Yoshua  Show  attend and tell  Neural image caption generation with visual attention  In Proceedings of The  nd International Conference on Machine
+Learning  pp     
+
+on Document Analysis and Recognition  pp   
+IEEE   
+
+Mouchere  Harold  ViardGaudin  Christian  Zanibbi 
+Richard  and Garain  Utpal  Icfhr   competition on
+recognition of online handwritten mathematical expressions  crohme   In Frontiers in handwriting recognition  icfhr     th international conference on  pp 
+  IEEE   
+
+Nagabhushan    and Alaei  Alireza  Tracing and straightening the baseline in handwritten persian arabic textline 
+  new approach based on paintingtechnique  International Journal on Computer Science and Engineering   
+   
+
+Papineni  Kishore  Roukos  Salim  Ward  Todd  and Zhu 
+WeiJing  Bleu    method for automatic evaluation of
+In Proceedings of the  th anmachine translation 
+nual meeting on association for computational linguistics  pp    Association for Computational Linguistics   
+
+Rae  Jack  Hunt  Jonathan    Danihelka  Ivo  Harley  Timothy  Senior  Andrew    Wayne  Gregory  Graves  Alex 
+and Lillicrap  Tim  Scaling MemoryAugmented Neural
+Networks with Sparse Reads and Writes  In Lee      
+Sugiyama     Luxburg       Guyon     and Garnett   
+ eds  Advances in Neural Information Processing Systems   Curran Associates  Inc   
+
+Raphael  Christopher  Coarseto ne dynamic programming  IEEE Transactions on Pattern Analysis and Machine Intelligence     
+
+Schulman  John  Heess  Nicolas  Weber  Theophane  and
+Abbeel  Pieter  Gradient estimation using stochastic
+computation graphs  In Advances in Neural Information
+Processing Systems  pp     
+
+Shazeer  Noam  Mirhoseini  Azalia  Maziarz  Krzysztof 
+Davis  Andy  Le  Quoc  Hinton  Geoffrey  and Dean 
+Jeff 
+the
+SparselyGated Mixtureof Experts Layer  Proceedings
+of the International Conference on Learning Representations  ICLR   
+
+Outrageously Large Neural Networks 
+
+Shi  Baoguang  Bai  Xiang  and Yao  Cong  An endto 
+end trainable neural network for imagebased sequence
+recognition and its application to scene text recognition 
+arXiv preprint arXiv   
+
+Shi  Baoguang  Bai  Xiang  and Yao  Cong  An endto 
+end trainable neural network for imagebased sequence
+recognition and its application to scene text recognition 
+IEEE Transactions on Pattern Analysis and Machine Intelligence   
+
+

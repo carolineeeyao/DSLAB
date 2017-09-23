@@ -1,0 +1,1135 @@
+Maxvalue Entropy Search for Ef cient Bayesian Optimization
+
+Zi Wang   Stefanie Jegelka  
+
+Abstract
+
+Entropy Search  ES  and Predictive Entropy
+Search  PES  are popular and empirically successful Bayesian Optimization techniques  Both
+rely on   compelling informationtheoretic motivation  and maximize the information gained
+about the arg max of the unknown function  yet 
+both are plagued by the expensive computation
+for estimating entropies  We propose   new criterion  Maxvalue Entropy Search  MES  that instead uses the information about the maximum
+function value  We show relations of MES to
+other Bayesian optimization methods  and establish   regret bound  We observe that MES
+maintains or improves the good empirical performance of ES PES  while tremendously lightening the computational burden  In particular  MES
+is much more robust to the number of samples
+used for computing the entropy  and hence more
+ef cient for higher dimensional problems 
+
+  Introduction
+Bayesian optimization  BO  has become   popular and effective way for blackbox optimization of nonconvex  expensive functions in robotics  machine learning  computer
+vision  and many other areas of science and engineering
+ Brochu et al    Calandra et al    Krause   Ong 
+  Lizotte et al    Snoek et al    Thornton
+et al    Wang et al    In BO    prior is posed on
+the  unknown  objective function  and the uncertainty given
+by the associated posterior is the basis for an acquisition
+function that guides the selection of the next point to query
+the function  The selection of queries and hence the acquisition function is critical for the success of the method 
+Different BO techniques differ in this acquisition function 
+
+ Computer Science and Arti cial Intelligence Laboratory 
+Massachusetts Institute of Technology  Massachusetts  USA  Correspondence to  Zi Wang  ziw csail mit edu  Stefanie Jegelka
+ stefje csail mit edu 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+Among the most popular ones range the Gaussian process
+upper con dence bound  GPUCB   Auer    Srinivas
+et al    probability of improvement  PI   Kushner 
+  and expected improvement  EI   Mo ckus   
+Particularly successful recent additions are entropy search
+ ES   Hennig   Schuler    and predictive entropy
+search  PES   Hern andezLobato et al    which aim
+to maximize the mutual information between the queried
+points and the location of the global optimum 
+ES and PES are effective in the sense that they are queryef cient and identify   good point within competitively few
+iterations  but determining the next query point involves
+very expensive computations  As   result  these methods
+are most useful if the blackbox function requires   lot of
+effort to evaluate  and are relatively slow otherwise  Moreover  they rely on estimating the entropy of the arg max of
+the function  In high dimensions  this estimation demands
+  large number of samples from the input space  which can
+quickly become inef cient 
+We propose   twist to the viewpoint of ES and PES that retains the informationtheoretic motivation and empirically
+successful queryef ciency of those methods  but at   much
+reduced computational cost  The key insight is to replace
+the uncertainty about the arg max with the uncertainty
+about the maximum function value  As   result  we refer
+to our new method as Maxvalue Entropy Search  MES 
+As opposed to the arg max  the maximum function value
+lives in   onedimensional space  which greatly facilitates
+the estimation of the mutual information via sampling  We
+explore two strategies to make the entropy estimation ef 
+ cient  an approximation by   Gumbel distribution  and  
+Monte Carlo approach that uses random features 
+Our contributions are as follows    MES    variant of
+the entropy search methods  which enjoys ef cient computation and simple implementation    an intuitive analysis which establishes the  rst connection between ES PES
+and the previously proposed criteria GPUCB  PI and
+EST  Wang et al    where the bridge is formed by
+MES      regret bound for   variant of MES  which  to
+our knowledge  is the  rst regret bound established for any
+variant of the entropy search methods    an extension of
+MES to the high dimensional settings via additive Gaussian processes  and   empirical evaluations which demon 
+
+Maxvalue Entropy Search for Ef cient Bayesian Optimization
+
+strate that MES identi es good points as quickly or better
+than ES PES  but is much more ef cient and robust in estimating the mutual information  and therefore much faster
+than its inputspace counterparts 
+After acceptance of this work  we learned that Hoffman  
+Ghahramani   independently arrived at the acquisition function in Eq    Yet  our approximation  Eq   
+is different  and hence the actual acquisition function we
+evaluate and analyze is different 
+
+  Background
+Our goal is to maximize   blackbox function          
+where     Rd and   is compact  At time step    we select
+point xt and observe   possibly noisy function evaluation
+yt      xt        where            are        Gaussian variables  We use Gaussian processes  Rasmussen  
+Williams    to build   probabilistic model of the blackbox function to be optimized  For high dimensional cases 
+we use   variant of the additive Gaussian process  Duvenaud et al    Kandasamy et al    For completeness  we here introduce some basics of GP and addGP 
+
+  Gaussian Processes
+
+Gaussian processes  GPs  are distributions over functions 
+and popular priors for Bayesian nonparametric regression 
+In   GP  any  nite set of function values has  
+multivariate Gaussian distribution    Gaussian process
+GP      is fully speci ed by   mean function    
+and covariance  kernel  function        cid 
+Let   be
+  function sampled from GP      Given the observations Dt              
+    we obtain the posterior mean
+        kt     Kt      yt and posterior covariance
+kt      cid           cid  kt     Kt      kt   cid  of the
+function via the kernel matrix Kt      xi  xj xi xj Dt
+and kt         xi    xi Dt  Rasmussen   Williams 
+  The posterior variance is  
+
+        kt      
+
+  Additive Gaussian Processes
+
+Additive Gaussian processes  addGP  were proposed
+in  Duvenaud et al    and analyzed in the BO setting in  Kandasamy et al   
+Following the latter  we assume that the function   is   sum of independent functions sampled from Gaussian processes that
+are active on disjoint sets Am of input dimensions  Prem       xAm  with Ai   Aj  
+  for all  
+    
+   Ai       and        
+GP          for all                 
+As   result of this decomposition 
+the function   is
+       
+Given   set of noisy observations Dt              
+where                  
+
+cisely           cid  
+distributed according to GP  cid  
+
+      cid  
+
+   
+the posterior mean and
+
+ cid    
+
+ 
+
+ 
+
+          
+
+      cid             cid        
+
+covariance of
+inferred as    
+and     
+       
+ 
+and Kt  
+we use the shorthand          cid        xAm    cid Am 
+
+the function component       can be
+     Kt      yt
+     Kt  
+           xi    xi Dt
+  For simplicity 
+
+   cid  where     
+       xi  xj 
+
+ 
+
+ cid cid  
+
+xi xj Dt
+
+ 
+
+ cid 
+
+ 
+
+  Evaluation Criteria
+
+We use two types of evaluation criteria for BO  simple regret and inference regret 
+In each iteration  we
+choose to evaluate one input xt to  learn  where the
+arg max of the function is  The simple regret rT  
+maxx           maxt        xt  measures the value of
+the best queried point so far  After all queries  we may
+infer an arg max of the function  which is usually chosen
+as  xT   arg maxx           Hennig   Schuler   
+Hern andezLobato et al    We denote the inference
+regret as RT   maxx              xT   which characterizes how satisfying our inference of the arg max is 
+
+  Maxvalue Entropy Search
+Entropy search methods use an informationtheoretic perspective to select where to evaluate  They  nd   query
+point that maximizes the information about the location
+     arg maxx         whose value            achieves
+the global maximum of the function    Using the negative
+differential entropy of     Dt  to characterize the uncertainty about    ES and PES use the acquisition functions
+                     Dt 
+
+ 
+            Dt                Dt           
+          Dt                  Dt         
+ 
+
+ES uses formulation   in which the expectation is over
+    Dt     while PES uses the equivalent  symmetric formulation   where the expectation is over     Dt  Unfortunately  both     Dt  and its entropy is analytically
+intractable and have to be approximated via expensive computations  Moreover  the optimum may not be unique 
+adding further complexity to this distribution 
+We follow the same informationtheoretic idea but propose
+  much cheaper and more robust objective to compute  Instead of measuring the information about the argmax   
+we use the information about the maximum value     
+      Our acquisition function is the gain in mutual information between the maximum    and the next point we
+query  which can be approximated analytically by evaluating the entropy of the predictive distribution 
+                     Dt 
+          Dt                 Dt       
+
+ 
+ 
+
+ cid 
+
+    
+
+   
+ 
+
+ cid               
+
+       
+
+ cid 
+  log       
+
+ 
+
+Maxvalue Entropy Search for Ef cient Bayesian Optimization
+
+     
+
+where   is the probability density function and   the cumulative density function of   normal distribution  and
+                
+  The expectation in Eq    is over
+    Dn  which is approximated using Monte Carlo estimation by sampling   set of   function maxima  Notice
+that the probability in the  rst term     Dt     is   Gaussian distribution with mean       and variance kt      
+The probability in the second term     Dn        is  
+truncated Gaussian distribution  given    the distribution
+of   needs to satisfy       
+Importantly  while ES
+and PES rely on the expensive  ddimensional distribution
+    Dt  here  we use the onedimensional     Dn 
+which is computationally much easier 
+It may not be immediately intuitive that the value should
+bear suf cient information for   good search strategy  Yet 
+the empirical results in Section   will demonstrate that this
+strategy is typically at least as good as ES PES  From  
+formal perspective  Wang et al    showed how an estimate of the maximum value implies   good search strategy
+ EST  Indeed  Lemma   will make the relation between
+EST and   simpler  degenerate version of MES explicit 
+Hence  it remains to determine how to sample    We
+propose two strategies    sampling from an approximation via   Gumbel distribution  and   sampling functions
+from the posterior Gaussian distribution and maximizing
+the functions to obtain samples of    We present the MES
+algorithm in Alg   
+
+  Gumbel Sampling
+
+The marginal distribution of       for any   is   onedimensional Gaussian  and hence the distribution of    may
+be viewed as the maximum of an in nite collection of dependent Gaussian random variables  Since this distribution
+is dif cult to compute  we make two simpli cations  First 
+we replace the continuous set   by   discrete  nite  dense
+subset    of representative points  If we select    to be an  
+cover of   and the function   is Lipschitz continuous with
+constant    then we obtain   valid upper bound on       by
+adding    to any upper bound on        
+Second  we use    mean  eld  approximation and treat the
+function values at the points in    as independent  This approximation tends to overestimate the maximum  this follows from Slepian   lemma if        cid      Such upper
+bounds still lead to optimization strategies with vanishing
+regret  whereas lower bounds may not  Wang et al   
+We sample from the approximation      Dn  via its cu 
+
+mulative distribution function  CDF   cid Pr          
+ cid 
+
+            That means we sample   uniformly from
+
+Algorithm   Maxvalue Entropy Search  MES 
+  function MES       
+for           do
+ 
+ 
+ 
+ 
+ 
+ 
+  end function
+
+     APPROXMI  Dt 
+xt   arg maxx        
+yt      xt                  
+Dt   Dt     xt  yt 
+
+end for
+
+else
+
+if Sample with Gumbel then
+
+approximate Pr         with        
+sample   Klength vector     Unif   
+           log  log   
+for           do
+sample      GP     kt   Dt 
+       maxx  
+
+      
+
+  function ApproxMI  Dt 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+  end function
+
+end if
+return     in Eq   
+
+end for
+           
+
+  
+
+ 
+
+Gumbel distribution   cid Pr                        
+
+    and  nd   such that Pr                binary search
+for   to accuracy   requires   log  
+    queries to the CDF 
+and each query takes            nd  time  so we obtain
+an overall time of          log  
+    for drawing   samples 
+To sample more ef ciently  we propose        
+      log  
+   time strategy  by approximating the CDF by  
+     
+ 
+This choice is motivated by the FisherTippett Gnedenko
+theorem  Fisher    which states that the maximum of
+  set of        Gaussian variables is asymptotically described
+by   Gumbel distribution  see the appendix for further details  This does not in general extend to noni      Gaussian variables  but we nevertheless observe that in practice 
+this approach yields   good and fast approximation 
+We sample from the Gumbel distribution via the Gumbel
+quantile function  we sample   uniformly from     and
+let the sample be                     log  log   
+We set the appropriate Gumbel distribution parameters  
+and   by percentile matching and solve the twovariable
+linear equations       log  log         and    
+  log  log         where Pr              and
+Pr             
+In practice  we use        and
+       so that the scale of the approximated Gumbel
+distribution is proportional to the interquartile range of the
+CDF  Pr        
+
+Maxvalue Entropy Search for Ef cient Bayesian Optimization
+
+ cid   
+
+  Sampling    via Posterior Functions
+For an alternative sampling strategy we follow  Hern andezLobato et al    we draw functions from the posterior GP and then maximize each of the sampled functions 
+Given the observations Dt              
+    we can approximate the posterior Gaussian process using    hiddent     where       RD
+layer neural network          aT
+is   vector of feature functions  Neal    Rahimi et al 
+  and the Gaussian weight at   RD is distributed according to   multivariate Gaussian          
+Computing    
+By Bochner   theorem  Rudin 
+the Fourier transform    of   continuous and
+ 
+translationinvariant kernel   is guaranteed to be   probHence we can write the kernel
+ability distribution 
+of the GP to be        cid     
+   ei       cid   
+Ec         cos Tx      cos Tx cid       and approximate the expectation by        cid           cid  where
+      ci         and ci  
+       
+      for                 
+Computing         By writing the GP as   random linear
+      we are de ncombination of feature functions aT
+ing the mean and covariance of the GP to be        
+      and        cid             cid  Let    
+      zt    RD    where              RD  The
+GP posterior mean and covariance in Section   become
+        zTZ ZTZ      yt and kt      cid    zTz cid   
+zTZ ZTZ      ZTz cid  Because   ZTZ        
+ ZZT      we can simplify the above equations and
+obtain       tZtyt and       ZZT      
+To sample   function from this random  hiddenlayer neural network  we sample    from           and construct
+the sampled function       aT    Then we optimize   
+with respect to its input to get   sample of the maximum of
+the function maxx  
+
+  cos  
+
+      
+
+  Relation to Other BO Methods
+
+As   side effect  our new acquisition function draws connections between ES PES and other popular BO methods 
+The connection between MES and ES PES follows from
+the informationtheoretic viewpoint  the following lemma
+makes the connections to other methods explicit 
+Lemma   The following methods are equivalent 
+
+  MES  where we only use   single sample    for      
+  EST with       
+  GPUCB with    
+  PI with       
+
+    minx  
+
+      
+
+     
+
+ 
+
+Proof  The equivalence among   is stated in Lemma
+  in  Wang et al    What remains to be shown
+is the equivalence between   and   When using   single    in MES  the next point to evaluate is chosen by
+          log       
+maximizing                        
+and             
+  For EST with        the next
+point to evaluate is chosen by minimizing         Let us
+      log    Clearly 
+de ne   function             
+                 Because      is   monotonically decreasing function  maximizing          is equivalent to
+minimizing         Hence   and   are equivalent 
+
+     
+
+  Regret Bound
+
+The connection with EST directly leads to   bound on the
+simple regret of MES  when using only one sample of   
+We prove Theorem   in the appendix 
+Theorem   Let   be the cumulative probability distribution for the maximum of any function   sampled from
+GP      over the compact search space     Rd  where
+       cid          cid       Let      maxx         and
+                and assume the observation noise is
+iid       If in each iteration    the query point is chosen
+ yt       log yt     
+as xt   arg maxx    yt     
+with probability at least       in    cid     cid  
+where  yt        yt     
+and yt  is drawn from     then
+ 
+  
+ cid 
+
+number of iterations  the simple regret satis es
+
+   logw
+
+ yt     
+
+     
+
+rT  cid   
+
+   
+
+ 
+
+          
+
+ 
+
+satis es cid  
+
+where       log      and        log    
+
+     
+      and        and      arg maxt   
+with     cid  minx   yt     yt      and    is the maximum
+information gain of at most   selected points 
+
+    
+
+     
+
+  Model Adaptation
+
+In practice we do not know the hyperparameters of the GP 
+so we must adapt our GP model as we observe more data 
+  standard way to learn the GP hyperparameters is to optimize the marginal data likelihood with respect to the hyperparameters  As   full Bayesian treatment  we can also draw
+samples of the hyperparameters using slice sampling  Vanhatalo et al    and then marginalize out the hyperparameters in our acquisition function in Eq    Namely 
+if we use   to denote the set of sampled settings for the GP
+hyperparameters  our acquisition function becomes
+
+This equivalence no longer holds if we use       samples
+of    in MES 
+
+       
+
+      
+ 
+
+      
+
+      
+
+  log 
+
+      
+
+ 
+
+ cid   
+
+ cid 
+
+ cid 
+
+  
+
+    
+
+ cid 
+
+Maxvalue Entropy Search for Ef cient Bayesian Optimization
+
+     
+
+           
+and the posterior inference on
+where  
+ 
+     
+the mean function  
+  and  
+  depends on the GP hyperparameter setting   Similar approaches have been used
+in  Hern andezLobato et al    Snoek et al   
+
+  High Dimensional MES with AddGP
+The highdimensional input setting has been   challenge
+for many BO methods  We extend MES to this setting via
+additive Gaussian processes  AddGP  In the past  AddGP has been used and analyzed for GPUCB  Kandasamy
+et al    which assumed the high dimensional blackbox function is   summation of several disjoint lower dimensional functions  Utilizing this special additive structure  we overcome the statistical problem of having insuf 
+cient data to recover   complex function  and the dif culty
+of optimizing acquisition functions in high dimensions 
+Since the function components       are independent  we
+can maximize the mutual information between the input in
+the active dimensions Am and maximum of       for each
+component separately  Hence  we have   separate acquisition function for each component  where      is the evaluation of      
+
+ 
+
+        xAm           
+
+   
+             Dt  xAm  
+
+  Dt 
+
+ 
+
+ 
+
+               Dt  xAm      
+
+ 
+
+   
+      
+
+   
+   
+
+      
+      
+
+  log   
+
+        
+
+   cid 
+
+    
+
+   
+
+  Analogously to the non 
+
+                 
+where    
+ 
+   
+   
+additive case  we sample     
+  separately for each function
+component  We select the  nal xt by choosing   subvector
+  arg maxx   Am    
+    
+      and concatenating
+ 
+the components 
+
+ 
+
+ 
+
+Sampling      with   Gumbel distribution  The Gumbel sampling from Section   directly extends to sampling     
+  approximately  We simply need to sam 
+      
+    and use the same Gumbel approxi 
+
+ple from the componentwise CDF  cid Pr     
+ cid 
+
+         
+
+ 
+
+mation 
+
+via posterior functions  The additive
+Sampling     
+structure removes some connections on the inputto hidden
+layer of our  hiddenlayer neural network approximation
+ cid   
+         aT
+      Namely  for each feature function   there
+exists   unique group   such that   is only active on xAm 
+  cos TxAm      where   Am   cid     
+and      
+
+ 
+
+    and           Similar to the nonadditive
+case  we may draw   posterior sample at            
+where       tZtyt and       ZZT      
+Let Bm              is active on xAm  The posterior
+sample for the function component       is           
+   Bm xAm  Then we can maximize        to ob 
+ aBm
+tain   sample for     
+The algorithm for the additive maxvalue entropy search
+method  addMES  is shown in Algorithm   The function
+APPROXMI does the precomputation for approximating
+the mutual information in   similar way as in Algorithm  
+except that it only acts on the active dimensions in the mth
+group 
+
+ 
+
+for           do
+
+Algorithm   Additive Maxvalue Entropy Search
+  function AddMES       
+ 
+for           do
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+  end function
+
+    APPROXMI  Dt 
+   
+    arg maxxAm XAm    
+xAm
+end for
+yt      xt                  
+Dt   Dt     xt  yt 
+
+end for
+
+    
+
+  Experiments
+In this section  we probe the empirical performance of MES
+and addMES on   variety of tasks  Here  MESG denotes MES with    sampled from the approximate Gumbel
+distribution  and MESR denotes MES with    computed
+by maximizing   sampled function represented by random
+features  Following  Hennig   Schuler    Hern andezLobato et al    we adopt the zero mean function and
+nonisotropic squared exponential kernel as the prior for
+the GP  We compare to methods from the entropy search
+family       ES and PES  and to other popular Bayesian optimization methods including GPUCB  denoted by UCB 
+PI  EI and EST  The parameter for GPUCB was set according to Theorem   in  Srinivas et al    the parameter for PI was set to be the observation noise   For the
+functions with unknown GP hyperparameters  every   iterations  we learn the GP hyperparameters using the same
+approach as was used by PES  Hern andezLobato et al 
+  For the high dimensional tasks  we follow  Kandasamy et al    and sample the additive structure GP
+parameters with the highest data likelihood when they are
+unknown  We evaluate performance according to the simple regret and inference regret as de ned in Section  
+We used the open source Matlab implementation of PES 
+ES and EST  Hennig   Schuler    Hern andezLobato
+
+Maxvalue Entropy Search for Ef cient Bayesian Optimization
+
+Figure   shows the simple and inference regrets  For both
+regret measures  PES is very sensitive to the the number
+of    sampled for the acquisition function    samples
+lead to much better results than   or   In contrast  both
+MESG and MESR perform competitively even with   or
+  samples  Overall  MESG is slightly better than MESR  and both MES methods performed better than other ES
+methods  MES methods performed better than all other
+methods with respect to simple regret  For inference regret  MES methods performed similarly to EST  and much
+better than all other methods including PES and ES 
+In Table   we show the runtime of selecting the next input per iteration  using GPUCB  PI  EI  EST  ES  PES 
+MESR and MESG on the synthetic data with  xed GP
+hyperparameters  For PES and MESR  every    or    requires running an optimization subprocedure  so their running time grows noticeably with the number of samples 
+MESG avoids this optimization  and competes with the
+fastest methods EI and UCB 
+In the following experiments  we set the number of    sampled for PES to be   and the number of    sampled for
+MESR and MESG to be   unless otherwise mentioned 
+
+  Optimization Test Functions
+
+We test on three challenging optimization test functions 
+the  dimensional eggholder function  the  dimensional
+Shekel function and the  dimensional Michalewicz function  All of these functions have many local optima  We
+randomly sample   points to learn   good GP hyperparameter setting  and then run the BO methods with the
+same hyperparameters  The  rst observation is the same
+for all methods  We repeat the experiments   times  The
+averaged simple regret is shown in the appendix  and the
+inference regret is shown in Table   On the    eggholder
+function  PES was able to achieve better function values
+faster than all other methods  which veri ed the good performance of PES when suf ciently many    are sampled 
+However  for higherdimensional test functions  the   
+Shekel and    Michalewicz function  MES methods performed much better than PES and ES  and MESG performed better than all other methods 
+
+  Tuning Hyperparameters for Neural Networks
+
+Next  we experiment with LevenbergMarquardt optimization for training    hiddenlayer neural network  The   parameters we tune with BO are the number of neurons  the
+damping factor   the  decrease factor  and the  increase
+factor  We test regression on the Boston housing dataset
+
+ All the timing experiments were run exclusively on an Intel    Xeon    CPU          GHz  The function evaluation time is excluded 
+
+Figure       Inference regret      simple regret  MES methods
+are much less sensitive to the number of maxima    sampled for
+the acquisition function     or   than PES is to the number
+of argmaxes   
+
+Table   The runtime of selecting the next input  PES   is signi cantly slower than other methods  MESG   runtime is comparable to the fastest method EI while it performs better in terms
+of simple and inference regrets 
+
+METHOD
+
+UCB
+PI
+EI
+EST
+ES
+PES  
+PES  
+
+PES  
+
+METHOD
+
+TIME    
+     
+      MESR  
+      MESR  
+      MESR  
+      MESG  
+      MESG  
+      MESG  
+
+TIME    
+     
+     
+     
+     
+     
+     
+     
+
+et al    Wang et al    Our Matlab code and
+test functions are available at https github com 
+ziw Maxvalue EntropySearch 
+
+  Synthetic Functions
+
+We begin with   comparison on synthetic functions sampled from    dimensional GP  to probe our conjecture that
+MES is much more robust to the number of    sampled to
+estimate the acquisition function than PES is to the number of    samples  For PES  we sample    PES  
+   PES   and    PES   argmaxes for the acquisition
+function  Similarly  we sample          values for
+MESR and MESG  We average the results on   functions sampled from the same Gaussian kernel with scale
+parameter   and bandwidth parameter   and observation noise      
+
+       log  Rt   log  rtUCBPIEIESTESPES  PES  PES  MESR  MESR  MESR  MESG  MESG  MESG  Maxvalue Entropy Search for Ef cient Bayesian Optimization
+
+Table   Inference regret RT for optimizing the eggholder function  Shekel function  and Michalewicz function 
+
+Table   Inference regret RT for tuning neural network hyperparameters on the Boston housing and breast cancer datasets 
+
+METHOD
+
+UCB
+PI
+EI
+EST
+ES
+PES
+MESR
+MESG
+
+EGGHOLDER
+     
+     
+     
+     
+     
+     
+     
+     
+
+SHEKEL
+     
+     
+     
+     
+     
+     
+     
+     
+
+MICHALEWICZ
+     
+     
+     
+     
+     
+     
+     
+     
+
+METHOD
+
+UCB
+PI
+EI
+EST
+ES
+PES
+MESR
+MESG
+
+BOSTON
+     
+     
+     
+     
+     
+     
+     
+     
+
+CANCER  
+     
+     
+     
+     
+     
+     
+     
+     
+
+Table   Inference regret RT for action selection in robot pushing 
+
+METHOD
+
+UCB
+PI
+EI
+EST
+ES
+PES
+MESR
+MESG
+
+   ACTION
+     
+     
+     
+     
+     
+     
+     
+     
+
+   ACTION
+     
+     
+     
+     
+     
+     
+     
+     
+
+Figure   Tuning hyperparameters for training   neural network 
+    Boston housing dataset      breast cancer dataset  MES methods perform better than other methods on     while for     MESG  UCB  PES perform similarly and better than others 
+
+and classi cation on the breast cancer dataset  Bache  
+Lichman    The experiments are repeated   times 
+and the neural network   weight initialization and all other
+parameters are set to be the same to ensure   fair comparison  Both of the datasets were randomly split into
+train validation test sets  We initialize the observation set
+to have   random function evaluations which were set to
+be the same across all the methods  The averaged simple
+regret for the regression   loss on the validation set of the
+Boston housing dataset is shown in Fig      and the classi 
+ cation accuracy on the validation set of the breast cancer
+dataset is shown in Fig      For the classi cation problem on the breast cancer dataset  MESG  PES and UCB
+achieved   similar simple regret  On the Boston housing
+dataset  MES methods achieved   lower simple regret  We
+also show the inference regrets for both datasets in Table  
+
+  Active Learning for Robot Pushing
+
+We use BO to do active learning for the preimage learning
+problem for pushing  Kaelbling   LozanoP erez   
+The function we optimize takes as input the pushing action
+of the robot  and outputs the distance of the pushed object
+to the goal location  We use BO to minimize the function in
+
+order to  nd   good preimage for pushing the object to the
+designated goal location  The  rst function we tested has
+   dimensional input  robot location  rx  ry  and pushing
+duration tr  We initialize the observation size to be one 
+the same across all methods  The second function has  
+ dimensional input  robot location and angle  rx  ry    
+and pushing duration tr  We initialize the observation to be
+  random points and set them the same for all the methods 
+We select   random goal locations for each function to
+test if BO can learn where to push for these locations  We
+show the simple regret in Fig    and the inference regret in
+Table   MES methods performed on   par with or better
+than their competitors 
+
+  High Dimensional BO with AddMES
+
+In this section  we test our addMES algorithm on high
+dimensional blackbox function optimization problems 
+First we compare addMES and addGP UCB  Kandasamy
+et al    on   set of synthetic additive functions with
+known additive structure and GP hyperparameters  Each
+function component of the synthetic additive function is
+active on at most three input dimensions  and is sampled
+from   GP with zero mean and Gaussian kernel  bandwidth     and scale     For the parameter of addGP UCB  we follow  Kandasamy et al    and set
+   
+samt
+pled for each function component in addMES   and addMES   to be   We repeat each experiment for   times
+
+   Am  log     We set the number of     
+
+       rt UCBPIEIESTESPESMESRMES Gt rt UCBPIEIESTESPESMESRMES  Maxvalue Entropy Search for Ef cient Bayesian Optimization
+
+Figure   Simple regrets for addGP UCB and addMES methods on the synthetic addGP functions  Both addMES methods outperform
+addGP UCB except for addMES   on the input dimension       AddMES   achieves the lowest simple regret when   is
+relatively low  while for higher   addMES   becomes better than addMES   
+
+by   robot which has   parameters  The other function returns the walking speed of   planar bipedal robot  with  
+parameters to tune  Westervelt et al    In Fig    we
+show the simple regrets achieved by addGP UCB and addMES  AddMES methods performed competitively compared to addGP UCB on both tasks 
+
+Figure   BO for active data selection on two robot pushing tasks
+for minimizing the distance to   random goal with        actions and        actions  MES methods perform better than other
+methods on the    function  For the    function  MES methods
+converge faster to   good regret  while PI achieves lower regret in
+the very end 
+
+for each dimension setting  The results for simple regret
+are shown in Fig    AddMES methods perform much
+better than addGP UCB in terms of simple regret 
+Interestingly  addMES   works better in lower dimensional
+cases where           while addMES   outperforms
+both addMES   and addGP UCB for higher dimensions
+where         In general  MESG tends to overestimate the maximum of the function because of the independence assumption  and MESR tends to underestimate the
+maximum of the function because of the imperfect global
+optimization of the posterior function samples  We conjecture that MESR is better for settings where exploitation
+is preferred over exploration       not too many local optima  and MESG works better if exploration is preferred 
+To further verify the performance of addMES in high dimensional problems  we test on two realworld high dimensional experiments  One is   function that returns the distance between   goal location and two objects being pushed
+
+Figure   Simple regrets for addGP UCB and addMES methods
+on       robot pushing task with   parameters and       planar
+bipedal walker optimization task with   parameters  Both MES
+methods perform competitively comparing to addGP UCB 
+
+  Conclusion
+We proposed   new informationtheoretic approach  maxvalue entropy search  MES  for optimizing expensive
+blackbox functions  MES is competitive with or better
+than previous entropy search methods  but at   much lower
+computational cost  Via additive GPs  MES is adaptable
+to highdimensional settings  We theoretically connected
+MES to other popular Bayesian optimization methods including entropy search  GPUCB  PI  and EST  and showed
+  bound on the simple regret for   variant of MES  Empirically  MES performs well on   variety of tasks 
+
+ We implemented the function in  Catto   
+
+  rt AddGP UCBAddMES RAddMES Gt rt AddGP UCBAddMES RAddMES Gt rt AddGP UCBAddMES RAddMES Gt rt AddGP UCBAddMES RAddMES Gd           rt AddGP UCBAddMES RAddMES         rt UCBPIEIESTESPESMESRMES Gt rt UCBPIEIESTESPESMESRMES Gt rt AddGP UCBAddMES RAddMES Gt rt AddGP UCBAddMES RAddMES       Maxvalue Entropy Search for Ef cient Bayesian Optimization
+
+Acknowledgements
+We thank Prof  Leslie Pack Kaelbling and Prof  Tom as
+LozanoP erez for discussions on active learning and
+Dr  William Huber for his solution to  Extreme Value
+Theory   Show  Normal
+to Gumbel  at stats 
+stackexchange com  which leads to our Gumbel approximation in Section   We gratefully acknowledge
+support from NSF CAREER award   NSF grants
+  and   from ONR grant   
+  and from ARO grant   NF  We thank
+MIT Supercloud and the Lincoln Laboratory Supercomputing Center for providing computational resources  Any
+opinions   ndings  and conclusions or recommendations
+expressed in this material are those of the authors and do
+not necessarily re ect the views of our sponsors 
+
+References
+Auer  Peter  Using con dence bounds for exploitationexploration
+tradeoffs  Journal of Machine Learning Research   
+ 
+
+Bache  Kevin and Lichman  Moshe  UCI machine learning repos 
+
+itory   
+
+Brochu  Eric  Cora  Vlad    and De Freitas  Nando    tutorial on
+Bayesian optimization of expensive cost functions  with application to active user modeling and hierarchical reinforcement
+learning  Technical Report TR  University of British
+Columbia   
+
+Calandra  Roberto  Seyfarth  Andr    Peters  Jan  and Deisenroth 
+Marc Peter  An experimental comparison of Bayesian optimization for bipedal locomotion  In International Conference
+on Robotics and Automation  ICRA   
+
+Catto  Erin  Box         physics engine for games  http 
+
+ box   org   
+
+Duvenaud  David    Nickisch  Hannes  and Rasmussen  Carl   
+Additive Gaussian processes  In Advances in Neural Information Processing Systems  NIPS   
+
+Fisher  Ronald Aylmer  The genetical theory of natural selection 
+  complete variorum edition  Oxford University Press   
+
+Hennig  Philipp and Schuler  Christian    Entropy search for
+informationef cient global optimization  Journal of Machine
+Learning Research     
+
+Hern andezLobato  Jos   Miguel  Hoffman  Matthew    and
+Ghahramani  Zoubin  Predictive entropy search for ef cient
+In Advances in
+global optimization of blackbox functions 
+Neural Information Processing Systems  NIPS   
+
+Hoffman  Matthew   and Ghahramani  Zoubin  Outputspace
+predictive entropy search for  exible global optimization  In
+NIPS workshop on Bayesian Optimization   
+
+Kandasamy  Kirthevasan  Schneider  Jeff  and Poczos  Barnabas 
+High dimensional Bayesian optimisation and bandits via additive models  In International Conference on Machine Learning
+ ICML   
+
+Krause  Andreas and Ong  Cheng    Contextual Gaussian process bandit optimization  In Advances in Neural Information
+Processing Systems  NIPS   
+
+Kushner  Harold      new method of locating the maximum point
+of an arbitrary multipeak curve in the presence of noise  Journal of Fluids Engineering     
+
+Lizotte  Daniel    Wang  Tao  Bowling  Michael    and Schuurmans  Dale  Automatic gait optimization with Gaussian process regression  In International Conference on Arti cial Intelligence  IJCAI   
+
+Mo ckus     On Bayesian methods for seeking the extremum  In
+
+Optimization Techniques IFIP Technical Conference   
+
+Neal       Bayesian Learning for Neural networks  Lecture
+
+Notes in Statistics   Springer   
+
+Rahimi  Ali  Recht  Benjamin  et al  Random features for largescale kernel machines  In Advances in Neural Information Processing Systems  NIPS   
+
+Rasmussen  Carl Edward and Williams  Christopher KI  Gaussian
+
+processes for machine learning  The MIT Press   
+
+Rudin  Walter  Fourier analysis on groups  John Wiley   Sons 
+
+ 
+
+Snoek  Jasper  Larochelle  Hugo  and Adams  Ryan    Practical Bayesian optimization of machine learning algorithms  In
+Advances in Neural Information Processing Systems  NIPS 
+ 
+
+Srinivas  Niranjan  Krause  Andreas  Kakade  Sham    and
+Seeger  Matthias  Gaussian process optimization in the bandit setting  no regret and experimental design  In International
+Conference on Machine Learning  ICML   
+
+Thornton  Chris  Hutter  Frank  Hoos  Holger    and LeytonBrown  Kevin  AutoWEKA  combined selection and hyperIn ACM
+parameter optimization of classi cation algorithms 
+SIGKDD Conference on Knowledge Discovery and Data Mining  KDD   
+
+Vanhatalo  Jarno  Riihim aki  Jaakko  Hartikainen  Jouni  Jyl anki 
+Pasi  Tolvanen  Ville  and Vehtari  Aki  Gpstuff  Bayesian
+modeling with gaussian processes  Journal of Machine Learning Research   Apr   
+
+Wang  Zi  Zhou  Bolei  and Jegelka  Stefanie  Optimization as
+estimation with Gaussian processes in bandit settings  In International Conference on Arti cial Intelligence and Statistics
+ AISTATS   
+
+Wang  Zi  Jegelka  Stefanie  Kaelbling  Leslie Pack  and LozanoP erez  Tom as  Focused modellearning and planning for nonIn International
+Gaussian continuous stateaction systems 
+Conference on Robotics and Automation  ICRA   
+
+Kaelbling  Leslie Pack and LozanoP erez  Tom as  Learning composable models of primitive actions  In International Conference on Robotics and Automation  ICRA   
+
+Westervelt  Eric    Grizzle  Jessy    Chevallereau  Christine 
+Choi  Jun Ho  and Morris  Benjamin  Feedback control of dynamic bipedal robot locomotion  volume   CRC press   
+
+

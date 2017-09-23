@@ -1,0 +1,992 @@
+Learning the Structure of Generative Models without Labeled Data
+
+Stephen    Bach   Bryan He   Alexander Ratner   Christopher      
+
+Abstract
+
+Curating labeled training data has become the
+primary bottleneck in machine learning  Recent frameworks address this bottleneck with
+generative models to synthesize labels at scale
+from weak supervision sources  The generative
+model   dependency structure directly affects the
+quality of the estimated labels  but selecting  
+structure automatically without any labeled data
+is   distinct challenge  We propose   structure estimation method that maximizes the  
+regularized marginal pseudolikelihood of the observed data  Our analysis shows that the amount
+of unlabeled data required to identify the true
+structure scales sublinearly in the number of possible dependencies for   broad class of models  Simulations show that our method is  
+faster than   maximum likelihood approach and
+selects   as many extraneous dependencies 
+We also show that our method provides an average of      points of improvement over existing  userdeveloped information extraction applications on realworld data such as PubMed journal abstracts 
+
+  Introduction
+Supervised machine learning traditionally depends on access to labeled training data    major bottleneck in developing new methods and applications  In particular  deep
+learning methods require tens of thousands or more labeled
+data points for each speci   task  Collecting these labels is
+often prohibitively expensive  especially when specialized
+domain expertise is required  and major technology companies are investing heavily in handcurating labeled training
+data  Metz    Eadicicco    Aiming to overcome
+this bottleneck  there is growing interest in using generative models to synthesize training data from weak super 
+
+ Stanford University  Stanford  California  Correspondence
+
+to  Stephen Bach  bach cs stanford edu 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+vision sources such as heuristics  knowledge bases  and
+weak classi ers trained directly on noisy sources  Rather
+than treating training labels as goldstandard inputs  such
+methods model training set creation as   process in order to
+generate training labels at scale  The true class label for  
+data point is modeled as   latent variable that generates the
+observed  noisy labels  After  tting the parameters of this
+generative model on unlabeled data    distribution over the
+latent  true labels can be inferred 
+The structure of such generative models directly affects the
+inferred labels  and prior work assumes that the structure
+is userspeci ed  Alfonseca et al    Takamatsu et al 
+  Roth   Klakow      Ratner et al    One
+option is to assume that the supervision sources are conditionally independent given the latent class label  However 
+statistical dependencies are common in practice  and not
+taking them into account leads to misjudging the accuracy
+of the supervision  We cannot rely in general on users to
+specify the structure of the generative model  because supervising heuristics and classi ers might be independent
+for some data sets but not others  We therefore seek an ef 
+cient method for automatically learning the structure of the
+generative model from weak supervision sources alone 
+While structure learning in the supervised setting is wellstudied       Meinshausen     uhlmann    Zhao   Yu 
+  Ravikumar et al    see also Section   learning the structure of generative models for weak supervision is challenging because the true class labels are latent 
+Although we can learn the parameters of generative models for   given structure using stochastic gradient descent
+and Gibbs sampling  modeling all possible dependencies
+does not scale as an alternative to model selection  For
+example  estimating all possible correlations for   modestly sized problem of   weak supervision sources takes
+over   minutes   For comparison  our proposed approach
+solves the same problem in   seconds  As users develop
+their supervision heuristics  rerunning parameter learning
+to identify dependencies becomes   prohibitive bottleneck 
+We propose an estimator to learn the dependency structure
+of   generative model without using any labeled training
+data  Our method maximizes the  regularized marginal
+pseudolikelihood of each supervision source   output independently  selecting those dependencies that have nonzero
+
+Learning the Structure of Generative Models without Labeled Data
+
+weights  This estimator is analogous to maximum likelihood for logistic regression  except that we marginalize
+out our uncertainty about the latent class label  Since the
+pseudolikelihood is   function of one free variable and
+marginalizes over one other variable  we compute the gradient of the marginal pseudolikelihood exactly  avoiding
+the need for approximating the gradient with Gibbs sampling  as is done for maximum likelihood estimation 
+Our analysis shows that the amount of data required to
+identify the true structure scales sublinearly in the number
+of possible dependencies for   broad class of models  Intuitively  this follows from the fact that learning the generative model   parameters is possible when there are   suf 
+ cient number of betterthan random supervision sources
+available  With enough signal to estimate the latent class
+labels better than random guessing  those estimates can be
+re ned until the model is identi ed 
+We run experiments to con rm these predictions  We also
+compare against the alternative approach of considering all
+possible dependencies during parameter learning  We  nd
+that our method is   faster  In addition  our method
+returns   as many extraneous correlations on synthetic
+data when tuned for comparable recall  Finally  we demonstrate that on realworld applications of weak supervision 
+using generative models with automatically learned dependencies improves performance  We  nd that our method
+provides on average      points of improvement over existing  userdeveloped information extraction applications
+on PubMed abstracts and hardware speci cation sheets 
+
+  Background
+When developing machine learning systems  the primary
+bottleneck is often curating   suf cient amount of labeled
+training data  Hand labeling training data is expensive  time
+consuming  and often requires specialized knowledge  Recently researchers have proposed methods for synthesizing
+labels from noisy label sources using generative models 
+ See Section   for   summary  We ground our work in one
+framework  data programming  Ratner et al    that
+generalizes many approaches in the literature 
+In data programming  weak supervision sources are encoded as labeling functions  heuristics that label data points
+ or abstain    generative probabilistic model is    to estimate the accuracy of the labeling functions and the strength
+of any userspeci ed statistical dependencies among their
+outputs  In this model  the true class label for   data point
+is   latent variable that generates the labeling function outputs  After  tting the parameters of the generative model 
+  distribution over the latent  true labels can be estimated
+and be used to train   discriminative model by minimizing
+the expected loss with respect to that distribution 
+
+We formally describe this setup by  rst specifying for each
+data point xi   latent random variable yi       that
+is its true label  For example  in an information extraction
+task  xi might be   span of text  Then  yi can represent
+whether it is   mention of   company or not  entity tagging  Alternatively  xi might be   more complex structure 
+such as   tuple of canonical identi ers along with associated mentions in   document  and then yi can represent
+whether   relation of interest over that tuple is expressed
+in the document  relation extraction 
+We do not have access to yi  even at training time  but
+we do have   userprovided labeling functions            
+that can be applied to xi to produce outputs              in 
+For example  for the companytagging task mentioned
+above    labeling function might apply the regular expression  sInc  to   span of text and return whether it
+matched  The domain of each  ij is       corresponding to false  abstaining  and true  Generalizing to
+the multiclass case is straightforward 
+Our goal is to estimate   probabilistic model that generates the labelingfunction outputs                
+common assumption is that the outputs are conditionally
+independent given the true label  and that the relationship
+between   and   is governed by   accuracy dependencies
+
+ Acc
+ 
+
+    yi    yi ij
+
+with   parameter  Acc
+  modeling how accurate each labeling
+function    is  We refer to this structure as the conditionally independent model  and specify it as
+
+         exp 
+mXi 
+
+ Acc
+   Acc
+
+ 
+
+nXj 
+
+    yi    
+
+ 
+
+where                ym 
+We estimate the parameters   by minimizing the negative
+log marginal likelihood    for an observed matrix of
+labeling function outputs  
+
+arg min
+
+ 
+
+  logXY
+
+        
+
+ 
+
+Optimizing the likelihood is straightforward using stochastic gradient descent  The gradient of objective   with respect to parameter  Acc
+
+is
+
+ 
+
+mXi      Acc
+
+ 
+
+    yi    EY    Acc
+
+ 
+
+    yi   
+
+the difference between the corresponding suf cient statistic
+of the joint distribution    and the same distribution conditioned on   In practice  we can interleave samples to
+estimate the gradient and gradient steps very tightly  taking
+
+Learning the Structure of Generative Models without Labeled Data
+
+  small step after each sample of each variable  ij or yi 
+similarly to contrastive divergence  Hinton   
+The conditionally independent model is   common assumption  and using   more sophisticated generative model
+currently requires users to specify its structure  In the rest
+of the paper  we address the question of automatically identifying the dependency structure from the observations  
+without observing    
+
+  Structure Learning without Labels
+Statistical dependencies arise naturally among weak supervision sources  In data programming  users often write labeling functions with directly correlated outputs or even
+labeling functions deliberately designed to reinforce others with narrow  more precise heuristics  To address this
+issue  we generalize the conditionally independent model
+as   factor graph with additional dependencies  including
+higherorder factors that connect multiple labeling function
+outputs for each data point xi and label yi  We specify the
+general model as
+
+marginal pseudolikelihood of the outputs of   single labeling function          conditioned on the outputs of the
+others     using   regularization to induce sparsity  The
+objective is
+
+arg min
+
+ 
+
+  arg min
+
+ 
+
+  log                  
+mXi 
+
+logXyi
+
+ 
+
+  ij  yi                
+
+ 
+
+logPyi
+
+where     is   hyperparameter 
+By conditioning on all other labeling functions in each term
+  ij  yi         we ensure that the gradient can
+be computed in polynomial time with respect to the number
+of labeling functions  data points  and possible dependencies  without requiring any sampling or variational approximations  The gradient of the log marginal pseudolikelihood
+is the difference between two expectations  the suf cient
+statistics conditioned on all labeling functions but     and
+conditioned on all labeling functions 
+
+  log          
+
+  
+ 
+
+ 
+
+       
+
+ 
+
+         exp  mXi Xt   Xs St
+
+     yi   
+
+  
+   
+
+ 
+
+where
+
+Here   is the set of dependency types of interest  and St is
+  set of index tuples  indicating the labeling functions that
+participate in each dependency of type         We start by
+de ning standard correlation dependencies of the form
+
+ Cor
+jk     yi     ij   ik   
+
+We refer to such dependencies as pairwise among labeling
+functions because they depend only on two labeling function outputs  We can also consider higherorder dependencies that involve more variables  such as conjunction dependencies of the form
+
+ And
+jk     yi     ij   yi    ik   yi   
+
+Estimating the structure of the distribution        is
+challenging because   is latent  we never observe its value 
+even during training  We must therefore work with the
+marginal likelihood    Learning the parameters of the
+generative model jointly requires Gibbs sampling to estimate gradients  As the number of possible dependencies
+increases at least quadratically in the number of labeling
+functions  this heavyweight approach to learning does not
+scale  see Section  
+
+  Learning Objective
+We can scale up learning over many potentially irrelevant
+dependencies by optimizing   different objective  the log
+
+   
+
+   
+
+mXi    ij  yi
+mXi Xyi
+
+  ij  yi         
+
+  ij        yi 
+
+  yi       
+
+     yi 
+
+Note that in the de nition of     
+  operates on the value of
+ ij set in the summation and the observed values of      
+We optimize for each labeling function    in turn  selecting
+those dependencies with parameters that have   suf ciently
+large magnitude and adding them to the estimated structure 
+
+  Implementation
+We implement our method as Algorithm     stochastic gradient descent  SGD  routine  At each step of the descent 
+the gradient   is estimated for   single data point  which
+can be computed in closed form  Using SGD has two advantages  First  it requires only  rstorder gradient information  Other methods for  regularized regression like
+interiorpoint methods  Koh et al    usually require
+computing secondorder information  Second  the observations   can be processed incrementally  Since data programming operates on unlabeled data  which is often abundant  scalability is crucial  To implement   regularization
+as part of SGD  we use an online truncated gradient method
+ Langford et al   
+In practice  we  nd that the only parameter that requires
+tuning is   which controls the threshold and regularization
+
+Learning the Structure of Generative Models without Labeled Data
+
+Algorithm   Structure Learning for Data Programming
+Input  Observations               threshold  
+distribution   with parameters   initial parameters  
+step size   epoch count     truncation frequency  
+     
+for       to   do
+
+  ij        yi 
+
+for   
+
+     
+for       to   do
+for       to   do
+  in   do
+     ij  yi
+   Pyi
+
+  ij  yi      
+     yi 
+
+  yi       
+         
+
+if        mod   is   then
+
+      
+  
+  in   where   
+for   
+    max   
+  
+  in   where   
+for   
+  
+    min   
+for   
+  in   where       do
+if   
+     then
+              
+return  
+
+      do
+      
+      do
+      
+
+strength  Higher values induce more sparsity in the selected
+structure  For the other parameters  we use the same values
+in all of our experiments  step size        epoch count
+      and truncation frequency      
+  Analysis
+We provide guarantees on the probability that Algorithm  
+successfully recovers the exact dependency structure  We
+ rst provide   general recovery guarantee for all types of
+possible dependencies  including both pairwise and higherorder dependencies  However  in many cases  higherorder
+dependencies are not necessary to model the behavior of
+the labeling functions  In fact  as we demonstrate in Section   in many useful models there are only accuracy
+dependencies and pairwise correlations  In this case  we
+show as   corollary to our general result that the number
+of samples required is sublinear in the number of possible
+dependencies  speci cally     log   
+Previous analyses for the supervised case do not carry
+over to the unsupervised setting because the problem is
+no longer convex  For example  analysis of an analogous method for supervised Ising models  Ravikumar et al 
+  relies on Lagrangian duality and   tight duality gap 
+which does not hold for our estimation problem  Instead 
+we reason about   region of the parameter space in which
+we can estimate   well enough that we can eventually ap 
+
+proach the true model 
+We now state the conditions necessary for our guarantees 
+First are two standard conditions that are needed to guarantee that the dependency structure can be recovered with any
+number of samples  One  we must have some set     RM
+of feasible parameters  Two  the true model is in       
+there exists some choice of       such that
+
+              
+                      
+
+ 
+
+where   is the true distribution 
+Next  let    denote the set of dependencies that involve
+either labeling function    or the true label    For any feasible parameter       and                  there must exist
+      such that
+
+cI  
+
+ 
+
+mXi 
+mXi 
+
+Cov                         
+
+Cov                             
+
+ 
+
+This means that for each labeling function  we have   better estimate of the dependencies with the labeling function
+than without  It is analogous to assumptions made to analyze parameter learning in data programming 
+Finally  we require that all nonzero parameters be bounded
+away from zero  That is  for all        and some    
+we have that
+ 
+
+     
+
+Under these conditions  we are able to provide guarantees
+on the probability of  nding the correct dependency structure  First  we present guarantees for all types of possible
+dependencies in Theorem   proved in Appendix    For
+this theorem  we de ne dj to be the number of possible dependencies involving either    or    and we de ne   as the
+largest of            dn 
+Theorem   Suppose we run Algorithm   on   problem
+where conditions     and   are satis ed  Then  for
+any     an unlabeled input dataset of size
+
+  
+
+   log   nd
+   
+
+   
+
+is suf cient to recover the exact dependency structure with
+  probability of at least      
+For general dependencies    can be as large as the number
+of possible dependencies due to the fact that higherorder
+dependencies can connect the true label and many labeling
+functions  The rate of Theorem   rate is therefore not directly comparable to that of Ravikumar et al    which
+applies to Ising models with pairwise dependencies 
+
+Learning the Structure of Generative Models without Labeled Data
+
+As we demonstrate in Section   however  realworld applications can be improved by modeling just pairwise correlations among labeling functions 
+If only considering
+these dependencies  then   will only be        rather
+than the number of potential dependencies  In Corollary
+  we show that   number of samples needed in this case is
+    log    Notice that this is sublinear in the number of
+possible dependencies  which is     
+Corollary   Suppose we run Algorithm   on   problem
+where conditions     and   are satis ed  Additionally  assume that the only potential dependencies are accuracy and correlation dependencies  Then  for any    
+an unlabeled input dataset of size
+
+  
+
+   
+   log    
+
+   
+
+is suf cient to recover the exact dependency structure with
+  probability of at least      
+In this case  we see the difference in analyses between the
+unsupervised and supervised settings  Whereas the rate of
+Corollary   depends on the maximum number of dependencies that could affect   variable in the model class  the
+rate of Ravikumar et al    depends cubically on the
+maximum number of dependencies that actually affect any
+variable in the true model and only logarithmically in the
+maximum possible degree  In the supervised setting  the
+guaranteed rate is therefore tighter for very sparse models 
+However  as we show in Section   the guaranteed rates
+in both settings are pessimistic  and in practice they appear
+to scale at the same rate 
+
+  Experiments
+We implement our method as part of the open source framework Snorkel  and evaluate it in three ways  First  we measure how the probability of returning the exact correlation
+structure is affected by the problem parameters using synthetic data  con rming our analysis that its sample complexity is sublinear in the number of possible dependencies 
+In fact  we  nd that in practice the sample complexity is
+lower than the theoretically guaranteed rate  matching the
+rate seen in practice for fully supervised structure learning 
+Second  we compare our method to estimating structures
+via parameter learning over all possible dependencies  We
+demonstrate using synthetic data that our method is  
+faster and more accurate  selecting   as many extraneous correlations on average  Third  we apply our method to
+realworld applications built using data programming  such
+as information extraction from PubMed journal abstracts
+and hardware speci cation sheets 
+In these applications 
+users did not specify any dependencies between the label 
+
+ snorkel stanford edu
+
+Figure   Algorithm   returns the true structure consistently when
+the control parameter   reaches   for the number of samples
+de ned by   The number of samples required to identify  
+model in practice scales logarithmically in    the number of labeling functions 
+
+ing functions they authored  however  as we detail in Section   these dependencies naturally arise  for example
+due to explicit composing  relaxing  or tightening of labeling function heuristics  related distant supervision sources 
+or multiple concurrent developers writing labeling functions  We show that learning this structure improves performance over the conditionally independent model  giving
+an average      point boost 
+
+  Sample Complexity
+We test how the probability that Algorithm   returns the
+correct correlation structure depends on the true distribution  Our analysis in Section   guarantees that the sample
+complexity grows at worst on the order     log    for  
+labeling functions  In practice  we  nd that structure learning performs better than this guaranteed rate  depending
+linearly on the number of true correlations and logarithmically on the number of possible correlations  This matches
+the observed behavior for fully supervised structure learning for Ising models  Ravikumar et al    which is also
+tighter than the best known theoretical guarantees 
+To demonstrate this behavior  we attempt to recover the true
+dependency structure using   number of samples de ned as
+
+                 log  
+
+ 
+
+where    is the maximum number of dependencies that affect any one labeling function  For example  in the conditionally independent model        and in   model with one
+correlation        We vary the control parameter   from
+  to   to determine the point at which   is suf ciently
+large for Algorithm   to recover the true dependency structure 
+ The constant   was selected so that it succeeds
+with high probability around      
+We  rst test the effect of varying    the number of labeling
+functions  For             we set two pairs of
+
+Learning the Structure of Generative Models without Labeled Data
+
+Figure   Algorithm   returns the true structure consistently when
+the control parameter   reaches   for the number of samples de 
+ ned by   The number of samples required to identify   model
+in practice scales linearly in    the maximum number of dependencies affecting any labeling function 
+
+labeling functions to be correlated with  Cor
+jk     We set
+ Acc
+      for all    We then generate   samples for each
+setting of   over   trials  Figure   shows the fraction of
+times Algorithm   returns the correct correlation structure
+as   function of the control parameter   That the curves
+are aligned for different values of   shows that the sample
+complexity in practice scales logarithmically in   
+We next test the effect of varying    the maximum number of dependencies that affect   labeling function in the
+true distribution  For   labeling functions  we add correlations to the true model to form cliques of increasing degree 
+All parameters are the same as in the previous experiment 
+Figure   shows that for increasing values of      again
+predicts the number of samples for Algorithm   to succeed 
+That the curves are aligned for different values of    shows
+that the sample complexity in practice scales linearly in   
+
+  Comparison with Maximum Likelihood
+We next compare Algorithm   with an alternative approach 
+Without an ef cient structure learning method  one could
+maximize the marginal likelihood of the observations  
+while considering all possible dependencies  To measure
+the bene ts of maximizing the marginal pseudolikelihood 
+we compare its performance against an analogous maximum likelihood estimation routine that also uses stochastic
+gradient descent  but instead uses Gibbs sampling to estimate the intractable gradient of the objective 
+We create different distributions over   labeling functions
+by selecting with probability   pairs of labeling functions to make correlated  Again  the strength of correlation
+is set at  Cor
+      We
+generate   distributions for                    
+For each distribution we generate   samples and attempt to recover the true correlation structure 
+
+jk     and accuracy is set at  Acc
+
+Figure   Comparison of structure learning with using maximum
+likelihood parameter estimation to select   model structure  Structure learning is two orders of magnitude faster 
+
+We  rst compare running time between the two methods 
+Our implementation of maximum likelihood estimation is
+designed for speed  for every sample taken to estimate the
+gradient    small update to the parameters is performed 
+This approach is stateof theart for highspeed learning for
+factor graphs  Zhang          However  the need for
+sampling the variables   and   is still computationally expensive  Figure   shows that by avoiding variable sampling  using pseudolikelihood is   faster 
+We next compare the accuracy of the two methods  which
+depends on the regularization   The ideal is to maximize
+the probability of perfect recall with few extraneous correlations  because subsequent parameter estimation can reduce the in uence of an extraneous correlation but cannot
+discover   missing correlation  We tune   independently for
+each method  Figure    top  shows that maximum pseudolikelihood is able to maintain higher levels of recall than
+maximum likelihood as the problem size increases  Figure    bottom  shows that even tuned for better recall  maximum pseudolikelihood is more precise  returning   as
+many extraneous correlations  We interpret this improved
+accuracy as   bene   of computing the gradient for   data
+point exactly  as opposed to using Gibbs sampling to estimate it as in maximum likelihood estimation 
+
+  RealWorld Applications
+We evaluate our method on several realworld information
+extraction applications  comparing the performance of data
+programming using dependencies selected by our method
+with the conditionally independent model  Table   In the
+data programming method  users express   variety of weak
+supervision rules and sources such as regular expression
+patterns  distant supervision from dictionaries and existing
+knowledge bases  and other heuristics as labeling functions 
+Due to the noisy and overlapping nature of these labeling functions  correlations arise  Learning this correlation
+structure gives an average improvement of      points 
+
+Learning the Structure of Generative Models without Labeled Data
+
+functions  the majority of which check for membership in
+speci   subtrees of   reference disease ontology using different matching heuristics  There is overlap in the labeling
+functions which check identical subtrees of the ontology 
+and we see that our method increases end performance by
+  signi cant      points by modeling this structure 
+Examining the ChemicalDisease task  we see that our
+method identi es correlations that are both obviously true
+and ones that are more subtle  For example  our method
+learns dependencies between labeling functions that are
+compositions of one another  such as one labeling function
+checking for the pattern  CHEM  induc   DIS  and
+  second labeling function checking for this pattern plus
+membership in an external knowledge base of known
+chemicaldisease relations  Our method also learns more
+subtle correlations  for example  it selected   correlation
+between   labeling function that checks for the presence
+of   chemical mention in between the chemical and disease
+mentions comprising the candidate  and one that checks for
+the pattern  induced appearing in between 
+
+  Accelerating Application Development
+Our method is in large part motivated by the new programming model introduced by weak supervision  and the novel
+hurdles that developers face  For example in the Disease
+Tagging application above  we observed developers significantly slowed down in trying to to leverage the rich disease ontologies and matching heuristics they had available
+without introducing too many dependencies between their
+labeling functions  In addition to being slowed down  we
+also observed developers running into signi cant pitfalls
+due to unnoticed correlations between their weak supervision sources  In one collaborator   application  for every
+labeling function that referenced the words in   sentence 
+  corresponding labeling function referenced the lemmas 
+which were often identical  and this signi cantly degraded
+performance  By automatically learning dependencies  we
+were able to signi cantly mitigate the effects of such correlations  We therefore envision an accelerated development
+process enabled by our method 
+To further explore the way in which our method can protect
+against such types of failure modes  we consider adding
+correlated  random labeling functions to those used in the
+ChemicalDisease task  Figure   shows the average estimated accuracy of copies of   random labeling function 
+An independent model grows more con dent that the random noise is accurate  However  with structure learning 
+we identify that the noisy sources are not independent and
+they therefore do not outvote the real labeling functions  In
+this way  structure learning can protect against failures as
+users experiment with sources of weak supervision 
+
+Figure   Comparison of structure learning with using maximum
+likelihood parameter estimation to select   model structure  Even
+when tuned for better recall  top  structure learning is also more
+precise  returning   as many extraneous correlations  bottom 
+
+Extracting structured information from unstructured text by
+identifying mentioned entities and relations is   challenging task that is well studied in the context of weak supervision  Bunescu   Mooney    Alfonseca et al   
+Ratner et al    We consider three tasks  extracting mentions of speci   diseases from the scienti   literature  Disease Tagging  extracting mentions of chemicals
+inducing diseases from the scienti   literature  ChemicalDisease  and extracting mentions of electronic device polarity from PDF parts sheet tables  Device Polarity  In the
+ rst two applications  we consider   training set of   unlabeled abstracts from PubMed  and in the third case  
+PDF parts sheets consisting of mixed text and tabular data 
+We use handlabeled test sets to evaluate on the candidatemention level performance  which is the accuracy of the
+classi er in identifying correct mentions of speci   entities or relations  given   set of candidate mentions  For
+example  in ChemicalDisease  we consider as candidates
+all pairs of cooccurring chemicaldisease mention pairs as
+identi ed by standard preprocessing tools 
+We see that modeling the correlations between labeling
+functions gives gains in performance which appear to be
+correlated with the total number of sources  For example 
+in the disease tagging application  we have   labeling
+
+ 
+
+ncbi nlm nih gov CBBresearch Lu Demo PubTator index cgi
+
+Learning the Structure of Generative Models without Labeled Data
+
+Table   Candidatemention scores of information extraction applications trained with data programming using generative models with
+no dependency structure  Independent  and learned dependency structure  Structure 
+
+APPLICATION
+
+DISEASE TAGGING
+CHEMICALDISEASE
+DEVICE POLARITY
+
+ 
+ 
+ 
+
+INDEPENDENT
+ 
+
+ 
+ 
+ 
+ 
+
+  
+ 
+ 
+ 
+
+STRUCTURE
+
+ 
+
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+  
+ 
+ 
+ 
+
+   DIFF 
+
+  LFS
+
+  COR    CORR 
+
+ 
+ 
+ 
+
+ 
+ 
+ 
+
+ 
+ 
+ 
+
+ 
+ 
+ 
+
+networks with latent variables  Elidan   Friedman   
+Using heuristic sources of labels is increasingly common 
+Treating labels from   single heuristic source as gold labels is called distant supervision  Craven   Kumlien   
+Mintz et al    Some methods use multiinstance
+learning to reduce the noise in   distant supervision source
+ Riedel et al    Hoffmann et al    Others use hierarchical topic models to generate additional training data
+for weak supervision  but they do not support userprovided
+heuristics  Alfonseca et al    Takamatsu et al   
+Roth   Klakow        Previous methods that support
+heuristics for weak supervision       Bunescu   Mooney 
+  Shin et al    do not model the noise inherent
+in these sources  Also  Downey   Etzioni   showed
+that PAC learning is possible without handlabeled data if
+the features monotonically order data by class probability 
+Estimating the accuracy of multiple label sources without  
+gold standard is   classic problem  Dawid   Skene   
+and many proposed approaches are generalized in the data
+programming framework  Parisi et al    proposed  
+spectral approach to estimating the accuracy of members
+of classi er ensembles  Many methods for crowdsourcing
+estimate the accuracy of workers without handlabeled data
+      Dalvi et al    Joglekar et al    Zhang et al 
+  In data programming  the scaling of data to label
+sources is different from crowdsourcing    relatively small
+number of sources label all the data  We can therefore learn
+rich dependency structures among the sources 
+
+  Conclusion and Future Directions
+We showed that learning the structure of   generative model
+enables higher quality data programming results  Our
+method for structure learning is also   faster than  
+maximum likelihood approach  If data programming and
+other forms of weak supervision are to make machine
+learning tools easier to develop  selecting accurate structures for generative models with minimal user intervention
+is   necessary capability  Interesting questions remain  Can
+the guarantee of Theorem   be tightened for higherorder
+dependencies to match the pairwise case of Corollary  
+Preliminary experiments show that they converge at similar rates in practice 
+
+Figure   Structure learning identi es and corrects correlated  random labeling functions added to the ChemicalDisease task 
+
+  Related Work
+Structure learning is   wellstudied problem  but most work
+has assumed access to handlabeled training data  Some of
+the earliest work has focused on generalized linear models  The lasso  Tibshirani    linear regression with  
+regularization  is   classic technique  Zhao   Yu  
+showed that the lasso is   consistent structure estimator 
+The Dantzig selector  Candes   Tao    is another
+structure estimator for linear models that uses   which can
+learn in the highdimensional setting where there are more
+possible dependencies than samples  Ng   showed
+that  regularized logistic regression has sample complexity logarithmic in the number of features    regularization
+has also been used as   prior for compressed sensing      
+Donoho   Elad    Tropp    Wainwright   
+Regularized estimators have also been used to select structures for graphical models  Meinshausen     uhlmann
+  showed that parameter learning with   regularization for Gaussian graphical models under similar assumptions also consistently selects the correct structure  Most
+similar to our proposed estimator  Ravikumar et al   
+propose   fully supervised pseudolikelihood estimator for
+Ising models  Also related is the work of Chandrasekaran
+et al    which considers learning the structure of
+Gaussian graphical models with latent variables  Other
+techniques for learning the structure of graphical models
+include grafting  Perkins et al    Zhu et al    and
+the information bottleneck approach for learning Bayesian
+
+Learning the Structure of Generative Models without Labeled Data
+
+Acknowledgements
+Thanks to Christopher De Sa for helpful discussions  and
+Henry Ehrenberg and Sen Wu for assistance with experiments  We gratefully acknowledge the support of the
+Defense Advanced Research Projects Agency  DARPA 
+SIMPLEX program under No       the
+DARPA     program under No  FA 
+the National Science Foundation  NSF  CAREER Award
+under No 
+IIS    the Of ce of Naval Research
+ ONR  under awards No     and No 
+     Sloan Research Fellowship  the Moore
+Foundation  an Okawa Research Grant  Toshiba  and Intel 
+Any opinions   ndings  and conclusions or recommendations expressed in this material are those of the authors and
+do not necessarily re ect the views of DARPA  NSF  ONR 
+or the      government 
+
+References
+Alfonseca     Filippova     Delort       and Garrido    
+Pattern learning for relation extraction with   hierarchical topic model  In Annual Meeting of the Association
+for Computational Linguistics  ACL   
+
+Bunescu        and Mooney        Learning to extract relations from the Web using minimal supervision  In Annual Meeting of the Association for Computational Linguistics  ACL   
+
+Candes     and Tao     The Dantzig selector  Statistical
+estimation when   is much larger than    The Annals of
+Statistics     
+
+Chandrasekaran     Parrilo        and Willsky        Latent variable graphical model selection via convex optimization  The Annals of Statistics   
+ 
+
+Craven     and Kumlien     Constructing biological knowledge bases by extracting information from text sources 
+In International Conference on Intelligent Systems for
+Molecular Biology  ISMB   
+
+Dalvi     Dasgupta     Kumar     and Rastogi     Aggregating crowdsourced binary ratings  In International
+World Wide Web Conference  WWW   
+
+Dawid        and Skene        Maximum likelihood estimation of observer errorrates using the EM algorithm 
+Journal of the Royal Statistical Society     
+ 
+
+Downey     and Etzioni     Look ma  no hands  Analyzing
+the monotonic feature abstraction for text classi cation 
+In Neural Information Processing Systems  NIPS   
+
+Eadicicco     Baidu   Andrew Ng on the future of arti cial
+intelligence    Time  Online  posted  January 
+ 
+
+Elidan     and Friedman     Learning hidden variable networks  The information bottleneck approach  Journal of
+Machine Learning Research     
+
+Hinton        Training products of experts by minimizing contrastive divergence  Neural Computation   
+   
+
+Hoffmann     Zhang     Ling     Zettlemoyer     and
+Weld        Knowledgebased weak supervision for information extraction of overlapping relations  In Annual
+Meeting of the Association for Computational Linguistics  ACL   
+
+Joglekar     GarciaMolina     and Parameswaran    
+Comprehensive and reliable crowd assessment algorithms  In International Conference on Data Engineering  ICDE   
+
+Koh     Kim        and Boyd     An interiorpoint method
+for largescale  regularized logistic regression  Journal of Machine Learning Research     
+
+Langford     Li     and Zhang     Sparse online learning via truncated gradient  Journal of Machine Learning
+Research     
+
+Meinshausen     and   uhlmann     Highdimensional
+graphs and variable selection with the lasso  The Annals
+of Statistics     
+
+Metz     Google   handfed AI now gives answers  not
+just search results    Wired  Online  posted  
+November 
+
+Mintz     Bills     Snow     and Jurafsky     Distant
+supervision for relation extraction without labeled data 
+In Annual Meeting of the Association for Computational
+Linguistics  ACL   
+
+Ng        Feature selection     vs     regularization  and rotational invariance  In International Conference on Machine Learning  ICML   
+
+Donoho     and Elad     Optimally sparse representation
+in general  nonorthogonal  dictionaries via   minimization  Proceedings of the National Academy of Sciences
+of the USA     
+
+Parisi     Strino     Nadler     and Kluger     Ranking
+and combining multiple predictors without labeled data 
+Proceedings of the National Academy of Sciences of the
+USA     
+
+Learning the Structure of Generative Models without Labeled Data
+
+crowdsourcing  Journal of Machine Learning Research 
+   
+
+Zhao     and Yu     On model selection consistency of
+lasso  Journal of Machine Learning Research   
+   
+
+Zhu     Lao     and Xing        GraftingLight  Fast 
+incremental feature selection and structure learning of
+Markov random  elds  In International Conference on
+Knowledge Discovery and Data Mining  KDD   
+
+Perkins     Lacker     and Theiler     Grafting  Fast  incremental feature selection by gradient descent in function space  Journal of Machine Learning Research   
+   
+
+Ratner     De Sa     Wu     Selsam     and         Data
+programming  Creating large training sets  quickly  In
+Neural Information Processing Systems  NIPS   
+
+Ravikumar     Wainwright        and Lafferty        Highdimensional Ising model selection using  regularized
+logistic regression  The Annals of Statistics   
+   
+
+Riedel     Yao     and McCallum     Modeling relations
+and their mentions without labeled text 
+In European
+Conference on Machine Learning and Knowledge Discovery in Databases  ECML PKDD   
+
+Roth     and Klakow     Featurebased models for improving the quality of noisy training data for relation extraction  In Conference on Information and Knowledge
+Management  CIKM     
+
+Roth     and Klakow     Combining generative and discriminative model scores for distant supervision 
+In
+Conference on Empirical Methods on Natural Language
+Processing  EMNLP     
+
+Shin     Wu     Wang     De Sa     Zhang     and
+        Incremental knowledge base construction using
+DeepDive  Proceedings of the VLDB Endowment   
+   
+
+Takamatsu     Sato     and Nakagawa     Reducing wrong
+labels in distant supervision for relation extraction 
+In
+Annual Meeting of the Association for Computational
+Linguistics  ACL   
+
+Tibshirani     Regression shrinkage and selection via the
+lasso  Journal of the Royal Statistical Society     
+   
+
+Tropp    
+
+Just relax  Convex programming methods for
+identifying sparse signals in noise  IEEE Transactions
+on Information Theory     
+
+Wainwright        Sharp thresholds for highdimensional
+and noisy sparsity recovery using  constrained
+quadratic programming  lasso 
+IEEE Transactions on
+Information Theory     
+
+Zhang     and         DimmWitted    study of mainmemory statistical analytics  Proceedings of the VLDB
+Endowment     
+
+Zhang     Chen     Zhou     and Jordan        Spectral methods meet EM    provably optimal algorithm for
+
+

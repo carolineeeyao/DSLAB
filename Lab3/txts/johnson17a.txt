@@ -1,0 +1,1091 @@
+StingyCD  Safely Avoiding Wasteful Updates in Coordinate Descent
+
+Tyler    Johnson   Carlos Guestrin  
+
+Abstract
+
+Coordinate descent  CD  is   scalable and simple
+algorithm for solving many optimization problems in machine learning  Despite this fact 
+CD can also be very computationally wasteful  Due to sparsity in sparse regression problems  for example  often the majority of CD
+updates result in no progress toward the solution  To address this inef ciency  we propose  
+modi ed CD algorithm named  StingyCD  By
+skipping over many updates that are guaranteed
+to not decrease the objective value  StingyCD
+signi cantly reduces convergence times  Since
+StingyCD only skips updates with this guarantee  however  StingyCD does not fully exploit
+For this reason  we also propose StingyCD  an algorithm
+that achieves further speedups by skipping updates more aggressively  Since StingyCD and
+StingyCD  rely on simple modi cations to CD 
+it
+is also straightforward to use these algorithms with other approaches to scaling optimization 
+In empirical comparisons  StingyCD and
+StingyCD  improve convergence times considerably for  cid regularized optimization problems 
+
+the problem   sparsity 
+
+  Introduction
+Known to be simple and fast  coordinate descent is   highly
+popular algorithm for training machine learning models 
+For  cid regularized loss minimization problems  such as the
+Lasso  Tibshirani    CD iteratively updates just one
+weight variable at   time  As it turns out  these small yet
+inexpensive updates ef ciently lead to the desired solution 
+Another attractive property of CD is its lack of parameters
+that require tuning  such as   learning rate 
+Due to its appeal  CD has been researched extensively in
+
+ University of Washington  Seattle  WA  Correspondence
+to  Tyler Johnson  tbjohns washington edu  Carlos Guestrin
+ guestrin cs washington edu 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+recent years  This includes theoretical  Nesterov   
+ShalevShwartz   Tewari    and more applied  Fan
+et al    Friedman et al    contributions  Many
+works also consider scaling CD using parallelism  Bradley
+et al    Richt arik   Tak        For surveys of research on CD  see  Wright    or  Shi et al   
+Despite its popularity  CD has   signi cant drawback  in
+many applications  the majority of coordinate updates yield
+no progress toward convergence  In sparse regression  most
+entries of the optimal weight vector equal zero  When CD
+updates these weights during optimization  the weights often equal zero both before and after they are updated  This
+is immensely wasteful  Computing these  zero updates 
+requires time yet leaves the iterate unchanged 
+In this work  we propose StingyCD  an improved CD algorithm for sparse optimization and linear SVM problems  With minimal added overhead  StingyCD identi es
+many coordinate updates that are guaranteed to result in no
+change to the current iterate  By skipping over these zero
+updates  StingyCD obtains much faster convergence times 
+StingyCD is related to safe screening tests  El Ghaoui et al 
+  which for Lasso problems  guarantee some weights
+equal zero at the solution  The algorithm can subsequently
+ignore screened weights for the remainder of optimization 
+Unfortunately  for screening to be effective    good approximate solution must already be available  For this reason 
+screening often has little impact until convergence is near
+ Johnson   Guestrin   
+By identifying zero updates rather
+than zerovalued
+weights at the solution  StingyCD drastically improves
+convergence times compared to safe screening  At the same
+time  we  nd that skipping only updates that are guaranteed to be zero is limiting  For this reason  we also propose
+StingyCD  an algorithm that estimates   probability that
+each update is zero  By also skipping updates that are likely
+zero  StingyCD  achieves even greater speedups 
+StingyCD and StingyCD  require only simple changes to
+CD  Thus  we can combine these algorithms with other
+improvements to CD  In this work  we apply StingyCD 
+to proximal Newton and working set algorithms  In both
+cases 
+incorporating StingyCD  leads to ef ciency improvements  demonstrating that  stingy updates  are   ver 
+
+Algorithm   Coordinate descent for solving    
+
+ cid 
+
+initialize                
+for                 do
+
+    get next coordinate 
+     
+    max
+ 
+               ei
+               Ai
+
+ cid Ai cid 
+
+ 
+
+ cid Ai     cid 
+
+ cid 
+
+return      
+
+StingyCD
+
+Iteration   requires   NNZ  Ai  time  where NNZ  Ai 
+is the number of nonzero entries in column Ai  Bottleneck
+
+operations are computing the dot product cid Ai      cid  and
+
+updating      We note implementations typically compute
+ cid Ai cid  once and then cache this value for later updates 
+
+  Wasteful updates in coordinate descent
+
+Because of the nonnegativity constraint and regularization
+penalty in     often     
+    in Algorithm   In this
+case  if      lies outside of the  active update  region
+
+ 
+
+satile and effective tool for scaling CD algorithms 
+
+  StingyCD for nonnegative Lasso
+We introduce StingyCD for solving the problem
+   cid Ax     cid     cid    cid 
+
+minimize
+
+  Rm
+    
+
+         
+     
+
+   
+
+ 
+
+    is known as the  nonnegative Lasso  Importantly  applications of StingyCD are not limited to     In   we explain how to apply StingyCD to general Lasso and sparse
+logistic regression objectives as well as SVM problems 
+In       is an       design matrix  while     Rn is   labels vector  Solving     results in   set of learned weights 
+which de ne   linear predictive model  The right term
+in the objective commonly written as  cid   cid  for Lasso
+problems without the nonnegativity constraint is   regularization term that encourages the weights to have small
+value  The parameter       controls the impact of the
+regularization term  Due to the nonnegativity constraint   
+solution to     is sparse for suf ciently large   That is  the
+majority of entries in   solution to     have value zero 
+Advantages of sparsity include reduced resources needed
+at test time  more interpretable models  and statistical ef 
+ ciency  Wainwright    In this paper  we propose an
+algorithm that exploits sparsity for ef cient optimization 
+
+  Coordinate descent
+
+Coordinate descent  CD  is   popular algorithm for solving
+    Algorithm   de nes   CD algorithm for this problem 
+During iteration      coordinate         is selected  usually
+at random or in roundrobin fashion  The ith entry in     
+is updated via     
+    while remaining weights
+do not change  The value of   is chosen to maximally decrease the objective subject to the nonnegativity constraint 
+De ning the residuals vector            Ax    we
+can write   as
+
+        
+
+ 
+
+ cid cid 
+
+Ai      cid     
+
+ cid cid 
+
+ 
+
+ 
+
+ cid     
+
+ 
+
+    max
+
+ 
+
+ cid Ai cid 
+
+Ai         cid Ai    cid           
+
+meaning cid Ai      cid        then   implies that      
+
+In this scenario  weight   equals zero at the beginning and
+end of iteration    When solutions to     are suf ciently
+sparse  these  zero updates  account for the majority of iterations in naive CD algorithms  Computing these updates
+is very wasteful  Each zero update requires   NNZ  Ai 
+time yet results in no progress toward convergence 
+
+  Stingy updates
+
+Our proposed algorithm  StingyCD  improves convergence
+times for CD by  skipping over  many zero updates  Put
+differently  StingyCD computes some zero updates in   
+time rather than   NNZ  Ai  time by guaranteeing      
+without computing this quantity via  
+We saw in   that suf cient conditions for       are
+        
+    and  ii         Ai  Since directly testing
+the second condition requires   NNZ  Ai  time  simply
+checking these conditions does not lead to   useful method
+for quickly guaranteeing      
+The insight that enables StingyCD is that we can relax the
+condition        Ai to form   condition that is testable
+in constant time  This relaxation depends on   region      
+for which              In particular        is   ball 
+
+ 
+
+     cid     rr cid        cid 
+ cid 
+where       cid cid        rr cid cid 
+
+       
+
+ 
+
+ 
+
+Above  rr is    reference residuals  vector   copy of the
+residuals from   previous iteration  Formally  rr         
+for some        to be de ned more precisely later  Note
+that      lies on the boundary of      
+At any iteration   such that     
+    StingyCD considers
+whether      Ai     before computing   If this condition
+is true  it is guaranteed that       and StingyCD continues
+to iteration    without computing   directly  We illustrate
+this concept in Figure   De ning gi    cid Ai  rr cid      we
+
+ 
+
+StingyCD
+
+Algorithm   StingyCD for solving    
+
+initialize                  rr     
+
+           compute thresholds   
+
+for                 do
+
+  Update reference residuals on occasion 
+if should update reference  then
+rr       
+    compute thresholds     
+        
+
+ 
+
+iteration   of CD 
+
+Figure   Geometry of StingyCD  At
+if
+    and        Ai  then       In this case  computing
+    
+  is wasteful because the  update  makes no change to     
+StingyCD skips over many zero updates by establishing   region
+      for which              If         Ai     it is guaranteed
+that       and StingyCD continues to iteration       without
+computing   directly  In the illustration  StingyCD successfully
+guarantees       since           
+In contrast  StingyCD
+would compute   directly if            We note
+   is wellde ned in the illustration  since rr   Ai  we have       
+
+ 
+
+can simplify the condition         Ai     as follows 
+ cid Ai    cid         
+        
+
+        Ai      
+ 
+         sign  gi 
+
+ gi    cid Ai cid cid 
+
+max
+       
+
+  
+  cid Ai cid        
+
+ 
+
+Thus  if            then        Ai  implying      
+if also     
+    We note that    can take positive or
+negative value  depending on if rr   Ai  If rr   Ai  then
+gi     which implies        However  if rr   Ai  then
+       and since      is nonnegative  it cannot be true
+that           StingyCD does not skip over coordinate
+  in this case  Thus  the magnitude of    is not signi cant to
+StingyCD when        though this magnitude has greater
+importance for StingyCD  in  
+Importantly  the condition           can be tested with
+minimal overhead by     updating rr only occasionally 
+ ii  precomputing  cid Ai  rr cid  and    for all   whenever rr is
+updated  and  iii  caching the value of      which is updated appropriately after each nonzero coordinate update 
+
+  StingyCD de nition and guarantees
+
+StingyCD is de ned in Algorithm   StingyCD builds
+upon Algorithm   with three simple changes  First  during some iterations  StingyCD updates   reference residuals vector  rr        When rr is updated  StingyCD
+also computes   thresholds vector      This requires evaluating  cid Ai  rr cid  for all columns in    While updating rr
+is relatively costly  more frequent updates to rr result in
+greater computational savings due to skipped updates 
+
+    get next coordinate 
+if           and     
+
+ 
+
+    then
+
+  Skip update 
+                                   
+continue
+
+ cid Ai     cid 
+
+  Perform coordinate update 
+     
+    max
+ 
+               ei
+               Ai
+
+               cid Ai         rr cid       cid Ai cid 
+
+ cid Ai cid 
+
+ 
+
+ cid 
+
+ cid 
+
+return      
+function compute thresholds   
+
+initialize       
+for         do
+
+gi    cid Ai  Ax     cid     
+     sign  gi 
+
+  
+
+  cid Ai cid 
+
+return  
+
+The second change to CD is that StingyCD tracks the
+
+quantity         cid cid        rr cid cid  After each update to rr 
+this update to     cid Ai cid cid Ai      cid   cid Ai  rr cid  and  
+
+StingyCD sets      to   After each nonzero residuals update                 Ai  StingyCD makes   corresponding update to      Importantly  the quantities required for
+
+have all been computed earlier by the algorithm  Thus  by
+caching these values  updating      requires negligible time 
+The  nal modi cation to CD is StingyCD   use of stingy
+updates  Before computing   during each iteration   
+StingyCD checks whether           and     
+   
+If both are true  StingyCD continues to the next iteration
+without computing   The threshold    is computed after
+each update to rr  If rr   Ai  the value of    equals the
+squared distance between rr and Ai  If rr   Ai  this quantity is the negative squared distance between rr and AC
+   
+StingyCD   choice of   ensures that each skipped update
+is  safe  We formalize this concept with our  rst theorem 
+Theorem    Safeness of StingyCD  In Algorithm   every skipped update would  if computed  result in      
+
+ 
+
+That is  if           and     
+
+ cid 
+
+max
+
+     
+
+ 
+
+ 
+
+ 
+
+    then
+
+ cid Ai      Ax   cid     
+
+ cid Ai cid 
+
+StingyCD
+
+ cid 
+
+     
+
+We prove Theorem   in Appendix   
+Theorem   is useful because it guarantees that although
+StingyCD skips many updates  CD and StingyCD have
+identical weight vectors for all iterations  assuming each
+algorithm updates coordinates in the same order  Our next
+theorem formalizes the notion that these skipped updates
+come nearly  for free  We prove this result in Appendix   
+Theorem    Per iteration time complexity of StingyCD 
+Algorithm   can be implemented so that iteration   requires
+
+ 
+
+  Less time than an identical iteration of Algorithm   if
+          and     
+     the update is skipped 
+and rr is not updated  Speci cally  StingyCD requires
+   time  while CD requires   NNZ  Ai  time 
+  The same amount of time  up to an    term  as  
+CD iteration if the update is not skipped and rr is not
+In particular  both algorithms require the
+updated 
+same number of   NNZ  Ai  operations 
+  More time than   CD iteration if rr is updated  In this
+case  StingyCD requires   NNZ     time 
+
+Note StingyCD requires no more computation than CD for
+nearly all iterations  and often much less  However  the
+cost of updating rr is not negligible  To ensure updates to
+rr do not overly impact convergence times  we schedule
+reference updates so that StingyCD invests less than  
+of its time in updating rr  Speci cally  StingyCD  rst updates rr after the second epoch and records the time that
+this update requires  Later on  rr is updated each time an
+additional    of this amount of time has passed 
+
+  Skipping extra updates with StingyCD 
+As we will see in   StingyCD can signi cantly reduce
+convergence times  However  StingyCD is also limited by
+the requirement that only updates guaranteed to be zero are
+skipped  In cases where      is only slightly greater than
+    intuition suggests that these updates will likely be zero
+too  Perhaps StingyCD should skip these updates as well 
+In this section  we propose StingyCD  an algorithm that
+also skips many updates that are not guaranteed to be zero 
+To do so  StingyCD  adds two components to StingyCD 
+      computationally inexpensive model of the probability
+that each update is zero  and  ii    decision rule that applies
+this model to determine whether or not to skip each update 
+
+ 
+
+Figure   Probability of   useful update  StingyCD skips update
+  iff           and     
+    which guarantee       To skip
+more updates  StingyCD  applies the intuition that if      is
+only slightly larger than     it is unlikely that        Ai  making it unlikely that    cid    To do so  StingyCD  models the probability that    cid    during iteration    denoted          Assuming     
+    in the illustrated scenario  StingyCD  computes
+         by dividing the length of the black arc  bd         Ai 
+by the circumference of      
+
+ 
+
+ 
+
+  Modeling the probability of nonzero updates
+During iteration   of StingyCD  suppose     
+    but
+          StingyCD does not skip update    For now 
+we also assume             otherwise we can guarantee        Ai  which implies    cid    Let       be
+  variable that is true if    cid   update   is useful and
+false otherwise  From the algorithm   perspective  it is uncertain whether       is true or false when iteration   begins  Whether or not       is true depends on whether
+       Ai  which requires   NNZ  Ai  time to test 
+This computation will be wasteful if       is false 
+StingyCD  models the probability that       is true using
+information available to the algorithm  Speci cally      
+lies on the boundary of       which is   ball with center rr
+
+     This leads to   simple assumption 
+
+and radius cid 
+
+Assumption    Distribution of      To model the
+probability          StingyCD  assumes      is uniformly distributed on the boundary of      
+
+By making this assumption           is tractable  In particular  we have the following equation for         
+Theorem    Equation for          Assume     
+   
+and                 Then Assumption   implies
+if       
+otherwise 
+
+             
+             
+
+     
+   
+     
+   
+
+          
+
+     
+
+ cid 
+
+ 
+
+ 
+
+where Ix       is the regularized incomplete beta function 
+
+Included in Appendix    Theorem    proof calculates
+the probability that        Ai by dividing the area of
+
+     
+
+Ai   bd       by that of bd        illustrated in Figure  
+This fraction is   function of the incomplete beta function
+since Ai   bd       is   hyperspherical cap  Li   
+Using Theorem   StingyCD  can approximately evaluate          ef ciently using   lookup table  Speci cally 
+for   values of         our implementation de nes
+an approximate lookup table for Ix    
+    prior to iteration   Before update    StingyCD  computes        
+and then  nds an appropriate estimate of          using the
+table  We elaborate on this procedure in Appendix   
+So far           models the probability that    cid    when
+                and     
+    We can also de 
+ ne          for other     
+and     When     
+ cid   
+we de ne              If           and     
+   
+ the scenario in which StingyCD skips update    we let
+             If            and     
+    we de 
+ ne               in this  nal case  we can show that
+        Ai  which guarantees        Ai and    cid   
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  Decision rule for skipping updates
+
+ 
+
+ 
+
+ 
+
+Given          consider the decision of whether to skip
+update    Let tlast
+denote the most recent iteration during
+which StingyCD  updated  did not skip  coordinate    If
+      We de ne the
+this has not yet occurred  de ne tlast
+ delay      
+as the number of updates that StingyCD  did
+and       inclusive 
+not skip between iterations tlast
+Our intuition for StingyCD  is that during iteration    if
+    
+is large and       is true  then StingyCD  should not
+skip update    However  if     
+is small and       is true 
+the algorithm may want to skip the update in favor of updating   coordinate with larger delay  Finally  if       is false 
+StingyCD  should skip the update  regardless of     
+Based on this intuition  StingyCD  skips update   if the
+ expected relevant delay  de ned as       
+        is small 
+That is  given   threshold     StingyCD  skips update   if
+
+ 
+
+ 
+
+ 
+
+ 
+
+            
+
+         
+
+ 
+
+Inserting   in place of StingyCD   condition for skipping
+updates is the only change from StingyCD to StingyCD 
+
+In practice  we de ne       NNZ cid     cid  De ning    
+In StingyCD  assume       NNZ cid     cid  for all      
+
+in this way leads to the following convergence guarantee 
+Theorem    StingyCD  converges to   solution of    
+Also  for each         assume the largest number of consecutive iterations during which get next coordinate 
+does not return   is bounded as       Then
+
+                  cid   
+lim
+
+StingyCD
+
+convergences to   solution when       NNZ cid     cid 
+
+Proven in Appendix    Theorem   ensures StingyCD 
+
+for all    As long as     is smaller than this limit  at
+least one coordinate speci cally   coordinate for which
+    
+ cid   will satisfy   during   future iteration  By
+ 
+de ning     as this limit in practice  StingyCD  achieves
+fast convergence times by skipping many updates 
+
+  Extending StingyCD to other objectives
+For simplicity  we introduced StingyCD for nonnegative
+Lasso problems  In this section  we brie   describe how
+to apply StingyCD to some other objectives 
+
+  General  not nonnegative  Lasso problems
+
+It is simple to extend StingyCD to general Lasso problems 
+
+minimize
+
+  Rm
+
+fL       
+
+   cid Ax     cid     cid   cid 
+
+ PL 
+
+ PL  can be transformed into an instance of     by introducing two features    positive and negative copy  for each
+column of    That is  we can solve  PL  with design matrix
+  by solving     with design matrix       Importantly 
+we perform this feature duplication implicitly in practice 
+Two modi cations to Algorithm   are needed to solve  PL 
+First  we adapt each update   to the new objective 
+
+    argmin
+
+ 
+
+fL         ei   
+
+Second  we consider   positive and negative copy of Ai in
+the condition for skipping update    Speci cally  we de ne
+
+  and
+
+    sign      cid Ai  rr cid   cid Ai rr cid 
+   
+    sign      cid Ai  rr cid   cid Ai rr cid 
+ 
+
+ cid Ai cid 
+ cid Ai cid 
+
+     
+
+ 
+StingyCD skips update   if and only if     
+    and
+       min   
+    Modifying StingyCD  to solve
+ PL  is similar           becomes the sum of two probabilities corresponding to features  Ai and  Ai  Speci 
+                 We de ne         
+cally                     
+   
+and            the same way as we de ne          in  
+  and  
+except we use    
+
+in place of    
+
+ 
+
+ 
+
+minimize
+
+  General  cid regularized smooth loss minimization
+We can also use StingyCD to solve problems of the form
+
+ cid  
+      cid ai    cid     cid   cid   
+ cid        cid         cid 
+
+where each    is smooth  To solve this problem  we rede 
+ ne      as   vector of derivatives 
+        cid 
+
+  cid an      cid    
+
+ PL 
+
+  Rm
+
+StingyCD
+
+ 
+
+In other words          cid cid        rr cid cid 
+
+When updating coordinate    it remains true that       if
+    
+    and        Ai the same geometry from
+Figure   applies  Unfortunately  updating      no longer
+requires negligible computation  This is because in general 
+      cid      Ai  Thus  the update to      in Algorithm  
+no longer applies 
+cannot be computed from      using negligible time 
+Nevertheless  we can use StingyCD to ef ciently solve
+ PL  by incorporating StingyCD into   proximal Newton
+     cid ai    cid 
+is approximated by   secondorder Taylor expansion  This
+results in   subproblem of the form  PL  which we solve
+using StingyCD  CDbased proximal Newton methods are
+known to be very fast for solving  PL  especially in the
+case of sparse logistic regression  Yuan et al   
+
+algorithm  At each outeriteration  the loss cid 
+
+  Linear support vector machines
+
+We can also apply StingyCD to train SVMs 
+
+minimize
+
+  Rn
+    
+
+ 
+
+   cid Mx cid     cid    cid 
+         
+
+ 
+
+ PSVM 
+
+This is the dual problem for training linear support vector
+machines  For this problem  we can apply concepts from
+  to guarantee       for many updates when     
+   
+or     
+     To do so  the changes to StingyCD are
+straightforward  Due to limited space  we provide details
+in Appendix   
+
+ 
+
+ 
+
+  Related work
+StingyCD is related to safe screening tests as well as alternative strategies for prioritizing coordinate updates in CD 
+
+  Safe screening
+
+Introduced in  El Ghaoui et al    for  cid regularized
+objectives  safe screening tests use suf cient conditions for
+which entries of the solution equal zero  Coordinates satisfying these conditions are discarded to simplify the problem  Followup works considered other problems  including sparse group Lasso  Wang   Ye    SVM training  Wang et al    and lowrank problems  Zhou  
+Zhao    Recent works proposed more  exible tests
+that avoid major issues of prior tests  Bonnefoy et al   
+  Fercoq et al    Ndiaye et al      such
+as the fact that initial tests apply only prior to optimization 
+The current stateof theart screening test was proposed in
+ Johnson   Guestrin    For the problem     this test
+relies on geometry similar to Figure   Speci cally  the test
+de nes   ball    Screen  that is proven to contain the residual
+vector of   solution to     If   Screen   cl Ai      it is
+guaranteed that the ith weight in      solution has value  
+
+The radius of   Screen is typically much larger than that of
+      in StingyCD  however  Unlike         Screen must contain the optimal residual vector  Unless   good approximate
+solution is available already    Screen is overly large  often
+resulting in few screened features  Johnson   Guestrin 
+  By ensuring only that       contains the current
+residual vector and identifying zerovalued updates rather
+than zerovalued entries in   solution  StingyCD improves
+convergence times drastically more compared to screening 
+
+  Other approaches to prioritizing CD updates
+
+Similar to StingyCD  recent work by  Fujiwara et al   
+also uses   reference vector concept for prioritizing updates
+in CD  Unlike StingyCD  this work focuses on identifying
+nonzerovalued coordinates  resulting in an active set algorithm  The reference vector is also   primal weight vector
+as opposed to   residual vector 
+Similarly  shrinking heuristics  Fan et al    Yuan et al 
+  and working set algorithms  Johnson   Guestrin 
+    have been shown to be effective for prioritizing computation in CD algorithms  These algorithms
+solve   sequence of smaller subproblems which consider
+only prioritized subsets of coordinates  In these algorithms 
+StingyCD could be used to solve each subproblem to furIn   we show that using
+ther prioritize computation 
+StingyCD  instead of CD for solving subproblems in the
+working set algorithm from  Johnson   Guestrin   
+can lead to further convergence time improvements 
+Finally  recent work has also considered adaptive sampling
+approaches for CD  Csiba et al    While also an interesting direction  this work does not apply to     due to  
+strong convexity requirement  Currently this approach also
+requires an additional pass over the data before each epoch
+as well as additional overhead for nonuniform sampling 
+
+  Empirical comparisons
+This section demonstrates the impact of StingyCD and
+StingyCD  in practice  We  rst compare these algorithms
+to CD and safe screening for Lasso problems  Later  we
+show that StingyCD  also leads to speedups when combined with working set and proximal Newton algorithms 
+
+  Lasso problem comparisons
+
+We implemented CD  CD with safe screening  StingyCD 
+and StingyCD  to solve  PL  Coordinates are updated in
+roundrobin fashion  We normalize columns of   and include an unregularized intercept term  We also remove
+features that have nonzero values in fewer than ten examples  For CD with safe screening  we apply the test from
+ Johnson   Guestrin    which is stateof theart to our
+knowledge  Following  Fercoq et al    screening is
+
+StingyCD
+
+Figure   Lasso results   above   nance   below  allstate 
+
+performed after every ten epochs  Performing screening
+requires   full pass over the data  which is nonnegligible 
+We compare the algorithms using    nancial document
+dataset  nance  and an insurance claim prediction task
+ allstate   nance contains     examples     
+features  and     nonzero values  The result included
+in this section uses regularization      max  where
+ max is the smallest   value that results in an allzero solution  The solution contains   nonzero entries 
+The allstate data contains       examples       
+features  and       nonzero values  For this problem 
+we set      max  resulting in   selected features 
+We include results for additional   values in Appendix   
+StingyCD seems to have slightly greater impact when   is
+larger  but the results generally do not change much with  
+We evaluate the algorithms using three metrics  The  rst
+metric is relative suboptimality  de ned as
+
+Relative suboptimality  
+
+               cid 
+
+     cid 
+
+ 
+
+where         is the objective value at iteration    and   cid 
+is the problem   solution  The other metrics are support set
+precision and recall  Let                  
+ cid    and let
+   cid  be the analogous set for   cid  We de ne
+
+ 
+
+ cid cid            cid cid cid 
+ cid cid      cid cid 
+
+ cid cid            cid cid cid 
+
+    cid 
+
+ 
+
+Precision  
+
+  Recall  
+
+ https www csie ntu edu tw cjlin libsvmtools 
+
+datasets regression html   log  
+
+ https www kaggle com   allstateclaims severity
+
+Precision and recall are arguably more important than suboptimality since  PL  is typically used for feature selection 
+Results of these experiments are included in Figure   We
+see that StingyCD and StingyCD  both greatly improve
+convergence times  For the reasons discussed in   safe
+screening provides little improvement compared to CD in
+these cases even with the relative suboptimality is plotted
+until   StingyCD provides    safeness  similar to safe
+screening yet with drastically greater impact 
+
+  Combining StingyCD  with working sets
+
+This section demonstrates that StingyCD  can be useful
+when combined with other algorithms  We consider the
+problem of sparse logistic regression  an instance of  PL 
+in which each    term is   logistic loss function  For each
+training example  ai  bi    Rm       we have
+   cid ai    cid    log    exp bi  cid ai    cid   
+
+In this section  we use StingyCD  as   subproblem solver
+for   proximal Newton algorithm and   working set algorithm  Speci cally  we implement StingyCD  within
+the  Blitz  working set algorithm proposed in  Johnson  
+Guestrin    At each iteration of Blitz    subproblem
+is formed by selecting   set of priority features  The objective is then approximately minimized by updating weights
+only for features in this working set  Importantly  each subproblem in Blitz is solved approximately with   proximal
+Newton algorithm  overviewed in   and each proximal
+Newton subproblem is solved approximately with CD 
+For these comparisons  we have replaced the aforemen 
+
+ Time min Relativesuboptimality Time min Supportsetprecision Time min Supportsetrecall Time   Relativesuboptimality Time   Supportsetprecision Time   SupportsetrecallStingyCD StingyCDCD SafeScreeningCDStingyCD
+
+Figure   Combining StingyCD  with other algorithms for sparse logistic regression   above  kdda  below  lending club
+
+tioned CD implementation with   StingyCD  implementation  We demonstrate the effects of this change when
+working sets are and are not used  In the case that working
+sets are omitted  we refer to the algorithm as  StingyCD 
+ProxNewton  or  CD ProxNewton  depending on whether
+StingyCD  is incorporated  We note that Blitz and the
+proximal Newton solver have not otherwise been modi ed 
+although it is likely possible to achieve improved convergence times by accounting for the use of StingyCD  For
+example  Blitz could likely be improved by including more
+features in each working set  since StingyCD  provides an
+additional layer of update prioritization 
+The datasets used for this comparison are an educational
+performance dataset  kdda  and   loan default prediction
+task  lending club  After removing features with fewer
+than ten nonzeros  kdda   design matrix contains    
+examples        features  and       nonzero values  We solve this problem with      max  which results in   nonzero weights at the problem   solution  The
+lending club data contains       examples       
+features  and     nonzero values  We solve this problem with      max  resulting in   selected features 
+We include plots for additional   values in Appendix   
+Results of this experiment are shown in Figure   We see
+that replacing CD with StingyCD  in both Blitz and ProxNewton can result in immediate ef ciency improvements 
+We remark that the amount that StingyCD  improved upon
+
+ https www csie ntu edu tw cjlin libsvmtools 
+
+datasets binary html kdd algebra 
+ https www kaggle com wendykan 
+
+lendingclub loandata
+
+the working set approach depended signi cantly on   at
+least in the case of lending club  For this dataset  when  
+is relatively large  and thus the solution is very sparse  we
+observed little or no improvement due to StingyCD  However  for smaller values of   StingyCD  produced more
+signi cant gains  Moreover  StingyCD  was the best performing algorithm in some cases  though in other cases 
+Blitz was much faster  This observation suggests that
+there likely exists   better approach to using working sets
+with StingyCD an ideal algorithm would obtain excellent performance across all relevant   values 
+
+  Discussion
+We proposed StingyCD    coordinate descent algorithm
+that avoids large amounts of wasteful computation in applications such as sparse regression  StingyCD borrows
+geometric ideas from safe screening to guarantee many updates will result in no progress toward convergence  Compared to safe screening  StingyCD achieves considerably
+greater convergence time speedups  We also introduced
+StingyCD  which applies   probabilistic assumption to
+StingyCD in order to further prioritize coordinate updates 
+In general  we  nd the idea of  stingy updates  to be deserving of signi cantly more exploration  Currently this
+idea is limited to CD algorithms and  for the most part 
+objectives with quadratic losses  However  it seems likely
+that similar ideas would apply in many other contexts  For
+example  it could be useful to use stingy updates in distributed optimization algorithms in order to signi cantly
+reduce communication requirements 
+
+ Time min Relativesuboptimality Time min Supportsetprecision Time min Supportsetrecall Time   Relativesuboptimality Time   Supportsetprecision Time   SupportsetrecallStingyCD ProxNewtonwithWorkingSetsCDProxNewtonwithWorkingSetsStingyCD ProxNewtonCDProxNewtonStingyCD
+
+Acknowledgments
+We thank our anonymous reviewers for their thoughtful
+This work is supported in part by
+PECASE    NSF IIS  and the
+TerraSwarm Research Center  
+
+feedback 
+
+References
+Bonnefoy     Emiya     Ralaivola     and Gribonval    
+In  nd
+
+  dynamic screening principle for the lasso 
+European Signal Processing Conference   
+
+Bonnefoy     Emiya     Ralaivola     and Gribonval    
+Dynamic screening  Accelerating  rstorder algorithms
+for the lasso and grouplasso  IEEE Transactions on Signal Processing     
+
+Bradley        Kyrola     Bickson     and Guestrin 
+   Parallel coordinate descent for   regularized loss
+minimization  In International Conference on Machine
+Learning   
+
+Csiba     Qu     and Richt arik     Stochastic dual coordinate ascent with adaptive probabilities  In International
+Conference on Machine Learning   
+
+El Ghaoui     Viallon     and Rabbani     Safe feature
+elimination for the Lasso and sparse supervised learning problems  Paci   Journal of Optimization   
+   
+
+Fan       Chang       Hsieh       Wang       and
+Lin       LIBLINEAR    library for large linear classi cation  Journal of Machine Learning Research   
+   
+
+Fercoq     Gramfort     and Salmon     Mind the duality
+gap  safer rules for the lasso  In International Conference on Machine Learning   
+
+Friedman     Hastie     and Tibshirani     Regularization
+paths for generalized linear models via coordinate descent  Journal of Statistical Software     
+
+Fujiwara     Ida     Shiokawa     and Iwamura     Fast
+lasso algorithm via selective coordinate descent  In Proceedings of the Thirtieth AAAI Conference on Arti cial
+Intelligence   
+
+Johnson        and Guestrin     Blitz    principled metaIn Interna 
+
+algorithm for scaling sparse optimization 
+tional Conference on Machine Learning   
+
+Johnson        and Guestrin     Uni ed methods for exploiting piecewise linear structure in convex optimization  In Advances in Neural Information Processing Systems    
+
+Li     Concise formulas for the area and volume of   hyperspherical cap  Asian Journal of Mathematics and Statistic     
+
+Ndiaye     Fercoq     Gramfort     and Salmon     GAP
+safe screening rules for sparse multitask and multiclass
+models  In Advances in Neural Information Processing
+Systems    
+
+Ndiaye     Fercoq     Gramfort     and Salmon     Gap
+safe screening rules for sparsegroup lasso  In Advances
+in Neural Information Processing Systems    
+
+Nesterov     Ef ciency of coordinate descent methods on
+hugescale optimization problems  SIAM Journal on Optimization     
+
+Richt arik     and Tak         Parallel coordinate descent
+methods for big data optimization  Mathematical Programming     
+
+ShalevShwartz     and Tewari     Stochastic methods for
+ cid regularized loss minimization  Journal of Machine
+Learning Research   June   
+
+Shi          Tu     Xu     and Yin       primer
+on coordinate descent algorithms  Technical Report
+arXiv   
+
+Tibshirani     Regression shrinkage and selection via the
+Lasso  Journal of the Royal Statistical Society  Series   
+   
+
+Wainwright        Sharp thresholds for highdimensional
+and noisy sparsity recovery using  cid constrained
+quadratic programming  Lasso  IEEE Transactions on
+Information Theory     
+
+Wang     and Ye     Twolayer feature reduction for sparseIn Adgroup lasso via decomposition of convex sets 
+vances in Neural Information Processing Systems  
+ 
+
+Wang     Wonka     and Ye     Scaling SVM and least
+absolute deviations via exact data reduction  In International Conference on Machine Learning   
+
+Wright        Coordinate descent algorithms  Mathematical
+
+Programming     
+
+Yuan        Ho        and Lin        An improved GLMNET for   regularized logistic regression  Journal of
+Machine Learning Research     
+
+Zhou     and Zhao     Safe subspace screening for nuclear norm regularized least squares problems  In International Conference on Machine Learning   
+
+

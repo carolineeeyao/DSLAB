@@ -1,0 +1,1111 @@
+TensorTrain Recurrent Neural Networks for Video Classi cation
+
+Yinchong Yang     Denis Krompass   Volker Tresp    
+
+Abstract
+
+The Recurrent Neural Networks and their variants have shown promising performances in sequence modeling tasks such as Natural Language
+Processing  These models  however  turn out to
+be impractical and dif cult to train when exposed
+to very highdimensional inputs due to the large
+inputto hidden weight matrix  This may have
+prevented RNNs  largescale application in tasks
+that involve very high input dimensions such as
+video modeling  current approaches reduce the
+input dimensions using various feature extractors  To address this challenge  we propose  
+new  more general and ef cient approach by factorizing the inputto hidden weight matrix using
+TensorTrain decomposition which is trained simultaneously with the weights themselves  We
+test our model on classi cation tasks using multiple realworld video datasets and achieve competitive performances with stateof theart models  even though our model architecture is orders of magnitude less complex  We believe
+that the proposed approach provides   novel and
+fundamental building block for modeling highdimensional sequential data with RNN architectures and opens up many possibilities to transfer
+the expressive and advanced architectures from
+other domains such as NLP to modeling highdimensional sequential data 
+
+  Introduction
+Nowadays  the Recurrent Neural Network  RNN  especially its more advanced variants such as the LSTM and
+the GRU  belong to the most successful machine learning
+approaches when it comes to sequence modeling  Especially in Natural Language Processing  NLP  great improvements have been achieved by exploiting these Neu 
+
+ Ludwig Maximilian University of Munich  Germany
+ Siemens AG  Corporate Technology  Germany  Correspondence
+to  Yinchong Yang  yinchong yang siemens com 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+ral Network architectures  This success motivates efforts
+to also apply these RNNs to video data  since   video clip
+could be seen as   sequence of image frames  However 
+plain RNN models turn out to be impractical and dif cult to
+train directly on video data due to the fact that each image
+frame typically forms   relatively highdimensional input 
+which makes the weight matrix mapping from the input to
+the hidden layer in RNNs extremely large  For instance 
+in case of an RGB video clip with   frame size of say
+  the input vector for the RNN would already
+be     at each time step  In this case  even   small hidden layer consisting of only   hidden nodes would lead
+to   free parameters  only considering the inputto hidden mapping in the model 
+In order to circumvent this problem  stateof theart approaches often involve preprocessing each frame using
+Convolution Neural Networks  CNN    Neural Network
+model proven to be most successful in image modeling 
+The CNNs do not only reduce the input dimension  but
+can also generate more compact and informative representations that serve as input to the RNN  Intuitive and tempting as it is  training such   model from scratch in an endto end fashion turns out to be impractical for large video
+datasets  Thus  many current works following this concept
+focus on the CNN part and reduce the size of RNN in term
+of sequence length  Donahue et al    Srivastava et al 
+  while other works exploit pretrained deep CNNs as
+preprocessor to generate static features as input to RNNs
+ YueHei Ng et al    Donahue et al    Sharma
+et al    The former approach neglects the capability of RNNs to handle sequences of variable lengths and
+therefore does not scale to larger  more realistic video data 
+The second approach might suffer from suboptimal weight
+parameters by not being trained endto end  Fernando  
+Gould    Furthermore  since these CNNs are pretrained on existing image datasets  it remains unclear how
+well the CNNs can generalize to video frames that could be
+of totally different nature from the image training sets 
+Alternative approaches were earlier applied to generate image representations using dimension reductions such as
+PCA  Zhang et al    Kambhatla   Leen    Ye
+et al    and Random Projection  Bingham   Mannila 
+  Classi ers were built on such features to perform
+object and face recognition tasks  These models  however 
+
+TensorTrain Recurrent Neural Networks for Video Classi cation
+
+are often restricted to be linear and cannot be trained jointly
+with the classi er 
+In this work  we pursue   new direction where the RNN
+is exposed to the raw pixels on each frame without any
+CNN being involved  At each time step  the RNN  rst
+maps the large pixel input to   latent vector in   typically
+much lower dimensional space  Recurrently  each latent
+vector is then enriched by its predecessor at the last time
+step with   hiddento hidden mapping 
+In this way  the
+RNN is expected to capture the interframe transition patterns to extract the representation for the entire sequence of
+frames  analogous to RNNs generating   sentence representation based on word embeddings in NLP  Sutskever et al 
+  In comparison with other mapping techniques    direct inputto hidden mapping in an RNN has several advantages  First it is much simpler to train than deep CNNs in an
+endto end fashion  Secondly it is exposed to the complete
+pixel input without the linear limitation as PCA and Random Projection  Thirdly and most importantly  since the
+inputto hidden and hiddento hidden mappings are trained
+jointly  the RNN is expected to capture the correlation between spatial and temporal patterns 
+To address the issue of having too large of   weight matrix for the inputto hidden mapping in RNN models  we
+propose to factorize the matrix with the TensorTrain decomposition  Oseledets    In  Novikov et al   
+the TensorTrain has been applied to factorize   fullyconnected feedforward layer that can consume image pixels as well as latent features  We conducted experiments
+on three largescale video datasets that are popular benchmarks in the community  and give empirical proof that the
+proposed approach makes very simple RNN architectures
+competitive with the stateof theart models  even though
+they are of several orders of magnitude lower complexity 
+The rest of the paper is organized as follows  In Section
+  we summarize the stateof theart works  especially in
+video classi cation using Neural Network models and the
+tensorization of weight matrices  In Section   we  rst introduce the TensorTrain model and then provide   detailed
+derivation of our proposed TensorTrain RNNs  In Section
+  we present our experimental results on three large scale
+video datasets  Finally  Section   serves as   wrapup of
+our current contribution and provides an outlook of future
+work 
+
+Notation We index an entry in   ddimensional tensor     Rp   pd using round parentheses such as
+          ld      and        Rp   pd  when
+we only write the  rst index  Similarly  we also use
+          Rp   pd to refer to the subtensor speci 
+ ed by two indices    and   
+
+  Related Works
+The current approaches to model video data are closely related to models for image data    large majority of these
+works use deep CNNs to process each frame as image 
+and aggregate the CNN outputs 
+ Karpathy et al   
+proposes multiple fusion techniques such as Early  Late
+and Slow Fusions  covering different aspects of the video 
+This approach  however  does not fully take the order of
+frames into account   YueHei Ng et al    and  Fernando   Gould    apply global pooling of framewise
+CNNs  before feeding the aggregated information to the  
+nal classi er  An intuitive and appealing idea is to fuse
+these framewise spatial representations learned by CNNs
+using RNNs  The major challenge  however  is the computation complexity  and for this reason multiple compromises in the model design have to be made   Srivastava
+et al    restricts the length of the sequences to be  
+while  Sharma et al    and  Donahue et al    use
+pretrained CNNs   Shi et al    proposed   more compact solution that applies convolutional layers as inputto 
+hidden and hiddento hidden mapping in LSTM  However 
+they did not show its performance on largescale video
+data   Simonyan   Zisserman    applied two stacked
+CNNs  one for spatial features and the other for temporal
+ones  and fused the outcomes of both using averaging and  
+SupportVector Machine as classi er  This approach is further enhanced with Residual Networks in  Feichtenhofer
+et al    To the best of our knowledge  there has been
+no published work on applying pure RNN models to video
+classi cation or related tasks 
+The TensorTrain was  rst introduced by  Oseledets   
+as   tensor factorization model with the advantage of being
+capable of scaling to an arbitrary number of dimensions 
+ Novikov et al    showed that one could reshape  
+fully connected layer into   highdimensional tensor and
+then factorize this tensor using TensorTrain  This was applied to compress very large weight matrices in deep Neural Networks where the entire model was trained endto 
+end  In these experiments they compressed fully connected
+layers on top of convolution layers  and also proved that  
+TensorTrain Layer can directly consume pixels of image
+data such as CIFAR  achieving the best result among all
+known nonconvolutional models  Then in  Garipov et al 
+  it was shown that even the convolutional layers themselves can be compressed with TensorTrain Layers  Actually  in an earlier work by  Lebedev et al      similar
+approach had also been introduced  but their CP factorization is calculated in   preprocessing step and is only  ne
+tuned with error back propagation as   post processing step 
+ Koutnik et al    performed two sequence classi cation tasks using multiple RNN architectures of relatively
+low dimensionality  The  rst task was to classify spoken
+
+TensorTrain Recurrent Neural Networks for Video Classi cation
+
+words where the input sequence had   dimension of  
+channels  In the second task  RNNs were trained to classify handwriting based on the timestamped    spatial features  RNNs have been also applied to classify the sentiment of   sentence such as in the IMDB reviews dataset
+ Maas et al    In this case  the word embeddings form
+the input to RNN models and they may have   dimension of
+  few hundreds  The sequence classi cation model can be
+seen as   special case of the EncoderDecoder Framework
+ Sutskever et al    in the sense that   classi er decodes
+the learned representation for the entire sequence into  
+probabilistic distribution over all classes 
+
+  TensorTrain RNN
+In this section  we  rst give an introduction to the core ingredient of our proposed approach       the TensorTrain
+Factorization  and then use this to formulate   socalled
+TensorTrain Layer  Novikov et al    which replaces
+the weight matrix mapping from the input vector to the hidden layer in RNN models  We emphasize that such   layer
+is learned endto end  together with the rest of the RNN in
+  very ef cient way 
+
+  TensorTrain Factorization
+
+  TensorTrain Factorization  TTF  is   tensor factorization model that can scale to an arbitrary number of dimensions  Assuming   ddimensional target tensor of the form
+    Rp   pd  it can be factorized in form of 
+
+ cid           ld                     Gd ld 
+
+where
+
+Gk   Rpk rk rk   lk     pk           
+and      rd    
+
+ 
+
+ 
+
+As Eq    suggests  each entry in the target tensor is represented as   sequence of matrix multiplications  The
+set of tensors  Gk  
+   are usually called coretensors 
+The complexity of the TTF is determined by the ranks
+         rd  We demonstrate this calculation also in Fig 
+  Please note that the dimensions and coretensors are indexed from   to   while the rank index starts from   also
+note that the  rst and last ranks are both restricted to be  
+which implies that the  rst and last core tensors can be seen
+as matrices so that the outcome of the chain of multiplications in Eq    is always   scalar 
+If one imposes the constraint that each integer pk as in Eq 
+  can be factorized as pk   mk   nk           and consequently reshapes each Gk into   
+    Rmk nk rk rk 
+then each index lk in Eq    and   can be uniquely rep 
+
+Figure   TensorTrain Factorization Model  To reconstruct
+one entry in the target tensor  one performs   sequence of
+vectormatrix vector multiplications  yielding   scalar 
+
+resented with two indices  ik  jk      
+ cid  jk   lk   nk cid  lk
+nk
+
+ik    cid  lk
+nk
+so that Gk lk      
+
+ 
+the factorization for the tensor    
+Correspondingly 
+          md nd  can be rewritten equiva 
+
+  ik  jk    Rrk rk  
+
+ cid 
+
+ 
+
+lently to Eq cid                   id  jd 
+           
+
+         
+
+         
+
+  id  jd 
+
+ 
+
+This double index trick  Novikov et al    enables the
+factorizing of weight matrices in   feedforward layer as
+described next 
+
+  TensorTrain Factorization of   FeedForward
+
+Layer
+
+Here we factorize the weight matrix   of   fullyconnected feedforward layer denoted in              
+First we rewrite this layer in an equivalent way with scalars
+as 
+
+ cid  
+
+Then 
+
+  
+
+                      
+
+       
+           and with     RM       RN  
+
+if we assume that      cid  
+
+   nk     
+
+   mk     
+both   and   can be factorized into
+two integer arrays of the same length  then we can reshape the input vector   and the output vector    into
+two tensors with the same number of dimensions     
+Rm   md      Rn   nd  and the mapping
+function Rm   md   Rn   nd can be writ 
+
+  cid 
+
+ 
+
+ 
+
+ten as cid           jd 
+  cid 
+
+  cid 
+
+md cid 
+
+                  id  jd 
+
+ 
+
+ 
+           id              jd 
+
+id 
+
+  
+
+  
+
+rk  pk rk                    ld  ld TensorTrain Recurrent Neural Networks for Video Classi cation
+
+ 
+
+  id  jd 
+
+         
+
+         
+
+Note that Eq    can be seen as   special case of Eq   
+with       The ddimensional doubleindexed tensor of
+weights   in Eq  can be replaced by its TTF represen 
+
+   of size cid  
+
+tation   cid                   id  jd 
+           
+ cid  
+Now instead of explicitly storing the full tensor   of size
+   mk nk        we only store its TTformat       the
+set of lowrank core tensors  Gk  
+   mk  
+nk   rk    rk  which can approximately reconstruct   
+The forward pass complexity  Novikov et al    for one
+scalar in the output vector indexed by          jd  turns
+out to be              Since one needs an iteration through
+all such tuples  yielding   nd  the total complexity for
+one FeedForward Pass can be expressed as                 
+ nd  where      maxk    mk       maxk    nk      
+maxk    rk  This  however  would be           for  
+fullyconnected layer 
+One could also compute the compression rate as the ratio
+between the number of weights in   fully connected layer
+and that in its compressed form as 
+
+ cid  
+
+ cid  
+
+   
+
+   mknkrk rk
+
+   mknk
+
+ 
+
+ 
+
+For instance  an RGB frame of size           implies
+an input vector of length   With   hidden layer of
+size  say    one would need   weight matrix consisting
+of   free parameters  On the other hand    TTL
+that factorizes the input dimension with   is
+able to represent this matrix using   parameters with
+  TTrank of   or   parameters with   TTrank of  
+ Tab    yielding compression rates of     and    
+respectively 
+For the rest of the paper  we term   fullyconnected layer
+in form of               whose weight matrix   is factorized with TTF    TensorTrain Layer  TTL  and use the
+notation
+
+                     or             
+
+ 
+where in the second case no bias is required  Please also
+note that  in contrast to  Lebedev et al    where the
+weight tensor is  rstly factorized using nonlinear LeastSquare method and then  netuned with BackPropagation 
+the TTL is always trained endto end  For details on the
+gradients calculations please refer to Section   in  Novikov
+et al   
+
+  TensorTrain RNN
+
+In this work we investigate the challenge of modeling highdimensional sequential data with RNNs  For this reason 
+
+we factorize the matrix mapping from the input to the hidden layer with   TTL  For an Simple RNN  SRNN  which
+is also known as the Elman Network  this mapping is realized as   vectormatrix multiplication  whilst in case of
+LSTM and GRU  we consider the matrices that map from
+the input vector to the gating units 
+TTGRU 
+
+                            rh      br 
+                            zh      bz 
+       tanh                                  
+                                    
+
+ 
+
+TTLSTM 
+
+                            kh      bk 
+                                       bf  
+                            oh      bo 
+       tanh                     gh      bg 
+                                 
+              tanh     
+
+ 
+
+  of the factors that form the output size      cid  
+
+One can see that LSTM and GRU require   and   TTLs 
+respectively  one for each of the gating units  Instead of
+calculating these TTLs successively  which we call vanilla
+TTLSTM and vanilla TTGRU  we increase     the  rst
+   nk
+in   TTL  by   factor of   or   and concatenate all the
+gates as one output tensor  thus parallelizing the computation  This trick  inspired by the implementation of standard
+LSTM and GRU in  Chollet    can further reduce the
+number of parameters  where the concatenation is actually
+participating in the tensorization  The compression rate for
+ cid  
+the inputto hidden weight matrix   now becomes
+   mknkrk rk                 
+
+    
+
+ 
+
+   cid  
+
+   mknk
+
+where       in case of LSTM and   in case of GRU 
+
+and one can show that    is always smaller than   as in Eq 
+  For the former numerical example of   input frame size
+    vanilla TTLSTM would simply require  
+times as many parameters as   TTL  which would be  
+for rank   and   for rank   Applying this trick would 
+however  yield only   and   parameters for both
+ranks  respectively  We cover other possible settings of this
+numerical example in Tab   
+Finally to construct the classi cation model  we denote
+the ith sequence of variable length Ti as   set of vectors
+
+ Though in theory one could of course choose any nk 
+
+TensorTrain Recurrent Neural Networks for Video Classi cation
+
+Table     numerical example of compressing with TTRNNs  Assuming that an input dimension of   is
+factorized as               and the hidden layer as                   depending on the TTranks we calculate the
+number of parameters necessary for   FullyConnected  FC  layer    TTL which is equivalent to TTSRNN   TTLSTM and
+TTGRU in their respective vanilla and parallelized form  For comparison  typical CNNs for preprocessing images such as
+AlexNet  Krizhevsky et al    Han et al    or GoogLeNet  Szegedy et al    consist of over   and   million
+parameters  respectively 
+
+FC
+
+ 
+
+TTranks
+ 
+ 
+ 
+
+TTL
+ 
+ 
+ 
+
+vanilla TTLSTM TTLSTM vanilla TTGRU TTGRU
+ 
+ 
+ 
+
+ 
+ 
+ 
+
+ 
+ 
+ 
+
+ 
+ 
+ 
+
+   Ti
+
+   with     
+
+           
+  Ti 
+
+     
+    RM    For video data each     
+ 
+would be an RGB frame of   dimensions  For the sake of
+simplicity we denote an RNN model  either with or without
+TTL  with   function    
+   Ti
+
+    RN  
+which outputs the last hidden layer vector   Ti 
+out of  
+sequential input of variable length  This vector can be interpreted as   latent representation of the whole sequence 
+on top of which   parameterized classi er   with either
+softmax or logistic activation produces the distribution over
+all   classes 
+
+   where   Ti 
+
+ 
+
+ 
+
+wild  and   resolution of       We generate   sequence of RGB frames of size       from each clip at
+an fps frame per second  of   corresponding to the standard value in  lm and television production  The lengths of
+frame sequences vary therefore between   to   with
+an average of  
+
+   Ti
+
+  yi        
+
+        Ti 
+ 
+   Ti
+          
+The model is also illustrated in Fig   
+
+ 
+
+           
+
+ 
+
+Figure   Two samples of frame sequences from the UCF 
+dataset  The two rows belong to the classes of basketball
+shooting and volleyball spiking  respectively 
+
+  Experiments
+In the following  we present our experiments conducted on
+three large video datasets  These empirical results demonstrate that the integration of the TensorTrain Layer in plain
+RNN architectures such as   tensorized LSTM or GRU
+boosts the classi cation quality of these models tremendously when directly exposed to highdimensional input
+data  such as video data  In addition  even though the plain
+architectures are of very simple nature and very low complexity opposed to the stateof theart solutions on these
+datasets  it turns out that the integration of the TensorTrain
+Layer alone makes these simple networks very competitive
+to the stateof theart  reaching second best results in all
+cases 
+
+UCF  Data  Liu et al   
+We  rst conduct experiments on the UCF    earlier
+known as the YouTube Action Dataset  It contains in total   video clips belonging to   classes that summarize the human action visible in each video clip such as
+basketball shooting  biking  diving etc  These videos originate from YouTube and have natural background  in the
+
+For both the TTGRUs and TTLSTMs the input dimension
+at each time step is               which is factorized as               the hidden layer is chosen to
+be                   and the TensorTrain ranks are
+            fullyconnected layer for such   mapping
+would have required   parameters to learn  while
+the inputto hidden layer in TTGRU and TTLSTM consist
+of only   and   respectively 
+As the  rst baseline model we sample   random frames in
+ascending order  The model is   simple Multilayer Perceptron  MLP  with two layers of weight matrices  the  rst of
+which being   TTL  The input is the concatenation of all
+   attened frames and the hidden layer is of the same size
+as the hidden layer in TTRNNs  We term this model as
+TensorTrain Multilayer Perceptron  TTMLP  for the rest
+of the paper  As the second baseline model we use plain
+GRUs and LSTMs that have the same size of hidden layer
+as their TT pendants  We follow  Liu et al    and perform for each experimental setting    fold cross validation
+with mutual exclusive data splits  The mean and standard
+deviation of the prediction accuracy scores are reported in
+Tab   
+
+TensorTrain Recurrent Neural Networks for Video Classi cation
+
+Figure   Architecture of the proposed model based on TTRNN  For illustrative purposes we only show   frames   
+softmax or sigmoid classi er built on the last hidden layer of   TTRNN  We hypothesize that the RNN can be encouraged
+to aggregate the representations of different shots together and produce   global representation for the whole sequence 
+
+Table   Experimental Results on UCF  Dataset  We report    the accuracy score  ii  the number of parameters involved in the inputto hidden mapping in respective models
+and iii  the average runtime of each training epoch  The
+models were trained on   Quad core Intel   cid Xeon   cid   
+      GHz Processor to   maximum of   epochs
+
+Accuracy
+
+     
+TTMLP
+     
+GRU
+     
+LSTM
+     
+TTGRU
+TTLSTM      
+
+  Parameters Runtime
+  
+  
+  
+  
+  
+
+ 
+ 
+ 
+ 
+ 
+
+The standard LSTM and GRU do not show large improvements compared with the TTMLP model  The TTLSTM
+and TTGRU  however  do not only compress the weight
+matrix from over   millions to   thousands  but also signi cantly improve the classi cation accuracy 
+It seems
+that plain LSTM and GRU are not adequate to model
+such highdimensional sequential data because of the large
+weight matrix from input to hidden layer  Compared to
+some latest stateof theart performances in Tab    our
+model  simple as it is  shows accuracy scores second to
+ Sharma et al    which uses pretrained GoogLeNet
+CNNs plus  fold stacked LSTM with attention mechanism  Please note that   GoogLeNet CNN alone consists of
+over   million parameters  Szegedy et al    In term of
+runtime  the plain GRU and LSTM took on average more
+than   and   days to train  respectively  while the TTGRU and TTLSTM both approximately   days  Therefore
+please note the TTL reduces the training time by   factor of
+  to   on these commodity hardwares 
+
+Table   Stateof theart results on the UCF  Dataset  in
+comparison with our best model  Please note that there was
+an update of the data set on  th December   We therefore only consider works posterior to this date 
+
+Original   Liu et al   
+ Liu et al   
+ Hasan   RoyChowdhury   
+ Sharma et al   
+Our best model  TTGRU 
+
+ 
+ 
+ 
+ 
+ 
+
+Hollywood  Data  Marsza ek et al   
+The Hollywood  dataset contains video clips from  
+movies  from which   movies serve as training set and
+  movies as test set  From these movies   training clips
+and   test clips are generated and each clip is assigned
+one or multiple of   action labels such as answering the
+phone  driving   car  eating or  ghting   person  This data
+set is much more realistic and challenging since the same
+action could be performed in totally different style in front
+of different background in different movies  Furthermore 
+there are often montages  camera movements and zooming
+within   single clip 
+The original frame sizes of the videos vary  but based on
+the majority of the clips we generate frames of size  
+    which corresponds to the Anamorphic Format  at
+fps of   The length of training sequences varies from  
+to   with an average of   while the length of test
+sequences varies from   to   frames with an average
+of  
+The input dimension at each time step  being        
+      is factorized as               The hidden
+layer is still                   and the TensorTrain
+ranks are           Since each clip might have more
+
+               FullyConnected Weights                TTLWeights                    Softmax Sigmoid Classifier for                                        Representation for the car  Representation for the gettingout action   TensorTrain Recurrent Neural Networks for Video Classi cation
+
+LSTM GRU  which highlights the signi cant performance
+improvements the TensorTrain Layer contributes to the
+RNN models 
+It is also to note that  although the plain LSTM and GRU
+consist of up to approximately    as many parameters as
+their TT modi cations do  the training time does not re ect
+such discrepancy due to the good parallelization power of
+GPUs  However  the obvious difference in their training
+qualities con rms that training larger models may require
+larger amounts of data  In such cases  powerful hardwares
+are no guarantee for successful training 
+
+Table   Stateof theart Results on Hollywood  Dataset 
+in comparison with our best model 
+
+Original   Marsza ek et al   
+ Le et al   
+ Jain et al   
+ Sharma et al   
+ Fernando et al   
+ Fernando   Gould   
+Our best model  TTLSTM 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Youtube Celebrities Face Data  Kim et al   
+This dataset consists of   Youtube video clips of  
+prominent individuals such as movie stars and politicians 
+In the simplest cases  where the face of the subject is visible as   long take    mere frame level classi cation would
+suf ce  The major challenge  however  is posed by the fact
+that some videos involve zooming and or changing the angle of view  In such cases   single frame may not provide
+enough information for the classi cation task and we believe it is advantageous to apply RNN models that can aggregate frame level information over time 
+
+Figure   Two samples of frame sequences from the Hollywood  dataset  The  rst sequence  row   and   belongs to
+the class of sitting down  the second sequence  row   and
+  has two labels  running and  ghting person 
+
+than one label  multiclass multilabel problem  we implement   logistic activated classi er for each class on top of
+the last hidden layer  Following  Marsza ek et al    we
+measure the performances using Mean Average Precision
+across all classes  which corresponds to the AreaUnder 
+PrecisionRecall Curve 
+As before we conduct experiments on this dataset using the
+plain LSTM  GRU and their respective TT modi cations 
+The results are presented in in Tab    and stateof theart in
+Tab   
+
+Table   Experimental Results on Hollywood  Dataset  We
+report    the Mean Average Precision score  ii  the number of parameters involved in the inputto hidden mapping
+in respective models and iii  the average runtime of each
+training epoch  The models were trained on an NVIDIA
+Tesla     Processor to   maximum of   epochs 
+
+MAP
+ 
+TTMLP
+ 
+GRU
+ 
+LSTM
+TTGRU
+ 
+TTLSTM  
+
+  Parameters Runtime
+  
+  
+  
+  
+  
+
+ 
+ 
+ 
+ 
+ 
+
+ Fernando et al    and  Jain et al    use improved trajectory features with Fisher encoding  Wang  
+Schmid    and Histogram of Optical Flow  HOF  features  Laptev et al    respectively  and achieve so
+far the best score 
+ Sharma et al    and  Fernando
+  Gould    provide best scores achieved with Neural Network models but only the latter applies endto 
+end training  To this end  the TTLSTM model provides
+the second best score in general and the best score with
+Neural Network models  even though it merely replaces
+the inputto hidden mapping with   TTL  Please note the
+large difference between the plain LSTM GRU and the TT 
+
+Figure   Two samples of frame sequences from the
+Youtube Celebrities Face dataset  The two rows belong to
+the classes of Al Pacino and Emma Thompson 
+
+The original frame sizes of the videos vary but based on
+the majority of the clips we generate frames of size  
+    at fps of   The retrieved sequences have lengths
+varying from   to   with an average of   The input
+dimension at each time step is              
+which is factorized as         the hidden layer is
+again                   and the TensorTrain ranks are
+
+TensorTrain Recurrent Neural Networks for Video Classi cation
+
+         
+
+Table   Experimental Results on Youtube Celebrities Face
+Dataset  We report    the Accuracy score  ii  the number of
+parameters involved in the inputto hidden mapping in respective models and iii  the average runtime of each training epoch  The models were trained on an NVIDIA Tesla
+    Processor to   maximum of   epochs 
+
+Accuracy
+
+     
+TTMLP
+     
+GRU
+     
+LSTM
+     
+TTGRU
+TTLSTM      
+
+  Parameters Runtime
+  
+  
+  
+  
+  
+
+ 
+ 
+ 
+ 
+ 
+
+As expected  the baseline of TTMLP model tends to perform well on the simpler video clips where the position
+of the face remains less changed over time  and can even
+outperform the plain GRU and LSTM  The TTGRU and
+TTLSTM  on the other hand  provide accuracy very close
+to the best stateof theart model  Tab    using Mean Sequence Sparse Representationbased Classi cation  Ortiz
+et al    as feature extraction 
+
+Table   Stateof theart Results on Youtube Celebrities
+Face Dataset  in comparison with our best model 
+
+Original   Kim et al   
+ Harandi et al   
+ Ortiz et al   
+ Faraki et al   
+Our best model  TTGRU 
+
+ 
+ 
+ 
+ 
+ 
+
+Experimental Settings
+We applied   Dropout  Srivastava et al    for both
+inputto hidden and hiddento hidden mappings in plain
+GRU and LSTM as well as their respective TT modi cations  and   ridge regularization for the singlelayered
+classi er 
+The models were implemented in Theano
+ Bastien et al    and deployed in Keras  Chollet 
+  We used the Adam  Kingma   Ba    step rule
+for the updates with an initial learning rate  
+
+  Conclusions and Future Work
+We proposed to integrate TensorTrain Layers into Recurrent Neural Network models including LSTM and GRU 
+which enables them to be trained endto end on highdimensional sequential data  We tested such integration
+on three largescale realistic video datasets  In comparison
+to the plain RNNs  which performed very poorly on these
+video datasets  we could empirically show that the integration of the TensorTrain Layer alone signi cantly improves
+
+the modeling performances  In contrast to related works
+that heavily rely on deep and large CNNs  one advantage of
+our classi cation model is that it is simple and lightweight 
+reducing the number of free parameters from tens of millions to thousands  This would make it possible to train
+and deploy such models on commodity hardware and mobile devices  On the other hand  with signi cantly less free
+parameters  such tensorized models can be expected to be
+trained with much less labeled data  which are quite expensive in the video domain 
+More importantly  we believe that our approach opens up
+  large number of possibilities to model highdimensional
+sequential data such as videos using RNNs directly  In spite
+of its success in modeling other sequential data such as natural language  music data etc  RNNs have not been applied
+to video data in   fully endto end fashion  presumably due
+to the large inputto hidden weight mapping  With TTRNNs that can directly consume video clips on the pixel
+level  many RNNbased architectures that are successful in
+other applications  such as NLP  can be transferred to modeling video data  one could implement an RNN autoencoder that can learn video representations similar to  Srivastava et al    an EncoderDecoder Network  Cho
+et al    that can generate captions for videos similar
+to  Donahue et al    or an attentionbased model that
+can learn on which frame to allocate the attention in order
+to improve the classi cation 
+We believe that the TTRNN provides   fundamental building block that would enable the transfer of techniques from
+ elds  where RNNs have been very successful  to  elds
+that deal with very highdimensional sequence data  where
+RNNs have failed in the past 
+The source codes of our TTRNN implementations and all
+the experiments in Sec    are publicly available at https 
+ github com Tuyki TT RNN  In addition  we also
+provide codes of unit tests  simulation studies as well as
+experiments performed on the HMDB  dataset  Kuehne
+et al   
+
+References
+Bastien  Fr ed eric  Lamblin  Pascal  Pascanu  Razvan 
+Bergstra  James  Goodfellow  Ian    Bergeron  Arnaud 
+Bouchard  Nicolas  and Bengio  Yoshua  Theano  new
+features and speed improvements  Deep Learning and
+Unsupervised Feature Learning NIPS   Workshop 
+ 
+
+Bingham  Ella and Mannila  Heikki  Random projection in
+dimensionality reduction  applications to image and text
+data  In Proceedings of the seventh ACM SIGKDD international conference on Knowledge discovery and data
+mining  pp    ACM   
+
+TensorTrain Recurrent Neural Networks for Video Classi cation
+
+Cho  Kyunghyun  Van Merri enboer  Bart  Bahdanau 
+Dzmitry  and Bengio  Yoshua  On the properties of neural machine translation  Encoderdecoder approaches 
+arXiv preprint arXiv   
+
+Chollet  Franc ois  Keras  Deep learning library for
+https github com 
+
+theano and tensor ow 
+fchollet keras   
+
+Donahue  Jeffrey  Anne Hendricks  Lisa  Guadarrama 
+Sergio  Rohrbach  Marcus  Venugopalan  Subhashini 
+Saenko  Kate  and Darrell  Trevor  Longterm recurrent convolutional networks for visual recognition and
+In Proceedings of the IEEE Conference
+description 
+on Computer Vision and Pattern Recognition  pp   
+   
+
+Faraki  Masoud  Harandi  Mehrtash    and Porikli  Fatih 
+Image set classi cation by symmetric positive semiIn Applications of Computer Vision
+de nite matrices 
+ WACV    IEEE Winter Conference on  pp   
+IEEE   
+
+Feichtenhofer  Christoph  Pinz  Axel  and Wildes  Richard 
+Spatiotemporal residual networks for video action recogIn Advances in Neural Information Processing
+nition 
+Systems  pp     
+
+Fernando  Basura and Gould  Stephen  Learning endto 
+In Proc 
+end video classi cation with rankpooling 
+of the International Conference on Machine Learning
+ ICML   
+
+Fernando  Basura  Gavves  Efstratios  Oramas  Jose   
+Ghodrati  Amir  and Tuytelaars  Tinne  Modeling video
+In Proceedings of
+evolution for action recognition 
+the IEEE Conference on Computer Vision and Pattern
+Recognition  pp     
+
+Garipov  Timur  Podoprikhin  Dmitry  Novikov  Alexander 
+and Vetrov  Dmitry  Ultimate tensorization  compressing convolutional and fc layers alike  arXiv preprint
+arXiv   
+
+Han  Song  Pool  Jeff  Tran  John  and Dally  William 
+Learning both weights and connections for ef cient neural network  In Advances in Neural Information Processing Systems  pp     
+
+Harandi  Mehrtash  Sanderson  Conrad  Shen  Chunhua 
+and Lovell  Brian    Dictionary learning and sparse
+coding on grassmann manifolds  An extrinsic solution 
+In Proceedings of the IEEE International Conference on
+Computer Vision  pp     
+
+Hasan  Mahmudul and RoyChowdhury  Amit   
+
+Incremental activity modeling and recognition in streaming
+In Proceedings of the IEEE Conference on
+videos 
+
+Computer Vision and Pattern Recognition  pp   
+ 
+
+Jain  Mihir  Jegou  Herve  and Bouthemy  Patrick  Better
+exploiting motion for better action recognition  In Proceedings of the IEEE Conference on Computer Vision
+and Pattern Recognition  pp     
+
+Kambhatla  Nandakishore and Leen  Todd    Dimension
+reduction by local principal component analysis  Neural
+computation     
+
+Karpathy  Andrej  Toderici  George  Shetty  Sanketh  Leung  Thomas  Sukthankar  Rahul  and FeiFei  Li  Largescale video classi cation with convolutional neural networks  In Proceedings of the IEEE conference on Computer Vision and Pattern Recognition  pp   
+ 
+
+Kim  Minyoung  Kumar  Sanjiv  Pavlovic  Vladimir  and
+Face tracking and recognition with
+Rowley  Henry 
+In Computer
+visual constraints in realworld videos 
+Vision and Pattern Recognition    CVPR  
+IEEE Conference on  pp    IEEE    URL
+http seqam rutgers edu site index 
+php option com content view article 
+id Itemid 
+
+Kingma  Diederik and Ba 
+
+Jimmy 
+method for stochastic optimization 
+arXiv   
+
+Adam 
+
+ 
+arXiv preprint
+
+Koutnik  Jan  Greff  Klaus  Gomez  Faustino  and SchmidarXiv preprint
+
+huber  Juergen    clockwork rnn 
+arXiv   
+
+Krizhevsky  Alex  Sutskever  Ilya  and Hinton  Geoffrey   
+Imagenet classi cation with deep convolutional neural
+networks  In Advances in neural information processing
+systems  pp     
+
+Kuehne     Jhuang     Garrote     Poggio     and Serre 
+   HMDB    large video database for human motion
+recognition  In Proceedings of the International Conference on Computer Vision  ICCV   
+
+Laptev  Ivan  Marszalek  Marcin  Schmid  Cordelia  and
+Rozenfeld  Benjamin  Learning realistic human actions
+from movies  In Computer Vision and Pattern Recognition    CVPR   IEEE Conference on  pp   
+IEEE   
+
+Le  Quoc    Zou  Will    Yeung  Serena    and Ng  Andrew    Learning hierarchical invariant spatiotemporal
+features for action recognition with independent subspace analysis  In Computer Vision and Pattern Recognition  CVPR    IEEE Conference on  pp   
+IEEE   
+
+TensorTrain Recurrent Neural Networks for Video Classi cation
+
+Lebedev  Vadim  Ganin  Yaroslav  Rakhuba  Maksim 
+Oseledets  Ivan  and Lempitsky  Victor 
+Speedingup convolutional neural networks using  netuned cpdecomposition  arXiv preprint arXiv   
+
+Liu  Dianting  Shyu  MeiLing  and Zhao  Guiru  Spatialtemporal motion information integration for action detection and recognition in nonstatic background  In Information Reuse and Integration  IRI    IEEE  th
+International Conference on  pp    IEEE   
+
+Liu  Jingen  Luo  Jiebo  and Shah  Mubarak  Recognizing realistic actions from videos  in the wild 
+In
+Computer Vision and Pattern Recognition    CVPR
+  IEEE Conference on  pp    IEEE 
+  URL http crcv ucf edu data UCF 
+YouTube Action php 
+
+Maas  Andrew    Daly  Raymond    Pham  Peter    Huang 
+Dan  Ng  Andrew    and Potts  Christopher  Learning
+word vectors for sentiment analysis  In Proceedings of
+the  th Annual Meeting of the Association for Computational Linguistics  Human Language TechnologiesVolume   pp    Association for Computational
+Linguistics   
+
+Marsza ek  Marcin  Laptev  Ivan  and Schmid  Cordelia 
+Actions in context  In IEEE Conference on Computer Vision   Pattern Recognition    URL http www 
+di ens fr laptev actions hollywood 
+Novikov  Alexander  Podoprikhin  Dmitrii  Osokin  Anton 
+and Vetrov  Dmitry    Tensorizing neural networks  In
+Advances in Neural Information Processing Systems  pp 
+   
+
+Ortiz  Enrique    Wright  Alan  and Shah  Mubarak  Face
+recognition in movie trailers via mean sequence sparse
+In Proceedings of
+representationbased classi cation 
+the IEEE Conference on Computer Vision and Pattern
+Recognition  pp     
+
+Oseledets  Ivan    Tensortrain decomposition  SIAM Jour 
+
+nal on Scienti   Computing     
+
+Sharma  Shikhar  Kiros  Ryan  and Salakhutdinov  Ruslan 
+Action recognition using visual attention  arXiv preprint
+arXiv   
+
+Shi  Xingjian  Chen  Zhourong  Wang  Hao  Yeung 
+Dityan  Wong  Waikin  and Woo  Wangchun  Convolutional lstm network    machine learning approach for
+precipitation nowcasting  pp     
+
+Simonyan  Karen and Zisserman  Andrew  Twostream
+convolutional networks for action recognition in videos 
+In Advances in Neural Information Processing Systems 
+pp     
+
+Srivastava  Nitish  Hinton  Geoffrey    Krizhevsky  Alex 
+Sutskever  Ilya  and Salakhutdinov  Ruslan  Dropout 
+  simple way to prevent neural networks from over tJournal of Machine Learning Research   
+ting 
+   
+
+Srivastava  Nitish  Mansimov  Elman  and Salakhutdinov 
+Ruslan  Unsupervised learning of video representations
+using lstms  CoRR  abs     
+
+Sutskever  Ilya  Vinyals  Oriol  and Le  Quoc   
+
+Sequence to sequence learning with neural networks 
+In
+Advances in neural information processing systems  pp 
+   
+
+Szegedy  Christian  Liu  Wei  Jia  Yangqing  Sermanet 
+Pierre  Reed  Scott  Anguelov  Dragomir  Erhan  Dumitru  Vanhoucke  Vincent  and Rabinovich  Andrew 
+In Proceedings of
+Going deeper with convolutions 
+the IEEE Conference on Computer Vision and Pattern
+Recognition  pp     
+
+Wang  Heng and Schmid  Cordelia  Action recognition
+with improved trajectories  In Proceedings of the IEEE
+International Conference on Computer Vision  pp   
+   
+
+Ye  Jieping  Janardan  Ravi  and Li  Qi  Gpca  an ef cient
+dimension reduction scheme for image compression and
+In Proceedings of the tenth ACM SIGKDD
+retrieval 
+international conference on Knowledge discovery and
+data mining  pp    ACM   
+
+YueHei Ng 
+
+Joe  Hausknecht  Matthew  Vijayanarasimhan  Sudheendra  Vinyals  Oriol  Monga 
+Rajat  and Toderici  George  Beyond short snippets 
+Deep networks for video classi cation  In Proceedings
+of the IEEE Conference on Computer Vision and Pattern
+Recognition  pp     
+
+Zhang  Jun  Yan  Yong  and Lades  Martin  Face recognition  eigenface  elastic matching  and neural nets  Proceedings of the IEEE     
+
+

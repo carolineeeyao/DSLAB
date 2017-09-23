@@ -1,0 +1,1030 @@
+DataEf cient Policy Evaluation Through Behavior Policy Search
+
+Josiah    Hanna   Philip    Thomas     Peter Stone   Scott Niekum  
+
+Abstract
+
+We consider the task of evaluating   policy for
+  Markov decision process  MDP  The standard
+unbiased technique for evaluating   policy is to
+deploy the policy and observe its performance 
+We show that the data collected from deploying
+  different policy  commonly called the behavior
+policy  can be used to produce unbiased estimates
+with lower mean squared error than this standard
+technique  We derive an analytic expression for
+the optimal behavior policy the behavior policy that minimizes the mean squared error of the
+resulting estimates  Because this expression depends on terms that are unknown in practice  we
+propose   novel policy evaluation subproblem 
+behavior policy search  searching for   behavior policy that reduces mean squared error  We
+present   behavior policy search algorithm and
+empirically demonstrate its effectiveness in lowering the mean squared error of policy performance estimates 
+
+  Introduction
+Many sequential decision problems 
+including diabetes
+treatment  Bastani    digital marketing  Theocharous
+et al    and robot control  Lillicrap et al    are
+modeled as Markov decision processes  MDPs  and solved
+using reinforcement learning  RL  algorithms  One important problem when applying RL to real problems is policy
+evaluation  The goal in policy evaluation is to estimate the
+expected return  sum of rewards  produced by   policy  We
+refer to this policy as the evaluation policy      The standard policy evaluation approach is to repeatedly deploy   
+and average the resulting returns  While this na ve Monte
+Carlo estimator is unbiased  it may have high variance 
+
+ The University of Texas at Austin  Austin  Texas  USA
+ The University of Massachusetts  Amherst  Massachusetts  USA
+ Carnegie Mellon University  Pittsburgh  Pennsylvania  USA 
+Correspondence to  Josiah    Hanna  jphanna cs utexas edu 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+Methods that evaluate    while selecting actions according
+to    are termed onpolicy  Previous work has addressed
+variance reduction for onpolicy returns  Zinkevich et al 
+  White   Bowling    Veness et al    An
+alternative approach is to estimate the performance of   
+while following   different  behavior policy      Methods
+that evaluate    with data generated from    are termed offpolicy  Importance sampling  IS  is one standard approach
+for using offpolicy data in RL  IS reweights returns observed while executing    such that they are unbiased estimates of the performance of    
+Presently  IS is usually used when offpolicy data is already
+available or when executing    is impractical  If    is not
+chosen carefully  IS often has high variance  Thomas et al 
+  For this reason  an implicit assumption in the RL
+community has generally been that onpolicy evaluation is
+more accurate when it is feasible  However  IS can also be
+used for variance reduction when done with an appropriately selected distribution of returns  Hammersley   Handscomb    While ISbased variance reduction has been
+explored in RL  this prior work has required knowledge of
+the environment   transition probabilities and remains onpolicy  Desai   Glynn    Frank et al    Ciosek
+  Whiteson   
+In contrast to this earlier work  we
+show how careful selection of the behavior policy can lead
+to lower variance policy evaluation than using the evaluation policy and do not require knowledge of the environment   transition probabilities 
+In this paper  we formalize the selection of    as the behavior policy search problem  We introduce   method for this
+problem that adapts the policy parameters of    with gradient descent on the variance of importancesampling  Empirically we demonstrate behavior policy search with our
+method lowers the mean squared error of estimates compared to onpolicy estimates  To the best of our knowledge 
+this work is the  rst to propose adapting the behavior policy to obtain better policy evaluation in RL  Furthermore
+we present the  rst method to address this problem 
+
+  Preliminaries
+This section details the policy evaluation problem setting 
+the Monte Carlo and Advantage Sum onpolicy methods 
+and importancesampling for offpolicy evaluation 
+
+DataEf cient Policy Evaluation Through Behavior Policy Search
+
+  Background
+
+  Advantage Sum Estimates
+
+and         cid  
+
+We use notational standard MDPNv   Thomas    and
+for simplicity  we assume that      and   are  nite  Let
+                         SL  AL  RL  be   trajectory
+    tRt be the discounted return of trajectory    Let                 be the expected
+discounted return when the stochastic policy   is used from
+   sampled from the initial state distribution  In this work 
+we consider parameterized policies    where the distribution over actions is determined by the vector   We assume
+that the transitions and reward function are unknown and
+that   is  nite 
+We are given an evaluation policy      for which we would
+like to estimate     We assume there exists   policy
+parameter vector    such that         and that this vector is known  We consider an incremental setting where 
+at iteration    we sample   single trajectory Hi with   policy    and add  Hi      to   set    We use Di to denote
+the set at iteration    Methods that always           choose
+        are onpolicy  otherwise  the method is offpolicy 
+  policy evaluation method  PE  uses all trajectories in Di
+to estimate     Our goal is to design   policy evaluation algorithm that produces estimates of     that have
+low mean squared error  MSE  Formally  the goal of policy evaluation with PE is to minimize  PE Di       
+While other measures of policy evaluation accuracy could
+be considered  we follow earlier work in using MSE      
+ Thomas   Brunskill    Precup et al   
+We focus on unbiased estimators of     While biased estimators       bootstrapping methods  Sutton  
+Barto    approximate models  Kearns   Singh   
+etc  can sometimes produce lower MSE estimates they are
+problematic for high risk applications requiring con dence
+intervals  For unbiased estimators  minimizing variance is
+equivalent to minimizing MSE 
+
+  MonteCarlo Estimates
+
+Perhaps the most commonly used policy evaluation method
+is the onpolicy MonteCarlo  MC  estimator  The estimate
+of     at iteration   is the average return 
+
+Like the MonteCarlo estimator  the advantage sum  ASE 
+estimator selects         for all    However  it introduces   control variate to reduce the variance without introducing bias  This control variate requires an approximate
+model of the MDP to be provided  Let the reward function of this model be given as          Let      st  at   
+   st cid  at cid  and       st          st  at at  
+         the actionvalue function and statevalue function
+of    in this approximate model  Then  the advantage sum
+estimator is given by 
+
+  cid  
+
+  cid      cid 
+
+AS Di   
+
+ 
+
+     
+
+   Rt         St  At          St 
+
+  cid 
+
+  cid 
+
+  
+
+  
+
+Intuitively  ASE is replacing part of the randomness of the
+Monte Carlo return with the known expected return under
+the approximate model  Provided      St  At         St  is
+suf ciently correlated with Rt  the variance of ASE is less
+than that of MC 
+Notice that  like the MC estimator  the ASE estimator is
+onpolicy  in that the behavior policy is always the policy
+that we wish to evaluate  Intuitively it may seems like this
+choice should be optimal  However  we will show that it is
+not selecting behavior policies that are different from the
+evaluation policy can result in estimates of     that have
+lower variance 
+
+  Importance Sampling
+
+Importance Sampling is   method for reweighting returns
+from   behavior policy    such that they are unbiased returns from the evaluation policy  In RL  the reweighted IS
+return of   trajectory     sampled from   is 
+   St At 
+ St At 
+
+IS            
+
+  cid 
+
+ 
+
+  
+
+The IS offpolicy estimator is then   Monte Carlo estimate
+of    IS          
+
+  cid 
+
+  
+
+MC Di   
+
+ 
+
+     
+
+ tRt  
+
+ 
+
+     
+
+  Hj 
+
+IS Di   
+
+ 
+
+     
+
+IS Hj     
+
+  cid 
+
+  cid 
+
+  
+
+  
+
+  cid 
+
+  
+
+This estimator is unbiased and strongly consistent given
+mild assumptions  However  this method can have high
+variance 
+
+ The methods  and theoretical results discussed in this paper
+are applicable to both  nite and in nite     and   as well as
+partiallyobservable Markov decision processes 
+
+ Being   strongly consistent estimator of     means that
+
+In RL  importance sampling allows offpolicy data to be
+used as if it were onpolicy  In this case the variance of
+the IS estimate is often much worse than the variance of
+onpolicy MC estimates because the behavior policy is not
+
+ cid 
+   MC Di       
+If     exists  MC is
+Pr
+strongly consistent by the Khintchine Strong law of large numbers  Sen   Singer   
+
+   
+
+ cid 
+
+lim
+
+DataEf cient Policy Evaluation Through Behavior Policy Search
+
+chosen to minimize variance  but is   policy that is dictated
+by circumstance 
+
+  Behavior Policy Search
+Importance sampling was originally intended as   variance
+reduction technique for Monte Carlo evaluation  Hammersley   Handscomb    When an evaluation policy rarely
+samples trajectories with high magnitude returns   Monte
+Carlo evaluation will have high variance  If   behavior policy can increase the probability of observing such trajectories then the offpolicy IS estimate will have lower variance
+than an onpolicy Monte Carlo estimate  In this section we
+ rst describe the theoretical potential for variance reduction
+with an appropriately selected behavior policy  In general
+this policy will be unknown  Thus  we propose   policy
+evaluation subproblem   the behavior policy search problem   solutions to which will adapt the behavior policy to
+provide lower mean squared error policy performance estimates  To the best of our knowledge  we are the  rst to
+propose behavior policy adaptation for policy evaluation 
+
+  The Optimal Behavior Policy
+
+An appropriately selected behavior policy can lower variance to zero  While this fact is generally known for
+importancesampling  we show here that this policy exists
+for any MDP and evaluation policy under two restrictive
+assumptions  all returns are positive and the domain is deterministic  In the following section we describe how an
+initial policy can be adapted towards the optimal behavior
+policy even when these conditions fail to hold 
+
+Let       cid  
+
+    At St  Consider   behavior policy
+
+  such that for any trajectory    
+ cid 
+
+      IS     cid 
+
+          
+
+      
+  cid 
+   
+
+ 
+
+ 
+
+Rearranging the terms of this expressions yields 
+
+  cid 
+
+ 
+
+          
+
+       
+   
+
+ 
+
+  is     
+
+  such that the probability of obThus  if we can select  cid 
+serving any      cid 
+    times the likelihood of observing        then the IS estimate has zero MSE with
+only   single sampled trajectory  Regardless of      the
+importancesampled return will equal    
+Furthermore  the policy  cid 
+  exists within the space of all
+feasible stochastic policies  Consider that   stochastic policy can be viewed as   mixture policy over timedependent
+      action selection depends on the current timestep  deterministic policies  For example  in an MDP with one
+state  two actions and   horizon of   there are    possible timedependent deterministic policies  each of which
+
+de nes   unique sequence of actions  We can express any
+evaluation policy as   mixture of these deterministic policies  The optimal behavior policy  cid 
+  can be expressed similarly and thus the optimal behavior policy exists 
+Unfortunately  the optimal behavior policy depends on the
+unknown value     as well as the unknown reward function    via      Thus  while there exists an optimal behavior policy for IS   which is not      in practice we cannot analytically determine  cid 
+  may not be
+representable by any   in our policy class 
+
+    Additionally   cid 
+
+  The Behavior Policy Search Problem
+
+Since the optimal behavior policy cannot be analytically
+determined  we instead propose the behavior policy search
+ BPS  problem for  nding    that lowers the MSE of estimates of       BPS problem is de ned by the inputs 
+
+offpolicy
+
+policy
+
+  An evaluation policy    with policy parameters    
+  An
+
+algorithm 
+OPE      that takes   trajectory        or 
+alternatively    set of trajectories  and returns an
+estimate of    
+
+evaluation
+
+  BPS solution is   policy     such that offpolicy estimates with OPE have lower MSE than onpolicy estimates 
+Methods for this problem are BPS algorithms 
+Recall we have formalized policy evaluation within an incremental setting where one trajectory for policy evaluation
+is generated each iteration  At the ith iteration    BPS algorithm selects   behavior policy that will be used to generate
+  trajectory  Hi  The policy evaluation algorithm  OPE 
+then estimates     using trajectories in Di  Naturally 
+the selection of the behavior policy depends on how OPE
+estimates    
+In   BPS problem  the ith iteration proceeds as follows 
+First  given all of the past behavior policies       
+   and
+the resulting trajectories   Hi   
+   the BPS algorithm must
+select     The policy    is then run for one episode to
+create the trajectory Hi  Then the BPS algorithm uses
+OPE to estimate     given the available data  Di
+ 
+    Hi  
+In this paper  we consider the onestep
+problem of selecting    and estimating     at iteration
+  in   way that minimizes MSE  That is  we do not consider
+how our selection of    will impact our future ability to select an appropriate    for       and thus to produce more
+accurate estimates in the future 
+One natural question is 
+if we are given   limit on the
+number of trajectories that can be sampled  is it better to
+ spend  some of our limited trajectories on BPS instead
+of using onpolicy estimates  Since each OP   Hi     
+is an unbiased estimator of     we can use all sampled
+trajectories to compute OPE Di  Provided for all itera 
+
+  
+
+DataEf cient Policy Evaluation Through Behavior Policy Search
+
+tions  Var OPE            ar      then  in expectation 
+  BPS algorithm will always achieve lower MSE than MC 
+showing that it is  in fact  worthwhile to do so  This claim
+is supported by our empirical study 
+
+ cid 
+
+  cid 
+
+  
+
+ cid 
+
+  Behavior Policy Gradient Theorem
+We now introduce our primary contributions  an analytic
+expression for the gradient of the mean squared error of
+the IS estimator and   stochastic gradient descent algorithm
+that adapts   to minimize the MSE between the IS estimate
+and     Our algorithm   Behavior Policy Gradient
+ BPG    begins with onpolicy estimates and adapts the
+behavior policy with gradient descent on the MSE with respect to   The gradient of the MSE with respect to the
+policy parameters is given by the following theorem 
+Theorem  
+
+ 
+ 
+
+MSE IS         
+
+  IS     
+
+log  At St 
+
+ 
+ 
+
+where the expectation is taken over      
+
+Proof  Proofs for all theoretical results are included in
+Appendix   of an extended version available at http 
+ arxiv org abs 
+
+BPG uses stochastic gradient descent in place of exact gradient descent  replacing the intractable expectation in Theorem   with an unbiased estimate of the true gradient  In
+our experiments  we sample   batch  Bi  of   trajectories
+with    to lower the variance of the gradient estimate at
+iteration    In the BPS setting  sampling   batch of trajectories is equivalent to holding    xed for   iterations and
+then updating   with the   most recent trajectories used to
+compute the gradient estimate 
+Full details of BPG are given in Algorithm   At iteration    BPG samples   batch  Bi  of   trajectories and adds
+    Hi  
+   to   data set    Lines   Then BPG updates   with an empirical estimate of Theorem    Line  
+After   iterations  the BPG estimate of     is IS Dn  as
+de ned in Section  
+Given that the stepsize      is consistent with standard gradient descent convergence conditions  BPG will converge
+to   behavior policy that locally minimizes the variance
+ Bertsekas   Tsitsiklis    At best  BPG converges to
+the globally optimal behavior policy within the parameterization of     Since the parameterization of    determines
+the class of representable distributions it is possible that
+the theoretically optimal behavior policy is unrepresentable
+under this parameterization  Nevertheless    suboptimal behavior policy still yields better estimates of     provided
+it decreases variance compared to onpolicy returns 
+
+Algorithm   Behavior Policy Gradient
+Input  Evaluation policy parameters      batch size     
+stepsize for each iteration      and number of iterations   
+Output  Final behavior policy parameters    and the IS
+estimate of     using all sampled trajectories 
+        
+        
+  for all        do
+Bi   Sample   trajectories       
+ 
+  cid 
+Di    Di   Bi
+ 
+
+ cid 
+
+ 
+
+             
+ 
+
+IS     
+
+log     At St 
+
+ 
+ 
+
+   
+
+  
+
+  end for
+  Return     IS Dn 
+
+  Control Variate Extension
+
+In cases where an approximate model is available  we can
+further lower variance adapting the behavior policy of the
+doubly robust estimator  Jiang   Li    Thomas  
+Brunskill    Based on   similar intuition as the Advantage Sum estimator  Section   the Doubly Robust  DR 
+estimator uses the value functions of an approximate model
+as   control variate to lower the variance of importancesampling  We show here that we can adapt the behavior
+policy to lower the mean squared error of DR estimates 
+We denote this new method DRBPG for Doubly Robust
+Behavior Policy Gradient 
+
+    At St  and recall that      and     
+are the state and action value functions of    in the approximate model  The DR estimator is 
+  cid 
+
+ Rt      St  At      St 
+
+DR             
+
+Let         cid  
+
+     
+     
+
+  
+
+  cid 
+
+  
+
+  cid 
+
+  
+
+  cid 
+
+  
+
+We can reduce the mean squared error of DR with gradient
+descent using unbiased estimates of the following corollary
+to Theorem  
+Corollary  
+
+ 
+ 
+
+MSE  DR          DR     
+
+log  At St 
+
+ 
+ 
+
+    DR     
+
+    
+
+     
+   
+
+log  Ai Si 
+
+ 
+ 
+
+where      Rt      St  At       St  and the expectation
+is taken over      
+
+The  rst term of  
+    SE is analogous to the gradient of
+the importancesampling estimate with IS      replaced
+
+ DR lowers the variance of perdecision importancesampling
+
+which importance samples the per timestep reward 
+
+DataEf cient Policy Evaluation Through Behavior Policy Search
+
+ cid 
+
+  cid 
+
+  
+
+ cid 
+
+ cid cid cid cid cid      
+
+ 
+
+by DR      The second term accounts for the covariance
+of the DR terms 
+AS and DR both assume access to   model  however  they
+make no assumption about where the model comes from
+except that it must be independent of the trajectories used to
+compute the  nal estimate  In practice  AS and DR perform
+best when all trajectories are used to estimate the model and
+then used to estimate      Thomas   Brunskill   
+However  for DRBPG  changes to the model change the
+surface of the MSE objective we seek to minimize and thus
+DRBPG will only converge once the model stops changing  In our experiments  we consider both   changing and
+   xed model 
+
+  Connection to REINFORCE
+
+BPG is closely related to existing work in policy gradient RL        Sutton et al    and we draw connections between one such method and BPG to illustrate how
+BPG changes the distribution of trajectories  REINFORCE
+ Williams    attempts to maximize   through gradient ascent on   using the following unbiased gradient
+of  
+
+ 
+ 
+
+     
+
+    
+
+log  At St 
+
+ 
+ 
+
+Intuitively  REINFORCE increases the probability of all
+actions taken during   as   function of      This update increases the probability of actions that lead to high
+return trajectories  BPG can be interpreted as REINFORCE where the return of   trajectory is the square of
+its importancesampled return  Thus BPG increases the
+probability of all actions taken along   as   function of
+IS      The magnitude of IS      depends on two
+qualities of   
+
+       is large         high magnitude event 
+    is rare relative to its probability under the evalua 
+
+tion policy      cid  
+
+   At St 
+   At St  is large 
+
+  
+
+These two qualities demonstrate   balance in how BPG
+changes trajectory probabilities  Increasing the probability of   trajectory under   will decrease IS      and so
+BPG increases the probability of   trajectory when     
+is large enough to offset the decrease in IS      caused
+by decreasing the importance weight 
+
+  Empirical Study
+This section presents an empirical study of variance reduction through behavior policy search  We design our experiments to answer the following questions 
+
+  Can behavior policy search with BPG reduce policy
+evaluation MSE compared to onpolicy estimates in
+
+both tabular and continuous domains 
+
+  Does adapting the behavior policy of the Doubly Robust estimator with DRBPG lower the MSE of the
+Advantage Sum estimator 
+  Does the rarety of actions that cause high magnitude
+rewards affect the performance gap between BPG and
+Monte Carlo estimates 
+
+  Experimental Setup
+
+We address our  rst experimental question by evaluating
+BPG in three domains  We brie   describe each domain
+here  full details are available in appendix   
+The  rst domain is       Gridworld  We obtain two evaluation policies by applying REINFORCE to this task  starting from   policy that selects actions uniformly at random 
+We then select one evaluation policy    from the early
+stages of learning   an improved policy but still far from
+converged   and one after learning has converged    We
+run all experiments once with        and   second time
+with       
+Our second and third tasks are the continuous control Cartpole Swing Up and Acrobot tasks implemented within RLLAB  Duan et al    The evaluation policy in each domain is   neural network that maps the state to the mean of  
+Gaussian distribution  Policies are partially optimized with
+trustregion policy optimization  Schulman et al    applied to   randomly initialized policy 
+
+  Main Results
+Gridworld Experiments Figure   compares BPG to
+Monte Carlo for both Gridworld policies    and   Our
+main point of comparison is the mean squared error  MSE 
+of both estimates at iteration   over   trials  For   BPG
+signi cantly reduces the MSE of onpolicy estimates  Figure     For   BPG also reduces MSE  however  it is only
+  marginal improvement 
+At the end of each trial we used the  nal behavior policy to collect   more trajectories and estimate     In
+comparison to   Monte Carlo estimate with   trajectories
+from   MSE is     lower with this improved behavior policy  For   the MSE is     lower  This result
+demonstrates that BPG can  nd behavior policies that substantially lower MSE 
+To understand the disparity in performance between these
+two instances of policy evaluation  we plot the distribution
+of      under     Figures    and     These plots show
+the variance of   to be much higher  it sometimes samples
+returns with twice the magnitude of any sampled by   To
+quantify this difference  we also measure the variance of
+
+IS        as   cid IS   cid cid       
+
+ cid     IS          
+
+where the expectations are estimated with   trajecto 
+
+DataEf cient Policy Evaluation Through Behavior Policy Search
+
+    Mean Squared Error
+
+    Mean Squared Error
+
+    Cartpole Swing Up MSE
+
+    Acrobot MSE
+
+    Histogram of   Returns     Histogram of   Returns
+
+    Variance Reduction
+
+    Learning Rate Sensitivity
+
+Figure   Gridworld experiments when    is   partially optimized policy        and   converged policy       
+The  rst and second rows give results for   on the left
+and   on the right  Results are averaged over   trials
+of   iterations with error bars given for     con 
+dence intervals  In both instances  BPG lowers MSE more
+than onpolicy Monte Carlo returns  statistically signi 
+cant        The second row shows the distribution of
+returns under the two different     Figure    shows   substantial decrease in variance when evaluating   with BPG
+and   lesser decrease when evaluating   with BPG  Figure    shows the effect of varying the stepsize parameter
+for representative    BPG diverged for high settings of  
+We ran BPG for   iterations per value of   and averaged
+over   trials  Axes in         and    are logscaled 
+
+ries  This evaluation is repeated   times per iteration and
+the reported variance is the mean over these evaluations 
+The decrease in variance for each policy is shown in Figure     The high initial variance means there is much more
+room for BPG to improve the behavior policy when    is
+the partially optimized policy 
+We also test the sensitivity of BPG to the learning rate parameter    critical issue in the use of BPG is selecting the
+
+Figure   Mean squared error reduction on the Cartpole
+Swing Up and Acrobot domains  We adapt the behavior
+policy for   iterations and average results over   trials 
+Error bars are for   con dence intervals 
+
+step size parameter   If   is set too high we risk making too large of an update to     potentially stepping to
+  worse behavior policy  If we are too conservative then it
+will take many iterations for   noticeable improvement over
+Monte Carlo estimation  Figure    shows variance reduction for   number of different   values in the GridWorld
+domain  We found BPG in this domain was robust to  
+variety of step size values  We do not claim this result is
+representative for all problem domains  stepsize selection
+in the behavior policy search problem is an important area
+for future work 
+
+Continuous Control Figure   shows reduction of MSE
+on the Cartpole Swingup and Acrobot domains  Again we
+see that BPG reduces MSE faster than Monte Carlo evaluation  In contrast to the discrete Gridworld experiment 
+this experiment demonstrates the applicability of BPG to
+the continuous control setting  While BPG signi cantly
+outperforms Monte Carlo evaluation in Cartpole Swingup  the gap is much smaller in Acrobot  This result also
+demonstrates BPG  and behavior policy search  when the
+policy must generalize across different states 
+
+  Control Variate Extensions
+
+In this section  we evaluate the combination of modelbased control variates with behavior policy search  Specifically  we compare the AS estimator with Doubly Robust
+BPG  DRBPG  In these experiments we use      
+stochastic gridworld  The added stochasticity increases the
+dif culty of building an accurate model from trajectories 
+Since these methods require   model we construct this
+model in one of two ways  The  rst method uses all trajectories in   to build the model and then uses the same set to
+estimate     with ASE or DR  The second method uses
+trajectories from the  rst   iterations to build the model
+and then  xes the model for the remaining iterations  For
+DRBPG  behavior policy search starts at iteration   un 
+
+DataEf cient Policy Evaluation Through Behavior Policy Search
+
+  Rareness of Event
+
+Our  nal experiment aims to understand how the gap between onand offpolicy variance is affected by the probability of rare events  The intuition for why behavior policy search can lower the variance of onpolicy estimates is
+that   well selected behavior policy can cause rare and high
+magnitude events to occur  We test this intuition by varying
+the probability of   rare  high magnitude event and observing how this change affects the performance gap between
+onand offpolicy evaluation  For this experiment  we use
+  variant of the deterministic Gridworld where taking the
+UP action in the initial state  the upper left corner  causes
+  transition to the terminal state with   reward of   We
+use   from our earlier Gridworld experiments but we vary
+the probability of choosing UP when in the initial state  So
+with probability   the agent will receive   large reward and
+end the trajectory  We use   constant learning rate of  
+for all values of   and run BPG for   iterations  We plot
+the relative decrease of the variance as   function of   over
+  trials for each value of    We use relative variance to
+normalize across problem instances  Note that under this
+measure  even when   is close to   the relative variance
+is not equal to zero because as   approaches   the initial
+variance also goes to zero 
+This experiment illustrates that as the initial variance increases  the amount of improvement BPG can achieve increases  As   becomes closer to   the initial variance becomes closer to zero and BPG barely improves over the
+variance of Monte Carlo  in terms of absolute variance
+there is no improvement  When the    rarely takes the
+high rewarding UP action    close to   BPG improves policy evaluation by increasing the probability of this action 
+This experiment supports our intuition for why offpolicy
+evaluation can outperform onpolicy evaluation 
+
+  Related Work
+Behavior policy search and BPG are closely related to
+existing work on adaptive importancesampling  While
+adaptive importancesampling has been studied in the estimation literature  we focus here on adaptive importancesampling for MDPs and Markov Reward Processes       an
+MDP with    xed policy  Existing work on adaptive IS
+in RL has considered changing the transition probabilities
+to lower the variance of policy evaluation  Desai   Glynn 
+  Frank et al    or lower the variance of policy
+gradient estimates  Ciosek   Whiteson    Since the
+transition probabilities are typically unknown in RL  adapting the behavior policy is   more general approach to adaptive IS  Ciosek and Whiteson also adapt the distribution of
+trajectories with gradient descent on the variance  Ciosek
+  Whiteson    with respect to parameters of the transition probabilities  The main focus of this work is increasing
+
+    Control Variate MSE
+
+    Rare Event Improvement
+
+Figure       Comparison of DR and ASE on   larger
+stochastic Gridworld  For the  xed model methods  the
+signi cant drop in MSE at iteration   is due to the introduction of the model control variate  For clarity we do
+not show error bars  The difference between the  nal estimate of DRBPG and ASE with the  xed model is statistically signi cant        the difference between the
+same methods with   constantly improving model is not 
+    Varying the probability of   high rewarding terminal
+action in the GridWorld domain  Each point on the horizontal axis is the probability of taking this action  The vertical
+axis gives the relative decrease in variance after adapting  
+for   iterations  Denoting the initial variance as vi and
+the  nal variance as vf   the relative decrease is computed
+as vi vf
+  Error bars for   con dence intervals are given
+but are small 
+
+vi
+
+der this second condition  We call the  rst method  update 
+and the second method  xed  The update method invalidates the theoretical guarantees of these methods but learns
+  more accurate model  In both instances  we build maximum likelihood tabular models 
+Figure   demonstrates that combining BPG with   modelbased control variate  DRBPG  can lead to further reduction of MSE compared to the control variate alone  ASE 
+Speci cally  with the  xed model  DRBPG outperformed
+all other methods  DRBPG using the update method for
+building the model performed competitively with ASE although not statistically signi cantly better  We also evaluate the  nal learned behavior policy of the  xed model
+variant of DRBPG  For   batch size of   trajectories 
+the DR estimator with this behavior policy improves upon
+the ASE estimator with the same model by    
+For DRBPG  estimating the model with all data still allowed steady progress towards lower variance  This result
+is interesting since   changing model changes the surface
+of our variance objective and thus gradient descent on the
+variance has no theoretical guarantees of convergence  Empirically  we observe that setting the learning rate for DRBPG was more challenging for either model type  Thus
+while we have shown BPG can be combined with control
+variates  more work is needed to produce   robust method 
+
+DataEf cient Policy Evaluation Through Behavior Policy Search
+
+the probability of simulated rare events so that policy improvement can learn an appropriate response  In contrast 
+we address the problem of policy evaluation and differentiate with respect to the  known  policy parameters 
+The crossentropy method  CEM  is   general method for
+adaptive importancesampling  CEM attempts to minimize
+the KullbackLeibler divergence between the current sampling distribution and the optimal sampling distribution  As
+discussed in Section   this optimal behavior policy only
+exists under   set of restrictive conditions  In contrast we
+adapt the behavior policy by minimizing variance 
+Other methods exist for lowering the variance of onpolicy
+estimates  In addition to the control variate technique used
+by the Advantage Sum estimator  Zinkevich et al   
+White   Bowling    Veness et al  consider using common random numbers and antithetic variates to reduce the
+variance of rollouts in Monte Carlo Tree Search  MCTS 
+  These techniques require   model of the environment  as is typical for MCTS  and do not appear to be applicable to the general RL policy evaluation problem  BPG
+could potentially be applied to  nd   lower variance rollout policy for MCTS 
+In this work we have focused on unbiased policy evaluation  When the goal is to minimize MSE it is often permissible to use biased methods such as temporal difference
+learning  van Seijen   Sutton    modelbased policy
+evaluation  Kearns   Singh    Strehl et al    or
+variants of weighted importance sampling  Precup et al 
+  It may be possible to use similar ideas to BPG to
+reduce bias and variance although this appears to be dif 
+ cult since the bias contribution to the mean squared error is squared and thus any gradient involving bias requires
+knowledge of the estimator   bias  We leave behavior policy search with biased offpolicy methods to future work 
+
+  Discussion and Future Work
+Our experiments demonstrate that behavior policy search
+with BPG can lower the variance of policy evaluation  One
+open question is characterizing the settings where adapting
+the behavior policy substantially improves over onpolicy
+estimates  Towards answering this question  our Gridworld
+experiment showed that when    has little variance  BPG
+can only offer marginal improvement  BPG increases the
+probability of observing rare events with   high magnitude 
+If the evaluation policy never sees such events then there
+is little bene   to using BPG  However  in expectation and
+with an appropriately selected stepsize  BPG will never
+lower the dataef ciency of policy evaluation 
+It is also necessary that the evaluation policy contributes to
+the variance of the returns  If all variance is due to the environment then it seems unlikely that BPG will offer much
+
+improvement  For example  Ciosek and Whiteson  
+consider   variant of the Mountain Car task where the dynamics can trigger   rare event   independent of the action
+  in which rewards are multiplied by   No behavior
+policy adaptation can lower the variance due to this event 
+One limitation of gradientbased BPS methods is the necessity of good stepsize selection  In theory  BPG can never
+lead to worse policy evaluation compared to onpolicy estimates  In practice    poorly selected stepsize may cause  
+step to   worse behavior policy at step   which may increase
+the variance of the gradient estimate at step       Future
+work could consider methods for adaptive stepsizes  second order methods  or natural behavior policy gradients 
+One interesting direction for future work is incorporating
+behavior policy search into policy improvement    similar
+idea was explored by Ciosek and Whiteson who explored
+offenvironment learning to improve the performance of
+policy gradient methods   The method presented in
+that work is limited to simulated environments with differential dynamics  Adapting the behavior policy is   potentially much more general approach 
+
+  Conclusion
+We have introduced the behavior policy search problem
+in order to improve estimation of     for an evaluation
+policy     We present   solution   Behavior Policy Gradient   for this problem which adapts the behavior policy with stochastic gradient descent on the variance of the
+importancesampling estimator  Experiments demonstrate
+BPG lowers the mean squared error of estimates of    
+compared to onpolicy estimates  We also demonstrate
+BPG can further decrease the MSE of estimates in conjunction with   modelbased control variate method 
+
+  Acknowledgements
+
+We thank Daniel Brown and the anonymous reviewers for useful comments on the work and its presentation  This work has
+taken place in the Personal Autonomous Robotics Lab  PeARL 
+and Learning Agents Research Group  LARG  at the Arti cial Intelligence Laboratory  The University of Texas at Austin  PeARL
+research is supported in part by NSF  IIS  IIS 
+LARG research is supported in part by NSF  CNS 
+CNS  IIS  IIS  ONR    
+AFOSR  FA  Raytheon  Toyota  AT    and
+Lockheed Martin  Josiah Hanna is supported by an NSF Graduate Research Fellowship  Peter Stone serves on the Board of Directors of Cogitai  Inc  The terms of this arrangement have been
+reviewed and approved by the University of Texas at Austin in
+accordance with its policy on objectivity in research 
+
+DataEf cient Policy Evaluation Through Behavior Policy Search
+
+References
+Bastani  Meysam  Modelfree intelligent diabetes management using machine learning  PhD thesis  Masters thesis  Department of Computing Science  University of Alberta   
+
+Bertsekas  Dimitri    and Tsitsiklis  John    Gradient convergence in gradient methods with erros   
+ 
+
+Ciosek  Kamil and Whiteson  Shimon  OFFER  OffIn Proceedings
+environment reinforcement learning 
+of the  st AAAI Conference on Arti cial Intelligence
+ AAAI   
+
+Desai  Paritosh   and Glynn  Peter    Simulation in optimization and optimization in simulation    Markov
+chain perspective on adaptive Monte Carlo algorithms 
+In Proceedings of the  rd conference on Winter simulation  pp    IEEE Computer Society   
+
+Duan  Yan  Chen  Xi  Houthooft  Rein  Schulman  John 
+and Abbeel  Pieter  Benchmarking deep reinforcement
+In In Proceedings of
+learning for continuous control 
+the  rd International Conference on Machine Learning 
+ 
+
+Frank  Jordan  Mannor  Shie  and Precup  Doina  Reinforcement learning in the presence of rare events  In Proceedings of the  th International Conference on Machine learning  pp    ACM   
+
+Hammersley  JM and Handscomb  DC  Monte Carlo meth 
+
+ods  methuen   co  Ltd  London  pp     
+
+Jiang  Nan and Li  Lihong  Doubly robust offpolicy evalIn Proceedings of
+uation for reinforcement learning 
+the  rd International Conference on Machine Learning
+ ICML   
+
+Kearns  Michael and Singh  Satinder  Nearoptimal reinforcement learning in polynomial time  Machine Learning     
+
+Lillicrap  Timothy    Hunt  Jonathan    Pritzel  Alexander 
+Heess  Nicolas  Erez  Tom  Tassa  Yuval  Silver  David 
+and Wierstra  Daan  Continuous control with deep reinforcement learning  CoRR  abs   
+
+Precup     Sutton        and Singh     Eligibility traces
+for offpolicy policy evaluation  In Proceedings of the
+ th International Conference on Machine Learning  pp 
+   
+
+Schulman  John  Levine  Sergey  Moritz  Philipp  Jordan 
+Michael  and Abbeel  Pieter  Trust region policy optimization  In Proceedings of the  nd International Conference on Machine Learning   ICML   
+
+Sen       and Singer       Large Sample Methods in Statistics  An Introduction with Applications  Chapman  
+Hall   
+
+Strehl  Alexander    Li  Lihong  and Littman  Michael   
+Reinforcement learning in  nite mdps  PAC analysis 
+Journal of Machine Learning Research   
+ 
+
+Sutton  Richard    and Barto  Andrew    Reinforcement
+
+Learning  An Introduction  MIT Press   
+
+Sutton  Richard    McAllester  David  Singh  Satinder  and
+Mansour  Yishay  Policy gradient methods for reinforcement learning with function approximation  In Proceedings of the  th Conference on Neural Information Processing Systems  NIPS   
+
+Philip   
+
+Theocharous  Georgios  Thomas 
+
+and
+Ghavamzadeh  Mohammad 
+Personalized ad recommendation systems for lifetime value optimization
+In Proceedings of the  th Interwith guarantees 
+national Joint Conference on Arti cial
+Intelligence
+ IJCAI  pp     
+
+Thomas  Philip      notation for Markov decision pro 
+
+cesses  ArXiv  arXiv     
+
+Thomas  Philip    and Brunskill  Emma  Dataef cient
+offpolicy policy evaluation for reinforcement learning 
+In Proceedings of the  rd International Conference on
+Machine Learning  ICML   
+
+Thomas 
+
+Philip    Theocharous  Georgios 
+
+and
+Ghavamzadeh  Mohammad  High con dence offpolicy
+evaluation  In Proceedings of the AAAI Conference on
+Arti cial Intelligence  AAAI   
+
+van Seijen  Harm and Sutton  Richard    True online TD
+  In Proceedings of the  st International Conference
+on Machine Learning  ICML  volume   pp   
+ 
+
+Veness     Lanctot     and Bowling     Variance reduction in MonteCarlo tree search  In Proceedings of the
+ th Conference on Neural Information Processing Systems  pp     
+
+White     and Bowling     Learning   value analysis tool
+for agent evaluation  In Proceedings of the  st International Joint Conference on Arti cial Intelligence  IJCAI  pp     
+
+Williams  Ronald    Simple statistical gradientfollowing
+learning 
+
+algorithms for connectionist reinforcement
+Machine learning     
+
+DataEf cient Policy Evaluation Through Behavior Policy Search
+
+Zinkevich     Bowling     Bard     Kan     and
+Billings     Optimal unbiased estimators for evaluating
+agent performance  In Proceedings of the  st National
+Conference on Arti cial Intelligence  AAAI  pp   
+   
+
+

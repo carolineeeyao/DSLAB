@@ -1,0 +1,1489 @@
+SecondOrder Kernel Online Convex Optimization with Adaptive Sketching
+
+Daniele Calandriello   Alessandro Lazaric   Michal Valko  
+
+Abstract
+
+Kernel online convex optimization  KOCO  is  
+framework combining the expressiveness of nonparametric kernel models with the regret guarantees of online learning  Firstorder KOCO methods such as functional gradient descent require
+only      time and space per iteration  and  when
+ 
+the only information on the losses is their convexity  achieve   minimax optimal   
+    regret  Nonetheless  many common losses in kernel problems  such as squared loss  logistic loss 
+and squared hinge loss posses stronger curvature
+that can be exploited  In this case  secondorder
+KOCO methods achieve   log Det    regret 
+which we show scales as   deff log     where
+deff is the effective dimension of the problem and
+is usually much smaller than   
+    The main
+drawback of secondorder methods is their much
+higher      space and time complexity  In this
+paper  we introduce kernel online Newton step
+ KONS    new secondorder KOCO method that
+also achieves   deff log     regret  To address the
+computational complexity of secondorder methods  we introduce   new matrix sketching algorithm for the kernel matrix Kt  and show that for
+  chosen parameter       our SketchedKONS
+reduces the space and time complexity by   factor of   to      space and time per iteration 
+while incurring only   times more regret 
+
+ 
+
+  Introduction
+Online convex optimization  OCO   Zinkevich    models the problem of convex optimization over Rd as   game
+over                  time steps between an adversary and
+the player  In its linear version  that we refer to as linearOCO  LOCO  the adversary chooses   sequence of arbitrary convex losses  cid   and points xt  and   player chooses
+weights wt and predicts xT
+  wt  The goal of the player is to
+ SequeL team  INRIA Lille   Nord Europe  Correspondence
+
+to  Daniele Calandriello  daniele calandriello inria fr 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+minimize the regret  de ned as the difference between the
+losses of the predictions obtained using the weights played
+by the player and the best  xed weight in hindsight given
+all points and losses 
+Gradient descent  For this setting  Zinkevich  
+showed that simple gradient descent  GD  combined with
+ 
+  smart choice for the stepsize    of the gradient updates 
+dT   regret with        space and time
+achieves     
+cost per iteration  When the only assumption on the losses
+is simple convexity  this upper bound matches the corresponding lower bound  Luo et al    thus making
+ rstorder methods       GD  essentially unimprovable in
+  minimax sense  Nonetheless  when the losses have additional curvature properties  Hazan et al    show that
+online Newton step  ONS  an adaptive method that exploits secondorder  second derivative  information on the
+losses  can achieve   logarithmic regret     log     The
+downside of this adaptive method is the larger      space
+and perstep time complexity  since secondorder updates
+require to construct  store  and invert Ht    preconditioner
+matrix related to the Hessian of the losses used to correct
+the  rstorder updates 
+Kernel gradient descent  For linear models  such as the
+ones considered in LOCO    simple way to create more expressive models is to map them in some highdimensional
+space  the feature space  and then use the kernel trick
+ Sch olkopf   Smola    to avoid explicitly computing their highdimensional representation  Mapping to  
+larger space allows the algorithm to better    the losses
+chosen by the adversary and reduce its cumulative loss 
+As   drawback  the Kernel OCO  KOCO  problem  is
+fundamentally harder than LOCO  due to   the fact that
+an in nite parametrization makes regret bounds scaling
+with the dimension   meaningless and   the size of the
+model  and therefore time and space complexities  scales
+with   itself  making these methods even less performant
+than LOCO algorithms  Kernel extensions of LOCO algorithms have been proposed for KOCO  such as functional
+GD       NORMA  Kivinen et al    which achieves
+    
+    regret with        space and time cost per iteration  For secondorder methods  the SecondOrder Per 
+
+ 
+
+ This setting is often referred to as online kernel learning or
+
+kernelbased online learning in the literature 
+
+SecondOrder Kernel Online Convex Optimization with Adaptive Sketching
+
+ceptron  CesaBianchi et al    or NAROW  Orabona
+  Crammer    for generic curved losses and Recursive Kernel Least Squares  Zhdanov   Kalnishkan   
+or Kernel AAR  Gammerman et al    for the speci  
+case of  cid  losses provide bounds that scale with the logdeterminant of the kernelmatrix  As we show  this quantity is closely related to the effective dimension dT
+eff of the
+of the points xt  and scales as   dT
+eff log     playing   similar role as the     log     bound from LOCO 
+Approximate GD  To trade off between computational
+ close to     log     several methods try approximate
+secondorder updates 
+replacing Ht with an approxi 
+
+complexity  cid smaller than     cid  and improved regret
+mate  cid Ht that can be ef ciently stored and inverted  Adaing   diagonal  cid Ht  but these methods ultimately only imsketch  cid Ht  that can be ef ciently stored and updated in
+
+ 
+
+Grad  Duchi et al    and ADAM  Kingma   Ba   
+reweight the gradient updates on   percoordinate basis us 
+
+  comprove the regret dependency on   and leave the
+ponent unchanged  SketchedONS  by Luo et al   
+uses matrix sketching to approximate Ht with   rrank
+  dr  time and space  close to the      complexity of diagonal approximations  More importantly  SketchedONS
+achieves   much smaller regret compared to diagonal approximations  When the true Ht is of lowrank    it recovers       log     regret bound logarithmic in     Unfortunately  due to the sketch approximation    new term appears
+in the bound that scales with the spectra of Ht  and in some
+cases can grow much larger than   log    
+Approximate kernel GD  Existing approximate GD methods for KOCO focus only on  rstorder updates  trying to
+reduce the      perstep complexity  Budgeted methods 
+such as BudgetedGD  Wang et al    and budgeted
+variants of the perceptron  Cavallanti et al    Dekel
+et al    Orabona et al    explicitly limit the size
+of the model  using some destructive budget maintenance
+procedure       removal  projection  to constrain the natural model growth over time  Alternatively  functional approximation methods in the primal  Lu et al    or dual
+ Le et al    use nonlinear embedding techniques  such
+as random feature expansion  Le et al    to reduce
+ 
+the KOCO problem to   LOCO problem and solve it ef 
+ ciently  Unfortunately  to guarantee   
+    regret using less than      space and time per round        all
+of these methods require additional assumptions  such as
+points xt coming from   distribution or strong convexity
+ 
+on the losses  Moreover  as approximate  rstorder methods  they can at most hope to match the   
+    regret of
+exact GD  and among secondorder kernel methods  no approximation scheme has been proposed that can provably
+maintain the same   log     regret as exact GD  In addition  approximating Ht is harder for KOCO  since we cannot directly access the matrix representation of Ht in the
+
+featurespace  making diagonal approximation impossible 
+and lowrank sketching harder 
+Contributions In this paper  we introduce KernelONS  an
+extension to KOCO of the ONS algorithm  As   secondorder method  KONS achieves     dt
+eff log     regret on
+  variety of curved losses  and runs in      time and
+space  To alleviate the computational complexity  we propose SKETCHEDKONS  the  rst approximate secondorder KOCO methods  that approximates the kernel matrix
+with   lowrank sketch  To compute this sketch we propose   new online kernel dictionary learning  kernel online
+row sampling  based on ridge leverage scores  By adaptively increasing the size of its sketch  SKETCHEDKONS
+provides   favorable regretperformance tradeoff  where
+for   given factor       we can increase the regret by
+  linear   factor to   dt
+eff log     while obtaining  
+quadratic   improvement in runtime  thereby achieving
+     space and time cost per iteration 
+
+  Background
+In this section  we introduce linear algebra and RKHS
+notation  and formally state the OCO problem in an
+RKHS  Sch olkopf   Smola   
+Notation  We use uppercase bold letters   for matrices 
+lowercase bold letters   for vectors  lowercase letters  
+for scalars  We denote by    ij and      the        element
+of   matrix and ith element of   vector respectively  We
+denote by IT   RT     the identity matrix of dimension  
+and by Diag      RT     the diagonal matrix with the vector     RT on the diagonal  We use eT     RT to denote
+the indicator vector of dimension   for element    When
+the dimension of   and ei is clear from the context  we omit
+the     We also indicate with   the identity operator  We use
+   cid    to indicate that       is   positive semide nite
+ PSD  matrix  With  cid cid  we indicate the operator  cid norm 
+Finally  the set of integers between   and   is denoted by
+                   
+Kernels  Given an arbitrary input space   and   positive
+de nite kernel function              we indicate the reproducing kernel Hilbert space  RKHS  associated with  
+as    We choose to represent our Hilbert space   as   feature space where  given    we can  nd an associated feature map            such that        cid  can be expressed
+as an inner product        cid     cid       cid cid    With  
+slight abuse of notation  we represent our feature space
+as an highdimensional vector space  or in other words
+    RD  where   is very large or potentially in nite 
+With this notation  we can write the inner product simply as
+       cid           cid  and for any function fw      we
+can represent it as    potentially in nite  set of weights  
+such that fw         Tw  Given points  xi  
+   we
+
+SecondOrder Kernel Online Convex Optimization with Adaptive Sketching
+
+  wt to com 
+
+function chosen by the adversary 
+
+shorten  xi       and de ne the feature matrix     
+                RD    Finally  to denote the inner product
+between two arbitrary subsets   and   of columns of   
+     With this notation  we can write
+we use Ka       
+the empirical kernel matrix as Kt              
+      the
+vector with all the similarities between   new point and the
+     and the kernel evaluated at
+old ones as           
+  speci   point as kt       
+      Throughout the rest of the
+paper  we assume that   is normalized and   
+        
+Kernelized online convex optimization 
+In the general
+OCO framework with linear prediction  the optimization
+process is   game where at each time step          the player
+  receives an input xt     from the adversary 
+  wt 
+
+  predicts cid yt   fwt xt     xt Twt     
+  incurs loss  cid   cid yt  with  cid     convex and differentiable
+
+  observes the derivative  gt    cid cid 
+Since the player uses   linear combination   
+
+pute cid yt  having observed  gt  we can compute the gradient 
+
+  cid yt 
+gt    cid   cid yt     gt  
+
+  wt     gt   
+After   timesteps  we indicate with Dt    xi  
+   the
+In the
+dataset containing the points observed so far 
+rest of the paper we consider the problem of kernelized
+OCO  KOCO  where   is arbitrary and potentially nonparametric  We refer to the special parametric case    
+Rd and      xt as linear OCO  LOCO 
+In OCO  the goal is to design an algorithm that returns   solution that performs almost as well as the bestin class  thus
+we must  rst de ne our comparison class  We de ne the
+feasible set as St          
+  St 
+This comparison class contains all functions fw whose output is contained  clipped  in the interval        on all
+points            xT   Unlike the often used constraint on
+ cid   cid    Hazan et al    Zhu   Xu    comparing
+against clipped functions  Luo et al    Gammerman
+et al    Zhdanov   Kalnishkan    has   clear interpretation even when passing from Rd to    Moreover    is
+invariant to linear transformations of   and suitable for
+practical problems where it is often easier to choose   rea 
+
+sonable interval for the predictions cid yt rather than   bound
+
+          and       
+
+on the norm of    possibly noninterpretable  parametrization    We can now de ne the regret as
+
+RT      
+
+  
+
+arg minw   cid  
+
+and denote with RT   RT     the regret            
+          the best  xed function
+in    We work with the following assumptions on the
+losses 
+
+    cid    
+
+ cid  
+
+ cid    
+
+  wt     cid    
+
+    
+
+Algorithm   Oneshot KONS
+Input  Feasible parameter    stepsizes     regulariz   
+  Initialize                             
+  for                  do
+ 
+ 
+ 
+ 
+ 
+ 
+  end for
+
+predict cid yt    xt Twt   yt     yt 
+
+receive xt
+compute bs as in Lem   
+compute ut     
+compute yt    xt Tut
+
+observe gt  update At   At     tgtgT
+ 
+
+  cid   
+
+   bsgs 
+
+        
+
+Assumption   The loss function  cid   satis es  cid cid 
+whenever       
+Note that this is equivalent to assuming Lipschitzness of the
+the loss          and it is weaker than assuming something
+on the norm of the gradient  cid gt cid  since  cid gt cid       gt cid   cid 
+Assumption   There exists        such that for all
+           lt       cid    
+lt      lt       lt           
+
+     is lowerbounded by
+
+ lt         
+
+  
+ 
+
+This condition is weaker than strong convexity and it is satis ed by all expconcave losses  Hazan et al    For
+example  the squared loss lt       yt   xT
+     is not
+strongly convex but satis es Asm    with          
+when       
+
+  Kernelized Online Newton Step
+The online Newton step algorithm  originally introduced
+by Hazan et al    is   projected gradient descent that
+uses the following update rules
+
+ut   wt      
+wt    At 
+ ut 
+
+St
+
+  gt 
+
+St
+
+ ut    arg minw St  cid ut     cid At  is an
+where  At 
+oblique projection on   set St with matrix At  If St is
+the set of vectors with bounded prediction in        as
+by Luo et al    then the projection reduces to
+
+wt    At 
+
+St
+
+ ut    ut      
+  ut 
+    
+   
+  
+
+  
+
+    
+
+ 
+
+where        sign    max           computes how
+much   is above or below the interval        When
+At        ONS is equivalent to vanilla projected gradient descent  which in LOCO achieves   
+dT   regret
+ Zinkevich    In the same setting  Hazan et al   
+       makes
+ONS an ef cient reformulation of follow the approximate
+
+shows that choosing At    cid  
+
+    sgsgT
+
+ 
+
+SecondOrder Kernel Online Convex Optimization with Adaptive Sketching
+
+ cid 
+
+  
+
+   
+
+ cid   
+
+leader  FTAL  While traditional followthe leader algos  lt   
+rithms play the weight wt   arg minw St
+FTAL replaces the loss lt with   convex approximation using Asm    and plays the minimizer of the surrogate function  As   result  under Asm    and when           
+FTAL achieves   logarithmic     log     regret  FTAL  
+solution path can be computed in      time using ONS
+updates  and further speedups were proposed by Luo et al 
+  using matrix sketching 
+Unfortunately  in KOCO  vectors    and weights wt cannot be explicitly represented  and most of the quantities
+used in vanilla ONS  Eq    cannot be directly computed 
+Instead  we derive   closed form alternative  Alg    that
+can be computed in practice  Using   rescaled variant
+of our feature vectors           gt
+ tgt
+ 
+and                    we can rewrite At      
+   
+       Kt  where the empirical kernel ma 
+   and  
+trix Kt is computed using the rescaled kernel   xi  xj   
+ 
+ 
+ jK xi  xj  instead of the original    or equiv 
+ gi
+    
+alently Kt   DtKtDt with Dt   Diag   gi
+   the
+rescaling diagonal matrix  We begin by noting that
+
+      
+
+    gj
+
+ 
+
+ 
+
+ 
+
+ 
+
+ cid 
+
+ cid yt     
+
+  wt     
+ 
+
+ut      
+  ut 
+    
+   
+  
+    
+  
+   
+    
+   
+  
+
+    
+
+  ut      
+
+  ut 
+
+  yt     yt 
+
+As   consequence  if we can  nd   way to compute yt  then
+
+we can obtain cid yt without explicitly computing wt  Before
+
+that  we  rst derive   nonrecursive formulation of ut 
+Lemma   In Alg    we introduce
+
+ cid cid yi     yi 
+
+ 
+
+    
+
+   
+
+ 
+
+ cid 
+
+   
+  
+
+bi    bt      gi
+
+ 
+
+  
+
+and compute ut as
+
+ut     
+
+    bt 
+
+Then  ut is equal to the same quantity in Eq    and the se 
+
+quence of predictions cid yt is the same in both algorithms 
+
+While the de nition of bt and ut still requires performing operations in the  possibly in nitely dimensional  feature space  in the following we show that bt and the prediction yt can be conveniently computed using only inner
+products 
+Lemma   All the components bi    bt   of the vector
+introduced in Lem    can be computed as
+ 
+
+ cid 
+
+   yi 
+
+ cid cid yi  
+
+ki      
+
+ 
+
+     Ki            
+
+   
+  
+
+ 
+
+ gi
+
+  
+
+Then  we can compute
+
+yt  
+
+ 
+ 
+
+   tDt bt     Kt       Kt bt 
+kT
+
+Since Alg    is equivalent to ONS  Eq    existing regret
+bounds for ONS directly applies to its kernelized version 
+Proposition    Luo et al    For any sequence of
+losses  cid   satisfying Asm    the regret RT of Alg    is
+bounded by RT    cid   cid    RG   RD with
+
+  cid 
+
+  
+
+    
+gT
+
+  gt  
+
+ 
+
+ 
+
+     
+
+ 
+
+          
+
+ wt       At   At tgtgT
+
+   wt     
+
+  
+
+  cid 
+  cid 
+  cid 
+
+  
+
+RG  
+
+RD  
+
+ 
+
+            
+
+   wt     
+
+    
+
+  
+
+size       cid           allows ONS to achieve  
+
+In the ddimensional LOCO  choosing   decreasing step 
+ 
+  CL
+dT   regret for the cases where        When
+                 when the functions are expconcave  we
+can set         and improve the regret to     log     Un 
+ 
+fortunately  these quantities hold little meaning for KOCO
+with Ddimensional features  since     
+   regret can be
+very large or even in nite  On the other hand  we expect
+the regret of KONS to depend on quantities that are more
+strictly related to the kernel Kt and its complexity 
+De nition   Given   kernel function      set of points
+Dt    xi  
+   and   parameter       we de ne the  
+ridge leverage scores  RLS  of point   as
+
+  iKT
+
+   Kt    et       
+       eT
+and the effective dimension of Dt as
+
+      
+
+       
+
+       Tr cid Kt Kt    It cid   
+
+dt
+eff   
+
+  cid 
+
+  
+
+ 
+
+ 
+
+In general  leverage scores have been used to measure
+the correlation between   point          the other      
+points  and therefore how essential it is in characterizing the dataset  Alaoui   Mahoney    As an example  if    is completely orthogonal to the other points 
+                 and its RLS is
+         
+maximized  while in the case where all the points xi are
+                  and its
+identical           
+RLS is minimal  While the previous de nition is provided
+for   generic kernel function    we can easily instantiate it
+on   and obtain the de nition of        By recalling the  rst
+regret term in the decomposition of Prop    we notice that
+
+        
+
+      
+
+RG  
+
+ 
+ 
+
+     
+
+ 
+
+            
+
+        
+
+  
+
+  
+
+  cid 
+
+  cid 
+
+SecondOrder Kernel Online Convex Optimization with Adaptive Sketching
+
+Algorithm   Kernel Online Row Sampling  KORS 
+Input  Regularization   accuracy   budget  
+  Initialize       
+  for                     do
+ 
+ 
+ 
+ 
+  end for
+
+compute cid pt   min cid        using     and Eq   
+draw zt     cid pt  and if zt     add      cid pt  to It
+
+receive   
+construct temporary dictionary       It         
+
+ 
+
+ 
+
+ cid 
+
+ting     cid         gives us   regret   
+ cid 
+
+for KT and that it is smaller than the rank   for any   For
+expconcave functions             we slightly improve
+over the bound of Luo et al    from     log     down
+eff  log           log     where   is the  unto   dT
+known  rank of the dataset  Furthermore  when       seteff   
+ 
+  dT
+     which is potentially much smaller than   
+  
+    
+Furthermore  if an oracle provided us in advance with
+eff  setting     
+eff         gives   regret
+dT
+dT
+ 
+  
+eff         
+dT
+Comparison to KOCO algorithms  Simple functional
+ 
+gradient descent       NORMA  Kivinen et al   
+achieves     
+    regret when properly tuned  Zhu  
+Xu    regardless of the loss function  For the special case of squared loss  Zhdanov   Kalnishkan  
+show that Kernel Ridge Regression achieves the same
+  log Det KT        regret as achieved by KONS for
+general expconcave losses 
+
+rT  
+
+lowrank approximation  cid Kt  constructed using   carefully
+
+  Kernel Online Row Sampling
+Although KONS achieves   low regret  storing and inverting the   matrix requires      space and      time 
+which becomes quickly unfeasible as   grows  To improve
+space and time ef ciency  we replace Kt with an accurate
+chosen dictionary It of points from Dt  We extend the online row sampling  ORS  algorithm of Cohen et al   
+to the kernel setting and obtain KernelORS  Alg    There
+are two main obstacles to overcome in the adaptation of
+ORS  From an algorithmic perspective we need to  nd  
+computable estimator for the RLS  since    cannot be accessed directly  while from an analysis perspective we must
+prove that our space and time complexity does not scale
+with the dimension of     as Cohen et al    as it can
+potentially be in nite 
+We de ne   dictionary It as   collection of  index  weight 
+
+tuples      cid pi  and the associated selection matrix St  
+
+eff   cid 
+
+           where
+
+which reveals   deep connection between the regret of
+KONS and the cumulative sum of the RLS  In other words 
+the RLS capture how much the adversary can increase
+the regret by picking orthogonal directions that have not
+been seen before  While in LOCO  this can happen at
+most   times  hence the dependency on   in the  nal regret 
+which is mitigated by   suitable choice of     in KOCO 
+RG can grow linearly with time  since large   can have
+in nite nearorthogonal directions  Nonetheless  the actual
+growth rate is now directly related to the complexity of the
+sequence of points chosen by the adversary and the kernel
+function    While the effective dimension dt
+eff  is related to the capacity of the RKHS   on the points in Dt
+and it has been shown to characterize the generalization error in batch linear regression  Rudi et al    we see
+that RG is rather related to the online effective dimension
+ 
+         Nonetheless  we show that the two
+ 
+quantities are also strictly related to each other 
+Lemma   For any dataset DT   any       we have
+
+onl     cid 
+  cid 
+
+        log Det KT       
+
+ 
+onl   
+
+ 
+
+  
+
+   
+
+ 
+
+eff    log cid KT cid     
+
+ 
+We  rst notice that in the  rst inequality we relate  
+onl 
+to the logdeterminant of the kernel matrix KT   This quantity appears in   large number of works on online linear
+prediction  CesaBianchi et al    Srinivas et al   
+where they were connected to the maximal mutual information gain in Gaussian processes  Finally  the second
+inequality shows that in general the complexity of online
+learning is only   factor log    in the worst case  away
+from the complexity of batch learning  At this point  we
+can generalize the regret bounds of LOCO to KOCO 
+Theorem   For any sequence of
+losses  cid   satisfying
+Asm    let     mint     If            for all   and
+     
+RT    cid   cid    dT
+
+    the regret of Alg    is upperbounded as
+
+onl           
+
+      
+
+  cid 
+
+  
+
+In particular  if for all   we have            setting
+       we obtain
+
+RT    cid   cid     dT
+
+eff
+
+ cid   cid  log      
+
+ 
+
+ 
+
+ 
+
+otherwise        and setting       LC
+
+   we obtain
+
+RT    cid   cid     LC
+
+  dT
+
+eff    log      
+
+ 
+
+Comparison to LOCO algorithms  We  rst notice that
+the effective dimension dT
+eff  can be seen as   soft rank
+
+ This can be easily seen as dT
+
+   are the eigenvalues of KT  
+
+SecondOrder Kernel Online Convex Optimization with Adaptive Sketching
+
+ 
+
+ 
+
+ 
+
+   
+
+It 
+ 
+
+It 
+ 
+
+       
+
+   
+ 
+
+It
+     tStST
+
+Rt   as   diagonal matrix with  cid cid pi for all     It and  
+
+ cid  
+
+   tSt ST
+
+elsewhere  We also introduce  
+     as an
+approximation of At constructed using the dictionary It 
+At each time step  KORS temporarily adds   with weight  
+to the dictionary It  and constructs the temporary dictionary It  and the corresponding selection matrix St  and
+approximation  
+  This augmented dictionary can be
+effectively used to compute the RLS estimator 
+
+ cid 
+  
+  KtSt       ST
+
+ cid             
+ cid 
+ cid kt      
+driello et al    here we modi ed it so that  cid     is
+
+While we introduced   similar estimator before  Calan 
+
+quence  denoting by  It  the size of the dictionary cid     can
+
+an overestimate of the actual        Note that all rows and
+columns for which St  is zero  all points outside the temporary dictionary It  do not in uence the estimator  so
+they can be excluded from the computation  As   consebe ef ciently computed in   It  space and   It 
+time  using an incremental update of Eq    After computing the RLS  KORS randomly chooses whether to include
+  point in the dictionary using   coin ip with probability
+
+ cid pt   min cid        and weight  cid pt  where   is   parameestimates cid      as well as on the size  It  of the dictionary 
+
+ter  The following theorem gives us at each step guarantees
+on the accuracy of the approximate matrices  
+and of
+
+Theorem   Given parameters                
+  and run Algorithm   with
+          let      
+      log     Then            for all steps         
+       At  cid   
+
+It
+ 
+
+zs    
+
+  cid 
+
+   cid       At 
+It
+ cid ps   dt
+
+  The dictionary   size  It   cid  
+  cid 
+    dt
+  Satis es       cid            
+space  and  cid   dt
+
+the algorithm runs in   dt
+eff  time per iteration 
+
+Moreover 
+
+onl 
+
+ 
+
+  
+
+  
+
+eff 
+
+   zs is bounded by
+
+The most interesting aspect of this result is that the dictionary It generated by KORS allows to accurately approxt      matrix up to   small      
+imate the At      
+multiplicative factor with   small time and space complexity  which makes it   natural candidate to sketch KONS 
+
+ 
+
+  Sketched ONS
+Building on KORS  we now introduce   sketched variant of
+KONS that can ef ciently trade off between computational
+
+Algorithm   SKETCHEDKONS
+Input  Feasible parameter    stepsizes     regulariz   
+
+  Initialize                       cid        
+
+receive xt
+
+  Initialize independent run of KORS
+  for                  do
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+  end for
+
+  cid   
+  cid bsgs 
+compute cid ut    cid   
+compute  yt    xt   cid ut
+predict cid yt    xt   cid wt    yt     yt  observe gt
+compute cid     using KORS  Eq   
+compute cid pt   max min cid         
+draw zt     cid pt 
+update  cid At    cid At     tztgtgT
+
+ 
+
+ gi
+
+  
+
+    tztgtgT
+
+Lemma   Let Et   RT
+
+computed as
+ 
+
+    where at
+  only if the coin
+
+  KtRt   be an auxiliary matrix 
+
+each step we add the current gradient gtgT
+
+performance and regret  Alg    runs KORS as   blackbox
+
+eter           Let Rt be the unweighted counterpart of
+St  that is  Rt         if  St         and  Rt         if
+ St      cid    Then we can ef ciently compute the coef 
+
+estimating RLS cid    that are then used to sketch the original
+matrix At with   matrix  cid At    cid  
+ ip zt succeeded  Unlike KORS  the elements added to cid At
+are not weighted  and the probabilities cid pt used for the coins
+zt are chosen as the maximum between cid      and   paramcients cid bt and predictions cid yt as follows 
+then all the components cid bi    cid bt   used in Alg    can be
+ cid 
+ cid cid yi  
+ cid kT
+
+Note that since the columns in Rt are selected without
+  KtRt       can be updated ef ciently
+weights   RT
+
+ cid 
+using block inverse updates  and only when  cid At changes 
+sketch  cid At instead of the weighted version  
+lary shows that  cid At is as accurate as  
+At up to the smallest sampling probability cid   
+  cid   
+Corollary   Let cid   
+   cid   cid At 
+     cid pminAt  cid cid pminA
+
+While the speci   reason for choosing the unweighted
+It
+  used in
+KORS is discussed further in Sect    the following corolin approximating
+
+ki      
+Then we can compute
+
+   tDt bt 
+  kT
+
+   yi 
+   iRi   
+
+   tDt Rt   
+
+    Then        we have
+
+  Rt Kt bt 
+
+  Ri      
+
+min   minT
+
+   
+  
+
+ yt  
+
+ 
+ 
+
+It
+ 
+
+   
+
+It
+
+ 
+
+ 
+
+We can now state the main result of this section  Since
+for SKETCHEDKONS we are interested not only in regret
+
+  log cid    
+
+ 
+
+ cid 
+
+ 
+
+ 
+
+eff  log    
+
+SecondOrder Kernel Online Convex Optimization with Adaptive Sketching
+
+minimization  but also in space and time complexity  we
+do not consider the case       because when the function
+ 
+does not have any curvature  standard GD already achieves
+the optimal regret of   
+     Zhu   Xu    while requiring only      space and time per iteration 
+Theorem   For any sequence of losses  cid   satisfying
+           for all         
+          When
+Asm    let     mint    and   min   minT
+          log     if we
+set        then            the regret of Alg    satis es
+ cid RT    cid   cid     
+
+ cid   cid  log      
+
+dT
+eff
+
+ 
+
+ 
+
+  max    min 
+
+and the algorithm runs in   dt
+eff       time and
+  dt
+eff       space complexity for each iteration   
+Proof sketch  Given these guarantees  we need to bound
+RG and RD  Bounding RD is straightforward  since
+by construction SKETCHEDKONS adds at most  tgtgT
+ 
+
+to  cid At at each step  To bound RG instead  we must take
+into account that an unweighted  cid At    tRtRT
+can be up to  cid pmin distant from the weighted  tStST
+
+      
+ 
+   
+for which we have guarantees  Hence the max    min 
+ 
+term appearing at the denominator 
+
+   
+
+ 
+
+  Discussion
+Regret guarantees  From Eq    we can see that when   min
+is not too small  setting       we recover the guarantees of
+exact KONS  Since usually we do not know   min  we can
+choose to set       and as long as       polylog     we
+preserve    poly logarithmic regret 
+Computational speedup  The time required to compute
+   tDt bt  gives   minimum     
+       kt    and kT
+perstep complexity  Note that Kt bt  can also be comdictionary at time   as Bt    cid   deff        computing
+puted incrementally in      time  Denoting the size of the
+ cid bt   and kT
+   tDt Rt   
+eff  to compute cid     incrementally using
+    time  When     dt
+eff  time to update  cid   
+eff  to compute  cid     using KORS
+
+an additional     
+tion takes   dt
+KORS    dt
+eff 
+ 
+eff    each iteratime to compute  bt    When     dt
+tion still takes   dt
+and      time to update the inverse and compute  bt   
+Therefore  in the case when   min is not too small  our runtime is of the order   dt
+eff       which is almost as
+small as the      runtime of GD but with the advantage
+of   secondorder method logarithmic regret  Moreover 
+when   min is small and we set   large   we can trade off  
+  increase in regret for     decrease in space and time
+complexity when compared to exact KONS       setting
+      would correspond to   tenfold increase in regret 
+but   hundredfold reduction in computational complexity 
+
+  Rt Kt bt  requires
+eff    each itera 
+
+and   dt
+
+  cid ps   
+
+Asymptotic behavior  Notice however  that space and time
+complexity  grow roughly with   term    mint
+   max    min  so if this quantity does not decrease
+over time  the computational cost of SKETCHEDKONS
+will remain large and close to exact KONS  This is to be
+expected  since SKETCHEDKONS must always keep an
+accurate sketch in order to guarantee   logarithmic regret
+bound  Note that Luo et al    took an opposite approach for LOCO  where they keep    xedsize sketch but
+possibly pay in regret  if this  xed size happens to be too
+small  Since   nonlogarithmic regret is achievable simply
+running vanilla GD  we rather opted for an adaptive sketch
+at the cost of space and time complexity 
+In batch optimization  where  cid   does not change over time  another possibility is to stop updating the solution once   min becomes
+too small  When Hs is the Hessian of  cid  in ws  then the
+quantity gT
+  gt  in the context of Newton   method  is
+called Newton decrement and it corresponds up to constant
+factors to   min  Since   stopping condition based on Newton   decrement is directly related to the nearoptimality of
+the current wt  Nesterov   Nemirovskii    stopping
+when   min is small also provides guarantees about the quality of the solution 
+Sampling distribution  Note that although       means
+that all columns have   small uniform chance of being se 
+
+lected for inclusion in  cid At  this is not equivalent to uni 
+
+    
+
+ cid     
+
+   Diag      
+
+dom approximation  cid At is biased  since   tRtRT
+to use   weighted and unbiased approximation  cid   cid 
+ cid  
+    szs cid psgsgT
+
+formly sampling columns  It is rather   combination of  
+RLSbased sampling to ensure that columns important to
+reconstruct At are selected and   threshold on the probabilities to avoid too much variance in the estimator 
+Biased estimator and results in expectation  The rant    
+    Another option would be
+   
+  used in KORS and   common choice
+in matrix approximation methods  see      Alaoui   Mahoney    Due to its unbiasedness  this variant would
+automatically achieve the same logarithmic regret as exact KONS in expectation  similar to the result obtained
+by Luo et al    using Gaussian random projection in
+LOCO  While any unbiased estimator       uniform sampling of gt  would achieve this result  RLSbased sampling
+already provides strong reconstruction guarantees suf 
+
+cient to bound RG  Nonetheless  the weights  cid ps may
+cause large variations in  cid At over consecutive steps  thus
+
+leading to   large regret RD in high probability 
+Limitations of dictionary learning approaches and open
+problems  From the discussion above  it appears that
+  weighted  unbiased dictionary may not achieve highprobability logarithmic guarantee because of the high variance coming from sampling  On the other hand  if we want
+to recover the regret guarantee  we may have to pay for it
+
+   
+
+ 
+ 
+
+ 
+
+ 
+
+with   large dictionary  This may actually be due to the
+analysis  the algorithm  or the setting  An important property of the dictionary learning approach used in KORS is
+that it can only add but not remove columns and potentially
+reweight them  Notice that in the batch setting  Alaoui  
+Mahoney    Calandriello et al    the sampling of
+columns does not cause any issue and we can have strong
+learning guarantees in high probability with   small dictionary  Alternative sketching methods such as Frequent Directions  FD  Ghashami et al      do create new atoms
+as learning progresses  By restricting to composing dictionaries from existing columns  we only have the degree
+of freedom of the weights of the columns  If we set the
+weights to have an unbiased estimate  we achieve an accurate RG but suffer   huge regret in RD  On the other hand 
+we can store the columns unweighted to have small RD but
+large RG  This could be potentially  xed if we knew how
+to remove less important columns from dictionary to gain
+some slack in RD 
+We illustrate this problem with following simple scenario 
+The adversary always presents to the learner the same
+point    with associated   but for the loss it alternates
+between  cid   wt          Twt  on even steps and
+ cid   wt          Twt  on odd steps  Then      
+         and we have   gradient that always points in
+the same   direction  but switches sign at each step  The
+optimal solution in hindsight is asymptotically       and
+let this be also our starting point    We also set       
+since this is what ONS would do  and       for simplicity 
+For this scenario  we can compute several useful quantities
+in closed form  in particular  RG and RD 
+
+   
+
+        
+
+    log    
+
+RG     cid 
+  cid  
+ cid  
+
+  
+
+   
+      
+       
+      wT
+
+RD  
+
+  
+
+    cid 
+
+  
+
+  gt     
+
+Note that although the matrix At is rank   at each time step 
+vanilla ONS does not take advantage of this easy data  and
+would store it all with        space in KOCO 
+As for the sketched versions of ONS  sketching using
+FD  Luo et al    would adapt to this situation  and
+only store   single copy of gt      achieving the desired regret with   much smaller space  Notice that in
+this example  the losses  cid   are effectively strongly convex 
+and even basic gradient descent with   stepsize        
+would achieve logarithmic regret  Zhu   Xu    with
+even smaller space  On the other hand  we show how the
+dictionarybased sketching has dif culties in minimizing
+the regret bound from Prop    in our simple scenario  In
+particular  consider an arbitrary  possibly randomized  algorithm that is allowed only to reweight atoms in the dictionary and not to create new ones  as FD  In our example  this translates to choosing   schedule of weights ws
+
+SecondOrder Kernel Online Convex Optimization with Adaptive Sketching
+
+and set  cid At    cid  
+    WT  cid  
+
+   ws       Wt  with total weight
+   ws and space complexity equal to the
+number of nonzero weights      ws  cid    We can
+show that there is no schedule for this speci   class of algorithms with good performance due to the following three
+con icting goals 
+
+  To mantain RG small cid  
+
+   ws should be as large as
+
+possible  as early as possible 
+
+  To mantain RD small  we should choose weights
+wt     as few times as possible  since we accumulate max wt       regret every time 
+
+  To mantain the space complexity small  we should
+
+choose only   few wt  cid   
+
+imize RG we should raise the sum cid  
+
+To enforce goal   we must choose   schedule with no
+more than   nonzero entries  Given the budget    to satisfy goal   we should use all the   budget in order to
+exploit as much as possible the max wt       in RD  or
+in other words we should use exactly   nonzero weights 
+and none of these should be smaller than   Finally  to mins  ws as quickly as
+possible  settling on   schedule where            and
+ws     for all the other   weights  It easy to see that if we
+want logarithmic RG    needs to grow as     but doing so
+with   logarithmic   would make RD               
+Similarly  keeping       in order to reduce RD would
+increase RG  In particular notice  that the issue does not
+go away even if we know the RLS perfectly  because the
+same reasoning applies  This simple example suggests that
+dictionarybased sketching methods  which are very successful in batch scenarios  may actually fail in achieving
+logarithmic regret in online optimization 
+This argument raises the question on how to design alternative sketching methods for the secondorder KOCO     rst
+approach  discussed above  is to reduce the dictionary size
+dropping columns that become less important later in the
+process  without allowing the adversary to take advantage
+of this forgetting factor  Another possibility is to deviate
+from the ONS approach and RD   RG regret decomposition  Finally  as our counterexample in the simple scenario hints  creating new atoms  either through projection
+or merging  allows for better adaptivity  as shown by FD
+ Ghashami et al      based methods in LOCO  However  the kernelization of FD does not appear to be straighforward  The most recent step in this direction  in particular  for kernel PCA  is only able to deal with  nite feature
+expansions  Ghashami et al      and therefore its application to kernels is limited 
+Acknowledgements The research presented was supported by
+French Ministry of Higher Education and Research  NordPas deCalais Regional Council and French National Research
+Agency projects ExTraLearn    ANR CE  and
+BoB    ANR CE 
+
+SecondOrder Kernel Online Convex Optimization with Adaptive Sketching
+
+References
+Alaoui  Ahmed El and Mahoney  Michael    Fast randomized kernel methods with statistical guarantees  In
+Neural Information Processing Systems   
+
+Calandriello  Daniele  Lazaric  Alessandro  and Valko 
+Michal  Distributed sequential sampling for kernel matrix approximation  In International Conference on Arti cial Intelligence and Statistics   
+
+Cavallanti  Giovanni  CesaBianchi  Nicolo  and Gentile 
+Claudio  Tracking the best hyperplane with   simple
+budget perceptron  Machine Learning   
+ 
+
+CesaBianchi  Nicolo  Conconi  Alex  and Gentile  Claudio    secondorder perceptron algorithm  SIAM Journal on Computing     
+
+Cohen  Michael    Musco  Cameron  and Pachocki  Jakub 
+International Workshop on ApOnline row sampling 
+proximation  Randomization  and Combinatorial Optimization   
+
+Dekel  Ofer  ShalevShwartz  Shai  and Singer  Yoram  The
+forgetron    kernelbased perceptron on   budget  SIAM
+Journal on Computing     
+
+Duchi  John  Hazan  Elad  and Singer  Yoram  Adaptive
+subgradient methods for online learning and stochastic
+optimization  Journal of Machine Learning Research 
+   
+
+Gammerman  Alex  Kalnishkan  Yuri  and Vovk  Vladimir 
+Online prediction with kernels and the complexity approximation principle  In Uncertainty in Arti cial Intelligence   
+
+Ghashami  Mina  Liberty  Edo  Phillips  Jeff    and
+Woodruff  David    Frequent directions  Simple and deterministic matrix sketching  SIAM Journal on Computing       
+
+Ghashami  Mina  Perry  Daniel    and Phillips  Jeff 
+Streaming kernel principal component analysis  In International Conference on Arti cial Intelligence and Statistics     
+
+Hazan  Elad  Kalai  Adam  Kale  Satyen  and Agarwal 
+Amit  Logarithmic regret algorithms for online convex
+optimization  In Conference on Learning Theory   
+
+Kingma  Diederik and Ba  Jimmy  Adam    method for
+stochastic optimization  In International Conference on
+Learning Representations   
+
+Kivinen     Smola       and Williamson       Online
+IEEE Transactions on Signal
+
+Learning with Kernels 
+Processing     
+
+Le  Quoc  Sarl os  Tam as  and Smola  Alex    Fastfood  
+Approximating kernel expansions in loglinear time  In
+International Conference on Machine Learning   
+
+Le  Trung  Nguyen  Tu  Nguyen  Vu  and Phung  Dinh 
+In
+
+Dual Space Gradient Descent for Online Learning 
+Neural Information Processing Systems   
+
+Lu  Jing  Hoi  Steven      Wang  Jialei  Zhao  Peilin  and
+Liu  ZhiYong  Large scale online kernel learning  Journal of Machine Learning Research     
+Luo  Haipeng  Agarwal  Alekh  CesaBianchi  Nicolo  and
+Langford  John  Ef cient secondorder online learning
+via sketching  Neural Information Processing Systems 
+ 
+
+Nesterov  Yurii and Nemirovskii  Arkadii 
+
+Interiorpoint
+polynomial algorithms in convex programming  Society
+for Industrial and Applied Mathematics   
+
+Orabona  Francesco and Crammer  Koby  New adaptive algorithms for online classi cation  In Neural Information
+Processing Systems   
+
+Orabona  Francesco  Keshet  Joseph  and Caputo  Barbara 
+The projectron    bounded kernelbased perceptron  In
+International Conference on Machine learning   
+
+Rudi  Alessandro  Camoriano  Raffaello  and Rosasco 
+Lorenzo  Less is more  Nystr om computational reguIn Neural Information Processing Systems 
+larization 
+ 
+
+Sch olkopf  Bernhard and Smola  Alexander    Learning
+with kernels  Support vector machines  regularization 
+optimization  and beyond  MIT Press   
+
+Srinivas  Niranjan  Krause  Andreas  Seeger  Matthias  and
+Kakade  Sham    Gaussian process optimization in the
+bandit setting  No regret and experimental design 
+In
+International Conference on Machine Learning   
+
+Tropp  Joel Aaron  Freedman   inequality for matrix martingales  Electronic Communications in Probability   
+   
+
+Wang  Zhuang  Crammer  Koby  and Vucetic  Slobodan 
+Breaking the curse of kernelization  Budgeted stochastic
+gradient descent for largescale svm training  Journal of
+Machine Learning Research   Oct   
+Zhdanov  Fedor and Kalnishkan  Yuri  An identity for kerIn Algorithmic Learning Theory 
+
+nel ridge regression 
+ 
+
+Zhu     and Xu     Online gradient descent in function
+
+space  ArXiv   
+
+Zinkevich  Martin  Online convex programming and genIn International
+
+eralized in nitesimal gradient ascent 
+Conference on Machine Learning   
+
+

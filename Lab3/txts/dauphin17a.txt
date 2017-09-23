@@ -1,0 +1,850 @@
+Language Modeling with Gated Convolutional Networks
+
+Yann    Dauphin   Angela Fan   Michael Auli   David Grangier  
+
+Abstract
+
+The predominant approach to language modeling to date is based on recurrent neural networks  Their success on this task is often linked
+to their ability to capture unbounded context 
+In this paper we develop    nite context approach through stacked convolutions  which can
+be more ef cient since they allow parallelization over sequential tokens  We propose   novel
+simpli ed gating mechanism that outperforms
+Oord et al      and investigate the impact
+of key architectural decisions  The proposed approach achieves stateof theart on the WikiText 
+  benchmark  even though it features longterm dependencies  as well as competitive results on the Google Billion Words benchmark 
+Our model reduces the latency to score   sentence by an order of magnitude compared to  
+recurrent baseline  To our knowledge  this is the
+ rst time   nonrecurrent approach is competitive
+with strong recurrent models on these large scale
+language tasks 
+
+  Introduction
+Statistical language models estimate the probability distribution of   sequence of words by modeling the probability
+of the next word given preceding words      
+
+  cid 
+
+              wN          
+
+   wi            wi 
+
+  
+
+where wi are discrete word indices in   vocabulary  Language models are   critical part of systems for speech
+recognition  Yu   Deng    and machine translation
+ Koehn   
+Recently  neural networks  Bengio et al    Mikolov
+et al    Jozefowicz et al    have been shown to
+
+ Facebook AI Research  Correspondence to  Yann    Dauphin
+
+ ynd fb com 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+outperform classical ngram language models  Kneser  
+Ney    Chen   Goodman    These classical models suffer from data sparsity  which makes it dif cult to represent large contexts and thus  longrange dependencies 
+Neural language models tackle this issue by embedding
+words in continuous space over which   neural network is
+applied  The current state of the art for language modeling is based on long short term memory networks  LSTM 
+Hochreiter et al    which can theoretically model arbitrarily long dependencies 
+In this paper  we introduce new gated convolutional networks and apply them to language modeling  Convolutional networks can be stacked to represent large context
+sizes and extract hierarchical features over larger and larger
+contexts with more abstractive features  LeCun   Bengio 
+  This allows them to model longterm dependencies by applying     
+    operations over   context of size  
+and kernel width    In contrast  recurrent networks view
+the input as   chain structure and therefore require   linear
+number       of operations 
+Analyzing the input hierarchically bears resemblance to
+classical grammar formalisms which build syntactic tree
+structures of increasing granuality       sentences consist
+of noun phrases and verb phrases each comprising further
+internal structure  Manning   Sch utze    Steedman 
+  Hierarchical structure also eases learning since the
+number of nonlinearities for   given context size is reduced
+compared to   chain structure  thereby mitigating the vanishing gradient problem  Glorot   Bengio   
+Modern hardware is well suited to models that are highly
+parallelizable  In recurrent networks  the next output depends on the previous hidden state which does not enable
+parallelization over the elements of   sequence  Convolutional networks  however  are very amenable to this computing paradigm since the computation of all input words
+can be performed simultaneously  
+Gating has been shown to be essential for recurrent neural
+networks to reach stateof theart performance  Jozefowicz et al    Our gated linear units reduce the vanishing gradient problem for deep architectures by providing  
+linear path for the gradients while retaining nonlinear capabilities  
+
+Language Modeling with Gated Convolutional Networks
+
+We show that gated convolutional networks outperform
+other recently published language models such as LSTMs
+trained in   similar setting on the Google Billion Word
+Benchmark  Chelba et al    We also evaluate the ability of our models to deal with longrange dependencies on
+the WikiText  benchmark for which the model is conditioned on an entire paragraph rather than   single sentence and we achieve   new stateof theart on this dataset
+ Merity et al    Finally  we show that gated linear
+units achieve higher accuracy and converge faster than the
+LSTMstyle gating of Oord et al       
+
+  Approach
+In this paper we introduce   new neural language model
+that replaces the recurrent connections typically used in recurrent networks with gated temporal convolutions  Neural language models  Bengio et al    produce   representation                 hN   of the context for each word
+           wN to predict the next word    wi hi  Recurrent
+neural networks   compute   through   recurrent function
+hi      hi  wi  which is an inherently sequential process that cannot be parallelized over   
+Our proposed approach convolves the inputs with   function   to obtain           and therefore has no temporal dependencies  so it is easier to parallelize over the individual words of   sentence  This process will compute
+each context as   function of   number of preceding words 
+Compared to recurrent networks  the context size is  nite
+but we will demonstrate both that in nite contexts are not
+necessary and our models can represent large enough contexts to perform well in practice  
+Figure   illustrates the model architecture  Words are represented by   vector embedding stored in   lookup table
+      where     is the number of words in the vocabulary
+and   is the embedding size  The input to our model is  
+sequence of words            wN which are represented by
+word embeddings      Dw          DwN   We compute the
+hidden layers            hL as
+
+hl                               
+
+ 
+
+where      are respectively the number of input and output
+feature maps and   is the patch size      RN   is the
+input of layer hl  either word embeddings or the outputs of
+previous layers      Rk          Rn      Rk     
+    Rn are learned parameters    is the sigmoid function
+and   is the elementwise product between matrices 
+When convolving inputs  we take care that hi does not
+contain information from future words  We address this
+by shifting the convolutional inputs to prevent the kernels
+
+ Parallelization is usually done over multiple sequences in 
+
+stead 
+
+Figure   Architecture of the gated convolutional network for language modeling 
+
+from seeing future context  Oord et al      Speci 
+cally  we zeropad the beginning of the sequence with     
+elements  assuming the  rst input element is the beginning
+of sequence marker which we do not predict and   is the
+width of the kernel 
+The output of each layer is   linear projection          
+modulated by the gates             Similar to LSTMs 
+these gates multiply each element of the matrix         
+and control the information passed on in the hierarchy 
+We dub this gating mechanism Gated Linear Units  GLU 
+Stacking multiple layers on top of the input   gives   representation of the context for each word     hL         
+We wrap the convolution and the gated linear unit in   preactivation residual block that adds the input of the block to
+
+Input sentenceTextThe    cat    sat    on    the    mat                                                 Lookup TableE   DwiConvolutionA         bGatingH          SoftmaxY   softmax WHL           cStack       Convolution Gating BlocksLanguage Modeling with Gated Convolutional Networks
+
+the output  He et al      The blocks have   bottleneck
+structure for computational ef ciency and each block has
+up to   layers 
+The simplest choice to obtain model predictions is to use
+  softmax layer  but this choice is often computationally
+inef cient for large vocabularies and approximations such
+as noise contrastive estimation  Gutmann   Hyv arinen 
+or hierarchical softmax  Morin   Bengio    are preferred  We choose an improvement of the latter known as
+adaptive softmax which assigns higher capacity to very frequent words and lower capacity to rare words  Grave et al 
+    This results in lower memory requirements as well
+as faster computation at both training and test time 
+
+  Gating Mechanisms
+Gating mechanisms control the path through which information  ows in the network and have proven to be useful for recurrent neural networks  Hochreiter   Schmidhuber    LSTMs enable longterm memory via   separate cell controlled by input and forget gates  This allows information to  ow unimpeded through potentially
+many timesteps  Without these gates  information could
+easily vanish through the transformations of each timestep 
+In contrast  convolutional networks do not suffer from the
+same kind of vanishing gradient and we  nd experimentally
+that they do not require forget gates 
+Therefore  we consider models possessing solely output
+gates  which allow the network to control what information should be propagated through the hierarchy of layers  We show this mechanism to be useful for language
+modeling as it allows the model to select which words or
+features are relevant for predicting the next word  Parallel to our work  Oord et al      have shown the
+effectiveness of an LSTMstyle mechanism of the form
+tanh              for the convolutional modeling of images  Later  Kalchbrenner et al    extended
+this mechanism with additional gates for use in translation
+and characterlevel language modeling 
+Gated linear units are   simpli ed gating mechanism based
+on the work of Dauphin   Grangier   for nondeterministic gates that reduce the vanishing gradient problem by having linear units coupled to the gates  This retains
+the nonlinear capabilities of the layer while allowing the
+gradient to propagate through the linear unit without scaling  The gradient of the LSTMstyle gating of which we
+dub gated tanh unit  GTU  is
+
+ tanh            tanh cid          
+ cid       tanh   
+
+ 
+
+Notice that it gradually vanishes as we stack layers because
+of the downscaling factors tanh cid    and  cid    In con 
+
+trast  the gradient of the gated linear unit
+
+                           cid      
+has   path          without downscaling for the activated gating units in     This can be thought of
+as   multiplicative skip connection which helps gradients
+ ow through the layers  We compare the different gating
+schemes experimentally in Section   and we  nd gated
+linear units allow for faster convergence to better perplexities 
+
+  Experimental Setup
+  Datasets
+
+We report results on two public largescale language modeling datasets  First  the Google Billion Word dataset
+ Chelba et al    is considered one of the largest language modeling datasets with almost one billion tokens and
+  vocabulary of over    words  In this dataset  words
+appearing less than   times are replaced with   special unknown symbol  The data is based on an English corpus
+of       sentences whose order has been shuf ed 
+Second  WikiText  is   smaller dataset of over   
+tokens with   vocabulary of about    words  Merity
+et al    Different from GBW  the sentences are consecutive which allows models to condition on larger contexts rather than single sentences  For both datasets  we
+add   beginning of sequence marker      at the start of
+each line and an end of sequence marker     at the end
+of each line  On the Google Billion Word corpus each
+sequence is   single sentence  while on WikiText   
+sequence is an entire paragraph  The model sees    
+and      as input but only predicts the end of sequence
+ cid  
+marker     We evaluate models by computing the peri   log   wi wi  on the standard held out
+plexity    
+test portion of each dataset 
+
+ 
+
+  Training
+
+We implement our models in Torch  Collobert et al   
+and train on Tesla    GPUs  The majority of our models
+are trained on single GPU  as we focused on identifying
+compact architectures with good generalization and ef 
+cient computation at test time  We trained larger models
+with an  GPU setup by copying the model onto each GPU
+and dividing the batch such that each worker computes
+ th of the gradients  The gradients are then summed using Nvidia NCCL  The multiGPU setup allowed us to train
+models with larger hidden units 
+We train using Nesterov   momentum  Sutskever et al 
+  While the cost in terms of memory is storing another vector of the size of the parameters  it increases the
+speed of convergence signi cantly with minimal additional
+
+ cid 
+
+Name
+Dataset
+Lookup
+Conv 
+
+Conv  
+
+Conv  
+
+Conv  
+
+Conv  
+
+Conv  
+Conv  
+AdaSoftmax
+
+   
+   
+
+     
+     
+     
+     
+
+   
+   
+
+   
+   
+
+   
+   
+
+     
+     
+     
+     
+
+   
+   
+
+     
+     
+     
+
+   
+   
+
+   
+   
+
+     
+     
+     
+
+Language Modeling with Gated Convolutional Networks
+
+GCNN 
+
+GCNN  
+
+GCNN 
+
+GCNN  
+
+GCNN 
+
+GCNN 
+
+Google Billion Word
+
+       
+
+       
+
+       
+
+       
+
+ cid 
+
+   
+   
+
+   
+
+ 
+
+ cid 
+
+ cid 
+
+   
+   
+
+   
+
+wikitext 
+
+       
+
+ 
+
+       
+
+       
+
+       
+
+       
+
+       
+
+       
+
+       
+       
+      
+
+      
+
+      
+
+      
+
+Table   Architectures for the models  The residual building blocks are shown in brackets with the format            denotes bottleneck
+architectures 
+
+computation compared to standard stochastic gradient descent  The speed of convergence was further increased with
+gradient clipping  Pascanu et al    and weight normalization  Salimans   Kingma   
+Pascanu et al    argue for gradient clipping because it
+prevents the gradient explosion problem that characterizes
+RNNs  However  gradient clipping is not tied to RNNs  as
+it can be derived from the general concept of trust region
+methods  Gradient clipping is found using   spherical trust
+region
+
+    argmin
+       cid cid 
+
+            
+
+    max cid   cid   
+
+  
+ cid   cid   
+
+ 
+
+Empirically  our experiments converge signi cantly faster
+with the use of gradient clipping even though we do not use
+  recurrent architecture 
+In combination  these methods led to stable and fast convergence with comparatively large learning rates such as  
+
+  Hyperparameters
+
+We found good hyperparameter con gurations by crossvalidating with random search on   validation set  For
+model architecture  we select
+the number of residual
+blocks between            
+the size of the embeddings with             the number of units between
+            and the kernel width between            
+
+In general   nding   good architecture was simple and the
+rule of thumb is that the larger the model  the better the performance  In terms of optimization  we initialize the layers of the model with the Kaiming initialization  He et al 
+    with the learning rate sampled uniformly in the
+interval     the momentum set to   and clipping
+set to   Good hyperparameters for the optimizer are
+quite straightforward to  nd and the optimal values do not
+change much between datasets 
+
+  Results
+LSTMs and recurrent networks are able to capture long
+term dependencies and are fast becoming cornerstones in
+natural language processing  In this section  we compare
+strong LSTM and RNN models from the literature to our
+gated convolutional approach on two datasets 
+We  nd the GCNN outperforms the comparable LSTM results on Google billion words  To accurately compare these
+approaches  we control for the same number of GPUs and
+the adaptive softmax output model  Grave et al      as
+these variables have   signi cant in uence on performance 
+In this setting  the GCNN reaches   test perplexity while
+the comparable LSTM has   perplexity  Table  
+Further  the GCNN obtains strong performance with much
+greater computational ef ciency  Figure   shows that our
+approach closes the previously signi cant gap between
+models that use the full softmax and models with the usually less accurate hierarchical softmax  Thanks to the adap 
+
+Language Modeling with Gated Convolutional Networks
+
+Model
+SigmoidRNN   Ji et al   
+Interpolated KN  Gram  Chelba et al   
+Sparse NonNegative Matrix LM  Shazeer et al   
+RNN    MaxEnt   Gram Features  Chelba et al   
+LSTM   Jozefowicz et al   
+ layer LSTM   Jozefowicz et al   
+BIG GLSTMG   Kuchaiev   Ginsburg   
+LSTM   Grave et al     
+ layer LSTM   Grave et al     
+GCNN 
+GCNN  Bottleneck
+
+Test PPL Hardware
+  CPU
+  CPUs
+ 
+  GPUs
+  GPUs
+  GPUs
+  GPUs
+  GPU
+  GPU
+  GPU
+  GPUs
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Table   Results on the Google Billion Word test set  The GCNN outperforms the LSTMs with the same output approximation 
+
+Model
+LSTM   Grave et al     
+GCNN 
+GCNN 
+
+Test PPL Hardware
+  GPU
+  GPU
+  GPUs
+
+ 
+ 
+ 
+
+Table   Results for single models on the WikiText  dataset 
+
+lion Word  the average sentence length is quite short  
+only   words  We evaluate on WikiText  to determine
+if the model can perform well on   dataset where much
+larger contexts are available  On WikiText  an input sequence is an entire Wikipedia article instead of an individual sentence   increasing the average length to   words 
+However  the GCNN outperforms LSTMs on this problem
+as well  Table   The GCNN  model has   layers with
+  units each and the LSTM has   units  These results
+show that GCNNs can model enough context to achieve
+strong results 
+We evaluated on the Gigaword dataset following Chen et al 
+  to compare with fully connected models  We found
+that the fully connected and convolutional network reach
+respectively   and   perplexity  We also ran preliminary experiments on the much smaller Penn tree bank
+dataset  When we score the sentences independently  the
+GCNN and LSTM have comparable test perplexity with
+  and   respectively  However  it is possible to
+achieve better results by conditioning on previous sentences  Unlike the LSTM  we found that the GCNN over 
+ ts on this quite small dataset and so we note the model is
+better suited to larger scale problems 
+
+  Computational Ef ciency
+
+Computational cost is an important consideration for language models  Depending on the application  there are  
+number of metrics to consider  We measure the throughput
+
+Figure   In comparison to the stateof theart  Jozefowicz et al 
+  which uses the full softmax  the adaptive softmax approximation greatly reduces the number of operations required to reach
+  given perplexity 
+
+tive softmax  the GCNN only requires   fraction of the operations to reach the same perplexity values  The GCNN
+outperforms other single model stateof theart approaches
+except the much larger LSTM of Jozefowicz et al   
+  model which requires more GPUs and the much more
+computationally expensive full softmax 
+In comparison 
+the largest model we have trained reaches   test perplexity compared to the   of that approach  but only requires training for   weeks on   GPUs compared to   weeks
+of training on   GPUs for the LSTM  Note that these results can be improved by either using mixtures of experts
+ Shazeer et al    or ensembles of these models 
+Another relevant concern is if the GCNN    xed context
+size can thoroughly model long sequences  On Google Bil 
+
+ appeared after submission
+
+ MFlops Test PerplexityLSTM SoftmaxGCNN AdaSoftmaxLanguage Modeling with Gated Convolutional Networks
+
+Figure   Learning curves on WikiText   left  and Google Billion Word  right  for models with different activation mechanisms 
+Models with gated linear units  GLU  converge faster and to   lower perplexity 
+
+LSTM 
+GCNN 
+GCNN  Bottleneck
+
+Throughput
+
+Responsiveness
+
+ CPU 
+ 
+ 
+ 
+
+ GPU 
+ 
+ 
+ 
+
+ GPU 
+ 
+ 
+ 
+
+Table   Processing speed in tokens   at test time for an LSTM
+with   units and GCNNs achieving   perplexity on Google
+Billion Word  The GCNN with bottlenecks improves the responsiveness by   times while maintaining high throughput 
+
+of   model as the number of tokens that can be processed
+per second  Throughput can be maximized by processing
+many sentences in parallel to amortize sequential operations  In contrast  responsiveness is the speed of processing the input sequentially  one token at   time  Throughput is important because it indicates the time required to
+process   corpus of text and responsiveness is an indicator
+of the time to  nish processing   sentence    model can
+have low responsiveness but high throughput by evaluating
+many sentences simultaneously through batching  In this
+case  such   model is slow in  nishing processing individual sentences  but can process many sentences at   good
+rate 
+We evaluate the throughput and responsiveness for models that reach approximately   perplexity on the Google
+Billion Word benchmark  We consider the LSTM with
+  units in Table     GCNN Bottleneck with   Resnet
+blocks that have   bottleneck structure as described by  He
+et al      and   GCNN  without bottlenecks    bottleneck block wedges         convolution between two
+      layers  This designs reduces computational cost by
+reducing and increasing dimensionality with the       layers so that the convolution operates in   lower dimensional
+space  Our results show that the use of bottleneck blocks is
+important to maintaining computational ef ciency 
+
+The throughput of the LSTM is measured by using   large
+batch of   sequences of length   resulting in     tokens per batch  The responsiveness is the average speed to
+process   sequence of     contiguous tokens  Table  
+shows that the throughput for the LSTM and the GCNN
+are similar  The LSTM performs very well on GPU because the large batch size of   enables high parallelization over different sentences  This is because the LSTM
+implementation has been thoroughly optimized and uses
+cuDNN  whereas the cuDNN implementation of convolutions is not been optimized for the    convolutions we use
+in our model  We believe much better performance can be
+achieved by   more ef cient    cuDNN convolution  Unlike the LSTM  the GCNN can be parallelized both over
+sequences as well as across the tokens of each sequence 
+allowing the GCNN to have    higher responsiveness 
+
+  Gating Mechanisms
+
+In this section  we compare the gated linear unit with
+other mechanisms as well as to models without gating 
+We consider the LSTMstyle gating mechanism  GTU 
+tanh                          of  Oord et al     
+and networks that use regular ReLU or Tanh activations 
+Gating units add parameters  so for fair comparison  we
+carefully crossvalidate models with   comparable number
+of parameters  Figure    left  shows that GLU networks
+converge to   lower perplexity than the other approaches
+on WikiText  Similar to gated linear units  the ReLU
+has   linear path that lets the gradients easily pass through
+the active units  This translates to much faster convergence
+for both the ReLU and the GLU  On the other hand  neither
+Tanh nor GTU have this linear path  and thus suffer from
+the vanishing gradient problem  In the GTU  both the inputs as well as the gating units can cut the gradient when
+the units saturate 
+Comparing the GTU and Tanh models allows us to measure
+
+ Epochs Test PerplexityTanhReLUGTUGLU Hours Test PerplexityReLUGTUGLULanguage Modeling with Gated Convolutional Networks
+
+Figure   Test perplexity as   function of context for Google Billion Word  left  and Wiki   right  We observe that models with
+bigger context achieve better results but the results start diminishing quickly after   context of  
+
+the effect of gating since the Tanh model can be thought of
+as   GTU network with the sigmoid gating units removed 
+The results  Figure   left  show that the gating units make
+  vast difference and provide useful modeling capabilities 
+as there is   large difference in the performance between
+GTU and Tanh units  Similarly  while ReLU unit is not
+an exact ablation of the gating units in the GLU  it can be
+seen as   simpli cation ReLU                 where
+the gates become active depending on the sign of the input 
+Also in this case  GLU units lead to lower perplexity 
+In Figure    right  we repeat the same experiment on the
+larger Google Billion Words dataset  We consider    xed
+time budget of   hours because of the considerable training time required for this task  Similar to WikiText 
+the gated linear units achieve the best results on this problem  There is   gap of about   perplexity points between
+the GLU and ReLU which is similar to the difference between the LSTM and RNN models measured by  Jozefowicz et al    on the same dataset 
+
+  Nonlinear Modeling
+
+The experiments so far have shown that the gated linear
+unit bene ts from the linear path the unit provides compared to other nonlinearities  Next  we compare networks
+with GLUs to purely linear networks and networks with
+bilinear layers in order to measure the impact of the nonlinear path provided by the gates of the GLU  One motivation for this experiment is the success of linear models on many natural language processing tasks  Manning
+  Sch utze    We consider deep linear convolutional
+networks where the layers lack the gating units of the GLU
+and take the form hl                 Stacking several layers on top of each other is simply   factorization of
+the model which remains linear up to the softmax  at which
+point it becomes loglinear  Another variation of GLUs are
+bilinear layers  Mnih   Hinton    which take the form
+
+hl                               
+
+Figure   Learning curves on Google Billion Word for models
+with varying degrees of nonlinearity 
+
+Figure   shows that GLUs perform best  followed by bilinear layers and then linear layers  Bilinear layers improve
+over linear ones by more than   perplexity points  and the
+GLU improves another   perplexity points over the bilinear model  The linear model performs very poorly at perplexity   even compared to   of   KneserNey  gram
+model  even though the former has access to more context  Surprisingly  the introduction of the gated linear units
+is enough to reach   perplexity on Google Billion Word 
+which surpasses both KneserNey  gram models and the
+nonlinear neural model of  Ji et al   
+
+  Context Size
+
+Figure   shows the impact of context size for the gated
+CNN  We tried different combinations of network depth
+and kernel widths for each context size and chose the best
+performing one for each size  Generally  larger contexts
+
+ Context Test Perplexity Context Test Perplexity Hours Test PerplexityLinearBilinearGLULanguage Modeling with Gated Convolutional Networks
+
+improve accuracy but returns drastically diminish with windows larger than   words  even for WikiText  where
+we may condition on an entire Wikipedia article  This
+means that the unlimited context offered by recurrent models is not strictly necessary for language modeling  Furthermore  this  nding is also congruent with the fact that
+good performance with recurrent networks can be obtained
+by truncating gradients after only   timesteps using truncated back propagation through time  Figure   also shows
+that WikiText  bene ts much more from larger context
+size than Google Billion Word as the performance degrades
+more sharply with smaller contexts  WikiText  provides much more context than Google Billion Word where
+the average sentence size is   However  while the average
+size of the documents is close to   tokens  we  nd that
+strong performance can be achieved with   context size as
+low as   tokens 
+
+  Training
+
+In this section  we perform an ablation study of the impact
+of weight normalization and gradient clipping  We separately crossvalidate the hyperparameters of each con guration to make the comparison fair  Due to the high cost of
+each of these experiments  we only consider   single iteration over the training data  Figure   shows that both methods signi cantly speed up convergence  Weight normalization in particular improves the speed by over two times 
+This speedup is partly due to the ability to use much larger
+learning rates   instead of   than would otherwise be
+possible  Both clipping and weight normalization add computational overhead  but it is minor compared to the large
+gains in convergence speed 
+
+Figure   Effect of weight normalization and gradient clipping on
+Google Billion Word 
+
+  Conclusion
+We introduce   convolutional neural network for language
+modeling with   novel gating mechanism  Compared to
+recurrent neural networks  our approach builds   hierarchical representation of the input words that makes it easier
+to capture longrange dependencies  similar in spirit to the
+treestructured analysis of linguistic grammar formalisms 
+The same property eases learning since features are passed
+through    xed number of layers and nonlinearities  unlike for recurrent networks where the number of processing
+steps differs depending on the position of the word in the
+input  The results show that our gated convolutional network achieves   new state of the art on WikiText  On
+the Google Billion Word benchmark  we show competitive
+results can be achieved with signi cantly fewer resources 
+
+Acknowledgments
+We would like to thank Ben Graham  Jonas Gehring 
+Edouard Grave  Armand Joulin and Ronan Collobert for
+helpful discussions 
+
+References
+Bengio  Yoshua  Ducharme    ejean  Vincent  Pascal  and Jauvin 
+journal of
+
+Christian    neural probabilistic language model 
+machine learning research   Feb   
+
+Chelba  Ciprian  Mikolov  Tomas  Schuster  Mike  Ge  Qi  Brants 
+Thorsten  Koehn  Phillipp  and Robinson  Tony  One billion
+word benchmark for measuring progress in statistical language
+modeling  arXiv preprint arXiv   
+
+Chen  Stanley   and Goodman  Joshua  An empirical study of
+smoothing techniques for language modeling  In Proceedings
+of the  th annual meeting on Association for Computational
+Linguistics  pp    Association for Computational Linguistics   
+
+Chen  Wenlin  Grangier  David  and Auli  Michael  Strategies
+for training large vocabulary neural language models  CoRR 
+abs   
+
+Collobert  Ronan  Kavukcuoglu  Koray  and Farabet  Clement 
+Torch    Matlablike Environment for Machine Learning  In
+BigLearn  NIPS Workshop    URL http torch ch 
+
+Dauphin  Yann   and Grangier  David 
+
+butions with linearizing belief networks 
+arXiv   
+
+Predicting distriarXiv preprint
+
+Glorot  Xavier and Bengio  Yoshua  Understanding the dif culty
+of training deep feedforward neural networks  The handbook
+of brain theory and neural networks   
+
+Grave     Joulin     Ciss       Grangier     and   egou    
+Ef cient softmax approximation for GPUs  ArXiv eprints 
+September    
+
+Grave     Joulin     and Usunier    
+
+Improving Neural Language Models with   Continuous Cache  ArXiv eprints  December    
+
+ Updates Test PerplexityWithout ClippingWithout WeightNormWith BothLanguage Modeling with Gated Convolutional Networks
+
+Oord  Aaron van den  Kalchbrenner  Nal  and Kavukcuoglu 
+arXiv preprint
+
+Pixel recurrent neural networks 
+
+Koray 
+arXiv     
+
+Oord  Aaron van den  Kalchbrenner  Nal  Vinyals  Oriol  Espeholt  Lasse  Graves  Alex  and Kavukcuoglu  Koray  Conditional image generation with pixelcnn decoders  arXiv preprint
+arXiv     
+
+Pascanu  Razvan  Mikolov  Tomas  and Bengio  Yoshua  On the
+dif culty of training recurrent neural networks  In Proceedings
+of The  th International Conference on Machine Learning 
+pp     
+
+Salimans  Tim and Kingma  Diederik    Weight normalization   
+simple reparameterization to accelerate training of deep neural
+networks  arXiv preprint arXiv   
+
+Shazeer  Noam  Pelemans  Joris  and Chelba  Ciprian  Skipgram
+language modeling using sparse nonnegative matrix probability estimation  arXiv preprint arXiv   
+
+Shazeer  Noam  Mirhoseini  Azalia  Maziarz  Krzysztof  Davis 
+Andy  Le  Quoc    Hinton  Geoffrey    and Dean  Jeff  Outrageously large neural networks  The sparselygated mixtureof experts layer  CoRR  abs    URL http 
+ arxiv org abs 
+
+Steedman  Mark  The syntactic process   
+
+Sutskever  Ilya  Martens  James  Dahl  George    and Hinton  Geoffrey    On the importance of initialization and momentum in
+deep learning   
+
+Yu  Dong and Deng  Li  Automatic Speech Recognition    Deep
+Learning Approach  Springer Publishing Company  Incorporated    ISBN    
+
+Gutmann  Michael and Hyv arinen  Aapo  Noisecontrastive estimation    new estimation principle for unnormalized statistical models 
+
+He  Kaiming  Zhang  Xiangyu  Ren  Shaoqing  and Sun  Jian 
+Deep residual learning for image recognition  arXiv preprint
+arXiv     
+
+He  Kaiming  Zhang  Xiangyu  Ren  Shaoqing  and Sun  Jian 
+Delving deep into recti ers  Surpassing humanlevel performance on imagenet classi cation  In Proceedings of the IEEE
+International Conference on Computer Vision  pp   
+   
+
+Hochreiter  Sepp and Schmidhuber    urgen  Long shortterm
+
+memory  Neural computation     
+
+Ji  Shihao  Vishwanathan  SVN  Satish  Nadathur  Anderson 
+Michael    and Dubey  Pradeep  Blackout  Speeding up recurrent neural network language models with very large vocabularies  arXiv preprint arXiv   
+
+Jozefowicz  Rafal  Vinyals  Oriol  Schuster  Mike  Shazeer 
+Noam  and Wu  Yonghui  Exploring the limits of language
+modeling  arXiv preprint arXiv   
+
+Kalchbrenner  Nal  Espeholt  Lasse  Simonyan  Karen  van den
+Oord  Aaron  Graves  Alex  and Kavukcuoglu  Koray  Neural
+Machine Translation in Linear Time  arXiv   
+
+Kneser  Reinhard and Ney  Hermann  Improved backingoff for
+mgram language modeling  In Acoustics  Speech  and Signal
+Processing    ICASSP    International Conference
+on  volume   pp    IEEE   
+
+Koehn  Philipp  Statistical Machine Translation  Cambridge University Press  New York  NY  USA   st edition    ISBN
+   
+
+Kuchaiev  Oleksii and Ginsburg  Boris  Factorization tricks for
+LSTM networks  CoRR  abs    URL http 
+ arxiv org abs 
+
+LeCun  Yann and Bengio  Yoshua  Convolutional networks for
+images  speech  and time series  The handbook of brain theory
+and neural networks     
+
+Manning  Christopher   and Sch utze  Hinrich  Foundations of
+
+statistical natural language processing   
+
+Merity     Xiong     Bradbury     and Socher     Pointer Sen 
+
+tinel Mixture Models  ArXiv eprints  September  
+
+Mikolov  Tom      Martin  Kara at  Burget  Luk      Cernock    Jan 
+and Khudanpur  Sanjeev  Recurrent Neural Network based
+Language Model  In Proc  of INTERSPEECH  pp   
+ 
+
+Mnih  Andriy and Hinton  Geoffrey  Three new graphical models
+for statistical language modelling  In Proceedings of the  th
+international conference on Machine learning  pp   
+ACM   
+
+Morin  Frederic and Bengio  Yoshua  Hierarchical probabilistic
+neural network language model  In Aistats  volume   pp   
+  Citeseer   
+
+

@@ -1,0 +1,1004 @@
+Canopy   Fast Sampling with Cover Trees
+
+Manzil Zaheer       Satwik Kottur     Amr Ahmed   Jos   Moura   Alex Smola    
+
+Abstract
+
+Hierarchical Bayesian models often capture distributions over   very large number of distinct atoms 
+The need for these models arises when organizing
+huge amount of unsupervised data  for instance 
+features extracted using deep convnets that can
+be exploited to organize abundant unlabeled images  Inference for hierarchical Bayesian models
+in such cases can be rather nontrivial  leading to
+approximate approaches  In this work  we propose
+Canopy    sampler based on Cover Trees that is
+exact  has guaranteed runtime logarithmic in the
+number of atoms  and is provably polynomial in
+the inherent dimensionality of the underlying parameter space  In other words  the algorithm is as
+fast as search over   hierarchical data structure 
+We provide theory for Canopy and demonstrate its
+effectiveness on both synthetic and real datasets 
+consisting of over   million images 
+
+  Introduction
+Fast nearestneighbor algorithms have become   mainstay
+of information retrieval  Beygelzimer et al    Liu et al 
+  Indyk   Motwani    Search engines are able to
+perform virtually instantaneous lookup among sets containing billions of objects  In contrast  inference procedures for
+latent variable models  Gibbs sampling  EM  or variational
+methods  are often problematic even when dealing with
+thousands of distinct objects  This is largely because  for
+any inference methods  we potentially need to evaluate all
+probabilities whereas search only needs the best instance 
+While the above is admittedly an oversimpli cation of matters  after all  we can use MarkovChain Monte Carlo methods for inference  it is nonetheless nontrivial to perform
+exact sampling for large state spaces  In the current work 
+we propose Canopy  an inference technique to address this
+issue by marrying   fast lookup structure with an adaptive
+
+ Equal contribution
+
+ Carnegie Mellon University  USA
+ Amazon Web Services  USA  Google Inc  USA  Correspondence
+to  Manzil Zaheer  manzil cmu edu 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright   by
+the author   
+
+Figure   Canopy is much faster yet as accurate as other methods
+like EM or ESCA  Zaheer et al    The bar graph shows time
+per iteration while line plots the likelihood on heldout test set 
+Results shown are for inference of   Gaussian mixture model with
+  million points having   clusters at   dimensions 
+
+rejection sampler  This leads to   surprisingly simple design for   plethora of samplingbased inference algorithms 
+Moreover  we provide runtime guarantees for Canopy that
+depend only on the inherent dimensionality of both parameter and data distributions  The expected depth for lookups is
+never worse than logarithmic in the number of atoms and
+the characteristic length scale at which models can be suf 
+ciently well distinguished  Furthermore  we can parallelize
+Canopy for hierarchical Bayesian models using stochastic
+cellular automata  ESCA   Zaheer et al    thus leading
+to an extremely scalable and ef cient system design 
+Most latent variable models       Gaussian mixture models
+ GMM  latent Dirichlet allocation  Blei et al    hidden
+Markov models  Dirichlet process clustering  Neal   
+or hierarchical generative models  Adams et al    have
+the structure of the form 
+
+ cid 
+
+      
+
+          
+
+ 
+
+ 
+
+where   denotes observed variables    latent variables  and
+   parameters of the conditional  Often the conditional distribution        belongs to the exponential family  which
+we assume to be the case as well  The inference procedure
+on these models using either Gibbs sampling  stochastic variation methods  or ESCA would require to draw           
+repeatedly  Na vely producing these draws would be expensive  especially when the number of latent classes is huge 
+We aim to bring the periteration cost down from   mn 
+to           where      are the number of latent classes
+and data points  respectively  For example  on GMM  the
+proposed method Canopy is much faster than EM or ESCA 
+while achieving the same accuracy as shown in Fig   
+
+Canopy   Fast Sampling with Cover Trees
+
+Our approach is as follows  we use cover trees  Beygelzimer et al    to design an ef cient lookup structure for
+       and approximate the values of        for   large
+number of     In combination with an ef cient node summary for      this allows us to design   rejection sampler
+that has an increasingly low rejection rate as we descend
+the tree  Moreover  for large numbers of observations    we
+use another cover tree to aggregate points into groups of
+similar points  perform expensive precomputation of assignment probabilities        only once  and amortize them
+over multiple draws  In particular  the alias method  Walker 
+  allows us to perform sampling in    time once the
+probabilities have been computed 
+In summary  Canopy has three parts  construction of cover
+trees for both parameters and data  Sec      an adaptive
+rejection sampler at the toplevel of the cover tree until
+the data representation is suf ciently high to exploit it for
+sampling  Sec    and   rejection sampler in the leaves
+ Sec    whenever the number of clusters is large  Most
+importantly  the algorithm becomes more ef cient as we
+obtain larger amounts of data since they lead to greater
+utilization of the alias table in  Walker    as shown
+by theoretical analysis in Sec    This makes it particularly
+wellsuited to big data problems as demonstrated through
+experiments in Sec   
+
+  Background
+We brie   discuss latent variable models  cover trees  and
+the alias method needed to explain this work 
+
+Trying to  nd   metric data structure for fast retrieval is
+not necessarily trivial for the exponential family  Jiang et al 
+  and Cayton   design Bregman divergence based
+methods for this problem  Unfortunately  such methods are
+costlier to maintain and have less ef cient lookup properties
+than those using Euclidean distance  as computing and optimizing over Bregman divergences is less straightforward 
+For example  whenever we end up on the boundary of the
+marginal polytope  as is common with natural parameters
+associated with single observations  optimization becomes
+intractable  Fortunately  this problem can be avoided entirely
+by rewriting the exponential family model as
+
+         cid     cid      cid     cid 
+where           and         
+
+ 
+
+In this case  being able to group similar   together allows
+us to assess their contributions ef ciently without having to
+inspect individual terms  Finally  we assume that
+
+ cid cid cid   xi 
+ cid cid cid   
+ cid cid cid      for all   and for all       respectively 
+
+ cid cid cid  
+
+  and
+
+  Alias Sampler
+
+  key component of Canopy is the alias sampler  Walker 
+  Vose    Given an arbitrary discrete probability distribution on   outcomes  it allows for    sampling once an      preprocessing step has been performed 
+Hence  drawing   observations from   distribution over  
+outcomes costs an amortized    per sample  Sec    in
+appendix has more details 
+
+  Latent Variable Models
+
+  Cover Trees
+
+The key motivation for this work is to make inference
+in latent variable models more ef cient  As expressed in
+  we consider latent models which have mixtures of exponential family  The reasons for limiting to exponential
+families are two fold  First  most of the mixture models
+used in practice belong to this class  Second  assumptions
+on model structure  for instance exponential family  allows for ef cient design of fast inference  In particular 
+we  rst assume that updates to      can be carried out
+by modifying    values at any given time  For instance 
+for Dirichlet process mixtures  the collapsed sampler uses
+  zi       zi       
+               Here    is the
+total number of observations     
+  denotes the number of
+occurrences of zl     when ignoring zi  and   is the concentration parameter  Second  the conditional      in  
+is assumed to be   member of the exponential family      
+
+       exp cid     cid      
+
+ 
+
+Here     represents the suf cient statistics and      is
+the  normalizing  logpartition function 
+
+Cover Trees  Beygelzimer et al    and their improved
+version  Izbicki   Shelton    are   hierarchical data
+structure that allow fast retrieval in logarithmic time  The
+key properties are      log    construction time    log   
+retrieval  and polynomial dependence on the expansion constant  Karger   Ruhl    of the underlying space  which
+we refer to as    Moreover  the degree of all internal nodes
+is well controlled  thus giving guarantees for retrieval  as
+exploited by  Beygelzimer et al    and for sampling
+ as we will be using in this paper 
+Cover trees are de ned as an in nite succession of levels
+Si with        Each level   contains    nested subset of  the
+data with the following properties 
+  Nesting property  Si   Si 
+  All      cid    Si satisfy  cid       cid cid       
+  All     Si have children   cid    Si  possibly with
+  As   consequence  the subtree for any     Si has
+
+      cid  with  cid       cid cid       
+
+distance at most     from   
+
+Please refer to appendix Sec    for more details 
+
+Canopy   Fast Sampling with Cover Trees
+
+  Our Approach
+Now we introduce notation and explain details of our
+approach when the number of clusters is     moderate
+ Sec    and     large  Sec    In what follows  the
+number of data points and clusters are denoted with   and
+  respectively  The function ch    returns children of  
+node   of any tree 
+Data tree  TD  Cover tree built with levels Sj on all
+available data using the suf cient statistic     constructed
+once for our setup  We record ancestors at level   as prototypes    for each data point    In fact  we only need to
+construct the tree up to    xed degree of accuracy   in case
+of moderate number of clusters    key observation is that
+multiple points can have   same prototype     making it  
+manyto one map  This helps us amortize costs over points
+by reusing proposal computed with     Sec   
+Cluster tree  TC  Similarly  TC is the cover tree generated with cluster parameters     For simplicity  we assume
+that the expansion rates of clusters and data are both   
+  Canopy    Moderate number of clusters
+
+We introduce our sampler  Canopy    when the number of
+clusters is relatively small compared to the total number of
+observations  This addresses many cases where we want to
+obtain    at clustering on large datasets  For instance  it is
+conceivable that one might not want to infer more than  
+thousand clusters for one million observations  In   nutshell 
+our approach works as follows 
+  Construct TD and pick   level       with accuracy  
+such that the average number of elements per node in   
+is     
+
+  For each of the prototypes     which are members of   
+compute        using the alias method to draw from
+  components     By construction  this cost amortizes
+   per observation         total cost of     
+
+  For each observation   with prototype     perform
+MetropolisHastings  MH  sampling using the draws
+from               as proposal  Hence we accept an
+MH move from   to   cid  with probability
+    cid         
+          cid   
+
+    min
+
+ cid 
+
+ cid 
+
+ 
+
+ 
+
+ 
+
+    min
+
+ cid cid 
+
+The key reason why this algorithm has   useful acceptance
+probability is that the normalizations for        and       
+and mixing proportions      and     cid  cancel out respectively  Only terms remaining in   are
+
+ cid 
+ cid cid cid       
+ cid cid cid       This follows from the Cauchy Schwartz
+
+for
+inequality and the covering property of cover trees  which
+ensures all descendants of    are no more than   apart
+from           cid         cid     
+
+             cid      
+
+ cid cid cid  
+
+  exp
+
+  Canopy II  Large number of clusters
+
+The key dif culty in dealing with many clusters is that it
+forces us to truncate TD at   granularity in   that is less precise than desirable in order to bene   from the alias sampler
+naively  In other words  for   given sampling complexity   
+larger   reduces the affordable granularity in    The problem arises because we are trying to distinguish clusters at  
+level of resolution that is too coarse    solution is to apply
+cover trees not only to observations but also to the clusters
+themselves       use both TD and TC  This allows us to decrease the minimum observationgroup size at the expense
+of having to deal with an aggregate of possible clusters 
+Our method for large number of clusters operates in two
+phases      Descend the hierarchy in cover trees while sampling  Sec        Sample for   single observation   from
+  subset of clusters arranged in TC  Sec    when appropriate conditions are met in     We begin with initialization
+and then elaborate each of these phases in detail 
+Initialize   Construct TC and for each node     assign
+              where   is the highest level Si such that
+    Si  else   Then perform bottomup aggregation via
+
+ cid 
+
+  cid ch   
+
+                 
+
+         cid 
+
+ 
+
+This creates at most      distinct entries        Notice
+that aggregated value        captures the mixing probability
+of the node and its children in TC 
+Initialize   Partition both the observations and the clusters at   resolution that allows for ef cient sampling and
+precomputation  More speci cally  we choose accuracy levels   and   to truncate TD and TC  so that there are   cid  and
+  cid  nodes respectively after truncation  These serve as partitions for data points and clusters such that   cid      cid        
+is satis ed  The aggregate approximation error
+
+               
+
+ 
+
+due to quantizing observations and clusters is minimized
+over the split  searching over the levels 
+
+  DESCENDING TD AND TC
+Given TD and TC with accuracy levels   and   we now
+iterate over the generated hierarchy  as shown in Fig    We
+recursively descend simultaneously in both the trees until
+the number of observations for   given cluster is too small 
+In that case  we simply default to the sampling algorithm described in Sec    for each observation in   given cluster 
+The reasoning works as follows  Once we have the partitioning into levels     for data and clusters respectively with
+  cid      cid         we draw from the proposal distribution
+
+               exp  cid       cid        
+
+ 
+
+Canopy   Fast Sampling with Cover Trees
+
+  SAMPLING FOR   SINGLE OBSERVATION  
+
+Let   be the single observation for which we want to sample from possibly subset of clusters   that are arranged in
+TC  In this case  we hierarchically descend TC using each
+aggregate as   proposal for the clusters below  As before 
+we can either use MH sampling or   rejection sampler  To
+illustrate the effects of the latter  we describe one below 
+whose theoretical analysis is provided in Sec    Before we
+delve into details  let us consider   simple case without TC 
+If we are able to approximate        by some qz such that
+ 
+
+           qz           
+
+for all    then it follows that   sampler drawing   from
+
+qzp   
+  cid  qz cid      cid 
+
+ 
+         will
+and then accepting with probability     
+draw from         see Appendix Sec    for details  Moreover  the acceptance probability is at least    However 
+ nding such qz with   small   is not easy in general  Thus 
+we propose to cleverly utilize structure of the cover tree TC
+to begin with   very course approximation and successively
+improving the approximation only for   subset of    which
+are of interest  The resultant sampler is described below 
+  Choose approximation level   and compute normaliza 
+
+tion at accuracy level  
+
+ cid 
+
+   
+
+ cid       
+ cid 
+
+ cid 
+
+ cid       
+ cid 
+ cid       
+ cid 
+
+ 
+
+   
+
+     exp
+
+    
+
+ 
+  Set        cid     cid  as multiplier for the acceptance
+  Draw   node        with probability   
+
+threshold of the sampler and       
+
+ 
+
+ 
+
+       exp
+
+  
+
+     exp
+
+  Accept    at the current level with probability    
+
+ 
+  For           down to   do
+
+ 
+   Set          cid     cid  as the new multiplier and
+ cid       
+ cid 
+     zi        as the new normalizer 
+ii  Draw one of the children   of zi  with probability
+not draw any of them  since cid 
+              exp
+  Exit if we do
+  ch zi        
+ cid zi     
+ cid 
+and restart from step   else denote this child by zi 
+iii  Accept zi at the current level with probability    
+ 
+  Do not include zi 
+in this setting  as we consider   only the  rst time
+we encounter it 
+
+  zi  exp
+
+zi
+
+The above describes   rejection sampler that keeps on upperbounding the probability of accepting   particular cluster or
+any of its children  It is as aggressive as possible at retaining
+tight lower bounds on the acceptance probability such that
+not too much effort is wasted in traversing the cover tree to
+the bottom       we attempt to reject as quickly as possible 
+
+Figure   Hierarchical partitioning over both data observations and
+clusters  Once we sample clusters at   coarser level  we descend
+the hierarchy and sample at    ner level  until we have few number
+of points per cluster  We then use Sec    for rejection sampler 
+
+for all the observations and clusters above the partitioned
+levels   and   respectively  That is  we draw from   distribution where both observations and clusters are grouped  We
+draw from the proposal for each   in TD truncated at level  
+Here        collects the prior cluster likelihood from    and
+all its children  As described earlier  we can use the alias
+method for sampling ef ciently from  
+Within each group of observations  drawing from   leads
+to   distribution over    possibly smaller  subset of cluster
+groups  Whenever the number of observations per cluster
+group is small  we default to the algorithm described in
+Sec    for each observation  On the other hand  if we
+have   sizable number of observations for   given cluster 
+which should happen whenever the clusters are highly discriminative for observations    desirable property for   good
+statistical model  we repeat the strategy on the subset to reduce the aggregate approximation error   In other words 
+we descend the hierarchy to yield   new pair    cid    cid  on the
+subset of clusters observations with   cid      and   cid      and
+repeat the procedure 
+The process works in   depth rst fashion in order to avoid
+using up too much memory  The sampling probabilities
+according to   are multiplied out for the path over the
+various hierarchy levels and used in   MH procedure  Each
+level of the hierarchy can be processed in    operations
+per instance  without access to the instance itself  Moreover 
+we are guaranteed to descend by at least one step in the
+hierarchy of observations and clusters  hence the cost is at
+most      min log    log   
+To summarize  we employ   MH scheme as before  with
+the aim of using   highly accurate  yet cheap proposal  To
+overcome the loss in precision of Canopy   proposal due
+to large of clusters  we devise   proposal wherein we look
+at aggregates of both data and clusters at comparable granularity using both TD and TC  Note that the acceptance
+probabilities are always at least as high as the bounds derived in Sec    as the errors on the paths are logadditive 
+Instead of MH    rejection sampler can also be devised  Details are omitted for the sake of brevity  since they mirror
+the singleobservation argument of the following section 
+
+ObservationsClustersObservationsClustersObservationsClustersCanopy   Fast Sampling with Cover Trees
+
+  Theoretical Analysis
+The main concern is to derive   useful bound regarding the
+runtime required for drawing   sample  Secondary concerns
+are those of generating the data structure  We address each
+of these components  reporting all costs per data point 
+Construction The data structure TD costs      log   
+ per datapoint  to construct and TC costs      log     per
+datapoint  as          all additional annotations cost
+negligible time and space  This includes computing   and
+  as discussed above 
+Startup The  rst step is to draw from    This costs
+     for the  rst time to compute all probabilities and
+to construct an alias table  Subsequent samples only cost  
+CPU cycles to draw from the associated alias table  The acceptance probability at this step is    Hence the aggregate
+cost for the top level is bounded by  
+ 
+Termination To terminate the sampler successfully  we
+need to traverse TC at least once to its leaf in the worst case 
+This costs      log    if the leaf is at maximum depth 
+Rejections The main effort of the analysis is to obtain
+useful guarantees for the amount of effort wasted in drawing
+from the cover tree    bruteforce bound immediately would
+yield  
+  Here the  rst term is due to
+the upper bound on the acceptance probability    term of   
+arises from the maximum number of children per node and
+lastly the    log   term quanti es the maximum depth  It
+is quite clear that this term would dominate all others  We
+now derive   more re ned  and tighter  bound 
+Essentially we will exploit the fact that the deeper we descend into the tree  the less likely we will have wasted computation later in the process  We use the following relations
+
+ cid        cid     cid cid 
+
+  cid     cid    log  
+
+ cid 
+
+ cid 
+
+ex       xea for          and
+
+      
+
+ 
+
+ cid 
+
+  
+
+In expectation  the  rst step of the sampler requires     
+  cid     cid  steps in expectation until   sample is accepted 
+Thus         effort is wasted  At the next level below we
+waste at most   cid     cid      effort  Note that we are less
+likely to visit this level commensurate with the acceptance
+probability  These bounds are conservative since any time
+we terminate above the very leaf levels of the tree we are
+done  Moreover  not all vertices have children at all levels 
+and we only need to revisit them whenever they do  In
+summary  the wasted effort can be bounded from above by
+
+ cid 
+
+ cid 
+
+  
+
+ cid        cid   cid 
+
+ cid 
+
+    cid     cid     
+
+         cid   cid 
+
+  
+
+  
+
+Here    was   consequence of the upper bound on the number of children of   vertex  Moreover  note that the exponential upper bound is rather crude  since the inequality   is
+
+ 
+
+very loose for large    Nonetheless we see that the rejection
+sampler over the tree has computational overhead independent of the tree size  This result is less surprising than it may
+seem  Effectively we pay for lookup plus   modicum for the
+inherent toplevel geometry of the set of parameters 
+Theorem   The cover tree sampler incurs worstcase computational complexity per sample of
+
+ cid         log        log         cid     cid cid 
+ cid cid cid  and that nowhere the particular structure of     
+ cid cid cid     
+
+Note that the only datadependent terms are         and
+
+entered the analysis  This means that our method will work
+equally well regardless of the type of latent variable model
+we apply  For example  we can even apply the model to
+more complicated latent variable models like latent Dirichlet allocation  LDA  The aforementioned constants are all
+natural quantities inherent to the problems we analyze  The
+constant   quanti es the inherent dimensionality of the parameter space 
+distribution  and      measure the  packing number  of the
+parameter space at   minimum level of granularity 
+
+ cid cid cid  measures the dynamic range of the
+
+ cid cid cid     
+
+ 
+
+  Experiments
+We now present empirical studies for our fast sampling techniques in order to establish that     Canopy is fast  Sec   
+ ii  Canopy is accurate  Sec    and  iii  it opens new
+avenues for data exploration and unsupervised learning
+ Sec    previously unthinkable  To illustrate these claims 
+we evaluate on  nite mixture models  more speci cally 
+Gaussian Mixture models  GMM    widely used probabilistic models  However  the proposed method can be applied
+effortlessly to any latent variable model like topic modeling
+through Gaussian latent Dirichlet allocation  Gaussian LDA 
+ Das et al    We pick GMMs due to their widespread
+application in various  elds spanning computer vision  natural language processing  neurobiology  etc 
+Methods For each experiment  we compare our two samplers  Canopy    Section   and Canopy II  Section  
+with both the traditional Expectation Maximization  EM 
+ Dempster et al    and the faster Stochastic EM through
+ESCA  ESCA   Zaheer et al    using execution time 
+cluster purity  and likelihood on   held out TEST set 
+Software   hardware All the algorithms are implemented multithreaded in simple     using   distributed
+setup  Within   node  parallelization is implemented using
+the workstealing Fork Join framework  and the distribution across multiple nodes using the process binding to  
+socket over MPI  We run our experiments on   cluster of  
+Amazon EC    xlarge nodes connected through  Gb  
+Ethernet  There are   virtual threads per node and  GB
+of memory  For purpose of experiments  all data and calculations are carried out at double  oatingpoint precision 
+
+Canopy   Fast Sampling with Cover Trees
+
+    Varying   with  xed
+
+            
+
+    Varying   with  xed
+
+            
+
+    Varying   with    
+
+   and      
+
+    Varying   with  xed
+
+            
+
+Figure   Showing scalability of periteration runtime of different algorithms with increasing dataset size  From Fig          and   
+we see that our approaches take orders of magnitude less time compared to the traditional EM and ESCA methods  while varying
+the number of points and clusters respectively  Note that we trade off memory for speed as seen from Fig      For instance  with
+             mil      we see that there is   speedup of   for   mere   memory overhead 
+
+Initialization Recall that speed and quality of inference
+algorithms depend on initialization of the random variables
+and parameters  Random initializations often lead to poor results  and so many speci   initialization schemes have been
+proposed  like KMeans   Arthur   Vassilvitskii    KMC   Bachem et al    However  these initializations
+can be costly  roughly   mn 
+Our approach provides   good initialization using cover trees
+free of cost  as the construction of cover tree is at the heart of
+our sampling approach  The proposed initialization scheme
+relies on the observation that cover trees partition the space
+of points while preserving important invariants based on
+its structure  They thus help in selecting initializations that
+span the entirety of space occupied by the points  which is
+desired to avoid local minima  The crux of the approach is to
+descend to   level   in TD such that there are no more than
+  points at level    These points from level   are included
+in set of initial points    We then randomly pick   point
+from   such that it belongs to level   and replace it with
+its children from level       in    This is repeated until we
+ nally have   elements in    The chosen   elements are
+mapped to parameter space through the inverse link function
+   and used as initialization  All our experiments use
+cover tree based initializations  We also make comparisons
+against random and KMeans  in Sec   
+
+  Speed
+
+To gauge the speed of Canopy  we begin with inference on
+GMMs using synthetic data  Working with synthetic data is
+advantageous as we can easily vary parameters like number
+of clusters  data points  or dimensionality to study its effect
+on the proposed method  Note that  from   computational
+perspective  data being real or synthetic does not matter as
+all the required computations are data independent  once the
+cover tree has been constructed 
+Synthetic Dataset Generation Data points are assumed
+to be        samples generated from   Gaussian probability
+
+     
+
+    for             
+distributions parameterized by  
+which mix with proportions given by  
+    Our experiments
+operate on three free parameters            where   is the
+total number of points    is the number of distributions  and
+  is the dimensionality  For    xed           we randomly
+generate   TRAIN set of   points as follows    Randomly
+    along with mixing proportions  
+pick parameters  
+   
+for              uniformly random at some scale   
+To generate each point  select   distribution based on  
+   
+and sample from the corresponding ddimensional Gaussian
+pdf  Additionally  we also generate another set of points as
+TEST set using the same procedure  For all the four models
+ Canopy    Canopy II  EM  ESCA  parameters are learnt
+using TRAIN and loglikelihood on the TEST set is used as
+evaluation 
+
+     
+
+Observations We run all algorithms for    xed number
+of iterations and vary         individually to investigate the
+respective dependence on performance of our approach as
+shown in Fig    We make the following observations   
+Overall  Fig    is in line with our claim that the proposed
+method reduced the per iteration complexity from   nm 
+of EM ESCA to             To illustrate this further 
+we consider          and vary    shown in Fig     
+While EM and ESCA have periteration time of   mn 
+          in this case  our Canopy   and Canopy II show
+                       However  there is no free lunch 
+The huge speedup comes at the cost of increased memory
+usage  for storing the datastructures  For example  in the
+case of       mil        and        Fig     
+mere   increase in memory gets us   speed up of  
+
+  Correctness
+
+Next  we demonstrate correctness of Canopy using medium
+sized real world datasets with labels       ground truth grouping of the points are known  We setup an unsupervised classi cation task on these datasets and perform evaluation on
+both cluster purity and loglikelihood 
+
+Canopy   Fast Sampling with Cover Trees
+
+Figure   Plots of cluster purity and loglikehood of ESCA  Canopy    and Canopy II on benchmark real datasets  MNIST   and
+CIFAR  All three methods have roughly same performance on cluster purity  See Sec    for more details 
+
+Datasets We use two benchmark image datasets 
+MNIST    Loosli et al    and CIFAR   Krizhevsky
+  Hinton    The former contains   million annotated
+handwritten digits of size       giving us data points of
+dimension   CIFAR  on the other hand  contains   
+images annotated with one of   object categories  Each
+image has   channels  RGB  and of size       resulting
+in   vector of dimension  
+
+Unsupervised Classi cation  We run unsupervised classi cation on the above two datasets and evaluate using cluster purity and loglikelihood  Here  cluster purity is de ned
+as the mean of accuracy across all clusters  where each
+cluster is assigned the class of majority of its members  In
+addition to using data points as is  we also experiment with
+unsupervised features learnt from   denoising autoencoder
+ Hinton   Salakhutdinov    We extract   and  
+dimensional features for MNIST   and CIFAR  respectively  Details of our unsupervised feature extraction are in
+Appendix    Further  we evaluate in multiple scenarios that
+differ in     number of clusters          for MNIST  
+and         for CIFAR  and     parameter initializations  Random  Kmeans  and CTree 
+
+Observations Fig    shows our results on MNIST  
+         and CIFAR           with error
+bars computed over   runs  Here are the salient observations    All the methods  SEM  Canopy    Canopy II  have
+roughly the same cluster purity with Canopy II outperforming in CIFAR    dim  and MNIST   by around
+  and   respectively  In CIFAR  SEM does slightly
+better than other methods by     Similar results are
+obtained for loglikelihood except for MNIST    where
+SEM heavily outperforms Canopy  However  note that loglikelihood results in an unsupervised task can be misleading
+ Chang et al    as evidenced here by superior performance of Canopy in terms of cluster purity 
+
+  Scalability     New Hope
+
+Finally  we demonstrate the scalability of our algorithm
+by clustering   crawled dataset having more than   million images that belong to more than   classes  We
+query Flickr  with the key words from WordNet  Fellbaum 
+  and downloaded the returned images for each key
+word  those images roughly belong to the same category 
+We extracted the image features of dimension   with
+ResNet  He et al        the stateof theart convolutional neural network  CNN  on ImageNet   classes
+data set using publicly available pretrained model of  
+layers  It takes   days with   GPUs to extract these features for all the images  We then use Canopy II to cluster
+these images with       taking around   hours 
+
+Observations For   qualitative assessment  we randomly
+pick four clusters and show four images  more in Appendix    closest to the means in Fig     each cluster in  
+row  We highlight two important observations      Though
+the underlying visual feature extractor  ResNet  is trained
+on   semantic classes  our clustering is able to discover
+semantic concepts that go beyond  To illustrate  images from
+the  rst row indicate   semantic class of crowd even though
+ResNet never received any supervision for such   concept 
+    The keywords associated with these images do not necessarily collate with the semantic concepts in the image  For
+example  images in  rst row are associated with key words
+ heave   makeshift   bloodbath  and  full llment  respectively  It is not too surprising as the relatedness of retrieved
+images for   query key word generally decreases for lower
+ranked images  This suggests that preprocessing images to
+obtain more meaningful semantic classes could potentially
+improve the quality of labels used to learn models  Such  
+cleanup would de nitely prove bene cial in learning deep
+image classi cation models from weakly supervised data 
+
+ http www flickr com 
+ github com facebook fb resnet torch
+
+Canopy   Fast Sampling with Cover Trees
+
+Figure   Illustration of concepts captured by clustering images in the ResNet  He et al      feature space  We randomly pick
+three clusters and show four closest images  one in each row  possibly denoting the semantic concepts of  crowd   ocean rock scenery 
+and  horse mounted police  Our clustering discovers new concepts beyond the Resnet supervised categories  does not include  crowd 
+
+  Discussion
+We present an ef cient sampler  Canopy  for mixture models
+over exponential families using cover trees that brings the
+periteration cost down from   mn  to           The
+use of cover trees over both data and clusters combined
+with alias sampling can signi cantly improve sampling time
+with no effect on the quality of the  nal clustering  We
+demonstrate speed  correctness  and scalability of Canopy
+on both synthetic and large real world datasets  To the best
+of our knowledge  our clustering experiment on   hundred
+million images is the largest to be reported  We conclude
+with some related works and future extensions 
+Related works There has been work using nearestneighbor search for guiding graphical model inference like
+kdtrees  Moore    Gray   Moore    But use of
+kdtrees is not scalable with respect to dimensionality of the
+data points  Moreover  kdtrees could be deeper  especially
+for small    and do not have special properties like covering 
+which can be exploited for speeding up sampling  We observe this empirically when training kdtree based methods
+using publicly available code  The models fail to train for
+dimensions greater than   or number of points greater than
+few thousands  In contrast  our method handles millions of
+points with thousands of dimensions 
+Further approximations From our experiments  we observe that using   simpli ed single observation sampling in
+Canopy II works well in practice  Instead of descending on
+
+ http www cs cmu edu psand 
+
+the hierarchy of clusters  we perform exact proposal computation for   closest clusters obtained through fast lookup
+from TC  All other clusters are equally assigned the least
+out of these   exact posteriors 
+In the future  we plan to integrate Canopy with 
+Coresets Another line of work to speed up mixture models and clustering involves  nding   weighted subset of
+the data  called coreset  Lucic et al    Feldman et al 
+  Models trained on the coreset are provably competitive with those trained on the original data set  Such
+approaches reduce the number of samples    but perform
+traditional inference on the coreset  Thus  our approach can
+be combined with coreset for additional speedup 
+
+Inner product acceleration In an orthogonal direction
+to Canopy  several works  Ahmed et al    Mussmann
+  Ermon    have used maximum inner product search
+to speed up inference and vice versa  Auvolat et al   
+We want to incorporate these ideas into Canopy as well 
+since the inner product is evaluated   times each iteration 
+it becomes the bottleneck for large   and      solution
+to overcome this problem would be to use binary hashing
+ Ahmed et al    as   good approximation and therefore
+  proposal distribution with high acceptance rate 
+Combining these ideas  one could build an extremely scalable and ef cient system  which potentially could bring
+down the periteration sampling cost from   mnd  to
+              or less 
+
+Canopy   Fast Sampling with Cover Trees
+
+References
+Adams     Ghahramani     and Jordan     Treestructured
+stick breaking for hierarchical data  In Neural Information Processing Systems  pp     
+
+Ahmed     Ravi     Narayanamurthy     and Smola      
+Fastex  Hash clustering with exponential families 
+In
+Neural Information Processing Systems   pp   
+   
+
+Arthur  David and Vassilvitskii  Sergei 
+
+kmeans 
+In Proceedthe advantages of careful seeding 
+ings of the Eighteenth Annual ACMSIAM Symposium
+on Discrete Algorithms  SODA   New Orleans 
+Louisiana  USA  January     pp   
+ 
+URL http dl acm org citation 
+cfm id 
+
+Auvolat  Alex  Chandar  Sarath  Vincent  Pascal  Larochelle 
+Hugo  and Bengio  Yoshua  Clustering is ef cient for approximate maximum inner product search  arXiv preprint
+arXiv   
+
+Bachem  Olivier  Lucic  Mario  Hassani     Hamed  and
+Krause  Andreas  Approximate kmeans  in subIn Proceedings of the Thirtieth AAAI
+linear time 
+Conference on Arti cial Intelligence  February  
+  Phoenix  Arizona  USA  pp     
+URL http www aaai org ocs index php 
+AAAI AAAI paper view 
+
+Beygelzimer     Kakade     and Langford     Cover trees
+In International Conference on
+
+for nearest neighbor 
+Machine Learning   
+
+Blei     Ng     and Jordan     Latent dirichlet allocation 
+In Dietterich        Becker     and Ghahramani      eds 
+Advances in Neural Information Processing Systems  
+Cambridge  MA    MIT Press 
+
+Cayton     Fast nearest neighbor retrieval for bregman
+divergences  In International Conference on Machine
+Learning ICML  pp    ACM   
+
+Chang  Jonathan  Gerrish  Sean  Wang  Chong  Boydgraber 
+Jordan    and Blei  David    Reading tea leaves  How
+humans interpret topic models  In Bengio     Schuurmans     Lafferty        Williams           and Culotta 
+    eds  Advances in Neural Information Processing
+Systems   pp    Curran Associates  Inc   
+
+Dempster        Laird        and Rubin        Maximum
+likelihood from incomplete data via the EM algorithm 
+Journal of the Royal Statistical Society     
+ 
+
+Feldman  Dan  Schmidt  Melanie  and Sohler  Christian 
+Turning big data into tiny data  Constantsize coresets for
+kmeans  pca and projective clustering  In Proceedings
+of the TwentyFourth Annual ACMSIAM Symposium on
+Discrete Algorithms  pp    Society for Industrial and Applied Mathematics   
+
+Fellbaum     WordNet  An electronic lexical database  The
+
+MIT press   
+
+Gray  Alexander   and Moore  Andrew   
+
+Nbody problems in statistical learning  In NIPS  volume  
+pp    Citeseer   
+
+He  Kaiming  Zhang  Xiangyu  Ren  Shaoqing  and Sun 
+Jian  Deep residual learning for image recognition  CoRR 
+abs    URL http arxiv org 
+abs 
+
+He  Kaiming  Zhang  Xiangyu  Ren  Shaoqing  and Sun 
+Jian  Identity mappings in deep residual networks  CoRR 
+abs    URL http arxiv org 
+abs 
+
+Hinton  Geoffrey and Salakhutdinov  Ruslan  Reducing the
+dimensionality of data with neural networks  Science 
+       
+
+Indyk  Piotr and Motwani  Rajeev  Approximate nearest
+neighbors  towards removing the curse of dimensionality 
+In Proceedings of the thirtieth annual ACM symposium
+on Theory of computing  pp    ACM   
+
+Izbicki  Mike and Shelton  Christian    Faster cover trees 
+In Proceedings of the ThirtySecond International Conference on Machine Learning   
+
+Jiang     Kulis     and Jordan     Smallvariance asymptotics for exponential family dirichlet process mixture
+models  In Neural Information Processing Systems NIPS 
+pp     
+
+Karger        and Ruhl     Finding nearest neighbors in
+growthrestricted metrics  In Symposium on Theory of
+Computing STOC  pp    ACM   
+
+Krizhevsky  Alex and Hinton  Geoffrey  Learning multiple
+
+layers of features from tiny images   
+
+Das  Rajarshi  Zaheer  Manzil  and Dyer  Chris  Gaussian
+lda for topic models with word embeddings  In Proceedings of the  nd Annual Meeting of the Association for
+Computational Linguistics   
+
+Liu  Ting  Rosenberg  Charles  and Rowley  Henry    Clustering billions of images with large scale nearest neighbor search  In Applications of Computer Vision   
+WACV  IEEE Workshop on  pp    IEEE   
+
+Canopy   Fast Sampling with Cover Trees
+
+Loosli  Ga elle  Canu  St ephane  and Bottou    eon  Training
+invariant support vector machines using selective sampling  In Bottou    eon  Chapelle  Olivier  DeCoste  Dennis  and Weston  Jason  eds  Large Scale Kernel Machines  pp    MIT Press  Cambridge  MA   
+
+Lucic  Mario  Bachem  Olivier  and Krause  Andreas  Strong
+coresets for hard and soft bregman clustering with applications to exponential family mixtures  In Proceedings
+of the  th International Conference on Arti cial Intelligence and Statistics  pp     
+
+Moore  Andrew    Very fast embased mixture model clustering using multiresolution kdtrees  Advances in Neural
+information processing systems  pp     
+
+Mussmann  Stephen and Ermon  Stefano  Learning and
+inference via maximum inner product search  In Proceedings of The  rd International Conference on Machine
+Learning  pp     
+
+Neal     Markov chain sampling methods for dirichlet process mixture models  Technical Report   University
+of Toronto   
+
+Vose  Michael      linear algorithm for generating random
+numbers with   given distribution  Software Engineering 
+IEEE Transactions on     
+
+Walker  Alastair    An ef cient method for generating discrete random variables with general distributions  ACM
+Transactions on Mathematical Software  TOMS   
+   
+
+Zaheer     Wick     Tristan       Smola        and Steele 
+      Exponential stochastic cellular automata for massively parallel inference  In Arti cial Intelligence and
+Statistics   
+
+

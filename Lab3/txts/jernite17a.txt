@@ -1,0 +1,1381 @@
+Simultaneous Learning of Trees and Representations for Extreme Classi cation
+
+and Density Estimation
+
+Yacine Jernite   Anna Choromanska   David Sontag  
+
+Abstract
+
+We consider multiclass classi cation where the
+predictor has   hierarchical structure that allows
+for   very large number of labels both at train and
+test time  The predictive power of such models
+can heavily depend on the structure of the tree 
+and although past work showed how to learn the
+tree structure  it expected that the feature vectors
+remained static  We provide   novel algorithm to
+simultaneously perform representation learning
+for the input data and learning of the hierarchical predictor  Our approach optimizes an objective function which favors balanced and easilyseparable multiway node partitions  We theoretically analyze this objective  showing that it gives
+rise to   boosting style property and   bound on
+classi cation error  We next show how to extend
+the algorithm to conditional density estimation 
+We empirically validate both variants of the algorithm on text classi cation and language modeling  respectively  and show that they compare
+favorably to common baselines in terms of accuracy and running time 
+
+  Introduction
+Several machine learning settings are concerned with performing predictions in   very large discrete label space 
+From extreme multiclass classi cation to language modeling  one commonly used approach to this problem reduces
+it to   series of choices in   treestructured model  where
+the leaves typically correspond to labels  While this allows for faster prediction  and is in many cases necessary
+to make the models tractable  the performance of the system can depend signi cantly on the structure of the tree
+used        Mnih   Hinton   
+Instead of relying on possibly costly heuristics  Mnih  
+
+ New York University  New York  New York  USA
+ Massachussets Institute of Technology  Cambridge  Massachussets  USA  Correspondence to  Yacine Jernite  jernite cs nyu edu 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+Hinton    extrinsic hierarchies  Morin   Bengio 
+  which can badly generalize across different data
+sets  or purely random trees  we provide an ef cient datadependent algorithm for tree construction and training  Inspired by the LOM tree algorithm  Choromanska   Langford    for binary trees  we present an objective function which favors highquality node splits       balanced
+and easily separable  In contrast to previous work  our objective applies to trees of arbitrary width and leads to guarantees on model accuracy  Furthermore  we show how to
+successfully optimize it in the setting when the data representation needs to be learned simultaneously with the classi cation tree 
+Finally  the multiclass classi cation problem is closely
+related to that of conditional density estimation  Ram  
+Gray    Bishop    since both need to consider all
+labels  at least implicitly  during learning and at prediction
+time  Both problems present similar dif culties when dealing with very large label spaces  and the techniques that
+we present in this work can be applied indiscriminately to
+either  Indeed  we show how to adapt our algorithm to ef 
+ ciently solve the conditional density estimation problem
+of learning   language model which uses   tree structured
+objective 
+This paper is organized as follows  Section   discusses related work  Section   outlines the necessary background
+and de nes the  at and treestructured objectives for
+multiclass classi cation and density estimation  Section  
+presents the objective and the optimization algorithm  Section   contains theoretical results  Section   adapts the algorithm to the problem of language modeling  Section   reports empirical results on the Flickr tag prediction dataset
+and Gutenberg text corpus  and  nally Section   concludes
+the paper  Supplementary material contains additional material and proofs of theoretical statements of the paper  We
+also release the    implementation of our algorithm 
+
+  Related Work
+The multiclass classi cation problem has been addressed
+in the literature in   variety of ways  Some examples include    clustering methods  Bengio et al    Madzarov
+et al    Weston et al     Bengio et al   
+
+ https github com yjernite fastTextLearnTree
+
+Simultaneous Learning of Trees and Representations for Extreme Classi cation and Density Estimation
+
+was later improved in  Deng et al    ii  sparse output coding  Zhao   Xing    iii  variants of error correcting output codes  Hsu et al    iv  variants of iterative leastsquares  Agarwal et al         method
+based on guessaverse loss functions  Beijbom et al   
+and vi  classi cation trees  Beygelzimer et al     
+Choromanska   Langford    Daume et al     that
+includes the Conditional Probability Trees  Beygelzimer
+et al      when extended to the classi cation setting 
+The recently proposed LOM tree algorithm  Choromanska   Langford    differs signi cantly from
+other similar hierarchical approaches 
+like for example Filter Trees  Beygelzimer et al      or random
+trees  Breiman    in that it addresses the problem of
+learning goodquality binary node partitions  The method
+results in lowentropy trees and instead of using an inef 
+cient enumerateand test approach  see       Breiman et al 
+  to  nd   good partition or expensive bruteforce optimization  Agarwal et al    it searches the space of
+all possible partitions with SGD  Bottou    Another
+work  Daume et al    uses   binary tree to map an example to   small subset of candidate labels and makes  
+ nal prediction via   more tractable oneagainst all classi 
+ er  where this subset is identi ed with the proposed Recall
+Tree    notable approach based on decision trees also include FastXML  Prabhu   Varma     and its slower
+and less accurate at prediction predecessor  Agarwal et al 
+ 
+It is based on optimizing the ranksensitive loss
+function and shows an advantage over some other ranking and NLPbased techniques in the context of multilabel
+classi cation  Other related approaches include the SLEEC
+classi er  Bhatia et al    for extreme multilabel classi cation that learns embeddings which preserve pairwise
+distances between only the nearest label vectors and ranking approaches based on negative sampling  Weston et al 
+  Another tree approach  Kontschieder et al   
+shows no computational speed up but leads to signi cant
+improvements in prediction accuracy 
+Conditional density estimation can also be challenging in
+settings where the label space is large  The underlying
+problem here consists in learning   probability distribution
+over   set of random variables given some context  For
+example  in the language modeling setting one can learn
+the probability of   word given the previous text  either
+by making   Markov assumption and approximating the
+left context by the last few words seen  ngrams       Jelinek   Mercer    Katz    feedforward neural
+language models
+ Mnih   Teh    Mikolov et al 
+  Schwenk   Gauvain    or by attempting to
+learn   lowdimensional representation of the full history
+ RNNs  Mikolov et al    Mirowski   Vlachos   
+Tai et al    Kumar et al    Both the recurrent
+and feedforward Neural Probabilistic Language Models
+ NPLM   Bengio et al    simultaneously learn   distributed representation for words and the probability function for word sequences  expressed in terms of these repre 
+
+sentations  The major drawback of these models is that they
+can be slow to train  as they grow linearly with the vocabulary size  anywhere between   and    words  which
+can make them dif cult to apply  Mnih   Teh     
+number of methods have been proposed to overcome this
+dif culty  Works such as LBL  Mnih   Hinton   
+or Word Vec  Mikolov et al    reduce the model to
+its barest bones  with only one hidden layer and no nonlinearities  Another proposed approach has been to only
+compute the NPLM probabilities for   reduced vocabulary size  and use hybrid neuraln gram model  Schwenk
+  Gauvain    at prediction time  Other avenues to
+reduce the cost of computing gradients for large vocabularies include using different sampling techniques to approximate it  Bengio     en ecal    Bengio   Senecal 
+  Mnih   Teh    replacing the likelihood objective by   contrastive one  Gutmann   Hyv arinen    or
+spherical loss  de Br ebisson   Vincent    relying on
+selfnormalizing models  Andreas   Klein    taking
+advantage of data sparsity  Vincent et al    or using
+clusteringbased methods  Grave et al    It should be
+noted however that most of these techniques  to the exception of  Grave et al    do not provide any speed up at
+test time 
+Similarly to the classi cation case  there have also been  
+signi cant number of works that use tree structured models to accelerate computation of the likelihood and gradients  Morin   Bengio    Mnih   Hinton   
+Djuric et al    Mikolov et al    These use various heuristics to build   hierarchy  from using ontologies  Morin   Bengio    to Huffman coding  Mikolov
+et al    One algorithm which endeavors to learn  
+binary tree structure along with the representation is presented in  Mnih   Hinton    They iteratively learn
+word representations given    xed tree structure  and use
+  criterion that trades off between making   balanced tree
+and clustering the words based on their current embedding 
+The application we present in the second part of our paper
+is most closely related to the latter work  and uses   similar
+embedding of the context  However  where their setting is
+limited to binary trees  we work with arbitrary width  and
+provide   tree building objective which is both less computationally costly and comes with theoretical guarantees 
+
+  Background
+In this section  we de ne the classi cation and loglikelihood objectives we wish to maximize  Let   be an
+input space  and     label space  Let   be   joint distribution over samples in        and let          Rdr be
+  function mapping every input       to   representation
+    Rdr  and parametrized by         as   neural network 
+We consider two objectives  Let   be   function that takes
+an input representation     Rdr  and predicts for it   label           The classi cation objective is de ned as the
+expected proportion of correctly classi ed examples 
+
+Simultaneous Learning of Trees and Representations for Extreme Classi cation and Density Estimation
+
+ cid 
+
+ cid 
+
+ cid 
+
+              
+
+Oclass              
+
+ 
+Now  let      de ne   conditional probability distribution  parametrized by   over   for any     Rdr  The density estimation task consists in maximizing the expected
+loglikelihood of samples from       
+
+Oll             
+
+log         
+
+ 
+
+TreeStructured Classi cation and Density Estimation
+Let us now show how to express the objectives in Equations   and   when using treestructured prediction functions  with  xed structure  as illustrated in Figure  
+
+Figure   Hierarchical predictor  in order to predict label     the
+system needs to choose the third child of node   then the third
+child of node  
+Consider   tree   of depth   and arity   with        
+leaf nodes and   internal nodes  Each leaf   corresponds
+to   label  and can be identi ed with the path cl from the
+root to the leaf  In the rest of the paper  we will use the
+following notations 
+
+   cl
+
+   cl
+
+cl    cl
+
+           cl
+
+            cl
+
+    
+  cl
+           correspond to the node index at depth
+where cl
+           indicates which child of cl
+   and cl
+   is next
+in the path  In that case  our classi cation and density estimation problems are reduced to choosing the right child of
+  node or de ning   probability distribution over children
+given       respectively 
+We then need to replace   and    with node decision
+   and conditional probability distributions
+functions  gn  
+   respectively  Given such   tree and representation
+       
+function  our objective functions then become 
+Oclass              
+
+         cl
+
+ cid 
+
+ 
+
+ gcl
+
+  
+
+  
+
+Oll             
+
+log   cl
+
+  
+
+      
+ cl
+
+ 
+
+The tree objectives de ned in Equations   and   can be
+optimized in the space of parameters of the representation
+
+ cid 
+
+ cid 
+
+ cid    cid 
+ cid    cid 
+
+  
+
+  
+
+  cid 
+
+and node functions using standard gradient ascent methods 
+However  they also implicitly depend on the tree structure
+    In the rest of the paper  we provide   surrogate objective
+function which determines the structure of the tree and  as
+we show theoretically  Section   maximizes the criterion
+in Equation   and  as we show empirically  Sections   and
+  maximizes the criterion in Equation  
+
+  Learning TreeStructured Objectives
+In this section  we introduce   pernode objective Jn which
+leads to good quality trees when maximized  and provide
+an algorithm to optimize it 
+
+  Objective function
+We de ne the node objective Jn for node   as 
+     
+        
+     
+
+  cid 
+
+  cid 
+
+    
+ 
+
+Jn  
+
+ 
+ 
+
+  
+
+  
+
+ 
+
+ 
+
+where     
+denotes the proportion of nodes reaching node
+  that are of class        
+    is the probability that an example
+of class   reaching   will be sent to its jth child  and     
+is
+the probability that an example of any class reaching   will
+be sent to its jth child  Note that we have 
+
+ 
+
+               
+
+   
+
+      
+    
+     
+
+ 
+
+  
+
+The objective in Equation   reduces to the LOM tree objective in the case of      
+At   high level  maximizing the objective encourages the
+conditional distribution for each class to be as different as
+possible from the global one  so the node decision function
+needs to be able to discriminate between examples of the
+different classes  The objective thus favors balanced and
+pure node splits  To wit  we call   split at node   perfectly
+balanced when the global distribution     
+is uniform  and
+perfectly pure when each      
+takes value either   or   as
+all data points from the same class reaching node   are sent
+to the same child 
+In Section   we discuss the theoretical properties of this
+objective in details  We show that maximizing it leads to
+perfectly balanced and perfectly pure splits  We also derive the boosting theorem that shows the number of internal
+nodes that the tree needs to have to reduce the classi cation
+error below any arbitrary threshold  under the assumption
+that the objective is  weakly  optimized in each node of the
+tree 
+Remark   In the rest of the paper  we use node functions
+gn which take as input   data representation     Rdr and
+output   distribution over children of    for example using
+  softmax function  When used in the classi cation setting  gn sends the data point to the child with the highest
+predicted probability  With this notation  and representa 
+
+                                ci             Simultaneous Learning of Trees and Representations for Extreme Classi cation and Density Estimation
+
+Algorithm   Tree Learning Algorithm
+Input Input representation function    with parameters
+
+Algorithm   Label Assignment Algorithm
+Input labels currently reaching the node
+
+     Node decisions functions  gn  
+parameters     
+
+   with
+   Gradient step size  
+
+Ouput Learned Mary tree  parameters    and     
+
+  
+
+node ID  
+
+Ouput Lists of labels now assigned to the node   children
+
+procedure InitializeNodeStats  
+
+for       to   do
+
+for       to   do
+SumProbasn      
+Countsn      
+
+procedure NodeCompute           target 
+
+    gn   
+SumProbasn     SumProbasn      
+Countsn     Countsn      
+  Gradient step in the node parameters
+             ptarget
+return  ptarget
+  
+
+  
+
+InitializeNodeStats  
+for Each batch   do
+
+  AssignLabels   rebuilds the tree based on the
+  current node statistics
+AssignLabels              root 
+for each example        in   do
+
+Compute input representation          
+      
+for       to   do
+
+   is the current path from the root to  
+
+  ci
+Set node id and target           ci
+          NodeCompute             
+
+ 
+
+  Gradient step in the parameters of  
+              
+
+  
+
+  
+
+tion function    we can write 
+
+    
+ 
+
+           gn       
+
+and
+
+               gn             
+    
+
+ 
+
+ 
+
+An intuitive geometric interpretation of probabilities     
+and     
+
+    can be found in the Supplementary material 
+
+ 
+
+  Algorithm
+In this section we present an algorithm for simultaneously
+building the classi cation tree and learning the data representation  We aim at maximizing the accuracy of the tree
+as de ned in Equation   by maximizing the objective Jn of
+Equation   at each node of the tree  the boosting theorem
+that will be presented in Section   shows the connection
+between the two 
+
+procedure CheckFull  full  assigned  count    
+
+if  assignedj      mod        then
+if count     then
+
+count   count         
+full   full      
+count    
+for   cid        assignedj cid      mod        do
+
+if count     then
+
+full   full      cid 
+
+procedure AssignLabels  labels    
+
+ 
+
+and     
+     
+
+    SumProbasn  
+
+   rst  compute     
+     
+pavg
+count    
+for   in labels do
+    pavg
+pavg
+count   count   Countsn  
+    SumProbasn   Countsn  
+pavg
+    pavg
+pavg
+   count
+  then  assign each label to   child of  
+unassigned   labels
+full    
+count    unassigned          
+for       to   do
+assignedj    
+while unassigned  cid    do
+
+is given in Equation  
+
+ cid cid   Jn
+
+     
+   
+
+ cid 
+
+ cid 
+
+ Jn
+     
+   
+
+  unassigned   cid full
+
+         argmax
+if     root then
+ci          
+ci     ci 
+
+        
+
+else
+assignedj    assignedj       
+unassigned   unassigned      
+CheckFull  full  assigned  count    
+
+for       to   do
+
+return assigned
+
+AssignLabels  assignedj  childn         
+
+Let us now show how we can ef ciently optimize Jn  The
+gradient of Jn with respect to the conditional probability
+distributions is  see proof of Lemma   in the Supplement 
+
+ Jn
+     
+   
+
+ 
+
+ 
+ 
+
+    
+ 
+
+        
+
+ 
+
+  sign     
+
+          
+
+ 
+
+ 
+
+ 
+
+Then  according to Equation   increasing the likelihood
+of sending label   to any child   of   such that     
+          
+increases the objective Jn  Note that we only need to con 
+
+ 
+
+Simultaneous Learning of Trees and Representations for Extreme Classi cation and Density Estimation
+
+      that is  labels   which
+
+sider the labels   for which     
+reach node   in the current tree 
+We also want to make sure that we have   wellformed Mary tree at each step  which means that the number of labels assigned to any node is always congruent to   modulo
+       Algorithm   provides such an assignment by
+greedily choosing the labelchild pair        such that   still
+has room for labels with the highest value of  Jn
+     
+   
+
+ 
+
+The global procedure  described in Algorithm   is then the
+following 
+
+  At the start of each batch  reassign targets for each
+node prediction function  starting from the root and
+going down the tree  At each node  each label is more
+likely to be reassigned to the child it has had most
+af nity with in the past  Algorithm   This can be
+seen as   form of hierarchical online clustering 
+
+  Every example now has   unique path depending on its
+label  For each sample  we then take   gradient step at
+each node along the assigned path  see Algorithm  
+
+Lemma   Algorithm    nds the assignment of nodes to
+children for    xed depth tree which most increases Jn under wellformedness constraints 
+Remark   An interesting feature of the algorithm  is that
+since the representation of examples from different classes
+are learned together  there is intuitively less of   risk of
+getting stuck in   speci   tree con guration  More speci 
+cally  if two similar classes are initially assigned to different children of   node  the algorithm is less likely to keep
+this initial decision since the representations for examples
+of both classes will be pulled together in other nodes 
+
+Next  we provide   theoretical analysis of the objective introduced in Equation   Proofs are deferred to the Supplementary material 
+
+  Theoretical Results
+In this section  we  rst analyze theoretical properties of the
+objective Jn as regards node quality  then prove   boosting
+statement for the global tree accuracy 
+
+  Properties of the objective function
+We start by showing that maximizing Jn in every node of
+the tree leads to highquality nodes       perfectly balanced
+and perfectly pure node splits  Let us  rst introduce some
+formal de nitions 
+De nition    Balancedness factor  The split in node   of
+the tree is    balanced if
+
+     
+
+         
+
+min
+
+ 
+
+ 
+
+where          
+
+    is   balancedness factor 
+
+   
+  split is perfectly balanced if and only if        
+De nition    Purity factor  The split in node   of the tree
+is    pure if
+
+  cid 
+
+  cid 
+
+  
+
+  
+
+ 
+ 
+
+ cid 
+
+    
+  min
+
+              
+    
+   
+
+ cid       
+
+ cid cid 
+
+ cid     
+ cid   
+ cid     
+ cid 
+
+ 
+
+ 
+
+    is   purity factor 
+
+where          
+  split is perfectly pure if and only if        
+The following lemmas characterize the range of the objective Jn and link it to the notions of balancedness and purity
+of the split 
+Lemma   The objective function Jn lies in the interval
+
+ 
+
+Let    denotes the highest possible value of Jn           
+
+ 
+ 
+Lemma   The objective function Jn admits the highest
+value       Jn      if and only if the split in node   is
+    and perfectly pure      
+perfectly balanced              
+       
+
+We next show Lemmas   and   which analyze balancedness and purity of   node split in isolation       we analyze
+resp  balancedness and purity of   node split when resp 
+purity and balancedness is  xed and perfect  We show that
+in such isolated setting increasing Jn leads to   more balanced and more pure split 
+Lemma   If   split in node   is perfectly pure  then
+
+ cid 
+
+     
+
+ 
+
+ 
+ 
+
+ cid         Jn 
+
+ 
+
+ cid 
+
+ 
+
+ 
+ 
+
+ 
+
+Lemma   If   split in node   is perfectly balanced  then
+            Jn 
+Next we provide   bound on the classi cation error for the
+tree  In particular  we show that if the objective is  weakly 
+optimized in each node of the tree  where this weak advantage is captured in   form of the Weak Hypothesis Assumption  then our algorithm will amplify this weak advantage
+to build   tree achieving any desired level of accuracy 
+
+  Error bound
+Denote      to be    xed target function with domain     which assigns the data point   to its label 
+and let   be    xed target distribution over     Together   and   induce   distribution on labeled pairs
+        
+Let      be the label assigned to data
+point   by the tree  We denote as      the error of
+tree                 Ex  
+                 cid    
+         refers to the accuracy as given by Equation  
+Then the following theorem holds
+
+ cid cid  
+
+ cid 
+
+  
+
+Simultaneous Learning of Trees and Representations for Extreme Classi cation and Density Estimation
+
+ cid 
+
+Theorem   The Weak Hypothesis Assumption says that
+for any distribution   over the data  at each node   of the
+tree   there exists   partition such that Jn     where
+   
+Under the Weak Hypothesis Assumption  for any        
+to obtain          it suf ces to have   tree with
+
+pj       
+
+   
+
+   
+
+ cid 
+
+min
+
+min
+
+ 
+ 
+
+pj
+
+ 
+
+ 
+
+ cid        
+
+log  eM    
+
+ln  
+
+internal nodes 
+
+ cid   
+
+ 
+
+   
+
+ 
+
+       
+
+The above theorem shows the number of splits that suf ce
+to reduce the multiclass classi cation error of the tree below an arbitrary threshold   As shown in the proof of the
+above theorem  the Weak Hypothesis Assumption implies
+that all pjs satisfy  pj      
+  Below we
+show   tighter version of this bound when assuming that
+each node induces balanced split 
+Corollary   The Weak Hypothesis Assumption says that
+for any distribution   over the data  at each node   of the
+tree   there exists   partition such that Jn     where
+      
+Under the Weak Hypothesis Assumption and when all
+nodes make perfectly balanced splits  for any        
+to obtain          it suf ces to have   tree with
+
+ cid     
+
+log  eM     ln  
+
+ cid   
+
+ 
+
+   
+
+internal nodes 
+
+  Extension to Density Estimation
+We now show how to adapt the algorithm presented in Section   for conditional density estimation  using the example
+of language modeling 
+
+Hierarchical Log BiLinear Language Model  HLBL 
+We take the same approach to language modeling as  Mnih
+  Hinton    First  using the chain rule and an order  
+Markov assumption we model the probability of   sentence
+                   wn  as 
+
+                wn   
+
+  wt wt     
+
+  cid 
+
+  
+
+Similarly to their work  we also use   low dimensional
+representation of the context  wt     
+In this setting  each word   in the vocabulary   has an embedding
+Uw   Rdr    given context      wt             wt  corresponding to position   is then represented by   context
+embedding vector rx such that
+
+  cid 
+
+rx  
+
+RkUwt    
+
+  
+
+where         dr is the embedding matrix  and Rk  
+Rdr dr is the transition matrix associated with the kth context word 
+
+The most straightforward way to de ne   probability function is then to de ne the distribution over the next word
+given the context representation as   softmax  as done in
+ Mnih   Hinton    That is 
+  wt               cid 
+
+ cid 
+
+        
+exp   cid 
+    exp   cid 
+
+  Ui   bi 
+
+  Uw   bw 
+
+ 
+
+ 
+
+where bw is the bias for word    However  the complexity
+of computing this probability distribution in this setting is
+     dr  which can be prohibitive for large corpora and
+vocabularies 
+Instead   Mnih   Hinton    takes   hierarchical approach to the problem  They construct   binary tree  where
+each word       corresponds to some leaf of the tree 
+and can thus be identi ed with the path from the root to
+the corresponding leaf by making   sequence of choices
+of going left versus right  This corresponds to the treestructured loglikelihood objective presented in Equation  
+for the case where       and        rx  Thus  if ci is
+the path to word   as de ned in Expression   then 
+log   wt         
+
+  cid 
+
+     bci
+
+    
+
+   cid 
+
+log  ci
+
+    ci
+
+  
+
+  
+
+In this binary case    is the sigmoid function  and for all
+nonleaf nodes                    we have       Rdr and
+bn   Rdr  The cost of computing the likelihood of word
+  is then reduced to   log      dr  In their work  the
+authors start the training procedure by using   random tree 
+then alternate parameter learning with using   clusteringbased heuristic to rebuild their hierarchy  We expand upon
+their method by providing an algorithm which allows for
+using hierarchies of arbitrary width  and jointly learns the
+tree structure and the model parameters 
+
+Using our Algorithm We may use Algorithm   as is to
+learn   good tree structure for classi cation  that is    model
+that often predicts wt to be the most likely word after seeing
+the context  wt             wt  However  while this could
+certainly learn interesting representations and tree structure  there is no guarantee that such   model would achieve
+  good average loglikelihood  Intuitively  there are often
+several valid possibilities for   word given its immediate
+left context  which   classi cation objective does not necessarily take into account  Yet another option would be
+to learn   tree structure that maximizes the classi cation
+objective  then  netune the model parameters using the
+loglikelihood objective  We tried this method  but initial
+tests of this approach did not do much better than the use
+of random trees  Instead  we present here   small modi 
+cation of Algorithm   which is equivalent to loglikelihood
+training when restricted to the  xed tree setting  and can
+be shown to increase the value of the node objectives Jn 
+by replacing the gradients with respect to ptarget by those
+with respect to log ptarget  Then  for   given tree structure  the algorithm takes   gradient step with respect to the
+
+Simultaneous Learning of Trees and Representations for Extreme Classi cation and Density Estimation
+
+loglikelihood of the samples 
+     
+
+ Jn
+
+ 
+
+    
+ 
+
+ 
+
+ 
+ 
+
+  log     
+   
+
+  sign     
+
+         
+
+ 
+
+     
+     
+
+ 
+
+Lemma   extends to the new version of the algorithm 
+
+  Experiments
+We ran experiments to evaluate both the classi cation and
+density estimation version of our algorithm  For classi 
+cation  we used the YFCC   dataset  Thomee et al 
+  which consists of   set of   hundred million Flickr
+pictures along with captions and tag sets split into   
+training     validation and    test examples  We
+focus here on the problem of predicting   picture   tags
+given its caption  For density estimation  we learned   logbilinear language model on the Gutenberg novels corpus 
+and compared the perplexity to that obtained with other
+ at and hierarchical losses  Experimental settings are described in greater detail in the Supplementary material 
+
+  Classi cation
+We follow the setting of  Joulin et al    for the
+YFCC   tag prediction task  we only keep the tags
+which appear at least   hundred times  which leaves us
+with   label space of size     We compare our results
+to those obtained with the FastText software  Joulin et al 
+  which uses   binary hierarchical softmax objective based on Huffman coding  Huffman trees are designed
+to minimize the expected depth of their leaves weighed
+by frequencies and have been shown to work well with
+word embedding systems  Mikolov et al    and to
+the Tagspace system  Weston et al    which uses
+  samplingbased margin loss  this allows for training in
+tractable time  but does not help at test time  hence the long
+times reported  We also extend the FastText software to
+use Huffman trees of arbitrary width  All models use   bagof word embedding representation of the caption text  the
+parameters of the input representation function    which
+we learn are the word embeddings Uw   Rd  as in Section
+  and   caption representation is obtained by summing the
+embeddings of its words  We experimented with embeddings of dimension       and       We predict one
+tag for each caption  and report the precision as well as the
+training and test times in Table  
+Our implementation is based on the FastText open source
+version  to which we added Mary Huffman and learned
+tree objectives  Table   reports the best accuracy we obtained with   hyperparameter search using this version on
+our system so as to provide the most meaningful comparison  even though the accuracy is less than that reported in
+ Joulin et al   
+We gain   few different insights from Table   First  al 
+
+ https github com facebookresearch fastText
+
+ 
+
+ 
+
+Model
+
+TagSpace 
+FastText 
+
+Mary Huffman Tree
+
+Learned Tree
+
+TagSpace 
+FastText 
+
+ 
+
+Mary Huffman Tree
+
+Learned Tree
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Arity    Train Test
+   
+  
+     
+     
+     
+     
+     
+  
+     
+     
+     
+     
+     
+
+ 
+ 
+ 
+ 
+ 
+ 
+   
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+
+Table   Classi cation performance on the YFCC   dataset 
+ Weston et al     Joulin et al    Mary Huffman
+Tree modi es FastText by adding an Mary hierarchical softmax 
+
+though wider trees are theoretically slower  remember that
+the theoretical complexity is     logM      for an Mary
+tree with   labels  they run incomparable time in practice
+and always perform better  Using our algorithm to learn
+the structure of the tree also always leads to more accurate models  with   gain of up to   precision points in
+the smaller  ary setting  Further  both the importance of
+having wider trees and learning the structure seems to be
+less when the node prediction functions become more expressive  At   high level  one could imagine that in that
+setting  the model can learn to use different dimensions of
+the input representation for different nodes  which would
+minimize the negative impact of having to learn   representation which is suited to more nodes 
+Another thing to notice is that since prediction time only
+depends on the expected depth of   label  our models which
+learned balanced trees are nearly as fast as Huffman coding
+which is optimal in that respect  except for the dimension
+   ary tree  but the tree structure had not stabilized
+yet in that setting  Given all of the above remarks  our algorithm especially shines in settings where computational
+complexity and prediction time are highly constrained at
+test time  such as mobile devices or embedded systems 
+
+  Density Estimation
+We also ran language modeling experiments on the Gutenberg novel corpus  which has about    tokens and   vocabulary of   words 
+One notable difference from the previous task is that the
+language modeling setting can drastically bene   from the
+use of GPU computing  which can make using    at softmax tractable  if not fast  While our algorithm requires
+
+ http www gutenberg org 
+
+Simultaneous Learning of Trees and Representations for Extreme Classi cation and Density Estimation
+
+Figure   Tree learned from the Gutenberg corpus  showing the four most common words assigned to each node 
+
+Model
+Clustering Tree
+Random Tree
+Flat softmax
+Learned Tree
+
+perp 
+ 
+ 
+ 
+ 
+
+train ms batch
+
+test ms batch
+
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+Table   Comparison of    at softmax to    ary hierarchical
+softmax  learned  random and heuristicbased tree 
+
+than   random one  We conjecture that its poor performance is because such   tree structure means that the deepest node decisions can be quite dif cult  Finally  we also
+ran density estimation experiments on the Penn TreeBank
+data set  which consists of    tokens with   vocabulary
+size of   with sensibly similar performance results
+and   speedup factor of two  see supplementary material 
+It should be noted that running   softmax on   label set of
+this size  only      ts comfortably on most modern GPUs
+ hence the comparatively smaller speed gain 
+Figure   shows the evolution of the test perplexity for   few
+epochs  It appears that most of the relevant tree structure
+can be learned in one epoch  from the second epoch on 
+the learned hierarchical softmax performs similarly to the
+ at one  Figure   shows   part of the tree learned on the
+Gutenberg dataset  which appears to make semantic and
+syntactic sense 
+
+  Conclusion
+In this paper  we introduced   provably accurate algorithm for jointly learning tree structure and data representation for hierarchical prediction  We applied it to   multiclass classi cation and   density estimation problem  and
+showed our models  ability to achieve favorable accuracy
+in competitive times in both settings 
+
+Figure   Test perplexity per epoch 
+
+more  exibility and thus does not bene   as much from
+the use of GPUs    small modi cation of Algorithm    described in the Supplementary material  allows it to run under   maximum depth constraint and remain competitive 
+The results presented in this section are obtained using this
+modi ed version  which learns  ary trees of depth  
+Table   presents perplexity results for different loss functions  along with the time spent on computing and learning
+the objective  softmax parameters for the  at version  hierarchical softmax node parameters for the  xed tree  and
+hierarchical softmax structure and parameters for our algorithm  The learned tree model is nearly three and seven
+times as fast at train and test time respectively as the  at
+objective without losing any points of perplexity 
+Huffman coding does not apply to trees where all of the
+leaves are at the same depth  Instead  we use the following heuristic as   baseline  inspired by  Mnih   Hinton 
+  we learn word embeddings using FastText  perform
+  hierarchical clustering of the vocabulary based on these 
+then use the resulting tree to learn   new language model 
+We call this approach  Clustering Tree  However  for
+all hyperparameter settings  this tree structure did worse
+
+ onlyneverjuststill turnedstoodsatran gotfoundheardmet putsetlaycut herhimmythem anoansomething itwhatnothinganything thisthesethosem ofto hadbeencouldonly firstmostnextbest theaithis   root the and Simultaneous Learning of Trees and Representations for Extreme Classi cation and Density Estimation
+
+References
+Agarwal     Kakade        Karampatziakis     Song    
+and Valiant     Least squares revisited  Scalable approaches for multiclass prediction  In ICML   
+
+Agarwal     Gupta     Prabhu     and Varma     Multilabel learning with millions of labels  Recommending
+advertiser bid phrases for web pages  In WWW   
+
+Andreas     and Klein     When and why are loglinear
+
+models selfnormalizing  In NAACL HLT   
+
+Azocar     Gimenez     Nikodem     and Sanchez       
+On strongly midconvex functions  Opuscula Math   
+   
+
+Beijbom     Saberian     Kriegman     and Vasconcelos     Guessaverse loss functions for costsensitive
+multiclass boosting  In ICML   
+
+Bengio     Weston     and Grangier     Label embedding
+
+trees for large multiclass tasks  In NIPS   
+
+Bengio     and   en ecal       Quick training of probabilisIn AISTATS 
+
+tic neural nets by importance sampling 
+ 
+
+Choromanska     Choromanski     and Bojarski     On
+the boosting ability of topdown decision tree learnCoRR 
+ing algorithm for multiclass classi cation 
+abs   
+
+Daume     Karampatziakis     Langford     and Mineiro 
+CoRR 
+
+Logarithmic time oneagainst some 
+
+  
+abs   
+
+de Br ebisson     and Vincent     An exploration of softmax
+In
+
+alternatives belonging to the spherical loss family 
+ICLR   
+
+Deng     Satheesh     Berg        and FeiFei     Fast
+and balanced  Ef cient label tree learning for large scale
+object recognition  In NIPS   
+
+Djuric     Wu     Radosavljevic     Grbovic     and
+Bhamidipati     Hierarchical neural language models
+for joint representation of streaming documents and their
+content  In WWW   
+
+Grave     Joulin     Ciss       Grangier     and   egou 
+   Ef cient softmax approximation for gpus  CoRR 
+abs   
+
+Bengio     and Senecal       Adaptive importance sampling to accelerate training of   neural probabilistic lanIEEE Trans  Neural Networks   
+guage model 
+   
+
+Gutmann        and Hyv arinen     Noisecontrastive estimation of unnormalized statistical models  with applications to natural image statistics     Mach  Learn  Res 
+   
+
+Bengio     Ducharme        Pascal  and Janvin      
+neural probabilistic language model     Mach  Learn 
+Res     
+
+Beygelzimer     Langford     Lifshits     Sorkin       
+and Strehl        Conditional probability tree estimation
+analysis and algorithms  In UAI     
+
+Beygelzimer     Langford     and Ravikumar        Error 
+
+correcting tournaments  In ALT     
+
+Bhatia     Jain     Kar     Varma     and Jain     Sparse
+local embeddings for extreme multilabel classi cation 
+In NIPS   
+
+Bishop        Pattern Recognition and Machine Learning 
+
+Springer   
+
+Bottou     Online algorithms and stochastic approximations  In Online Learning and Neural Networks  Cambridge University Press   
+
+Breiman     Random forests  Mach  Learn     
+
+Breiman     Friedman        Olshen        and Stone 
+      Classi cation and Regression Trees  CRC Press
+LLC  Boca Raton  Florida   
+
+Choromanska     and Langford     Logarithmic time online
+
+multiclass prediction  In NIPS   
+
+Hsu     Kakade     Langford     and Zhang     Multilabel prediction via compressed sensing  In NIPS   
+
+Jelinek     and Mercer       
+
+Interpolated estimation of
+Markov source parameters from sparse data  In Proceedings  Workshop on Pattern Recognition in Practice  pp 
+  North Holland   
+
+Joulin  Armand  Grave  Edouard  Bojanowski  Piotr  and
+Mikolov  Tomas  Bag of tricks for ef cient text classi 
+cation  CoRR  abs   
+
+Katz        Estimation of probabilities from sparse data for
+the language model component of   speech recognizer 
+In IEEE Trans  on Acoustics  Speech and Singal proc 
+volume ASSP  pp     
+
+Kontschieder     Fiterau     Criminisi     and Bulo 
+   Rota  Deep Neural Decision Forests  In ICCV   
+
+Kumar     Irsoy     Su     Bradbury     English    
+Pierce     Ondruska     Gulrajani     and Socher    
+Ask me anything  Dynamic memory networks for natural language processing  CoRR  abs   
+
+Madzarov     Gjorgjevikj     and Chorbev       multiclass svm classi er utilizing binary decision tree  Informatica     
+
+Simultaneous Learning of Trees and Representations for Extreme Classi cation and Density Estimation
+
+Weston     Bengio     and Usunier     Wsabie  Scaling up
+
+to large vocabulary image annotation  In IJCAI   
+
+Weston     Makadia     and Yee     Label partitioning for
+
+sublinear ranking  In ICML   
+
+Weston 
+
+Jason  Chopra  Sumit  and Adams  Keith 
+ tagspace  Semantic embeddings from hashtags  In Proceedings of the   Conference on Empirical Methods
+in Natural Language Processing  EMNLP   October     Doha  Qatar    meeting of SIGDAT   
+Special Interest Group of the ACL  pp     
+
+Zhao     and Xing        Sparse output coding for large 
+
+scale visual recognition  In CVPR   
+
+Mikolov     Kara       Burget     Cernock     and Khudanpur     Recurrent neural network based language
+model  In INTERSPEECH   
+
+Mikolov     Deoras     Kombrink     Burget     and Cernocky     Honza  Empirical evaluation and combination
+of advanced language modeling techniques  In INTERSPEECH   
+
+Mikolov     Sutskever     Chen     Corrado       
+and Dean     Distributed representations of words and
+phrases and their compositionality  In NIPS   
+
+Mirowski     and Vlachos     Dependency recurrent neural language models for sentence completion  CoRR 
+abs   
+
+Mnih     and Hinton     Three new graphical models for
+
+statistical language modelling  In ICML   
+
+Mnih     and Hinton          scalable hierarchical dis 
+
+tributed language model  In NIPS   
+
+Mnih     and Teh          fast and simple algorithm for
+training neural probabilistic language models  In ICML 
+ 
+
+Morin     and Bengio     Hierarchical probabilistic neural
+
+network language model  In AISTATS   
+
+Prabhu     and Varma     Fastxml    fast  accurate and
+stable treeclassi er for extreme multilabel learning  In
+ACM SIGKDD   
+
+Ram     and Gray        Density estimation trees  In KDD 
+
+ 
+
+Schwenk     and Gauvain       Connectionist language
+modeling for large vocabulary continuous speech recognition  In ICASSP   
+
+Schwenk     and Gauvain       Training neural network
+
+language models on very large corpora  In HLT   
+
+ShalevShwartz     Online learning and online convex optimization  Found  Trends Mach  Learn   
+ 
+
+Tai        Socher     and Manning        Improved semantic representations from treestructured long shortterm memory networks  CoRR  abs   
+
+Thomee  Bart  Shamma  David    Friedland  Gerald 
+Elizalde  Benjamin  Ni  Karl  Poland  Douglas  Borth 
+Damian  and Li  LiJia  YFCC    the new data
+in multimedia research  Commun  ACM   
+ 
+
+Vincent     de Br ebisson     and Bouthillier     Ef cient
+exact gradient update for training deep networks with
+very large sparse targets  In NIPS   
+
+

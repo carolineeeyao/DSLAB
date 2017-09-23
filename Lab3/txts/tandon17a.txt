@@ -1,0 +1,1000 @@
+Gradient Coding 
+
+Avoiding Stragglers in Distributed Learning
+
+Rashish Tandon   Qi Lei   Alexandros    Dimakis   Nikos Karampatziakis  
+
+Abstract
+
+We propose   novel coding theoretic framework
+for mitigating stragglers in distributed learning 
+We show how carefully replicating data blocks
+and coding across gradients can provide tolerance to failures and stragglers for synchronous
+Gradient Descent  We implement our schemes
+in python  using MPI  to run on Amazon EC 
+and show how we compare against baseline approaches in running time and generalization error 
+
+  Introduction
+We propose   novel coding theoretic framework for mitigating stragglers in distributed learning  The central idea
+can be seen through the simple example of Figure   Consider synchronous Gradient Descent  GD  on three workers         The baseline vanilla system is shown in
+the top  gure and operates as follows  The three workers
+have different partitions of the labeled data stored locally
+        and all share the current model  Worker   computes the gradient of the model on examples in partition   
+denoted by    Similarly  Workers   and   compute    and
+   The three gradient vectors are then communicated to  
+central node  called the master aggregator    which computes the full gradient by summing these vectors           
+and updates the model with   gradient step  The new model
+is then sent to the workers and the system moves to the next
+round  where the same examples or other labeled examples 
+say        will be used in the same way 
+The problem is that sometimes worker nodes can be stragglers  Li et al    Ho et al    Dean et al   
+     delay signi cantly in computing and communicating
+gradient vectors to the master  This is especially pronounced
+for cheaper virtual machines in the cloud  For example on
+
+ Department of Computer Science  University of Texas at
+Austin  Austin  TX  USA  Institute for Computational Engineering and Sciences  University of Texas at Austin  Austin 
+TX  USA  Department of Electrical and Computer Engineering  University of Texas at Austin  Austin  TX  USA
+ Microsoft  Seattle  WA  USA  Correspondence to  Rashish Tandon  rashish cs utexas edu 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright   by
+the author   
+
+    Naive synchronous gradient descent
+
+    Gradient coding  The vector
+             is in the span of any
+two out of the vectors        
+        and        
+
+Figure   The idea of Gradient Coding 
+
+  micro machines on Amazon EC  as can be seen in
+Figure   some machines can be   slower in computing
+and communicating gradients compared to typical performance 
+First  we discuss one way to resolve this problem if we
+replicate some data across machines by considering the
+placement in Fig      but without coding  As can be seen 
+in Fig        each example is replicated two times using
+  speci   placement policy  Each worker is assigned to
+compute two gradients on the two examples they have for
+this round  For example     will compute vectors    and
+   Now lets assume that    is the straggler  If we use
+control messages        can notify the master   that they
+are done  Subsequently  if feedback is used  the master
+can ask    to send    and    and    to send    These
+feedback control messages can be much smaller than the
+
+AW                             AW                                                     from any  Gradient Coding
+
+                cid   
+
+         
+
+actual gradient vectors but are still   system complication
+that can cause delays  However  feedback makes it possible
+for   centralized node to coordinate the workers  thereby
+avoiding straggler  One can also reduce network communication further by simply asking    to send the sum of
+two gradient vectors         instead of sending both  The
+master can then create the global gradient on this batch by
+summing these two vectors  Unfortunately  which linear
+combination must be sent depends on who is the straggler 
+If    was the straggler then    should be sending    and
+   sending         so that their sum is the global gradient
+            
+In this paper we show that feedback and coordination is not
+necessary  every worker can send   single linear combination of gradient vectors without knowing who the straggler
+will be  The main coding theoretic question we investigate
+is how to design these linear combinations so that any two
+ or any  xed number generally  contain the             
+vector in their span  In our example  in Fig         sends
+             sends         and    sends  
+          The
+ 
+reader can verify that   can obtain the vector             
+from any two out of these three vectors  For instance 
+
+ cid             We call this
+
+idea gradient coding 
+We consider this problem in the general setting of   machines and any   stragglers  We  rst establish   lower bound 
+to compute gradients on all the data in the presence of any
+  stragglers  each partition must be replicated       times
+across machines  We propose two placement and gradient
+coding schemes that match this optimal       replication factor  We further consider   partial straggler setting  wherein
+we assume that   straggler can compute gradients at   fraction of the speed of others  and show how our scheme can
+be adapted to such scenarios  All proofs can be found in the
+supplementary material 
+We also compare our scheme with the popular ignoring the
+stragglers approach  Chen et al    simply doing   gradient step when most workers are done  We see that while
+ignoring the stragglers is faster  this loses some data and
+which can hurt the generalization error  This can be especially pronounced in supervised learning with unbalanced
+labels or heavily unbalanced features since   few examples
+may contain critical  previously unseen information 
+
+  The Effects of Stragglers
+In Figure   we show measurements on the time required for
+  micro Amazon EC  instances to communicate gradients to   master machine      xlarge instance  We
+observe that   few worker machines were incur   communication delay of up to    the typical behavior  Interestingly 
+throughout the timescale of our experiments    few hours 
+the straggling behavior was consistent in the same machines 
+We have also experimented extensively with other Amazon
+EC  instances  Our  nding is that cheaper instance types
+have signi cantly higher variability in performance  This
+is especially true for    type instance which on AWS are
+
+Figure   Average measured communication times for  
+vector of dimension       using         micro
+worker machines  and     xlarge master machine 
+Error bars indicate one standard deviation 
+
+described as having Burstable Performance  Fortunately 
+these machines have very low cost 
+The choices of the number and type of workers used in
+training big models ultimately depends on total cost and
+time needed until deployment  The main message of this
+paper is that going for very lowcost instances and using
+coding to mitigate stragglers  may be   sensible choice for
+some learning problems 
+
+  Related Work
+The slow machine problem is the Achilles heel of many distributed learning systems that run in modern cloud environments  Recognizing that  some recent work has advocated
+asynchronous approaches  Li et al    Ho et al   
+Mitliagkas et al    to learning  While asynchronous
+updates are   valid way to avoid slow machines  they do
+give up many other desirable properties  including faster
+convergence rates  amenability to analysis  and ease of reproducibility and debugging 
+Attacking the straggling problem in synchronous machine
+learning algorithms has surprisingly not received much attention in the literature  There do exist general systems solutions such as speculative execution  Zaharia et al   
+but we believe that approaches tailored to machine learning
+can be vastly more ef cient  In  Chen et al    the authors use synchronous minibatch SGD and request   small
+number of additional worker machines so that they have an
+adequate minibatch size even when some machines are slow 
+However  this approach does not handle well machines that
+are consistently slow and the data on those machines might
+never participate in training  In  Narayanamurthy et al 
+  the authors describe an approach for dealing with
+
+Gradient Coding
+
+failed machines by approximating the loss function in the
+failed partitions with   linear approximation at the last iterate before they failed  Since the linear approximation is only
+valid at   small neighborhood of the model parameters  this
+approach can only work if failed data partitions are restored
+fairly quickly 
+The work of  Lee et al    is the closest in spirit to
+our work  using coding theory and treating stragglers as
+erasures in the transmission of the computed results  However  we focus on codes for recovering the batch gradient
+of any loss function while  Lee et al    and the more
+recent work  Dutta et al    describe techniques for mitigating stragglers in two different distributed applications 
+data shuf ing and matrix multiplication  We also mention
+ Li et al      which investigates   generalized view
+of the coding ideas in  Lee et al    Further closely
+related work showed how coding can be used for distributed
+MapReduce and how to trade off communication and computation  Li et al     Li et al      All these prior
+works develop novel coding techniques  but do not code
+across gradient vectors in the way we are proposing in this
+paper 
+
+  Preliminaries
+Given data                     xd  yd  with each tuple
+         Rp    several machine learning tasks aim to solve
+the following problem 
+
+  cid 
+
+  
+
+    arg min
+ Rp
+
+ cid    xi  yi       
+
+ 
+
+   cid  
+
+where  cid  is   taskspeci   loss function  and    is  
+regularization function  Typically  this optimization problem can be solved using gradientbased approaches  Let
+    cid    xi  yi  be the gradient of the loss at the
+current model     Then the updates to the model are of
+the form 
+
+      hR
+
+     
+
+ 
+
+ cid 
+
+ cid 
+
+where hR is   gradientbased optimizer  which also depends
+on    Several methods such as gradient descent  accelerated gradient  conditional gradient  FrankWolfe  proximal
+methods  LBFGS  and bundle methods    in this framework 
+However  if the number of samples     is large    computational bottleneck in the above update step is the computation
+of the gradient     whose computation can be distributed 
+
+  Notation
+Throughout this paper  we let   denote the number of
+samples    denote the number of workers    denote
+the number of data partitions  and   denote the number of stragglers failures  The   workers are denoted
+as               Wn  The partial gradients over   data
+partitions are denoted as               gk  The ith row of
+some matrices   or   is denoted as ai or bi respectively 
+For any vector     Rn  supp    denotes its support     
+
+supp          xi  cid    and  cid   cid  denotes its  cid norm     
+the cardinality of the support       and      denote all
+   and all    matrices respectively  with dimension       
+Finally  for any            denotes the set             
+
+  The General Setup
+We can generalize the scheme in Figure    to   workers and
+  data partitions by setting up   system of linear equations 
+
+AB       
+
+ 
+
+where   denotes the number of combinations of surviving
+workers nonstragglers       is the all    matrix of dimension        and we have matrices     Rf        Rn   
+We associate the ith row of    bi  with the ith worker 
+Wi  The support of bi  supp bi  corresponds to the data
+partitions that worker Wi has access to  and the entries of bi
+encode   linear combination over their gradients that worker
+Wi transmits  Let      Rk   be   matrix with each row
+being the partial gradient of   data partition     
+
+                    gk    
+
+Then  worker Wi transmits bi    Note that to transmit bi   
+Wi only needs to compute the partial gradients on the partitions in supp bi  Now  each row of   is associated with
+  speci   failure straggler scenario  to which tolerance is
+desired  In particular  any row ai  with support supp ai 
+corresponds to the scenario where the worker indices in
+supp ai  are alive nonstragglers 
+Also  by the construction in Eq    we have 
+
+    cid 
+
+  
+
+ cid 
+
+ cid 
+
+aiB                     
+
+gj
+
+  
+
+ai   bk    
+
+aiB    
+
+  supp ai 
+
+and 
+
+ 
+
+ 
+
+Thus  the entries of ai encode   linear combination which 
+when taken over the transmitted gradients of the alive nonstraggler workers   bk      supp ai  would yield the full gradient 
+Going back to the example in Fig      the corresponding  
+and   matrices under the above generalization are 
+
+   
+
+ 
+ 
+ 
+   
+
+ 
+ 
+ 
+
+  and    
+
+ 
+ 
+   
+ 
+ 
+
+ 
+
+ cid 
+
+ cid 
+
+ 
+ 
+
+ cid 
+
+with                   It is easy to check that AB  
+  Also  since every row of   here has exactly one zero 
+we say that this scheme is robust to any one straggler 
+In general  we shall seek schemes  through the construction
+of        which are robust to any   stragglers 
+
+Gradient Coding
+
+The rest of this paper is organized as follows  In Section  
+we provide two schemes applicable to any number of workers    under the assumption that stragglers can be arbitrarily
+slow to the extent of total failure  In Section   we relax this
+assumption to the case of worker slowdown  with known
+slowdown factor  instead of failure  and show how our constructions can be appended to be more effective  Finally 
+in Section   we present results of empirical tests using our
+proposed distribution schemes on Amazon EC 
+
+  Full Stragglers
+In this section  we consider schemes robust to any   stragglers  given   workers  with        We assume that any
+straggler is  what we call    full straggler     
+it can be
+arbitrarily slow to the extent of complete failure  We show
+how to construct the matrices   and    with AB     such
+that the scheme        is robust to any   full stragglers 
+Consider any such scheme        Since every row of  
+represents   set of nonstraggler workers  all possible sets
+over     of size         must be supports in the rows of
+
+ cid       the total number of failure
+
+   Thus    cid   
+
+ cid   cid  
+
+scenarios is the number of ways to choose   stragglers out
+of   workers  Now  since each row of   represents   linear
+span over some rows of    and since we require AB    
+this leads us to the following condition on   
+Condition    BSpan  Consider any scheme        robust
+to any   stragglers  given   workers  with        Then we
+require that for every subset                   
+
+   
+
+ 
+
+     span bi         
+
+ 
+
+ with        and   partitions  Then  if all rows of   have the
+same number of nonzeros  we must have   cid bi cid     
+        
+for any        
+
+Theorem   implies that any scheme        that assigns the
+same amount of data to all the workers must assign at least
+  fraction of the data to each worker  Since this fraction
+  
+is independent of    for the remainder of this paper we shall
+assume that            the number of partitions is the same
+as the number of workers  In this case  we want   to be  
+square matrix satisfying Condition   with each row having
+atleast        nonzeros  In the sequel  we demonstrate two
+constructions for   which satisfy Condition   and achieve
+the density lower bound 
+
+  Fractional Repetition Scheme
+In this section  we provide   construction for   that works
+by replicating the task done by   subset of the workers 
+We note that this construction is only applicable when the
+number of workers     is   multiple of        where   is
+the number of stragglers we seek tolerance to  In this case 
+the construction is as follows 
+
+  We divide the   workers into        groups of size
+
+        
+
+  In each group  we divide all the data equally and dis 
+
+jointly  assigning        partitions to each worker
+
+where span  is the span of vectors 
+
+  All the groups are replicas of each other
+
+The BSpan condition above ensures that the all    vector
+lies in the span of any       rows of    This is of course
+necessary  However  it is also suf cient  In particular  given
+    satisfying Condition   we can construct   such that
+AB     and   has the support structure discussed above 
+The construction of   is described in Algorithm    in MATLAB syntax  and we have the following lemma 
+Lemma   Consider     Rn   satisfying Condition   for
+some        Then  Algorithm   with input   and    yields
+an        
+    such that AB     
+    and the scheme
+       is robust to any   full stragglers 
+
+Based on Lemma   to obtain   scheme        robust to
+any   stragglers  we only need to furnish     satisfying
+Condition     trivial   that works is           the all
+ones matrix  However  this is wasteful since it implies that
+each worker gets all the partitions and computes the full
+gradient  Our goal is to construct   satisfying Condition  
+while also being as sparse as possible in each row  In this
+regard  we have the following theorem  which gives   lower
+bound on the number of nonzeros in any row of   
+Theorem    Lower Bound on     density  Consider any
+scheme        robust to any   stragglers  given   workers
+
+  When  nished computing  every worker transmits the
+
+sum of its partial gradients
+
+Fig    shows an instance of the above construction for
+              general description of   constructed in
+this way  denoted as Bf rac  is shown in Eq    Each group
+of workers in this scheme can be denoted by   block matrix
+
+    satisfying Condition        
+
+Algorithm   Algorithm to compute  
+Input
+Output     such that AB     
+    binom      
+    zeros      
+foreach                            do
+
+   
+
+    zeros    
+    ones          
+         
+          
+
+end
+
+Gradient Coding
+
+          
+
+Algorithm   Algorithm to construct     Bcyc
+Input
+Output       Rn   with        nonzeros in each row
+    randn      
+         sum               
+    zeros   
+for           do
+
+    mod                         
+                             
+
+end
+
+satis es Condition   However  in contrast to construction
+in the previous section  this construction does not require  
+to be divisible by        Here  instead of assigning disjoint
+collections of partitions  we consider   cyclic assignment of
+       partitions to the workers  We construct       Bcyc
+with the following support structure 
+
+supp Bcyc   
+  
+
+ 
+
+ cid 
+ 
+
+ cid 
+ 
+ 
+
+ 
+
+ cid 
+
+ cid 
+ cid 
+
+ 
+
+ 
+ 
+ 
+
+ cid cid 
+ 
+ cid 
+ 
+ 
+ 
+
+ cid 
+
+ cid 
+ 
+ 
+
+ cid   
+ cid 
+ cid 
+
+   cid 
+
+ 
+ 
+
+ 
+
+ 
+
+ cid 
+ 
+ 
+ 
+
+ 
+
+ cid 
+
+ 
+ 
+ 
+ cid 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+
+ 
+ 
+
+ 
+ 
+
+ cid 
+
+ 
+ 
+
+ 
+ 
+
+ cid 
+
+   cid 
+
+   
+
+ 
+
+where  cid  indicates nonzero entries in Bcyc  So  the  rst row
+of Bcyc has its  rst        entries assigned as nonzero 
+As we move down the rows  the positions of the       
+nonzero entries shift one step to the right  and cycle around
+until the last row 
+Given the support structure in Eq    the actual nonzero
+entries must be carefully assigned in order to satisfy Condition   The basic idea is to pick every row of Bcyc  with
+its particular support  to lie in   suitable subspace   that
+contains the all ones vector     We consider           dimensional subspace           Rn   Hx         Rs   
+     the null space of the matrix    for some   satisfying
+       Now  to make the rows of Bcyc lie in    we require that the null space of   must contain vectors with
+all the different supports in Eq    This turns out to be
+equivalent to requiring that any   columns of   are linearly
+independent  and is also referred to as the MDS property
+in coding theory  We show that   random choice of   suf 
+ ces for this  and we are able to construct   Bcyc with the
+support structure in Eq    Moreover  for any         rows
+of Bcyc  we show that their linear span also contains    
+thereby satisfying Condition   Algorithm   describes the
+construction of Bcyc  in MATLAB syntax  and  we have the
+following theorem 
+Theorem   Consider Bcyc constructed using the randomized construction in Algorithm   for   given number of
+
+Figure   Fractional Repetition Scheme for            
+
+Bblock            
+
+     We de ne 
+
+Bblock        
+
+         
+
+   
+
+   
+
+ 
+
+ 
+
+   
+
+   
+
+   
+   
+ 
+   
+
+   
+   
+
+ 
+
+   
+
+ 
+
+   
+
+ 
+
+ 
+
+Thus  the  rst worker in the group gets the  rst        partitions  the second worker gets the second        partitions 
+and so on  Then    is simply        replicated copies of
+Bblock      
+
+    Bf rac  
+
+ 
+
+ 
+
+ 
+ 
+
+ 
+block
+ 
+block
+
+ 
+
+ 
+
+   
+block
+
+ 
+
+   
+
+where for each                      
+   
+block   Bblock      
+It is easy to see that this construction can yield robustness
+to any   stragglers  Since any particular partition of data
+is replicated over        workers  any   stragglers would
+leave at least one nonstraggler worker to process it  We
+have the following theorem 
+Theorem   Consider Bf rac constructed as in Eq    for
+  given number of workers   and stragglers       Then 
+Bf rac satis es the BSpan condition  Condition   Consequently  the scheme     Bf rac  with   constructed using
+Algorithm   is robust to any   stragglers 
+
+The construction of Bf rac matches the density lower bound
+in Theorem   and  the above theorem shows that the scheme
+    Bf rac  with   constructed from Algorithm   is robust
+to   stragglers 
+
+  Cyclic Repetition Scheme
+In this section we provide an alternate construction for  
+which also matches the lower bound in Theorem   and
+
+AW                                               Group  Group  Group  Gradient Coding
+
+  Each worker gets        coded partitions  distributed
+according to an        distribution scheme robust to  
+stragglers       with     Bf rac or     Bcyc 
+
+  Any worker  Wi   rst processes all its naive partitions
+and sends the sum of their gradients to the master  It
+then processes its coded partitions  and sends   linear
+combination  as per the        distribution scheme 
+
+Figure   Scheme for Partial Stragglers                 
+     represents the partial gradient 
+workers   and stragglers       Then  with probability
+  Bcyc satis es the BSpan condition  Condition   Consequently  the scheme     Bcyc  with   constructed using
+Algorithm   is robust to any   stragglers 
+
+  Partial Stragglers
+In this section  we revisit our earlier assumption of full
+stragglers  Under   full straggler assumption  Theorem  
+shows that any nonstraggler worker must incur an     
+ factor overhead in computation  if we want to attain
+tolerance to any   stragglers  This may be prohibitively huge
+in many situations  One way to mitigate this is by allowing
+at least some work to be done also by the straggling workers 
+Therefore  in this section  we consider   more plausible
+scenario of slow workers  but assume   known slowdown
+factor  We say that   straggler is an  partial straggler  with
+      if it is at most   slower than any nonstraggler  This
+means that if   nonstraggler completes   task in time    
+an  partial straggler would require at most    time to
+complete it  Now  we augment our previous schemes  in
+Section   and Section   to be robust to any   stragglers 
+assuming that any straggler is an  partial straggler 
+Note that our earlier constructions are still applicable   
+scheme        with     Bf rac or     Bcyc  would still
+provide robustness to   partial stragglers  However  given
+that no machine is slower than   factor of     more ef cient
+scheme is possible by exploiting at least some computation
+on every machine  Our basic idea is to couple our earlier
+schemes with   naive distribution scheme  but on different
+parts of the data  We split the data into   naive component 
+and   coded component  The key is to do the split such that
+whenever an  partial straggler is done processing its naive
+partitions    nonstraggler would be done processing both
+its naive and coded partitions 
+In general  for any          our twostage scheme works as
+follows 
+
+  We split the data   into         
+
+  equalsized partitions   of which   partitions are coded components 
+and the rest are naive components
+
+  Each worker gets   
+
+  naive partitions  distributed dis 
+
+jointly 
+
+ cid   
+
+Note that each worker now has to send two partial gradients
+ instead of one  as in earlier schemes  However    speedup
+gained in processing   smaller fraction of the data may
+mitigate this overhead in communication  since each nonstraggler only has to process     
+fraction of the
+ 
+  fraction in full straggler schemes 
+data  as opposed to     
+Fig    illustrates our twostage strategy for          
+        We see that each nonstraggler gets      
+fraction of the data  instead of         fraction  for
+     in Fig    
+
+ cid 
+
+  
+
+  Experiments
+In this section  we present experimental results on Amazon
+EC  comparing our proposed gradient coding schemes with
+baseline approaches  We compare our approaches against 
+  the naive scheme  where the data is divided uniformly
+across all workers without replication and the master waits
+for all workers to send their gradients  and   the ignoring
+  stragglers scheme where the data is divided as in the naive
+scheme  however the master performs an update step after
+some       workers have successfully sent their gradient 
+Experimental setup  We implemented all methods in
+python using MPI py  Dalcin et al    an open source
+MPI implementation  Based on the method being considered  each worker loads   certain number of partitions of
+the data into memory before starting the iterations  In iteration   the master sends the latest model     to all the
+workers  using Isend  Each worker receives the model
+ using Irecv  and starts   gradient computation  Once
+ nished  it sends its gradient    back to the master  When
+suf ciently many workers have returned with their gradients  the master computes the overall gradient  performs  
+descent step  and moves on to the next iteration 
+Our experiments were performed using two different
+worker instance types on Amazon EC    small and
+  micro   these are very small  very lowcost EC 
+instances  We also observed that our system was often bottlenecked by the number of incoming connections      all
+workers trying to talk to the master concurrently  For that
+reason  and to mitigate this additional overhead to some
+degree  we used   larger master instance of   xlarge
+in our experiments 
+We ran the various approaches to train logistic regression
+models    wellunderstood convex problem that is widely
+used in practice  Moreover  Logistic regression models are
+often expanded by including interaction terms that are often
+
+AW                                                                                                                                            Gradient Coding
+
+          Straggler
+
+          Stragglers
+
+Figure   Empirical running times on Amazon EC  with       machines for       and       stragglers  In this
+experiment  the stragglers are arti cially delayed while the other machines run at normal speed  We note that the partial
+straggler schemes have much lower data replication  for example with       we need to only replicate approximately
+  of the data 
+
+onehot encoded for categorical features  This can lead to
+   of thousands of parameters  or more  in the trained
+models 
+Results 
+Arti cial Dataset  In our  rst experiment  we solved  
+logistic regression problem using gradient descent  on  
+arti cially generated dataset  We generated   dataset of
+      samples                     xd  yd  using the model                            
+ for random       Rp  and     Ber    with    
+ exp xT       where     Rp is the true regressor 
+In our experiments  we used   model dimension of      
+and chose   randomly 
+In this experiment  we also arti cially added delays to  
+random workers in each iteration  using time sleep 
+Figure   presents the results of our experiments with      
+and       stragglers  on   cluster of         small
+machines  As expected  the baseline naive scheme that waits
+for the stragglers has poorer performance as the delay increases  The Cyclic and Fractional schemes were designed
+for one straggler in Figure    and for two stragglers    
+
+Therefore  we expect that these two schemes would not be
+in uenced at all by the delay of the stragglers  up to some
+variance due to implementation overheads  The partial
+straggler schemes were designed for various   Recall that
+for partial straggler schemes    denotes the slowdown factor 
+Real Dataset  Next  we trained   logistic regression model
+on the Amazon Employee Access dataset from Kaggle   We
+used       training samples  and   model dimension of
+       after onehot encoding with interaction terms 
+These experiments were run on             micro
+instances on Amazon EC 
+In Figure   we show the Generalization AUC of our method
+ FracRep and CycRep  versus the popular approach of ignoring   stragglers  As can be seen  Gradient coding achieves
+signi cantly better generalization error  We emphasize that
+the results in  gures   and   do not use any arti cial straggling  only the natural delays introduced by the AWS cluster 
+How is this stark difference possible  When stragglers are
+
+ https www kaggle com   amazonemployee access 
+
+challenge
+
+Gradient Coding
+
+Figure   Avg  Time per iteration on Amazon Employee Access dataset 
+
+Figure   AUC vs Time on Amazon Employee Access dataset  The two proposed methods are FracRep and CycRep
+compared against the frequently used approach of Ignoring   stragglers  As can be seen  gradient coding achieves signi cantly
+better generalization error on   true holdout  Note that for Ignoring stragglers  we used   learning rate of          with
+   and    chosen as optimal in   range  This is typical for SGD  For FracRep and CycRep  we used Nesterov   accelerated
+gradient descent with   constant learning rate  since these get the full gradient  Also  see discussion below in this regard 
+
+ignored we are  at best  receiving   stochastic gradient  when
+random machines are straggling in each iteration  In this
+case the best we can do as an optimization algorithm is to run
+gradient descent as it is robust to noise  When using gradient
+coding however  we can retrieve the full gradient which
+gives us access to faster optimization algorithms  In Figure  
+we use Nesterov   Accelerated Gradient  NAG  but other
+optimizers are also applicable such as LBFGS  Though we
+do not present any empirical results here  we refer the reader
+to  Devolder et al    for   theoretical and empirical
+analysis of the effect of noisy gradients in NAG  The upshot
+is that ignoring stragglers cannot be combined with NAG
+because errors quickly accumulate and eventually cause the
+method to diverge 
+Another advantage of using full gradients is that we can
+guarantee that we are training on the same distribution as
+the training set was drawn from  This is not true for the
+approach that ignores stragglers  If   particular machine
+is more likely to be   straggler  samples on that machine
+will likely be underrepresented in the  nal model  unless
+particular countermeasures are deployed  There may even
+be inherent reasons why   particular sample will systematically be excluded when we ignore stragglers  For example 
+in structured models such as linearchain CRFs  the computation of the gradient is proportional to the length of the
+sequence  Therefore  extraordinarily long examples can be
+ignored very frequently 
+
+  Conclusion
+In this paper  we have experimented with various gradient
+coding ideas on Amazon EC  instances  This is   complex tradeoff space between model sizes  number of samples  worker con gurations  and number of workers  Our
+proposed schemes create computation overhead and keep
+communication the same 
+The bene   of this additional computation is faulttolerance 
+we are able to recover full gradients  even if   machines do
+not deliver their assigned work  or are slow in doing so  Our
+partial straggler schemes provide fault tolerance while allowing all machines to do partial work  Another interesting
+open question here is approximate gradient coding  can we
+get   vector that is close to the true gradient  with lesser
+computation overheads  
+For several modelcluster con gurations that we tested  communication was the bottleneck and hence the additional
+computation   effect on iteration times was negligible  This
+is the regime where gradient coding is most useful  However  this design space needs further exploration  that is
+also varying as different architectures change the parameter
+landscape  Overall  we believe that gradient coding is an
+interesting idea to add in the distributed learning arsenal 
+
+Gradient Coding
+
+computing  CoRR  abs      URL http 
+ arxiv org abs 
+
+Mitliagkas  Ioannis  Zhang  Ce  Hadjis  Stefan  and   
+Christopher  Asynchrony begets momentum  with an application to deep learning  CoRR  abs   
+URL http arxiv org abs 
+
+Narayanamurthy 
+
+Shravan  Weimer  Markus  MaSellamanickam 
+Towards
+URL
+
+hajan  Dhruv  Condie  Tyson 
+Sundararajan  and Keerthi     Sathiya 
+resourceelastic machine learning   
+http research microsoft com apps 
+pubs default aspx id 
+
+Zaharia  Matei  Konwinski  Andy  Joseph  Anthony    Katz 
+Randy    and Stoica  Ion  Improving mapreduce performance in heterogeneous environments  In OSDI  volume   pp     
+
+Acknowledgements  RT  QL and AD would like to acknowledge the support of NSF Grants CCF  
+      and ARO YIP   NF 
+  in conducting this research  RT and AD also acknowledge support from the William Hartwig Fellowship  NK
+thanks Paul Mineiro for insightful discussions 
+
+References
+Chen     Monga     Bengio     and Jozefowicz     Revisiting Distributed Synchronous SGD  ArXiv eprints  April
+ 
+
+Dalcin  Lisandro    Paz  Rodrigo    Kler  Pablo    and
+Cosimo  Alejandro  Parallel distributed computing using
+python  Advances in Water Resources       
+  New Computational Methods and Software Tools 
+
+Dean  Jeffrey  Corrado  Greg  Monga  Rajat  Chen  Kai 
+Devin  Matthieu  Mao  Mark  Ranzato  Marc Aurelio 
+Senior  Andrew  Tucker  Paul  Yang  Ke  Le  Quoc    and
+Ng  Andrew    Large scale distributed deep networks  In
+Advances in Neural Information Processing Systems  
+ 
+
+Devolder  Olivier  Glineur  Fran ois  and Nesterov  Yurii 
+Firstorder methods of smooth convex optimization with
+inexact oracle  Mathematical Programming   
+   
+
+Dutta  Sanghamitra  Cadambe  Viveck  and Grover  Pulkit 
+Shortdot  Computing large linear transforms distributedly using coded short dot products 
+In Lee       
+Sugiyama     Luxburg        Guyon     and Garnett    
+ eds  Advances in Neural Information Processing Systems   pp    Curran Associates  Inc   
+
+Ho  Qirong  Cipar  James  Cui  Henggang  Lee  Seunghak  Kim  Jin Kyu  Gibbons  Phillip    Gibson  Garth   
+Ganger  Greg  and Xing  Eric    More effective distributed
+ml via   stale synchronous parallel parameter server  In
+Advances in neural information processing systems   
+
+Lee  Kangwook  Lam  Maximilian  Pedarsani  Ramtin 
+Papailiopoulos  Dimitris    and Ramchandran  Kannan  Speeding up distributed machine learning using
+codes  CoRR  abs    URL http 
+ arxiv org abs 
+
+Li  Mu  Andersen  David    Smola  Alex    and Yu  Kai 
+Communication ef cient distributed machine learning
+with the parameter server  In Advances in Neural Information Processing Systems  pp     
+
+Li     MaddahAli        and Avestimehr        Coded
+mapreduce  In    rd Annual Allerton Conference
+on Communication  Control  and Computing  Allerton 
+pp    Sept   doi   ALLERTON 
+ 
+
+Li  Songze  MaddahAli  Mohammad Ali  and Avestimehr 
+Amir Salman    uni ed coding framework for distributed computing with straggling servers  CoRR 
+abs      URL http arxiv org 
+abs 
+
+Li  Songze  MaddahAli  Mohammad Ali  Yu  Qian  and
+Avestimehr  Amir Salman    fundamental tradeoff between computation and communication in distributed
+
+

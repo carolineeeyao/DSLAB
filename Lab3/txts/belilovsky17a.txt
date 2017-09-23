@@ -1,0 +1,1124 @@
+Learning to Discover Sparse Graphical Models
+
+Eugene Belilovsky       Kyle Kastner   Gael Varoquaux   Matthew    Blaschko  
+
+Abstract
+
+We consider structure discovery of undirected
+graphical models from observational data  Inferring likely structures from few examples is   complex task often requiring the formulation of priors
+and sophisticated inference procedures  Popular
+methods rely on estimating   penalized maximum
+likelihood of the precision matrix  However  in
+these approaches structure recovery is an indirect
+consequence of the data   term  the penalty can
+be dif cult to adapt for domainspeci   knowledge  and the inference is computationally demanding  By contrast  it may be easier to generate training samples of data that arise from graphs
+with the desired structure properties  We propose
+here to leverage this latter source of information
+as training data to learn   function  parametrized
+by   neural network  that maps empirical covariance matrices to estimated graph structures 
+Learning this function brings two bene ts  it implicitly models the desired structure or sparsity
+properties to form suitable priors  and it can be
+tailored to the speci   problem of edge structure
+discovery  rather than maximizing data likelihood 
+Applying this framework  we  nd our learnable
+graphdiscovery method trained on synthetic data
+generalizes well  identifying relevant edges in
+both synthetic and real data  completely unknown
+at training time  We  nd that on genetics  brain
+imaging  and simulation data we obtain performance generally superior to analytical methods 
+
+Introduction
+Probabilistic graphical models provide   powerful framework to describe the dependencies between   set of variables  Many applications infer the structure of   probabilistic graphical model from data to elucidate the relationships
+
+ KU Leuven  INRIA  University of ParisSaclay  University
+of Montreal  Correspondence to  Eugene Belilovsky  eugene belilovsky inria fr 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright   by
+the author   
+
+between variables  These relationships are often represented
+by an undirected graphical model also known as   Markov
+Random Field  MRF  We focus on   common MRF model 
+Gaussian graphical models  GGMs  GGMs are used in
+structurediscovery settings for rich data such as neuroimaging  genetics  or  nance  Friedman et al    Ryali et al 
+  Mohan et al    Belilovsky et al    Although
+multivariate Gaussian distributions are wellbehaved  determining likely structures from few examples is   dif cult task
+when the data is high dimensional  It requires strong priors 
+typically   sparsity assumption  or other restrictions on the
+structure of the graph  which now make the distribution
+dif cult to express analytically and use 
+  standard approach to estimating structure with GGMs in
+high dimensions is based on the classic result that the zeros
+of   precision matrix correspond to zero partial correlation 
+  necessary and suf cient condition for conditional independence  Lauritzen    Assuming only   few conditional
+dependencies corresponds to   sparsity constraint on the
+entries of the precision matrix  leading to   combinatorial
+problem  Many popular approaches to learning GGMs can
+be seen as leveraging the  cid norm to create convex surrogates to this problem  Meinshausen     hlmann  
+use nodewise  cid  penalized regressions  while other estimators penalize the precision matrix directly  Cai et al   
+Friedman et al    Ravikumar et al    the most
+popular being the graphical lasso
+
+fgl      arg min
+ cid 
+
+  log     Tr        cid cid 
+
+ 
+
+which can be seen as   penalized maximumlikelihood estimator  Here   and   are the precision and sample covariance matrices  respectively    large variety of alternative
+penalties extend the priors of the graphical lasso  Danaher et al    Ryali et al    Varoquaux et al   
+However  this strategy faces several challenges  Constructing novel surrogates for structuredsparsity assumptions on
+MRF structures is dif cult  as priors need to be formulated
+and incorporated into   penalized maximum likelihood objective which then calls for the development of an ef cient
+optimization algorithm  often within   separate research effort  Furthermore  model selection in   penalized maximum
+likelihood setting is dif cult as regularization parameters
+are often unintuitive 
+We propose to learn the estimator  Rather than manually de 
+
+Learning to Discover Sparse Graphical Models
+
+signing   speci   graphestimation procedure  we frame this
+estimatorengineering problem as   learning problem  selecting   function from   large  exible function class by risk
+minimization  This allows us to construct   loss function
+that explicitly aims to recover the edge structure  Indeed 
+sampling from   distribution of graphs and empirical covariances with desired properties is often possible  even when
+this distribution is not analytically tractable  As such we
+can perform empirical risk minimization to select an appropriate function for edge estimation  Such   framework gives
+more control on the assumed level of sparsity  as opposed
+to graph lasso  and can impose structure on the sampling to
+shape the expected distribution  while optimizing   desired
+performance metric 
+For particular cases we show that the problem of interest
+can be solved with   polynomial function  which is learnable with   neural network  Andoni et al    Motivated
+by this fact  as well as theoretical and empricial results
+on learning smooth functions approximating solutions to
+combinatorial problems  Cohen et al    Vinyals et al 
+  we propose to use   particular convolutional neural
+network as the function class  We train it by sampling small
+datasets  generated from graphs with the prescribed properties  with   primary focus on sparse graphical models  We
+estimate from this data smallsample covariance matrices
+        where   is the number of samples and   is the
+dimensionality of the data  Then we use them as training
+data for the neural network  Figure   where target labels
+are indicators of present and absent edges in the underlying
+GGM  The learned network can then be employed in various
+realworld structure discovery problems 
+In Section   we review the related work  In Section   we
+formulate the risk minimization view of graphstructure inference and describe how it applies to sparse GGMs  Section
+  describes and motivates the deeplearning architecture
+we chose to use for the sparse GGM problem in this work 
+In Section   we describe the details of how we train an edge
+estimator for sparse GGMs  We then evaluate its properties
+extensively on simulation data  Finally  we show that this
+edge estimator trained only on synthetic data can obtain
+state of the art performance at inference time on real neuroimaging and genetics problems  while being much faster
+to execute than other methods 
+
+Related Work
+
+LopezPaz et al    analyze learning functions to identify the structure of directed graphical models in causal
+inference using estimates of kernelmean embeddings  As
+in our work  they demonstrate the use of simulations for
+training while testing on real data  Unlike our work  they
+primarily focus on  nding the causal direction in two node
+graphs with many observations 
+
+Our learning architecture is motivated by the recent literature on deep networks  Vinyals et al    have shown
+that neural networks can learn approximate solutions to NPhard combinatorial problems  and the problem of optimal
+edge recovery in MRFs can be seen as   combinatorial optimization problem  Several recent works have proposed
+neural architectures for graph input data  Henaff et al   
+Duvenaud et al    Li et al    These are based on
+multilayer convolutional networks  as in our work  or multistep recurrent neural networks  The input in our approach
+can be viewed as   complete graph  while the output is  
+sparse graph  thus none of these are directly applicable  Related to our work  Balan et al    use deep networks
+to approximate   posterior distribution  Finally  Gregor
+  LeCun   Xin et al    use deep networks to
+approximate steps of   known sparse recovery algorithm 
+Bayesian approaches to structure learning rely on priors on
+the graph combined with sampling techniques to estimate
+the posterior of the graph structure  Some approaches make
+assumptions on the decomposability of the graph  Moghaddam et al    The GWishart distribution is   popular
+distribution which forms part of   framework for structure
+inference  and advances have been recently made in ef cient
+sampling  Mohammadi   Wit    These methods can
+still be rather slow compared to competing methods  and in
+the setting of       we  nd they are less powerful 
+
+Methods
+Learning an Approximate Edge Estimation Procedure
+
+We consider MRF edge estimation as   learnable function 
+Let     Rn   be   matrix whose   rows are        samples
+          of dimension    Let            be an undirected
+and unweighted graph associated with the set of variables in
+   Let         and Ne       
+the maximum possible
+edges in    Let     LNe indicate the presence or absence
+of edges in the edge set   of    namely
+
+ 
+
+ cid 
+
+  ij  
+
+  xi   xj xV     
+  xi  cid  xj xV      
+
+ 
+
+We de ne an approximate structure discovery method
+gw    which predicts the edge structure       gw   
+given   sample of data    We focus on   drawn from  
+Gaussian distribution  In this case  the empirical covariance
+matrix    is   suf cient statistic of the population covariance and therefore of the conditional dependency structure 
+We thus express our structurerecovery problem as   function of   gw      fw    fw is parametrized by   and
+belongs to the function class    Note that the graphical
+lasso in Equation   is an fw for   speci   choice of   
+This view on the edge estimator now allows us to bring the
+selection of fw from the domain of human design to the
+
+Learning to Discover Sparse Graphical Models
+
+domain of empirical risk minimization over    De ning  
+distribution   on Rp     LNe such that              we
+would like our estimator  fw  to minimize the expected risk
+
+         
+
+                   
+
+ 
+Here     LNe   LNe      is the loss function  For graphical model selection the   loss function is the natural error
+metric to consider  Wang et al    The estimator with
+minimum risk is generally not possible to compute as  
+closed form expression for most interesting choices of   
+such as those arising from sparse graphs  In this setting 
+Eq    achieves the information theoretic optimal recovery rate up to   constant for certain   corresponding to
+uniformly sparse graphs with   maximum degree  but only
+when the optimal   is used and the nonzero precision matrix values are bounded away from zero  Wang et al   
+Ravikumar et al   
+The design of the estimator in Equation   is not explicitly
+minimizing this risk functional  Thus modifying the estimator to      different class of graphs       smallworld networks  while minimizing       is not obvious  Furthermore 
+in practical settings the optimal   is unknown and precision
+matrix entries can be very small  We would prefer to directly
+minimize the risk functional  Desired structural assumptions
+on samples from   on the underlying graph  such as sparsity 
+may imply that the distribution is not tractable for analytic
+solutions  Meanwhile  we can often devise   sampling procedure for   allowing us to select an appropriate function
+via empirical risk minimization  Thus it is suf cient to
+de ne   rich enough   over which we can minimize the
+empirical risk over the samples generated  giving us   learning objective over   samples  Yk      
+   drawn from   
+     fw      Yk  To maintain tractability  we
+min
+ 
+use the standard crossentropy loss as   convex surrogate 
+     RNe   LNe  given by
+
+ 
+ 
+
+ cid  
+ cid   ij log   ij
+
+              ij  log      ij
+
+     cid 
+
+ cid 
+
+  cid  
+
+We now need to select   suf ciently rich function class
+for fw and   method to produce appropriate       which
+model our desired data priors  This will allow us to learn
+  fw that explicitly attempts to minimize errors in edge
+discovery 
+
+Discovering Sparse GGMs and Beyond
+
+We discuss how the described approach can be applied to
+recover sparse Gaussian graphical models    typical assumption in many modalities is that the number of edges
+is sparse    convenient property of these GGMs is that the
+precision matrix has   zero value in the       th entry precisely when variables   and   are independent conditioned
+on all others  Additionally  the precision matrix and partial
+
+correlation matrix have the same sparsity pattern  while the
+partial correlation matrix has normalized entries 
+We propose to simulate our   priori assumptions of sparsity
+and Gaussianity to learn fw    which can then produce
+predictions of edges from the input data  We model        
+as arising from   sparse prior on the graph   and correspondingly the entries of the precision matrix   To obtain
+  single sample of   corresponds to          samples from
+      We can now train fw    by generating sample
+pairs         At execution time we standardize the input
+data and compute the covariance matrix before evaluating
+fw    The process of learning fw for the sparse GGM is
+given in Algorithm  
+
+Algorithm   Training   GGM edge estimator
+
+for            do
+Sample Gi       
+Sample            Gi 
+Xi    xj        
+  
+Construct  Yi      pair from  Gi  Xi 
+
+ 
+ 
+
+end for
+Select Function Class         CNN 
+Optimize  min
+   
+
+           Yk 
+
+ cid  
+
+  
+
+  
+
+ 
+ 
+
+  weaklyinformative sparsity prior is one where each edge
+is equally likely with small probability  versus structured
+sparsity where edges have speci   con gurations  For obtaining the training samples         in this case we would
+like to create   sparse precision matrix    with the desired
+number of zero entries distributed uniformly  One strategy
+to do this and assure the precision matrices lie in the positive
+de nite cone is to  rst construct an upper triangular sparse
+matrix and then multiply it by its transpose  This process
+is described in detail in the experimental section  Alternatively  an MCMC based GWishart distribution sampler can
+be employed if speci   structures of the graph are desired
+ Lenkoski   
+The sparsity patterns in real data are often not uniformly
+distributed  Many real world networks have   smallworld
+structure  graphs that are sparse and yet have   comparatively short average distance between nodes  These transport
+properties often hinge on   small number of highdegree
+nodes called hubs  Normally  such structural patterns require sophisticated adaptation when applying estimators
+like Eq    Indeed  highdegree nodes break the smallsample  sparserecovery properties of  cid penalized estimators  Ravikumar et al    In our framework such structural assumptions appear as   prior that can be learned of 
+ ine during training of the prediction function  Similarly
+priors on other distributions such as general exponential
+families can be more easily integrated  As the structure discovery model can be trained of ine  even   slow sampling
+procedure may suf ce 
+
+Learning to Discover Sparse Graphical Models
+
+Neural Network Graph Estimator
+
+In this work we propose to use   neural network as our
+function fw  To motivate this let us consider the extreme
+case when    cid     In this case       and thus entries
+of   or the partial correlation that are almost equal to
+zero can give the edge structure  We can show that   neural
+network is consistent with this limiting case 
+De nition    Pconsistency    function class   is Pconsistent if        such that  
+                       
+as       with high probability 
+Proposition    Existence of Pconsistent neural network
+graph estimator  There exists   feed forward neural network function class   that is Pconsistent 
+Proof  If the data is standardized  each entry of   corresponds to the correlation       The partial correlation of
+edge        conditioned on nodes    is given recursively as
+
+                zo      zo   zo   zo   zo 
+
+ 
+ 
+
+ 
+
+ 
+
+We may ignore the denominator     as we are interested in
+            Thus we are left with   recursive formula that
+yields   high degree polynomial  From Andoni et al   
+Theorem   using gradient descent    neural network with
+only two layers can learn   polynomial function of degree  
+to arbitrary precision given suf cient hidden units 
+Remark   Na vely the polynomial from the recursive de 
+nition of partial correlation is of degree bounded by    
+In the worst case  this would seem to imply that we would
+need an exponentially growing number of hidden nodes to
+approximate it  However  this problem has   great deal
+of structure that can allow ef cient approximation  Firstly 
+higher order monomials will go to zero quickly with   uniform prior on       which takes values between   and  
+suggesting that in many cases   concentration bound exists
+that guarantees nonexponential growth  Furthermore  the
+existence result is shown already for   shallow network  and
+we expect   logarithmic decrease in the number of parameters to peform function estimation with   deep network
+ Cohen et al   
+
+Moreover  there are   great deal of redundant computations
+in Eq    and an ef cient dynamic programming implementation can yield polynomial computation time and require
+only low order polynomial computations with appropriate
+storage of previous computation  Similarly we would like to
+design   network that would have capacity to reuse computations across edges and approximate low order polynomials 
+We also observe that the conditional independence of nodes
+     given   can be computed equivalently in many ways by
+considering many paths through the nodes    Thus we can
+choose any valid ordering for traversing the nodes starting
+from   given edge 
+
+We now describe an ef cient architecture for this problem
+which uses   series of shared operations at each edge  We
+consider   feedforward network where each edge      is associated with   vector  ok
+     at each layer       For each edge 
+      we start with   neighborhood of the   adjacent nodes 
+                  for which we take all corresponding
+edge values from the covariance matrix and construct   
+    
+We proceed at each layer to increase the nodes considered
+for each ok
+     the output at each layer progressively increasing the receptive  eld making sure all values associated with
+the considered nodes are present  The entries used at each
+layer are illustrated in Figure   The receptive  eld here
+refers to the original covariance entries which are accessible
+by   given  ok
+     Luo et al    The equations de ning
+the process are shown in Figure   Here   neural network
+fwk is applied at each edge at each layer and   dilation sequence dk is used  We call   network of this topology  
+DNet of depth    We use dilation here to allow the receptive
+ eld to grow fast  so the network does not need   great deal
+of layers  We make the following observations 
+Proposition   For general   it is   necessary condition
+for Pconsistency that the receptive  eld of DNet covers all
+entries of the covariance    at any edge it is applied 
+Proof  Consider nodes   and   and   chain graph such that
+  and   are adjacent to each other in the matrix but are at
+the terminal nodes of the chain graph  One would need
+to consider all other variables to be able to explain away
+the correlation  Alternatively we can see this directly from
+expanding Eq   
+Proposition           matrix   will be covered by the
+receptive  eld for   DNet of depth log    and dk      
+Proof  The receptive  eld of   DNet with dilation sequence
+dk       of depth   is      We can see this as ok
+    will
+receive input from ok 
+    at the edge of it   receptive  eld 
+effectively doubling it  It now follows that we need at least
+log    layers to cover the receptive  eld 
+
+Intuitively adjacent edges have   high overlap in their
+receptive  elds and can easily share information about
+the nonoverlapping components  This is analogous to  
+parametrized message passing  For example if edge        is
+explained by node    as   enters the receptive  eld of edge
+          the path through        can already be discounted 
+In terms of Eq    this can correspond to storing computations that can be used by neighbor edges from lower levels
+in the recursion 
+As fwk is identical for all nodes  we can simultaneously
+implement all edge predictions ef ciently as   convolutional
+network  We make sure that to have considered all edges
+relevant to the current set of nodes in the receptive  eld
+which requires us to add values from  lters applied at the
+diagonal to all edges  In Figure   we illustrate the nodes
+
+Learning to Discover Sparse Graphical Models
+
+Figure       Illustration of nodes and edges  seen  at edge   in layer   and     Receptive  eld at layer   All entries in
+grey show the   
+      shows the dilation process and receptive  eld  red  at
+higher layers  Finally the equations for each layer output are given  initialized by the covariance entries pi  
+
+    in covariance matrix used to compute   
+
+and receptive  eld considered with respect to the covariance
+matrix  This also motivates   straightforward implementation using    convolutions  adding separate convolutions at
+     and      to each      at each layer to achieve the speci  
+input pattern described  shown in Figure  
+Ultimately our choice of architecture that has shared computations and multiple layers is highly scalable as compared
+with   naive fully connected approach and allows leveraging existing optimized    convolutions  In preliminary
+work we have also considered fully connected layers but
+this proved to be much less ef cient in terms of storage and
+scalibility than using deep convolutional networks 
+Considering the general    cid    case is illustrative  However 
+the main bene   of making the computations differentiable
+and learned from data is that we can take advantage of the
+sparsity and structure assumptions to obtain more ef cient
+results than naive computation of partial correlation or matrix inversion  As   decreases our estimate of      becomes
+inexact    datadriven model that takes better advantage of
+the assumptions on the underlying distribution and can more
+accurately recover the graph structure 
+The convolution structure is dependent on the order of the
+variables used to build the covariance matrix  which is arbitrary  Permuting the input data we can obtain another estimate of the output  In the experiments  we leverage these
+various estimate in an ensembling approach  averaging the
+results of several permutations of input  We observe that this
+generally yields   modest increase in accuracy  but that even
+  single node ordering can show substantially improved
+performance over competing methods in the literature 
+
+Experiments
+Our experimental evaluations focus on the challenging high
+dimensional settings in which       and consider both
+synthetic data and real data from genetics and neuroimaging 
+In our experiments we explore how well networks trained on
+parametric samples generalize  both to unseen synthetic data
+and to several real world problems  In order to highlight
+
+the generality of the learned networks  we apply the same
+network to multiple domains  We train networks taking in
+    and   node graphs  The former sizes are chosen
+based on the real data we consider in subsequent sections 
+We refer to these networks as DeepGraph    and  
+In all cases we have   feature maps of       kernels  The
+  and   node network with   convolutional layers and
+dk         For the   node network with   convolutional
+layers and dk       We use ReLU activations  The last
+layer has       convolution and   sigmoid outputing   value
+of   to   for each edge 
+We sample         with   sparse prior on       as follows 
+We  rst construct   lower diagonal matrix     where each
+entry has   probability of being zero  Nonzero entries are
+set uniformly between    and    Multiplying LLT gives  
+sparse positive de nite precision matrix    This gives us
+our       with   sparse prior on       We sample from
+the Gaussian       to obtain samples of    Here  
+corresponds to   speci   sparsity level in the  nal precision
+matrix  which we set to produce matrices       sparse
+and   chosen so that partial correlations range   to  
+Each network is trained continously with new samples generated until the validation error saturates  For   given precision matrix we generate   possible   samples to be used as
+training data  with   total of approximately    training
+samples used for each network  The networks are optimized
+using ADAM  Kingma   Ba    coupled with crossentropy loss as the objective function  cf  Sec    We use
+batch normalization at each layer  Additionally  we found
+that using the absolute value of the true partial correlations
+as labels  instead of hard binary labels  improves results 
+
+Synthetic Data Evaluation To understand the properties
+of our learned networks  we evaluated them on different
+synthetic data than the ones they were trained on  More
+speci cally  we used   completely different third party sampler so as to avoid any contamination  We use DeepGraph 
+  which takes   hours to train  on   variety of settings 
+The same trained network is utilized in the subsequent neuroimaging evaluations as well  DeepGraph  is also used
+
+   layer edge   layer edge         pi jo     fw                               fw         id       jd       jd oli   fwl ol     ol idl   ol   jdl ol   dl jdl yi   wl oli   Learning to Discover Sparse Graphical Models
+
+Figure   Diagram of the DeepGraph structure discovery architecture used in this work  The input is  rst standardized and then the
+sample covariance matrix is estimated    neural network consisting of multiple dilated convolutions  Yu   Koltun    and    nal
+      convolution layer is used to predict edges corresponding to nonzero entries in the precision matrix 
+
+to evaluate larger graphs 
+We used the BDGraph Rpackage to produce sparse
+precision matrices based on the GWishart distribution
+ Mohammadi   Wit    as well as the Rpackage
+rags ridges  Peeters et al    to generate data from
+smallworld networks corresponding to the Watts Strogatz
+model  Watts   Strogatz    We compared our learned
+estimator against the scikitlearn  Pedregosa et al 
+  implementation of Graphical Lasso with regularizer
+chosen by crossvalidation as well as the BirthDeath Rate
+MCMC  BDMCMC  method from Mohammadi   Wit
+ 
+For each scenario we repeat the experiment for   different graphs and small sample observations showing the
+average area under the ROC curve  AUC  precision   corresponding to   of possible edges  and calibration error
+ CE   Mohammadi   Wit   
+For graphical lasso we use the partial correlations to indicate
+con dence in edges  BDGraph automatically returns posterior probabilities as does our method  Finally to understand
+the effect of the regularization parameter we additionally
+report the result of graphical lasso under optimal regularizer
+setting on the testing data 
+Our method dominates all other approaches in all cases with
+       which also corresponds to the training regime  For
+the case of random Gaussian graphs with     as in our
+training data  and graph sparsity of   we have superior
+performance and can further improve on this by averaging
+permutations  Next we apply the method to less straightforward synthetic data  such as that arising from smallworld
+graphs which is typical of many applications  We found
+that  compared to baseline methods  our network performs
+particularly well with highdegree nodes and when the distribution becomes nonnormal  In particular our method
+performs well on the relevant metrics with smallworld networks    very common family of graphs in realworld data 
+obtaining superior precision at the primary levels of interest 
+Figure   shows examples of random and WattsStrogatz
+smallworld graphs used in these experiments 
+Training   new network for each number of samples can
+
+pose dif culties with our proposed method  Thus we evaluted how robust the network DeepGraph  is to input
+covariances obtained from fewer or more samples  We  nd
+that overall the performance is quite good even when lowering the number of samples to       we obtain superior
+performance to the other approaches  Table   We also
+applied DeepGraph  on data from   multivariate generalization of the Laplace distribution    mez et al    As
+in other experiments precision matrices were sampled from
+the GWishart at   sparsity of     mez et al   
+Proposition   was applied to produce samples  We  nd
+that DeepGraph  performs competitively  despite the discrepancy between train and test distributions  Experiments
+with variable sparsity are considered in the supplementary
+material  which  nd that for very sparse graphs  the networks remain robust in performance  while for increased
+density performance degrades but remains competitive 
+Using the smallworld network data generator  Peeters et al 
+  we demonstrate that we can update the generic sparse
+prior to   structured one  We retrain DeepGraph  using
+only   examples of smallworld graphs mixed with  
+examples from the original uniform sparsity model  We
+perform just one epoch of training and observe markedly
+improved performance on this test case as seen in the last
+row of Table  
+For our  nal scenario we consider the very challenging
+setting with   nodes and only       samples  We note
+that the MCMC based method fails to converge at this scale 
+while graphical lasso is very slow as seen in the timing
+performance and barely performs better than chance  Our
+method convincingly outperforms graphical lasso in this
+scenario as shown in Tabel   Here we additionally report
+precision at just the  rst   of edges since competitors
+perform nearly at chance at the   level 
+We compute the average execution time of our method compared to Graph Lasso and BDGraph on   CPU in Table  
+We note that we use   production quality version of graph
+lasso  Pedregosa et al    whereas we have not optimized the network execution  for which known strategies
+may be applied  Denton et al   
+
+Dilated Conv  layersConv layer    Conv  layerStandardizeEstimate CovarianceInput DataLearning to Discover Sparse Graphical Models
+
+Experimental Setup
+
+Gaussian
+
+Random Graphs
+            
+
+Gaussian
+
+Random Graphs
+            
+
+Gaussian
+
+Random Graphs
+            
+
+Laplace
+
+Random Graphs
+            
+
+Gaussian
+
+SmallWorld Graphs
+
+     
+
+Method
+Glasso
+
+Glasso  optimal 
+
+BDGraph
+
+DeepGraph 
+
+DeepGraph Perm
+
+Glasso
+
+Glasso  optimal 
+
+BDGraph
+
+DeepGraph 
+
+DeepGraph Perm
+
+Glasso
+
+Glasso  optimal 
+
+BDGraph
+
+DeepGraph 
+
+DeepGraph Perm
+
+Glasso
+
+Glasso  optimal 
+
+BDGraph
+
+DeepGraph 
+
+DeepGraph Perm
+
+Glasso
+
+Glasso  optimal 
+
+BDGraph
+
+DeepGraph 
+
+DeepGraph Perm
+DeepGraph update
+
+DeepGraph update Perm
+
+Prec 
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+
+AUC
+
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+
+CE
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Table   For each case we generate   sparse graphs with  
+nodes and data matrices sampled  with   samples  from distributions with those underlying graphs  DeepGraph outperforms other
+methods in terms of AP  AUC  and precision at    the approximate true sparsity  In terms of precision and AUC DeepGraph
+has better performance in all cases except       
+
+Method
+random
+Glasso
+
+Prec 
+     
+     
+     
+     
+DeepGraph Perm      
+
+Glasso  optimal 
+DeepGraph 
+
+Prec 
+     
+     
+     
+     
+     
+
+AUC
+
+     
+     
+     
+     
+     
+
+CE
+ 
+ 
+ 
+ 
+ 
+
+Table   Experiment on   node graphs with only   samples
+repeated   times  This corresponds to the experimental setup of
+Gaussian Random Graphs       Improved performance
+in all metrics 
+
+sklearn GraphLassoCV
+
+BDgraph
+DeepGraph
+
+  nodes    
+
+  nodes    
+
+ 
+ 
+ 
+
+ 
+   
+ 
+
+Table   Avg  execution time over
+  trials for   and   node problem on   CPU for Graph Lasso 
+BDMCMC  and DeepGraph
+
+   
+
+   
+
+Figure   Example of
+    random and     small
+world used in experiments
+
+responding edge selection method  We then evaluate the
+likelihood on heldout data  We repeat this procedure for  
+range of    We rely on Algorithm   in Hara   Takemura
+  to compute the maximum likelihood precision given
+  support  The experiment is repeated for each of CODA
+and BRCA subject groups   times  Results are shown in
+Figure   In all cases we use   samples for edge selection
+and precision estimation  We compare with graphical lasso
+as well as the LedoitWolf shrinkage estimator  Ledoit  
+Wolf    We additionally consider the MCMC based
+approach described in previous section  For graphical lasso
+and LedoitWolf  edge selection is based on thresholding
+partial correlation  Balmand   Dalalyan   
+Additionally  we evaluate the stability of the solutions provided by the various methods  In several applications   low
+variance on the estimate of the edge set is important  On
+Table   we report Spearman correlations between pairs of
+solutions  as it is   measure of   monotone link between two
+variables  DeepGraph has far better stability in the genome
+experiments and is competitive in the fMRI data 
+
+Resting State Functional Connectivity We evaluate our
+graph discovery method to study brain functional connectivity in restingstate fMRI data  Correlations in brain activity measured via fMRI reveal functional interactions
+between remote brain regions 
+These are an important measure to study psychiatric diseases that have no
+known anatomical support  Typical connectome analysis describes each subject or group by   GGM measuring functional connectivity between   set of regions  Varoquaux   Craddock    We use the ABIDE dataset
+ Di Martino et al      large scale resting state fMRI
+dataset  It gathers brain scans from   individuals suffering from autism spectrum disorder and   controls over
+  sites  For our experiments we use an atlas with  
+regions of interest described in Varoquaux et al   
+
+Graph Lasso
+LedoitWolfe
+
+Bdgraph
+DeepGraph
+
+DeepGraph  Permute
+
+Gene BRCA
+     
+     
+     
+     
+     
+
+Gene COAD
+     
+     
+     
+     
+     
+
+ABIDE Control ABIDE Autistic
+     
+     
+     
+     
+     
+     
+     
+     
+
+   
+
+   
+
+Cancer Genome Data We perform experiments on  
+gene expression dataset described in Honorio et al   
+The data come from   cancer genome atlas from   subjects for various types of cancer  We used the  rst   genes
+from Honorio et al    Appendix    of commonly
+regulated genes in cancer  We evaluated on two groups of
+subjects  one with breast invasive carcinoma  BRCA  consisting of   subjects and the other colon adenocarcinoma
+ COAD  consisting of   subjects 
+Evaluating edge selection in realworld data is challenging 
+We use the following methodology  for each method we
+select the topk ranked edges  recomputing the maximum
+likelihood precision matrix with support given by the cor 
+
+Table   Average Spearman correlation results for real data showing stability of solution amongst   trials
+We use the network DeepGraph  the same network and
+parameters from synthetic experiments  using the same evaluation protocol as used in the genomic data  For both control
+and autism patients we use time series from   random subjects to estimate edges and corresponding precision matrices 
+We  nd that for both the Autism and Control group we can
+obtain edge selection comparable to graph lasso for very
+few selected edges  When the number of selected edges is in
+the range above   we begin to perform signi cantly better
+
+ http preprocessedconnectomes project 
+
+github io abide 
+
+Learning to Discover Sparse Graphical Models
+
+Figure   Average test likelihood for COAD and BRCA subject groups in gene data and neuroimaging data using different number of
+selected edges  Each experiment is repeated   times for genetics data  It is repeated approximately   times in the fMRI to obtain
+signi cant results due high variance in the data  DeepGraph with averaged permutation dominates in all cases for genetics data  while
+DeepGraph Permutation is superior or equal to competing methods in the fMRI data 
+
+proves  Most importantly the learned estimator generalizes
+well to real data  nding relevant stable edges  We also observed that the learned estimators generalize to variations
+not seen at training time       different   or sparsity  which
+points to this potentialy learning generic computations  This
+also shows potential to more easily scale the method to different graph sizes  One could consider transfer learning 
+where   network for one size of data is used as   starting
+point to learn   network working on larger dimension data 
+Penalized maximum likelihood can provide performance
+guarantees under restrictive assumptions on the form of the
+distribution and not considering the regularization path  In
+the proposed method one could obtain empirical bounds
+under the prescribed data distribution  Additionally  at execution time the speed of the approach can allow for resampling based uncertainty estimates and ef cient model
+selection       crossvalidation  amongst several trained estimators 
+We have introduced the concept of learning an estimator for
+determining the structure of an undirected graphical model 
+  network architecture and sampling procedure for learning
+such an estimator for the case of sparse GGMs was proposed  We obtained competitive results on synthetic data
+with various underlying distributions  as well as on challenging realworld data  Empirical results show that our method
+works particularly well compared to other approaches for
+smallworld networks  an important class of graphs common
+in realworld domains  We have shown that neural networks
+can obtain improved results over various statistical methods
+on real datasets  despite being trained with samples from
+parametric distributions  Our approach enables straightforward speci cations of new priors and opens new directions
+in ef cient graphical structure discovery from few examples 
+
+Acknowledgements
+This work is partially funded by Internal Funds KU Leuven  FP MCCIG   DIGITEO      SOPRANO  and ANR BINF  NiConnect  We thank
+Jean Honorio for providing preprocessed Genome Data 
+
+Figure   Example solution from DeepGraph and Graph Lasso
+in the small sample regime on the same   samples  along with  
+larger sample solution of Graph Lasso for reference  DeepGraph
+is able to extract similar key edges as graphical lasso
+
+in edge selection as seen in Fig    We evaluated stability
+of the results as shown in Tab    DeepGraph outperformed
+the other methods across the board 
+ABIDE has high variability across sites and subjects  As
+  result  to resolve differences between approaches  we
+needed to perform   folds to obtain wellseparated error
+bars  We found that the birthdeath MCMC method took
+very long to converge on this data  moreover the need for
+many folds to obtain signi cant results amongst the methods
+made this approach prohibitively slow to evaluate 
+We show the edges returned by Graph Lasso and DeepGraph
+for   sample from   subjects  Fig    in the control group 
+We also show the result of   largesample result based on
+  subjects from graphical lasso  In visual evaluation of
+the edges returned by DeepGraph we  nd that they closely
+align with results from   largesample estimation procedure 
+Furthermore we can see several edges in the subsample
+which were particularly strongly activated in both methods 
+
+Discussion and Conclusions
+Learned graph estimation outperformed strong baselines
+in both accuracy and speed  Even in cases that deviate
+from standard GGM sparsity assumptions       Laplace 
+smallworld  it performed substantially better  When  netuning on the target distribution performance further im 
+
+ Edgesinsupport LogLikehoodTestDataEdgeSelectionColonadenocarcinomaSubjectsDeepGraphDeepGraph Permuteglassoledoitbayesian Edgesinsupport LogLikehoodTestDataEdgeSelectionBreastinvasivecarcinomaSubjectsDeepGraphDeepGraph Permuteglassoledoitbayesian EdgesinGraphSupport AverageTestLogLikehoodEdgeSelectionAutismSubjects EdgesinGraphSupport AverageTestLogLikehoodEdgeSelectionControlSubjectsLRDeepGraph  samples LRGraphLasso  Samples LRGraphLasso  samples Learning to Discover Sparse Graphical Models
+
+graphs and variable selection with the lasso  The Annals of
+Statistics  pp     
+
+Moghaddam  Baback  Khan  Emtiyaz  Murphy  Kevin    and Marlin  Benjamin    Accelerating Bayesian structural inference for
+nondecomposable Gaussian graphical models  In NIPS   
+Mohammadi  Abdolreza and Wit  Ernst    Bayesian structure
+learning in sparse Gaussian graphical models  Bayesian Analysis     
+
+Mohan  Karthik  Chung  Mike  Han  Seungyeop  Witten  Daniela 
+Lee  SuIn  and Fazel  Maryam  Structured learning of Gaussian
+graphical models  In NIPS  pp     
+
+Pedregosa et al  Fabian  Scikitlearn  Machine learning in python 
+
+JMLR     
+
+Peeters         Bilgrau       and van Wieringen      
+rags ridges  Ridge estimation of precision matrices from highdimensional data    package   
+
+Ravikumar  Pradeep  Wainwright  Martin    Raskutti  Garvesh  and
+Yu  Bin  Highdimensional covariance estimation by minimizing  cid penalized logdeterminant divergence  EJS   
+ 
+
+Ryali et al  Srikanth  Estimation of functional connectivity in fMRI
+data using stability selectionbased sparse partial correlation
+with elastic net penalty  NeuroImage     
+Varoquaux  Ga   and Craddock    Cameron  Learning and comparing functional connectomes across subjects  NeuroImage 
+   
+
+Varoquaux  Ga    Gramfort  Alexandre  Poline  JeanBaptiste  and
+Thirion  Bertrand  Brain covariance selection  Better individual
+functional connectivity models using population prior  In NIPS 
+ 
+
+Varoquaux  Ga    Gramfort  Alexandre  Pedregosa  Fabian  Michel 
+Vincent  and Thirion  Bertrand  Multisubject dictionary learning to segment an atlas of brain spontaneous activity  In IPMI 
+ 
+
+Vinyals  Oriol  Fortunato  Meire  and Jaitly  Navdeep  Pointer
+
+networks  In NIPS   
+
+Wang  Wei  Wainwright  Martin    and Ramchandran  Kannan 
+Informationtheoretic bounds on model selection for gaussian
+markov random  elds  In ISIT  pp    Citeseer   
+Watts  Duncan    and Strogatz  Steven    Collective dynamics of
+ smallworld  networks  Nature       
+Xin  Bo  Wang  Yizhou  Gao  Wen  and Wipf  David  Maximal
+sparsity with deep networks  arXiv preprint arXiv 
+ 
+
+Yu  Fisher and Koltun  Vladlen  Multiscale context aggregation by
+dilated convolutions  arXiv preprint arXiv   
+
+References
+Andoni  Alexandr  Panigrahy  Rina  Valiant  Gregory  and Zhang 
+Li  Learning polynomials with neural networks  In ICML   
+Balan  Anoop Korattikara  Rathod  Vivek  Murphy  Kevin  and
+
+Welling  Max  Bayesian dark knowledge  In NIPS   
+
+Balmand  Samuel and Dalalyan  Arnak    On estimation of the
+diagonal elements of   sparse precision matrix  Electronic
+Journal of Statistics     
+
+Belilovsky  Eugene  Varoquaux  Ga    and Blaschko  Matthew   
+Hypothesis testing for differences in Gaussian graphical models 
+Applications to brain connectivity  In NIPS   
+
+Cai  Tony  Liu  Weidong  and Luo  Xi    constrained  cid  minimization approach to sparse precision matrix estimation  Journal of
+the American Statistical Association     
+Cohen  Nadav  Sharir  Or  and Shashua  Amnon  On the expressive
+
+power of deep learning    tensor analysis  In COLT   
+
+Danaher  Patrick  Wang  Pei  and Witten  Daniela    The joint
+graphical lasso for inverse covariance estimation across multiple
+classes  Journal of the Royal Stat  Society     
+ 
+
+Denton  Emily    Zaremba  Wojciech  Bruna  Joan  LeCun  Yann 
+and Fergus  Rob  Exploiting linear structure within convolutional networks for ef cient evaluation  In NIPS   
+
+Di Martino et al  Adriana  The autism brain imaging data exchange  Towards   largescale evaluation of the intrinsic brain
+architecture in autism  Molecular psychiatry     
+
+Duvenaud et al  David    Convolutional networks on graphs for
+
+learning molecular  ngerprints  In NIPS   
+
+Friedman  Jerome  Hastie  Trevor  and Tibshirani  Robert  Sparse
+inverse covariance estimation with the graphical lasso  Biostatistics     
+
+  mez     GomezViilegas  MA  and Marin  JM    multivariate
+generalization of the power exponential family of distributions 
+Commun Stat Theory Methods     
+
+Gregor  Karol and LeCun  Yann  Learning fast approximations of
+
+sparse coding  In ICML   
+
+Hara  Hisayuki and Takemura  Akimichi    localization approach
+to improve iterative proportional scaling in Gaussian graphical
+models  Commun Stat Theory Methods   
+ 
+
+Henaff  Mikael  Bruna  Joan  and LeCun  Yann  Deep convolutional networks on graphstructured data  arXiv 
+ 
+
+Honorio  Jean  Jaakkola  Tommi  and Samaras  Dimitris  On the
+statistical ef ciency of  cid   multitask learning of Gaussian
+graphical models  arXiv   
+
+Kingma  Diederik and Ba  Jimmy  Adam    method for stochastic
+
+optimization  ICLR   
+
+Lauritzen  Steffen    Graphical models  Oxford University Press 
+
+ 
+
+Ledoit  Olivier and Wolf  Michael    wellconditioned estimator
+for largedimensional covariance matrices  Journal of multivariate analysis     
+
+Lenkoski  Alex    direct sampler for GWishart variates  Stat   
+
+   
+
+Li  Yujia  Tarlow  Daniel  Brockschmidt  Marc  and Zemel 
+Richard  Gated graph sequence neural networks  ICLR   
+LopezPaz  David  Muandet  Krikamol  Sch lkopf  Bernhard  and
+Tolstikhin  Iliya  Towards   learning theory of causeeffect
+inference  In ICML   
+
+Luo  Wenjie  Li  Yujia  Urtasun  Raquel  and Zemel  Richard 
+Understanding the effective receptive  eld in deep convolutional
+neural networks  In ICML   
+
+Meinshausen  Nicolai and   hlmann  Peter  Highdimensional
+
+

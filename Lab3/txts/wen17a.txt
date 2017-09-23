@@ -1,0 +1,1264 @@
+Latent Intention Dialogue Models
+
+TsungHsien Wen     Yishu Miao     Phil Blunsom   Steve Young  
+
+Abstract
+
+Developing   dialogue agent that is capable of
+making autonomous decisions and communicating by natural language is one of the longterm
+goals of machine learning research  Traditional
+approaches either rely on handcrafting   small
+stateaction set for applying reinforcement learning that is not scalable or constructing deterministic models for learning dialogue sentences that
+fail to capture natural conversational variability 
+In this paper  we propose   Latent Intention Dialogue Model  LIDM  that employs   discrete latent variable to learn underlying dialogue intentions in the framework of neural variational inference  In   goaloriented dialogue scenario  these
+latent intentions can be interpreted as actions
+guiding the generation of machine responses 
+which can be further re ned autonomously by reinforcement learning  The experimental evaluation of LIDM shows that the model outperforms
+published benchmarks for both corpusbased and
+human evaluation  demonstrating the effectiveness of discrete latent variable models for learning goaloriented dialogues 
+
+  Introduction
+Recurrent neural networks  RNNs  have shown impressive results in modeling generation tasks that have   sequential structured output form  such as machine translation  Sutskever et al    Bahdanau et al    caption
+generation  Karpathy   FeiFei    Xu et al   
+and natural language generation  Wen et al    Kiddon et al    These discriminative models are trained
+to learn only   conditional output distribution over strings
+and despite the sophisticated architectures and condition 
+
+ Equal contribution  Department of Engineering  University of
+Cambridge  Cambridge  United Kingdom  Department of Computer Science  University of Oxford  Oxford  United Kingdom 
+Correspondence to  TsungHsien Wen  thw cam ac uk 
+Yishu Miao  yishu miao cs ox ac uk 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+ing mechanisms used to ensure salience  they are not able
+to model the underlying actions needed to generate natural
+dialogues  As   consequence  these sequenceto sequence
+models are limited in their ability to exhibit the intrinsic
+variability and stochasticity of natural dialogue  For example both goaloriented dialogue systems  Wen et al   
+Bordes   Weston    and sequenceto sequence learning chatbots  Vinyals   Le    Shang et al    Serban et al    struggle to generate diverse yet causal responses  Li et al      Serban et al    In addition 
+there is often insuf cient training data for goaloriented dialogues which results in over tting and prevents deterministic models from learning effective and scalable interactions  In this paper  we propose   latent variable model  
+Latent Intention Dialogue Model  LIDM    for learning the
+complex distribution of communicative intentions in goaloriented dialogues  Here  the latent variable representing
+dialogue intention can be considered as the autonomous
+decisionmaking center of   dialogue agent for composing
+appropriate machine responses 
+Recent advances in neural variational inference  Kingma
+  Welling    Mnih   Gregor    have sparked  
+series of latent variable models applied to NLP  Bowman
+et al    Serban et al    Miao et al    Cao  
+Clark    For models with continuous latent variables 
+the reparameterisation trick  Kingma   Welling    is
+commonly used to build an unbiased and lowvariance gradient estimator for updating the models  However  since  
+continuous latent space is hard to interpret  the major bene 
+ ts of these models are the stochasticity and the regularisation brought by the latent variable  In contrast  models with
+discrete latent variables are able to not only produce interpretable latent distributions but also provide   principled
+framework for semisupervised learning  Kingma et al 
+  This is critical for NLP tasks  especially where additional supervision and external knowledge can be utilized
+for bootstrapping  Faruqui et al    Miao   Blunsom 
+  Ko cisk   et al    However  variational inference
+with discrete latent variables is relatively dif cult due to the
+problem of high variance during sampling  Hence we introduce baselines  as in the REINFORCE  Williams   
+algorithm  to mitigate the high variance problem  and carry
+out ef cient neural variational inference  Mnih   Gregor 
+  for the latent variable model 
+
+Latent Intention Dialogue Models
+
+In the LIDM  the latent intention is inferred from user input utterances  Based on the dialogue context  the agent
+draws   sample as the intention which then guides the natural language response generation  Firstly  in the framework
+of neural variational inference  Mnih   Gregor    we
+construct an inference network to approximate the posterior
+distribution over the latent intention  Then  by sampling the
+intentions for each response  we are able to directly learn
+  basic intention distribution on   humanhuman dialogue
+corpus by optimising the variational lower bound  To further reduce the variance  we utilise   labeled subset of the
+corpus in which the labels of intentions are automatically
+generated by clustering  Then  the latent intention distribution can be learned in   semisupervised fashion  where
+the learning signals are either from the direct supervision
+ labeled set  or the variational lower bound  unlabeled set 
+From the perspective of reinforcement learning  the latent
+intention distribution can be interpreted as the intrinsic policy that re ects human decisionmaking under   particular
+conversational scenario  Based on the initial policy  latent intention distribution  learnt from the semisupervised
+variational inference framework  the model can re ne its
+strategy easily against alternative objectives using policy
+gradientbased reinforcement learning  This is somewhat
+analogous to the training process used in AlphaGo  Silver
+et al    for the game of Go  Based on LIDM  we show
+that different learning paradigms can be brought together
+under the same framework to bootstrap the development of
+  dialogue agent  Li et al      Weston   
+In summary  the contribution of this paper is twofold 
+ rstly  we show that the neural variational inference framework is able to discover discrete  interpretable intentions
+from data to form the decisionmaking basis of   dialogue
+agent  secondly  the agent is capable of revising its conversational strategy based on an external reward within
+the same framework  This is important because it provides   stepping stone towards building an autonomous dialogue agent that can continuously improve itself through
+interaction with users  The experimental results demonstrate the effectiveness of our latent intention model which
+achieves stateof theart performance on both automatic
+corpusbased evaluation and human evaluation 
+
+  Latent Intention Dialogue Model for
+
+Goaloriented Dialogue
+
+Goaloriented dialogue   Young et al    aims at building models that can help users to complete certain tasks via
+natural language interaction  Given   user input utterance
+ut at turn   and   knowledge base  KB  the model needs to
+
+ Like most of the goaloriented dialogue research  we focus
+
+on information seek type dialogues 
+
+parse the input into actionable commands   and access the
+KB to search for useful information in order to answer the
+query  Based on the search result  the model needs to summarise its  ndings and reply with an appropriate response
+mt in natural language 
+
+  Model
+
+The LIDM is based on the endto end system architecture
+described in  Wen et al    It comprises three components    Representation Construction    Policy Network  and   Generator  as shown in Figure   To capture
+the user   intent and match it against the system   knowledge    dialogue state vector st   ut   bt   xt is derived
+from the user input ut and the knowledge base KB  ut is
+the distributed utterance representation  which is formed
+by encoding the user utterance  ut with   bidirectional
+LSTM  Hochreiter   Schmidhuber    and concatenating the  nal stage hidden states together 
+
+ut   biLSTM ut 
+
+ 
+
+The belief vector bt  which is   concatenation of   set
+of probability distributions over domain speci   slotvalue
+pairs  is extracted by   set of pretrained RNNCNN belief
+trackers  Wen et al    Mrk si   et al    in which ut
+and mt  are processed by two different CNNs as shown
+in Figure  
+
+bt   RNNCNN ut  mt  bt 
+
+ 
+
+where mt  is the preceding machine response and bt 
+is the preceding belief vector  They are included to model
+the current turn of the discourse and the longterm dialogue
+context  respectively  Based on the belief vector    query  
+is formed by taking the union of the maximum values of
+each slot    is then used to search the internal KB and return   vector xt representing the degree of matching in the
+KB  This is produced by counting all the matching venues
+and restructuring it into   sixbin onehot vector  Among
+the three vectors that comprise the dialogue state st  ut is
+completely trainable from data  bt is pretrained using  
+separate objective function  and xt is produced by   discrete database accessing operation  For more details about
+the belief trackers and database operation refer to Wen et
+al    
+Conditioning on the state st  the policy network parameterises the latent intention zt by   single layer MLP 
+ cid 
+ zt st    softmax  
+  st            
+where             are model parameters  Since
+ zt st  is   discrete conditional probability distribution
+ All sentences are preprocessed by delexicalisation  Henderson et al    where slotvalue speci   words are replaced with
+their corresponding generic tokens based on an ontology 
+
+ cid 
+    tanh  
+
+Latent Intention Dialogue Models
+
+Figure   LIDM for Goaloriented Dialogue Modeling
+
+based on dialogue state  we can also interpret the policy
+network here as   latent dialogue management component
+in the traditional POMDPbased framework  Young et al 
+  Ga si   et al      latent intention     
+ or an
+action in the reinforcement learning literature  can then be
+sampled from the conditional distribution 
+
+ 
+
+     zt st 
+    
+
+ 
+
+This sampled intention  or action      
+and the state vector
+st can then be combined into   control vector dt  which is
+used to govern the generation of the system response based
+on   conditional LSTM language model 
+
+ 
+
+ cid 
+  zt    sigmoid  
+
+dt    
+  mt st  zt   
+
+ cid 
+
+ cid 
+  st 
+
+ cid 
+  zt         
+  wt
+
+   ht
+
+   dt 
+
+  wt
+
+ 
+
+ 
+
+ 
+
+ 
+
+  wt
+
+where    and    are parameters  zt is the  hot representation of     
+  is the last output token         word 
+  delexicalised  slot name or   delexicalised  slot value 
+and ht
+   is the decoder   last hidden state  Note in Equation   the degree of information  ow from the state vector is
+controlled by   sigmoid gate whose input signal is the sampled intention     
+  This prevents the decoder from over 
+ tting to the deterministic state information and forces it
+to take the sampled stochastic intention into account  The
+LIDM can then be formally written down in its parame 
+
+ 
+
+terised form with parameter set  
+
+  mt st   
+
+  mt zt  st zt st 
+
+ 
+
+ cid 
+
+zt
+
+  Inference
+
+To carry out inference for the LIDM  we introduce an inference network   zt st  mt  to approximate the posterior
+distribution   zt st  mt  so that we can optimise the variational lower bound of the joint probability in   neural variational inference framework  Miao et al    We can
+then derive the variational lower bound as 
+    Eq zt log   mt zt  st     DKL   zt zt st 
+
+  mt zt  st zt st 
+
+ cid 
+
+  log
+  log   mt st 
+
+zt
+
+ 
+where   zt  is   shorthand for   zt st  mt  Note that
+we use   modi ed version of the lower bound here by incorporating   tradeoff factor    Higgins et al    The
+inference network   zt st  mt  is then constructed by
+  zt st  mt    Multi ot    softmax   ot 
+
+ 
+
+ot   MLP bt  xt  ut  mt 
+
+ut   biLSTM ut  mt   biLSTM mt 
+
+ 
+ 
+where ot is the joint representation  and both ut and mt are
+modeled by   bidirectional LSTM network  Although both
+
+Latent Intention Dialogue Models
+
+  zt st  mt  and  zt st  are modelled as parameterised
+multinomial distributions  the approximation   zt st  mt 
+only functions during inference by producing samples to
+compute the stochastic gradients  while  zt st  is the
+generative distribution that generates the required samples
+for composing the machine response 
+
+      zt st  mt  we use difBased on the samples     
+ferent strategies to alternately optimise the parameters  
+and   against the variational lower bound  Equation   To
+do this  we further divide   into two sets        
+Parameters   on the decoder side are directly updated by
+backpropagating the gradients 
+
+  
+ 
+
+  Eq zt st mt 
+
+  log   mt zt  st 
+
+ 
+
+ cid 
+
+ 
+  log   mt     
+
+ 
+
+ 
+
+ 
+
+   
+ 
+
+  st 
+
+ 
+
+ 
+
+Parameters   in the generative network  however  are updated by minimising the KL divergence 
+
+  
+ 
+
+     DKL   zt st  mt   zt st 
+  log  zt st 
+   
+
+ 
+  zt st  mt 
+
+ cid 
+
+ 
+
+zt
+
+ 
+
+where the entropy derivative      zt st  mt     
+and therefore can be ignored  Finally  for the parameters
+  in the inference network  we  rstly de ne the learning
+signal   mt      
+
+  st 
+
+ 
+
+  mt     
+
+  st    log   mt     
+
+ 
+
+  st 
+
+ 
+ log       
+
+ 
+
+ st  mt    log      
+
+ 
+
+ st 
+
+ 
+
+Then the parameters   are updated by 
+  
+ 
+
+  Eq zt st mt   mt  zt  st 
+
+  log   zt st  mt 
+
+ 
+
+   
+ 
+
+  mt      
+
+ 
+
+  st 
+
+  log       
+ 
+ 
+
+ 
+ st  mt 
+
+   
+
+ cid 
+
+ 
+
+ 
+
+However  this gradient estimator has   large variance because the learning signal   mt      
+  st  relies on samples
+from the proposal distribution   zt st  mt  To reduce the
+variance during inference  we follow the REINFORCE algorithm  Mnih et al    Mnih   Gregor    and
+introduce two baselines   and   st  the centered learning signal and input dependent baseline respectively to
+help reduce the variance    is   learnable constant and
+  st    MLP st  During training  the two baselines are
+updated by minimising the distance 
+
+Lb  
+
+  mt      
+
+ 
+
+  st          st 
+
+ 
+
+ cid 
+
+ cid 
+
+ cid 
+
+and the gradient          can be rewritten as
+  
+ 
+
+  st     st 
+
+   mt      
+
+   
+ 
+
+ 
+
+  log       
+ 
+ 
+
+ 
+
+ st  mt 
+
+ 
+
+ 
+
+  SemiSupervision
+
+Despite the steps described above for reducing the variance 
+there remain two major dif culties in learning latent intentions in   completely unsupervised manner    the high
+variance of the inference network prevents it from generating sensible intention samples in the early stages of training  and   the overly strong discriminative power of the
+LSTM language model is prone to the disconnection phenomenon between the LSTM decoder and the rest of the
+components whereby the decoder learns to ignore the samples and focuses solely on optimising the language model 
+To ensure more stable training and prevent disconnection 
+  semisupervised learning technique is introduced 
+Inferring the latent intentions underlying utterances is similar to an unsupervised clustering task  Standard clustering
+algorithms can therefore be used to preprocess the corpus
+and generate automatic labels  zt for part of the training examples  mt  st   zt       Then when the model is trained
+on the unlabeled examples  mt  st       we optimise it
+against the modi ed variational lower bound given in Equation  
+    
+
+Eq zt st mt   log   mt zt  st 
+   DKL   zt st  mt zt st   
+However  when the model is updated based on examples
+from the labeled set  mt  st   zt       we treat the labeled
+intention  zt as an observed variable and train the model by
+maximising the joint loglikelihood 
+    
+
+log    mt   zt  st   zt st     zt st  mt 
+
+ cid 
+
+ cid 
+
+ mt st  
+
+ mt   zt st  
+
+ 
+The  nal joint objective function can then be written as
+  cid             where   controls the tradeoff between
+the supervised and unsupervised examples 
+
+  Reinforcement Learning
+
+One of the main purposes of learning interpretable  discrete
+latent intention inside   dialogue system is to be able to
+control and re ne the model   behaviour with operational
+experience  The learnt generative network  zt st  encodes the policy discovered from the underlying data distribution but this is not necessarily optimal for any speci  
+task  Since  zt st  is   parameterised policy network
+itself  any policy gradientbased reinforcement learning algorithm  Williams    Konda   Tsitsiklis    can be
+
+Latent Intention Dialogue Models
+
+used to  netune the initial policy against other objective
+functions that we are more interested in 
+Based on the initial policy  zt st  we revisit the training dialogues and update parameters based on the following strategy  when encountering unlabeled examples   at
+turn   the system samples an action from the learnt policy
+     zt st  and receives   reward     
+    
+  Conditioning
+on these  we can directly  netune   subset of the model
+parameters  cid  by the policy gradient method 
+
+ 
+
+ID  
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+content words
+thank  goodbye
+welcome  goodbye
+phone  address     phone   address 
+address     address 
+located  area     area 
+area  would  like
+food  serving  restaurant     food 
+help  anything  else
+
+  
+ cid     
+
+ 
+
+    
+ 
+
+  log      
+
+ 
+
+ cid 
+
+ st 
+
+ 
+
+Table   An example of the automatically labeled response seed
+set for semisupervised learning during variational inference 
+
+ cid 
+
+ 
+
+where  cid                 is the MLP that parameterises the policy network  Equation   However  when  
+labeled example     is encountered we force the model to
+take the labeled action     
+     zt and update the parameters
+by Equation   as well  Unlike Li et al     where the
+whole model is re ned endto end using RL  updating only
+ cid  effectively allows us to re ne only the decisionmaking
+of the system and avoid the problem of over tting 
+
+  Experiments
+  Dataset   Setup for Goaloriented Dialogue
+We explored the properties of the LIDM model  using the
+CamRest  corpus  collected by Wen et al   in
+which the task of the system is to assist users to  nd  
+restaurant in the Cambridge  UK area  The corpus was collected based on   modi ed Wizard of Oz  Kelley   
+online data collection  Workers were recruited on Amazon
+Mechanical Turk and asked to complete   task by carrying
+out   conversation  alternating roles between   user and  
+wizard  There are three informable slots  food  pricerange 
+area  that users can use to constrain the search and six requestable slots  address  phone  postcode plus the three
+informable slots  that the user can ask   value for once  
+restaurant has been offered  There are   dialogues in the
+dataset  including both  nished and un nished dialogues 
+and approximately   conversational turns in total  The
+database contains   unique restaurants 
+To make   direct comparison with prior work we follow
+the same experimental setup as in Wen et al    
+The corpus was partitioned into training  validation  and
+test sets in the ratio   The LSTM hidden layer sizes
+were set to   and the vocabulary size is around   after
+preprocessing  to remove rare words and words that can
+be delexicalised  All the system components were trained
+jointly by  xing the pretrained belief trackers and the discrete database operator with the model   latent intention
+
+ Will be available at https github com shawnwun NNDIAL
+ https www repository cam ac uk handle 
+
+size   set to     and   respectively  The tradeoff
+constants   and   were both set to   To produce selflabeled response clusters for semisupervised learning of
+the intentions  we  rstly removed function words from all
+the responses and clustered them according to their content
+words  We then assigned the responses in the ith frequent
+cluster to the ith latent dimension as its supervised set 
+This results in about          to         
+labeled responses across the whole dataset  An example
+of the resulting seed set is shown in Table   During inference we carried out stochastic estimation by taking one
+sample for estimating the stochastic gradients  The model
+is trained by Adam  Kingma   Ba    and tuned  early
+stopping  hyperparameters  on the heldout validation set 
+We alternately optimised the generative model and the inference network by  xing the parameters of one while updating the parameters of the other 
+During reinforcement  netuning  we generated   sentence
+mt from the model to replace the ground truth  mt at each
+turn and de ne an immediate reward as whether mt can
+improve the dialogue success  Su et al    relative to
+ mt  plus the sentence BLEU score  Auli   Gao   
+
+rt       sBLEU mt   mt   
+
+mt improves
+  mt degrades
+ 
+
+otherwise
+
+ 
+
+ 
+
+where the constant   was set to   We  netuned the
+model parameters using RL for only   epochs  During testing  we greedily selected the most probable intention and
+applied beam search with the beamwidth set to   when decoding the response  The decoding criterion was the average logprobability of tokens in the response  We then evaluated our model on task success rate  Su et al    and
+BLEU score  Papineni et al    as in Wen et al  
+  in which the model is used to predict each system
+response in the heldout test set 
+
+Latent Intention Dialogue Models
+
+Model
+
+Ground Truth
+Ground Truth
+
+Success   BLEU
+
+ 
+
+ 
+
+Published Models  Wen et al   
+
+NDM
+NDM Att
+NDM Att SS
+
+LIDM Models
+
+LIDM       
+LIDM       
+LIDM       
+
+LIDM Models   RL
+
+LIDM         RL
+LIDM         RL
+LIDM         RL
+
+ 
+ 
+ 
+
+ 
+ 
+ 
+
+ 
+ 
+ 
+
+ 
+ 
+ 
+
+ 
+ 
+ 
+
+ 
+ 
+ 
+
+Table   Corpusbased Evaluation 
+
+  Experiments on Goaloriented Dialogue
+
+Table   presents the results of the corpusbased evaluation 
+The Ground Truth block shows the two metrics when we
+compute them on the humanauthored responses  This sets
+  gold standard for the task  In the Published Models block 
+the results for the three baseline models were borrowed
+from Wen et al   they are    the vanilla neural dialogue model  NDM    NDM plus an attention mechanism on the belief trackers  and   the attentive NDM
+with selfsupervised subtask neurons  The results of the
+LIDM model with and without RL  netuning are shown
+in the LIDM Models and the LIDM Models   RL blocks 
+respectively  As can be seen  the initial policy learned by
+ tting the latent intention to the underlying data distribution yielded reasonably good results on BLEU but did not
+perform well on task success when compared to their deterministic counterparts  block          This may be due to
+the fact that the variational lower bound of the dataset was
+optimised rather than task success during variational inference  However  once RL was applied to optimise the success rate as part of the reward function  Equation   during the  netuning phase  the resulting LIDM RL models
+outperformed the three baselines in terms of task success
+without signi cantly sacri cing BLEU  block         
+In order to assess the human perceived performance  we
+evaluated the three models   NDM    LIDM  and  
+LIDM RL by recruiting paid subjects on Amazon Mechanical Turk  Each judge was asked to follow   task and
+carried out   conversation with the machine  At the end of
+each conversation the judges were asked to rate and compare the model   performance  We assessed the subjective
+
+ Note that both NDM Att SS and LIDM use selfsupervised
+
+information
+
+Metrics
+Success
+Comprehension
+Naturalness
+  of Turns
+     
+
+NDM LIDM LIDM RL
+   
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+Table   Human evaluation  The signi cance test is based on  
+twotailed studentt test  between NDM and LIDMs 
+
+success rate  the perceived comprehension ability and the
+naturalness of responses on   scale of   to   For each
+model  we collected   dialogues and averaged the scores 
+During human evaluation  we sampled from the top  intentions of the LIDM models and decoded   response based
+on the sample  The result is shown in Table   One interesting fact to note is that although the LIDM did not perform
+well on the corpusbased task success metric  the human
+judges rated its subjective success almost indistinguishably
+from the others  This discrepancy between the two experiments arises mainly from    aw in the corpusbased success metric in that it favors greedy policies because the user
+side behaviours are  xed rather than interactional  Despite
+the fact that LIDMs are considered only marginally better
+than NDM on subjective success  the LIDMs do outperform NDM on both comprehension and naturalness scores 
+This is because the proposed LIDM models can better capture multiple modes in the communicative intention and
+thereby respond more naturally by sampling from the latent intention variable 
+Three example conversations are shown between   human
+judge and   machine  one from LIDM in Table   and two
+from LIDM RL in Table   respectively  The results are
+displayed one exchange per block  Each induced latent intention is shown by   tuple  index  probability  followed
+by   decoded response  and the sample dialogues were produced by following the responses highlighted in bold  As
+can be seen  the LIDM shown in Table   clearly has multiple modes in the distribution over the learned intention
+latent variable  and what it represents can be easily interpreted by the response generated  However  some intentions  such as intent   can result in very different responses
+under different dialogue states even though they were supervised by   small response set as shown in Table   This
+is mainly because of the variance introduced during variational inference  Finally  when comparing Table   and
+Table   we can observe the difference between the two dialogue strategies  the LIDM  by inferring its policy from
+the supervised dataset  re ects the diverse set of modes in
+the underlying distribution  whereas the LIDM RL  which
+
+ The system tries to provide as much information as possible
+in the early turns  in case the  xed user side behaviours   few
+turns later do not    the scenario the system originally planned 
+
+Latent Intention Dialogue Models
+
+  am sorry   there are no indonesian restaurants in the area   would you like something else  
+there are no restaurants serving indonesian kind of food  
+
+there are   restaurants in the east side of town   would you like their address  
+curry prince serves indian cuisine  
+
+ 
+ 
+  what location would you like  
+
+ 
+ 
+  what area would you like  
+
+Hi      hungry for some Indonesian
+   
+ 
+ 
+Oh no  How about Indian 
+   
+ 
+ 
+East side please
+   
+ 
+ 
+yes   the address and phone number please
+   
+ 
+   
+
+ 
+ 
+ 
+
+ 
+ 
+ 
+
+Human  
+Machine 
+
+Human  
+Machine 
+
+Human  
+Machine 
+
+Human  
+Machine 
+
+Human  
+Machine 
+
+curry prince is   indian restaurant in the east side of town   would you like their telephone number  
+curry prince is an indian restaurant in the east of town and the number is      
+curry prince serves indian type of cuisine and is located in the east part of town  
+
+the address is   newmarket road fen ditton and the phone is      
+the address for curry prince is   newmarket road fen ditton and the phone number is      
+curry prince is located at   newmarket road fen ditton and their phone is       is there
+anything else   can help you with  
+
+Okay  thank you goodbye
+   
+   
+   
+   
+
+ 
+ 
+ 
+ 
+
+thank you   goodbye  
+goodbye  
+you are welcome   goodbye  
+thank you for using the cambridge restaurant system   goodbye  
+
+Table     sample dialogue from the LIDM     model  one exchange per block  Each latent intention is shown by   tuple  index 
+probability  followed by   decoded response  The sample dialogue was produced by following the responses highlighted in bold 
+
+re ned its strategy using RL  exhibits   much greedier behavior in achieving task success       in Table   in block
+      the LIDM RL agent provides the address and phone
+number even before the user asks  This is also supported
+by the human evaluation in Table   where LIDM RL has
+much shorter dialogues on average compared to the other
+two models 
+
+  Discussion
+Learning an endto end dialogue system is appealing but
+challenging because of the credit assignment problem  Discrete latent variable dialogue models such as LIDM are attractive because the latent variable can serve as an interface for decomposing the learning of language and the internal dialogue decisionmaking  This decomposition can
+effectively help us resolve the credit assignment problem
+where different learning signals can be applied to different submodules to update the parameters  In variational
+inference for discrete latent variables  the latent distribution is basically updated by the reward from the variational
+lower bound  While in reinforcement learning  the latent
+distribution       policy network  is updated by the rewards
+from dialogue success and sentence BLEU score  Hence 
+the latent variable bridges the different learning paradigms
+such as Bayesian learning and reinforcement learning and
+brings them together under the same framework  This
+framework provides   more robust neural networkbased
+approach than previous approaches because it does not depend solely on sequenceto sequence learning but instead
+
+explicitly models the hidden dialogue intentions underlying the user   utterances and allows the agent to directly
+learn   dialogue policy through interaction 
+
+  Related work
+Modeling chatbased dialogues  Serban et al    Shang
+et al    as   sequenceto sequence learning  Sutskever
+et al    problem is   common theme in the deep learning community  Vinyals and Le   has demonstrated  
+seq seqbased model trained on   huge amount of conversation corpora which learns interesting replies conditioned
+on different user queries  However  due to an inability
+to model dialogue context  these models generally suffer
+from the generic response problem  Li et al      Serban et al    Several approaches have been proposed to
+mitigate this issue  such as modeling the persona  Li et al 
+    reinforcement learning  Li et al      and introducing continuous latent variables  Serban et al    Cao
+  Clark    While in our case  we not only make use
+of the latent variable to inject stochasticity for generating
+natural and diverse machine responses but also model the
+hidden dialogue intentions explicitly  This combines the
+merits of reinforcement learning and generative models 
+At the other end of the spectrum  goaloriented dialogue
+systems typically adopt the POMDP framework  Young
+et al    and break down the development of the dialogue systems into   pipeline of modules  natural language understanding  Henderson    dialogue manage 
+
+Latent Intention Dialogue Models
+
+Human  
+Machine 
+
+Human  
+Machine 
+
+Human  
+Machine 
+
+Human  
+Machine 
+
+Human  
+Machine 
+
+  am sorry   there are no indonesian restaurants in the area   would you like something else  
+ 
+ 
+no restaurants in the part of town  
+  what part of town would you like  
+
+the gandhi is located at   regent street city centre and their telephone number is      
+the gandhi serves indian kind of food and is in the centre of town and is in the cheap price range  
+the gandhi is   indian restaurant in the centre location and is in the cheap price range  
+
+Hi      hungry for some Indonesian  
+   
+ 
+ 
+Oh no  How about Indian 
+ 
+ 
+ 
+Okay  thank you goodbye
+   
+   
+   
+
+ 
+ 
+ 
+
+ 
+ 
+ 
+
+thank you for using the cambridge restaurant system   goodbye  
+you are welcome   goodbye  
+is there anything else   can help you with  
+
+golden house is located at   lens eld road city centre and their number is      
+golden house is located at   lens eld road city centre and the number is       is there  
+golden house is located at   lens eld road city centre and their phone is      
+
+ 
+ 
+ 
+
+hey can   have some chinese cruisine in the centre   and   cheap one please
+ 
+   
+ 
+that is all
+   
+   
+ 
+
+thank you for using the cambridge restaurant system   goodbye  
+you are welcome   goodbye  
+have   nice day  
+
+ 
+ 
+ 
+
+Table   Two sample dialogues from the LIDM RL     model  one exchange per block  Comparing to Table   the RL agent
+demonstrates   much greedier behavior toward task success  This can be seen in block     block   in which the agent provides the
+address and phone number even before the user asks 
+
+ment  Ga si   et al    and natural language generation  Wen et al    These system modules communicate through   dialogue act formalism  Traum   
+which in effect constitute    xed set of handcrafted intentions  This limits the ability of such systems to scale to
+more complex tasks  In contrast  the LIDM directly infers
+all underlying dialogue intentions from data and can handle
+intention distributions with long tails by measuring similarities against the existing ones during variational inference 
+Modeling of endto end goaloriented dialogue systems has
+also been studied recently  Wen et al      Bordes
+  Weston    however  these models are typically deterministic and rely on decoder supervision signals to  netune   large set of model parameters 
+Much research has focused on combining different learning paradigms and signals to bootstrap performance  For
+example  semisupervised learning  Kingma et al   
+has been applied in the samplebased neural variational inference framework as   way to reduce sample variance  In
+practice  this relies on   discrete latent variable  Miao  
+Blunsom    Ko cisk   et al    as the vehicle for the
+supervision labels  As in reinforcement learning  which has
+been   very common learning paradigm in dialogue systems  Ga si   et al    Su et al    Li et al   
+the policy is also parameterised by   discrete set of actions 
+As   consequence  the LIDM  which parameterises the intention space via   discrete latent variable  can automatically enjoy the bene   of bootstrapping from signals coming from different learning paradigms 
+In addition  selfsupervised learning  Snow et al     or distant  weak
+
+supervision  as   simple way to generate automatic labels
+by heuristics is popular in many NLP tasks and has been
+applied to memory networks  Hill et al    and neural
+dialogue systems  Wen et al    recently  Since there
+is no additional effort required in labeling  it can also be
+viewed as   method for bootstrapping 
+
+  Conclusion
+In this paper  we have proposed   framework for learning
+dialogue intentions via discrete latent variable models and
+introduced the Latent Intention Dialogue Model  LIDM 
+for goaloriented dialogue modeling  We have shown that
+the LIDM can discover an effective initial policy from the
+underlying data distribution and is capable of revising its
+strategy based on an external reward using reinforcement
+learning  We believe this is   promising step forward for
+building autonomous dialogue agents since the learnt discrete latent variable interface enables the agent to perform
+learning using several differing paradigms  The experiments showed that the proposed LIDM is able to communicate with human subjects and outperforms previous published results 
+
+Acknowledgements
+TsungHsien Wen is supported by Toshiba Research Europe Ltd  Cambridge Research Laboratory  The authors
+would like to thank the members of the Cambridge Dialogue Systems Group for their valuable comments 
+
+Latent Intention Dialogue Models
+
+References
+Auli  Michael and Gao  Jianfeng  Decoder integration and
+expected bleu training for recurrent neural network language models  In ACL  Association for Computational
+Linguistics   
+
+Bahdanau  Dzmitry  Cho  Kyunghyun  and Bengio 
+Yoshua  Neural machine translation by jointly learning
+to align and translate  ICLR   
+
+Bordes  Antoine and Weston  Jason  Learning endto end
+
+goaloriented dialog  In ICLR   
+
+Bowman  Samuel    Vilnis  Luke  Vinyals  Oriol  Dai  Andrew      ozefowicz  Rafal  and Bengio  Samy  Generating sentences from   continuous space  arXiv preprint 
+ 
+
+Cao  Kris and Clark  Stephen  Latent variable dialogue
+
+models and their diversity  In EACL   
+
+Faruqui  Manaal  Dodge  Jesse  Jauhar  Sujay Kumar 
+Dyer  Chris  Hovy  Eduard  and Smith  Noah   
+Retro tting word vectors to semantic lexicons 
+In
+NAACLHLT  pp    Denver  Colorado  May 
+June   Association for Computational Linguistics 
+
+Ga si    Milica  Breslin  Catherine  Henderson  Matthew 
+Kim  Dongho  Szummer  Martin  Thomson  Blaise  Tsiakoulis  Pirros  and Young  Steve  Online policy optimisation of bayesian spoken dialogue systems via human
+interaction  In ICASSP   
+
+Henderson  Matthew  Machine learning for dialog state
+tracking    review  In Machine Learning in Spoken Language Processing Workshop   
+
+Henderson  Matthew  Thomson  Blaise  and Young  Steve 
+Wordbased dialog state tracking with recurrent neural
+In SigDial  pp    Philadelphia  PA 
+networks 
+       June   Association for Computational Linguistics 
+
+Higgins  Irina  Matthey  Loic  Pal  Arka  Burgess  Christopher  Glorot  Xavier  Botvinick  Matthew  Mohamed 
+Shakir  and Lerchner  Alexander  betavae  Learning basic visual concepts with   constrained variational framework  In ICLR   
+
+Hill  Felix  Bordes  Antoine  Chopra  Sumit  and Weston 
+Jason  The goldilocks principle  Reading children  
+In ICLR 
+books with explicit memory representations 
+ 
+
+Hochreiter  Sepp and Schmidhuber    urgen  Long short 
+
+term memory  Neural Computation   
+
+Karpathy  Andrej and FeiFei  Li  Deep visualsemantic
+alignments for generating image descriptions  In CVPR 
+ 
+
+Kelley  John    An iterative design methodology for userfriendly natural language of ce information applications  ACM Transaction on Information Systems   
+
+Kiddon  Chlo    Zettlemoyer  Luke  and Choi  Yejin  Globally coherent text generation with neural checklist models  In EMNLP  pp    Austin  Texas  November
+  Association for Computational Linguistics 
+
+Kingma  Diederik    and Ba  Jimmy  Adam    method
+for stochastic optimization  arXiv preprint   
+abs   
+
+Kingma  Diederik    and Welling  Max  Stochastic backpropagation and approximate inference in deep generative models  In ICML   
+
+Kingma  Diederik    Mohamed  Shakir  Rezende 
+Danilo    and Welling  Max  Semisupervised learning
+with deep generative models  In NIPS  pp   
+Curran Associates  Inc   
+
+Konda  Vijay    and Tsitsiklis  John   
+
+critic algorithms 
+  April  
+   
+
+On actorSIAM    Control Optim   
+doi 
+
+ISSN  
+
+Ko cisk    Tom      Melis    abor  Grefenstette  Edward 
+Dyer  Chris  Ling  Wang  Blunsom  Phil  and Hermann 
+Karl Moritz  Semantic parsing with semisupervised
+In EMNLP  pp   
+sequential autoencoders 
+Austin  Texas  November   Association for Computational Linguistics 
+
+Li  Jiwei  Galley  Michel  Brockett  Chris  Gao  Jianfeng 
+and Dolan  Bill    diversitypromoting objective funcIn NAACLHLT 
+tion for neural conversation models 
+pp    San Diego  California  June     Association for Computational Linguistics 
+
+Li  Jiwei  Galley  Michel  Brockett  Chris  Spithourakis 
+Georgios  Gao  Jianfeng  and Dolan  Bill    personabased neural conversation model  In ACL  pp   
+Berlin  Germany  August     Association for Computational Linguistics 
+
+Li  Jiwei  Monroe  Will  Ritter  Alan  Jurafsky  Dan  Galley  Michel  and Gao  Jianfeng  Deep reinforcement
+learning for dialogue generation  In EMNLP  pp   
+  Austin  Texas  November     Association for
+Computational Linguistics 
+
+Li  Jiwei  Miller  Alexander    Chopra  Sumit  Ranzato 
+Marc Aurelio  and Weston  Jason  Dialogue learning
+with humanin theloop  In ICLR   
+
+Latent Intention Dialogue Models
+
+Miao  Yishu and Blunsom  Phil  Language as   latent variable  Discrete generative models for sentence compression  In EMNLP  pp    Austin  Texas  November
+  Association for Computational Linguistics 
+
+Miao  Yishu  Yu  Lei  and Blunsom  Phil  Neural varia 
+
+tional inference for text processing  In ICML   
+
+Mnih  Andriy and Gregor  Karol  Neural variational infer 
+
+ence and learning in belief networks  In ICML   
+
+Mnih  Volodymyr  Heess  Nicolas  Graves  Alex  and
+kavukcuoglu  koray  Recurrent models of visual attention  In NIPS   
+
+Mrk si    Nikola 
+
+     eaghdha  Diarmuid  Wen  TsungHsien  Thomson  Blaise  and Young  Steve  Neural belief tracker  Datadriven dialogue state tracking  In ACL 
+Vancouver  Canada  August   Association for Computational Linguistics 
+
+Papineni  Kishore  Roukos  Salim  Ward  Todd  and Zhu 
+WeiJing  Bleu    method for automatic evaluation of
+machine translation  In ACL  pp    Philadelphia 
+Pennsylvania  USA  July   Association for Computational Linguistics 
+
+Serban  Iulian    Sordoni  Alessandro  Lowe  Ryan  Charlin  Laurent  Pineau  Joelle  Courville  Aaron  and Bengio  Yoshua    hierarchical latent variable encoderdecoder model for generating dialogues  arXiv preprint 
+   
+
+Serban  Iulian Vlad  Sordoni  Alessandro  Bengio  Yoshua 
+Courville  Aaron    and Pineau  Joelle  Hierarchical
+neural network generative models for movie dialogues 
+In AAAI   
+
+Shang  Lifeng  Lu  Zhengdong  and Li  Hang  Neural responding machine for shorttext conversation  In ACL 
+ 
+
+Silver  David  Huang  Aja  Maddison  Chris    Guez 
+Arthur  Sifre  Laurent  Van Den Driessche  George 
+Schrittwieser  Julian  Antonoglou  Ioannis  Panneershelvam  Veda  Lanctot  Marc  et al  Mastering the game of
+go with deep neural networks and tree search  Nature 
+   
+
+Snow  Rion  Jurafsky  Daniel  and Ng  Andrew    Learning
+syntactic patterns for automatic hypernym discovery  In
+NIPS   
+
+Su  PeiHao  Vandyke  David  Gasic  Milica  Kim 
+Dongho  Mrksic  Nikola  Wen  TsungHsien  and
+Young  Steve  Learning from real users  Rating dialogue
+success with neural networks for reinforcement learning
+in spoken dialogue systems  In Interspeech   
+
+Su  PeiHao  Gasic  Milica  Mrk si    Nikola  Rojas Barahona  Lina    Ultes  Stefan  Vandyke  David  Wen 
+TsungHsien  and Young  Steve  Online active reward
+learning for policy optimisation in spoken dialogue systems  In ACL  pp    Berlin  Germany  August
+  Association for Computational Linguistics 
+
+Sutskever  Ilya  Vinyals  Oriol  and Le  Quoc    Sequence
+In NIPS 
+
+to sequence learning with neural networks 
+ 
+
+Traum  David    Foundations of Rational Agency  chapter
+
+Speech Acts for Dialogue Agents  Springer   
+
+Vinyals  Oriol and Le  Quoc      neural conversational
+
+model  In ICML Deep Learning Workshop   
+
+Wen  TsungHsien  Gasic  Milica  Mrk si    Nikola  Su 
+PeiHao  Vandyke  David  and Young  Steve  Semantically conditioned lstmbased natural language generation for spoken dialogue systems  In EMNLP  pp   
+  Lisbon  Portugal  September   Association
+for Computational Linguistics 
+
+Wen  TsungHsien  Gasic  Milica  Mrk si    Nikola  Rojas Barahona  Lina    Su  PeiHao  Ultes  Stefan 
+Vandyke  David  and Young  Steve  Conditional generation and snapshot learning in neural dialogue systems 
+In EMNLP  pp    Austin  Texas  November
+  Association for Computational Linguistics 
+
+Wen  TsungHsien  Vandyke  David  Mrk si    Nikola 
+Ga si    Milica     RojasBarahona  Lina  Su  PeiHao 
+Ultes  Stefan  and Young  Steve    networkbased endto end trainable taskoriented dialogue system  In EACL 
+ 
+
+Weston  Jason    Dialogbased language learning  In NIPS 
+
+pp    Curran Associates  Inc   
+
+Williams  Ronald    Simple statistical gradientfollowing
+learning 
+ISSN
+
+algorithms for connectionist reinforcement
+Machine Learning    May  
+  doi   BF 
+
+Xu  Kelvin  Ba  Jimmy  Kiros  Ryan  Cho  Kyunghyun 
+Courville  Aaron  Salakhutdinov  Ruslan  Zemel 
+Richard  and Bengio  Yoshua  Show  attend and tell 
+Neural image caption generation with visual attention 
+In ICML   
+
+Young  Steve  Ga si    Milica  Thomson  Blaise  and
+Williams  Jason    Pomdpbased statistical spoken dialog systems    review  Proceedings of the IEEE   
+
+

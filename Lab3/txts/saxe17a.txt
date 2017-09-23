@@ -1,0 +1,1023 @@
+Hierarchy Through Composition with Multitask LMDPs
+
+Andrew    Saxe   Adam    Earle   Benjamin Rosman    
+
+Abstract
+
+Hierarchical architectures are critical
+to the
+scalability of reinforcement learning methods 
+Most current hierarchical frameworks execute actions serially  with macroactions comprising sequences of primitive actions  We propose   novel
+alternative to these control hierarchies based on
+concurrent execution of many actions in parallel 
+Our scheme exploits the guaranteed concurrent
+compositionality provided by the linearly solvable
+Markov decision process  LMDP  framework 
+which naturally enables   learning agent to draw
+on several macroactions simultaneously to solve
+new tasks  We introduce the Multitask LMDP
+module  which maintains   parallel distributed
+representation of tasks and may be stacked to form
+deep hierarchies abstracted in space and time 
+
+  Introduction
+Real world tasks unfold at   range of spatial and temporal
+scales  such that learning solely at the  nest scale is likely to
+be slow  Hierarchical reinforcement learning  HRL   Barto
+  Madadevan    Parr   Russell    Dietterich   
+attempts to remedy this by learning   nested sequence of
+ever more detailed plans  Hierarchical schemes have   number of desirable properties  Firstly  they are intuitive  as
+humans seldom plan at the level of raw actions  typically preferring to reason at   higher level of abstraction  Botvinick
+et al    RibasFernandes et al    Solway et al 
+  Secondly  they constitute one approach to tackling
+the curse of dimensionality  Bellman    Howard   
+In real world MDPs  the number of states typically grows
+dramatically in the size of   domain    similar curse of dimensionality af icts actions  such that   robot with multiple
+joints  for instance  must operate in the product space of
+
+ Center for Brain Science  Harvard University  School of
+Computer Science and Applied Mathematics  University of
+the Witwatersrand  Council for Scienti   and Industrial Research  South Africa  Correspondence to  Andrew    Saxe
+ asaxe fas harvard edu 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright   by
+the author   
+
+actions for each joint individually  Mausam   Weld   
+Finally  the  tasks  performed by an agent may come in
+great variety  and can also suffer from   curse of dimensionality    robot that learns policies to navigate to each of ten
+rooms would need to learn   choose   policies to navigate
+to the closer of each pair of rooms  Transferring learning
+across tasks is therefore vital  Taylor   Stone    Foster
+  Dayan    Drummond    Fern ndez   Veloso 
+  Bonarini et al    Barreto et al   
+Many HRL schemes rely on   serial call return procedure 
+in which temporally extended macroactions or  options 
+can call other  macro actions  In this sense  these schemes
+draw on   computer metaphor  in which   serial processor
+chooses sequential primitive actions  occasionally pushing
+or popping new macroactions onto   stack  The in uential
+options framework  Sutton et al    MAXQ method
+ Dietterich    Jonsson     mez    and the hierarchy of abstract machines  Parr   Russell    Burridge
+et al    all share this sequentialexecution structure 
+Concurrent MDPs  Mausam   Weld    relax the assumption of serial execution to allow multiple actions to be
+executed simultaneously at each time step  at the cost of  
+combinatorial increase in the size of the action space  In
+this paper  we develop   novel hierarchical scheme with  
+parallel and distributed execution structure that overcomes
+the combinatorial increase in action space by exploiting the
+guaranteed optimal compositionality afforded by the linearly solvable Markov decision process  LMDP  framework
+ Todorov    Kappen   
+We present   Multitask LMDP module that executes concurrent blends of previously learned tasks  Here we use
+the term  concurrent  or  parallel  to refer to  parallel distributed processing  or neural networklike methods that
+form weighted blends of many simple elements to achieve
+their aim  In standard schemes  if   robot arm has acquired
+policies to individually reach two points in some space  this
+knowledge typically does not aid it in optimally reaching to
+either point  However in our scheme  such behaviours can
+be expressed as different weighted task blends  such that
+an agent can simultaneously draw on several subpolicies
+to achieve goals not explicitly represented by any of the
+individual behaviours  including tasks the agent has never
+performed before 
+
+Hierarchy Through Composition with Multitask LMDPs
+
+Next we show how this Multitask LMDP module can be
+stacked  resulting in   hierarchy of more abstract modules
+that communicate distributed representations of tasks between layers  We give   simple theoretical analysis showing
+that hierarchy can yield qualitative ef ciency improvements
+in learning time and memory  Finally  we demonstrate the
+operation of the method on   navigation domain  and show
+that its multitasking ability can speed learning of new tasks
+compared to   traditional optionsbased agent 
+Our scheme builds on   variety of prior work  Like the options framework  Sutton et al    we build   hierarchy
+in time  Similar to MAXQ Value Decomposition  Dietterich    we decompose   target MDP into   hierarchy
+of smaller SMDPs which progressively abstract over states 
+From Feudal RL  we draw the idea of   managerial hierarchy in which higher layers prescribe goals but not details for
+lower layers  Dayan   Hinton    Most closely related
+to our scheme   Jonsson     mez    develop   MAXQ
+decomposition within the LMDP formalism  see Supplementary Material for extended discussion  Our method
+differs from all of the above approaches in permitting  
+graded  concurrent blend of tasks at each level  and developing   uniform  stackable module capable of performing  
+variety of tasks 
+
+  The Multitask LMDP    compositional
+
+action module
+
+Our goal in this paper is to describe    exible actionselection module which can be stacked to form   hierarchy  such that the full action at any given point in time is
+composed of the concurrent composition of subactions
+within subactions  By analogy to perceptual deep networks  restricted Boltzmann machines  RBMs  form   component module from which   deep belief network can be
+constructed by layerwise stacking  Hinton et al    Hinton   Salakhutdinov    We seek   similar module in
+the context of action or control  This section describes the
+module  the Multitask LMDP  MLMDP  before turning to
+how it can be stacked  Our formulation relies on the linearly
+solvable Markov decision process  LMDP  framework introduced by Todorov    see also Kappen   The
+LMDP differs from the standard MDP formulation in fundamental ways  and enjoys   number of special properties 
+We  rst brie   describe the canonical MDP formulation  in
+order to explain what the switch to the LMDP accomplishes
+and why it is necessary 
+
+  Canonical MDPs
+In its standard formulation  an MDP is   fourtuple    
+ cid            cid  where   is   set of states    is   set of discrete
+actions    is   transition probability distribution        
+            and   is an expected instantaneous reward
+
+function                The goal is to determine an
+optimal policy           specifying which action to
+take in each state  This optimal policy can be computed
+from the optimal value function            de ned as
+the expected reward starting in   given state and acting
+optimally thereafter  The value function obeys the wellknown Bellman optimality condition
+
+        max
+
+    cid          cid   cid 
+
+     cid           cid cid   
+
+ 
+
+This formalism is the basis of most practical and theoretical
+studies of decisionmaking under uncertainty and reinforcement learning  Bellman    Howard    Sutton  
+Barto    See  for instance   Mnih et al    Lillicrap
+et al    Levine et al    for recent successes in
+challenging domains 
+For the purposes of   compositional hierarchy of actions 
+this formulation presents two key dif culties 
+
+  Mutually exclusive sequential actions First 
+
+the
+agent   actions are discrete and execute serially  Exactly one  macro action operates at any given time
+point  Hence there is no way to build up an action at  
+single time point out of several  subactions  taken in
+parallel  For example    control signal for   robotic arm
+cannot be composed of   control decision for the elbow
+joint    control decision for the shoulder joint  and  
+control decision for the gripper  each taken in parallel
+and combined into   complete action for   speci   time
+point 
+
+  Noncomposable optimal policies The maximization
+in Eqn    over   discrete set of actions is nonlinear  This means that optimal solutions  in general  do
+not compose in   simple way  Consider two standard
+MDPs       cid            cid  and       cid            cid 
+which have identical state spaces  action sets  and transition dynamics but differ in their instantaneous rewards    and    These may be solved independently
+to yield value functions    and    But the value function of the MDP       cid                 cid  whose
+instantaneous rewards are the sum of the  rst two  is
+not              In general  there is no simple
+procedure for deriving    from    and    it must
+be found by solving Eqn    again 
+
+  Linearly Solvable MDPs
+The LMDP  Todorov      Dvijotham   Todorov   
+Todorov      Dvijotham   Todorov    is de ned
+by   threetuple      cid         cid  where   is   set of
+states    is   passive transition probability distribution
+                and   is an expected instantaneous reward function            The LMDP framework replaces
+
+Hierarchy Through Composition with Multitask LMDPs
+
+the traditional discrete set of actions   with   continuous
+probability distribution over next states                
+That is  the  control  or  action  chosen by the agent in state
+  is   transition probability distribution over next states 
+     The controlled transition distribution may be interpreted either as directly constituting the agent   dynamics 
+or as   stochastic policy over deterministic actions which
+affect state transitions  Todorov    Jonsson     mez 
+  Swapping   discrete action space for   continuous action space is   key change which will allow for concurrently
+selected  subactions  and distributed representations 
+The LMDP framework additionally posits   speci   form
+for the cost function to be optimized  The instantaneous
+reward for taking action      in state   is
+
+                  KL             
+
+ 
+
+where the KL term is the KullbackLeibler divergence between the selected control transition probability and the
+passive dynamics  This term implements   control cost  encouraging actions to conform to the natural passive dynamics of   domain  In   cartpole balancing task  for instance 
+the passive dynamics might encode the transition structure
+arising from physics in the absence of control input  Any
+deviation from these dynamics will require energy input 
+In more abstract settings  such as navigation in      grid
+world  the passive dynamics might encode   random walk 
+expressing the fact that actions cannot transition directly
+to   far away goal but only move some limited distance
+in   speci   direction  Examples of standard benchmark
+domains in the LMDP formalism are provided in the Supplementary Material  The parameter   in Eqn    acts to
+tradeoff the relative value between the reward of being in  
+state and the control cost  and determines the stochasticity
+of the resulting policies 
+We consider  rstexit problems  see Dvijotham   Todorov
+  for in nite horizon and other formulations  in which
+the state space is divided into   set of absorbing boundary
+states       and nonabsorbing interior states        with
+           In this formulation  an agent acts in   variable
+length episode that consists of   series of transitions through
+interior states before    nal transition to   boundary state
+which terminates the episode  The goal is to  nd the policy
+   which maximizes the total expected reward across the
+episode 
+
+     argmaxaE st   st 
+
+   min   st   cid cid   
+
+  st             cid   
+
+ 
+Because of the carefully chosen structure of the reward
+        and the continuous action space  the Bellman equation simpli es greatly  In particular de ne the desirability
+function        eV     as the exponentiated costto go
+
+function  and de ne        eR    to be the exponentiated
+instantaneous rewards  Let   be the number of states  and
+Ni and Nb be the number of internal and boundary states
+respectively  Represent      and      with Ndimensional
+column vectors   and    and the transition dynamics      cid   
+with the Nby Ni matrix     where column index corresponds to   and row index corresponds to   cid  Let zi and zb
+denote the partition of   into internal and boundary states 
+respectively  and similarly for qi and qb  Finally  let Pi denote the Niby Ni submatrix of   containing transitions
+between internal states  and Pb denote the Nbby Ni submatrix of   containing transitions from internal states to
+boundary states 
+As shown in Todorov     the Bellman equation in this
+setting reduces to
+
+     MiP  
+
+   zi   MiP  
+
+  zb
+
+ 
+
+where Mi   diag qi  and  because boundary states are
+absorbing  zb   qb  The exponentiated Bellman equation
+is hence   linear system  the key advantage of the LMDP
+framework    variety of special properties  ow from the
+linearity of the Bellman equation  which we exploit in the
+following 
+Solving for zi may be done explicitly as zi       
+  zb or via the ziteration method  akin to
+   MiP  
+MiP  
+value iteration 
+
+zi   MiP  
+
+  zi   MiP  
+
+  zb 
+
+ 
+
+Finally  the optimal policy may be computed in closed form
+as
+
+    cid     
+normalizing
+
+     cid       cid 
+
+      
+constant
+
+ 
+
+ 
+
+where
+
+the
+
+      
+
+Detailed derivations of
+
+ 
+these results are given in  Todorov        Dvijotham   Todorov 
+ 
+Intuitively  the hard maximization of Eqn   
+
+ cid   cid       cid       cid 
+has been replaced by   soft maximization log cid  exp 
+
+and the continuous action space enables closed form
+computation of the optimal policy 
+Compared to the standard MDP formulation  the LMDP has
+
+  Continuous concurrent actions Actions are expressed as transition probabilities over next states  such
+that these transition probabilities can be in uenced by
+many subtasks operating in parallel  and in   graded
+fashion 
+
+  Compositional optimal policies In the LMDP  linearly blending desirability functions yields the correct
+composite desirability function  Todorov        In
+particular  consider two LMDPs       cid       qi    
+  cid 
+
+Hierarchy Through Composition with Multitask LMDPs
+
+Figure   Distributed task representations with the Multitask LMDP      Example  DOF arm constrained to the plane with state space
+consisting of shoulder and elbow joint angles  cid     cid          respectively        novel task is speci ed as an instantaneous reward
+function over terminal states  In this example  the task  reach to the black rectangle  is encoded by rewarding any terminal state with the
+end effector in black rectangle  all successful con gurations shown   cg  Solutions via the LMDP  Top row  Instantaneous rewards in
+the space of joint angles  Middle row  Optimal desirability function with sample trajectories starting at green circles   nishing at red
+circles  Bottom row  Strobe plot of sample trajectories in Cartesian space  Trajectories start at green circle  end at red circle  Column    
+The linear Bellman equation is solved for this particular instantaneous boundary reward structure to obtain the optimal value function 
+Columns  dg  Solution via compositional Multitask LMDP  The instantaneous reward structure is expressed as   weighted combination
+of previouslylearned subtasks  df  here chosen to be navigation to speci   points in state space      Because of the linearity of the
+Bellman equation  the resulting combined value function is optimal  and the system can act instantly despite no explicit training on the
+reachto rectangle task  The same  xed basis set can be used to express   wide variety of tasks  reach to   cross  reach to   circle  etc 
+
+  and   
+
+and       cid       qi    
+  cid  which have identical state
+spaces  transition dynamics  and internal reward structures  but differ in their exponentiated boundary rewards   
+    These may be solved independently to
+yield desirability functions    and    The desirability
+function of the LMDP       cid       qi     
+  cid 
+       
+whose instantaneous rewards are   weighted sum of
+the  rst two  is simply                This property follows from the linearity of Eqn    and is the
+foundation of our hierarchical scheme 
+
+  The Multitask LMDP
+To build   multitask action module  we exploit this compositionality to build   basis set of tasks  Foster   Dayan 
+  Ruvolo   Eaton    Schaul et al    Pan et al 
+  Borsa et al    Suppose that we learn   set of
+LMDPs Lt    cid       qi  qt
+  cid          Nt which all share
+the same state space  passive dynamics  and internal rewards 
+but differ in their instantaneous exponentiated boundary reward structure qt
+           Nt  Each of these LMDPs
+corresponds to   different task  de ned by its boundary reward structure  in the same overall state space  see Taylor
+  Stone   for an overview of this and other notions
+of transfer and multitask learning  We denote the Multitask LMDP module   formed from these Nt LMDPs
+as      cid       qi  Qb cid  Here the Nbby Nt task basis matrix Qb  cid   
+   cid  encodes   library of component
+
+tasks in the MLMDP  Solving each component LMDP yields
+
+    qNt
+
+    
+
+    
+ 
+
+   cid  for the
+
+the corresponding desirability functions zt
+            Nt
+for each task  which can also be formed into the Niby 
+  zNt
+
+Nt desirability basis matrix Zi  cid   
+
+multitask module 
+When we encounter   new task de ned by   novel instantaneous exponentiated reward structure    if we can express it as   linear combination of previously learned tasks 
+    Qbw  where     RNt is   vector of task blend weights 
+then we can instantaneously derive its optimal desirability
+function as zi   Ziw  This immediately yields the optimal
+action through Eqn    Hence an MLMDP agent can act
+optimally even in neverbefore seen tasks  provided that
+the new task lies in the subspace spanned by previously
+learned tasks  This approach is an offpolicy variant on
+the successor representation method of Dayan   It
+differs by yielding the optimal value function  rather than
+the value function under   particular policy   and allows
+arbitrary boundary rewards for the component tasks  the
+SR implicitly takes these to be   positive reward on just
+one state  Also related is the successor feature approach of
+Barreto et al    which permits performance guarantees
+for transfer to new tasks  With successor features  new tasks
+must have rewards that are close in Euclidean distance to
+prior tasks  whereas here we require only that they lie in the
+span of prior tasks 
+More generally  if the target task   is not an exact linear
+combination of previously learned tasks  an approximate
+
+episode   argmaxaEst   st min   st   Xt   st       BecauseofthecarefullychosenstructureoftherewardR     andthecontinuousactionspace the Bellmanequationsimpli esgreatly Inparticularde nethedesirabilityfunctionz   eV   as theexponentiatedcostto gofunction andde neq   eR   tobetheexponentiatedinstanta neousrewards Letnbethenumberofstates andniandnbbethenumberofinternalandboundary statesrespectively Representz   andq   withndimensionalcolumnvectorszandq andthe transitiondynamicsP     withthenby nimatrixP wherecolumnindexcorrespondstosand rowindexcorrespondstos Letziandzbdenotethepartitionofzintoboundaryandinternalstates respectively andsimilarlyforqiandqb Finally letPidenotetheniby nisubmatrixofPcontaining transitionsbetweeninternalstates andPbdenotethenbby nisubmatrixofPcontainingtransitions frominternalstatestoboundarystates Asshownin theBellmanequationinthissettingreducesto   QiPi zi QiPbzb whereQi diag qi and becauseboundarystatesareabsorbing zb qb Theexponentiated Bellmanequationishencealinearsystem thekeyadvantageoftheLMDPframework Avarietyof specialproperties owfromthelinearityoftheBellmanequation whichweexploitinthefollowing Solvingforzimaybedoneexplicitlyaszi   QiPi QiPbzborviatheziterationmethod akintovalueiteration zi QiPizi QiPbzb Finally theoptimalpolicymaybecomputedinclosedformas                       wherethenormalizingconstantG     Ps           Detailedderivationsoftheseresults aregivenin Intuitively thehardmaximizationofEqn hasbeenreplacedbyasoft maximizationlog Pexp andthecontinuousactionspaceenablesclosedformcomputationof theoptimalpolicy Concurrentsubactionsanddistributedrepresentationsoftasks OurhierarchicalschemeisbuiltontwokeypropertiesoftheLMDP Continuousconcurrentactions Compositionaloptimalpolicies Thespeci cformofEqn canseemtolimittheapplicabilityoftheLMDPframework Yetas showninavarietyofrecentwork andintheexamplesgivenlater moststandarddomainscan betranslatedtotheMDPframework andthereexistsageneralprocedureforembeddingtraditional MDPsintheLMDPframework Moregenerally wesuggestthatmostdomainsofinteresthavesomenotionof ef cient actions makingacontrolcostareasonablynaturalanduniversalphenomenon Indeed itispossiblethat thestandardMDPformulationisoverlygeneral discardingusefulstructureinmostrealworld domains namely apreferenceforef cientactions StandardMDPformulationscommonlyplace smallnegativerewardsoneachactiontoinstantiatethisef ciencygoal buttheyretainthe exibility to forinstance preferenergeticallyinef cienttrajectoriesbyplacingpositiverewardsoneach action Thedrawbackofthis exibilityistheunstructuredmaximizationofEqn whichprevents compositionality The episode   argmaxaEst   st min   st   Xt   st       BecauseofthecarefullychosenstructureoftherewardR     andthecontinuousactionspace the Bellmanequationsimpli esgreatly Inparticularde nethedesirabilityfunctionz   eV   as theexponentiatedcostto gofunction andde neq   eR   tobetheexponentiatedinstanta neousrewards Letnbethenumberofstates andniandnbbethenumberofinternalandboundary statesrespectively Representz   andq   withndimensionalcolumnvectorszandq andthe transitiondynamicsP     withthenby nimatrixP wherecolumnindexcorrespondstosand rowindexcorrespondstos Letziandzbdenotethepartitionofzintoboundaryandinternalstates respectively andsimilarlyforqiandqb Finally letPidenotetheniby nisubmatrixofPcontaining transitionsbetweeninternalstates andPbdenotethenbby nisubmatrixofPcontainingtransitions frominternalstatestoboundarystates Asshownin theBellmanequationinthissettingreducesto   QiPi zi QiPbzb whereQi diag qi and becauseboundarystatesareabsorbing zb qb Theexponentiated Bellmanequationishencealinearsystem thekeyadvantageoftheLMDPframework Avarietyof specialproperties owfromthelinearityoftheBellmanequation whichweexploitinthefollowing Solvingforzimaybedoneexplicitlyaszi   QiPi QiPbzborviatheziterationmethod akintovalueiteration zi QiPizi QiPbzb Finally theoptimalpolicymaybecomputedinclosedformas                       wherethenormalizingconstantG     Ps           Detailedderivationsoftheseresults aregivenin Intuitively thehardmaximizationofEqn hasbeenreplacedbyasoft maximizationlog Pexp andthecontinuousactionspaceenablesclosedformcomputationof theoptimalpolicy Concurrentsubactionsanddistributedrepresentationsoftasks OurhierarchicalschemeisbuiltontwokeypropertiesoftheLMDP Continuousconcurrentactions Compositionaloptimalpolicies Thespeci cformofEqn canseemtolimittheapplicabilityoftheLMDPframework Yetas showninavarietyofrecentwork andintheexamplesgivenlater moststandarddomainscan betranslatedtotheMDPframework andthereexistsageneralprocedureforembeddingtraditional MDPsintheLMDPframework Moregenerally wesuggestthatmostdomainsofinteresthavesomenotionof ef cient actions makingacontrolcostareasonablynaturalanduniversalphenomenon Indeed itispossiblethat thestandardMDPformulationisoverlygeneral discardingusefulstructureinmostrealworld domains namely apreferenceforef cientactions StandardMDPformulationscommonlyplace smallnegativerewardsoneachactiontoinstantiatethisef ciencygoal buttheyretainthe exibility to forinstance preferenergeticallyinef cienttrajectoriesbyplacingpositiverewardsoneach action Thedrawbackofthis exibilityistheunstructuredmaximizationofEqn whichprevents compositionality The episode   argmaxaEst   st min   st   Xt   st       BecauseofthecarefullychosenstructureoftherewardR     andthecontinuousactionspace the Bellmanequationsimpli esgreatly Inparticularde nethedesirabilityfunctionz   eV   as theexponentiatedcostto gofunction andde neq   eR   tobetheexponentiatedinstanta neousrewards Letnbethenumberofstates andniandnbbethenumberofinternalandboundary statesrespectively Representz   andq   withndimensionalcolumnvectorszandq andthe transitiondynamicsP     withthenby nimatrixP wherecolumnindexcorrespondstosand rowindexcorrespondstos Letziandzbdenotethepartitionofzintoboundaryandinternalstates respectively andsimilarlyforqiandqb Finally letPidenotetheniby nisubmatrixofPcontaining transitionsbetweeninternalstates andPbdenotethenbby nisubmatrixofPcontainingtransitions frominternalstatestoboundarystates Asshownin theBellmanequationinthissettingreducesto   QiPi zi QiPbzb whereQi diag qi and becauseboundarystatesareabsorbing zb qb Theexponentiated Bellmanequationishencealinearsystem thekeyadvantageoftheLMDPframework Avarietyof specialproperties owfromthelinearityoftheBellmanequation whichweexploitinthefollowing Solvingforzimaybedoneexplicitlyaszi   QiPi QiPbzborviatheziterationmethod akintovalueiteration zi QiPizi QiPbzb Finally theoptimalpolicymaybecomputedinclosedformas                       wherethenormalizingconstantG     Ps           Detailedderivationsoftheseresults aregivenin Intuitively thehardmaximizationofEqn hasbeenreplacedbyasoft maximizationlog Pexp andthecontinuousactionspaceenablesclosedformcomputationof theoptimalpolicy Concurrentsubactionsanddistributedrepresentationsoftasks OurhierarchicalschemeisbuiltontwokeypropertiesoftheLMDP Continuousconcurrentactions Compositionaloptimalpolicies Thespeci cformofEqn canseemtolimittheapplicabilityoftheLMDPframework Yetas showninavarietyofrecentwork andintheexamplesgivenlater moststandarddomainscan betranslatedtotheMDPframework andthereexistsageneralprocedureforembeddingtraditional MDPsintheLMDPframework Moregenerally wesuggestthatmostdomainsofinteresthavesomenotionof ef cient actions makingacontrolcostareasonablynaturalanduniversalphenomenon Indeed itispossiblethat thestandardMDPformulationisoverlygeneral discardingusefulstructureinmostrealworld domains namely apreferenceforef cientactions StandardMDPformulationscommonlyplace smallnegativerewardsoneachactiontoinstantiatethisef ciencygoal buttheyretainthe exibility to forinstance preferenergeticallyinef cienttrajectoriesbyplacingpositiverewardsoneach action Thedrawbackofthis exibilityistheunstructuredmaximizationofEqn whichprevents compositionality The episode   argmaxaEst   st min   st   Xt   st       BecauseofthecarefullychosenstructureoftherewardR     andthecontinuousactionspace the Bellmanequationsimpli esgreatly Inparticularde nethedesirabilityfunctionz   eV   as theexponentiatedcostto gofunction andde neq   eR   tobetheexponentiatedinstanta neousrewards Letnbethenumberofstates andniandnbbethenumberofinternalandboundary statesrespectively Representz   andq   withndimensionalcolumnvectorszandq andthe transitiondynamicsP     withthenby nimatrixP wherecolumnindexcorrespondstosand rowindexcorrespondstos Letziandzbdenotethepartitionofzintoboundaryandinternalstates respectively andsimilarlyforqiandqb Finally letPidenotetheniby nisubmatrixofPcontaining transitionsbetweeninternalstates andPbdenotethenbby nisubmatrixofPcontainingtransitions frominternalstatestoboundarystates Asshownin theBellmanequationinthissettingreducesto   QiPi zi QiPbzb whereQi diag qi and becauseboundarystatesareabsorbing zb qb Theexponentiated Bellmanequationishencealinearsystem thekeyadvantageoftheLMDPframework Avarietyof specialproperties owfromthelinearityoftheBellmanequation whichweexploitinthefollowing Solvingforzimaybedoneexplicitlyaszi   QiPi QiPbzborviatheziterationmethod akintovalueiteration zi QiPizi QiPbzb Finally theoptimalpolicymaybecomputedinclosedformas                       wherethenormalizingconstantG     Ps           Detailedderivationsoftheseresults aregivenin Intuitively thehardmaximizationofEqn hasbeenreplacedbyasoft maximizationlog Pexp andthecontinuousactionspaceenablesclosedformcomputationof theoptimalpolicy Concurrentsubactionsanddistributedrepresentationsoftasks OurhierarchicalschemeisbuiltontwokeypropertiesoftheLMDP Continuousconcurrentactions Compositionaloptimalpolicies Thespeci cformofEqn canseemtolimittheapplicabilityoftheLMDPframework Yetas showninavarietyofrecentwork andintheexamplesgivenlater moststandarddomainscan betranslatedtotheMDPframework andthereexistsageneralprocedureforembeddingtraditional MDPsintheLMDPframework Moregenerally wesuggestthatmostdomainsofinteresthavesomenotionof ef cient actions makingacontrolcostareasonablynaturalanduniversalphenomenon Indeed itispossiblethat thestandardMDPformulationisoverlygeneral discardingusefulstructureinmostrealworld domains namely apreferenceforef cientactions StandardMDPformulationscommonlyplace smallnegativerewardsoneachactiontoinstantiatethisef ciencygoal buttheyretainthe exibility to forinstance preferenergeticallyinef cienttrajectoriesbyplacingpositiverewardsoneach action Thedrawbackofthis exibilityistheunstructuredmaximizationofEqn whichprevents compositionality The episode   argmaxaEst   st min   st   Xt   st       BecauseofthecarefullychosenstructureoftherewardR     andthecontinuousactionspace the Bellmanequationsimpli esgreatly Inparticularde nethedesirabilityfunctionz   eV   as theexponentiatedcostto gofunction andde neq   eR   tobetheexponentiatedinstanta neousrewards Letnbethenumberofstates andniandnbbethenumberofinternalandboundary statesrespectively Representz   andq   withndimensionalcolumnvectorszandq andthe transitiondynamicsP     withthenby nimatrixP wherecolumnindexcorrespondstosand rowindexcorrespondstos Letziandzbdenotethepartitionofzintoboundaryandinternalstates respectively andsimilarlyforqiandqb Finally letPidenotetheniby nisubmatrixofPcontaining transitionsbetweeninternalstates andPbdenotethenbby nisubmatrixofPcontainingtransitions frominternalstatestoboundarystates Asshownin theBellmanequationinthissettingreducesto   QiPi zi QiPbzb whereQi diag qi and becauseboundarystatesareabsorbing zb qb Theexponentiated Bellmanequationishencealinearsystem thekeyadvantageoftheLMDPframework Avarietyof specialproperties owfromthelinearityoftheBellmanequation whichweexploitinthefollowing Solvingforzimaybedoneexplicitlyaszi   QiPi QiPbzborviatheziterationmethod akintovalueiteration zi QiPizi QiPbzb Finally theoptimalpolicymaybecomputedinclosedformas                       wherethenormalizingconstantG     Ps           Detailedderivationsoftheseresults aregivenin Intuitively thehardmaximizationofEqn hasbeenreplacedbyasoft maximizationlog Pexp andthecontinuousactionspaceenablesclosedformcomputationof theoptimalpolicy Concurrentsubactionsanddistributedrepresentationsoftasks   OurhierarchicalschemeisbuiltontwokeypropertiesoftheLMDP Continuousconcurrentactions Compositionaloptimalpolicies Thespeci cformofEqn canseemtolimittheapplicabilityoftheLMDPframework Yetas showninavarietyofrecentwork andintheexamplesgivenlater moststandarddomainscan betranslatedtotheMDPframework andthereexistsageneralprocedureforembeddingtraditional MDPsintheLMDPframework Moregenerally wesuggestthatmostdomainsofinteresthavesomenotionof ef cient actions makingacontrolcostareasonablynaturalanduniversalphenomenon Indeed itispossiblethat thestandardMDPformulationisoverlygeneral discardingusefulstructureinmostrealworld domains namely apreferenceforef cientactions StandardMDPformulationscommonlyplace smallnegativerewardsoneachactiontoinstantiatethisef ciencygoal buttheyretainthe exibility to forinstance preferenergeticallyinef cienttrajectoriesbyplacingpositiverewardsoneach action Thedrawbackofthis exibilityistheunstructuredmaximizationofEqn whichprevents compositionality The episode   argmaxaEst   st min   st   Xt   st       BecauseofthecarefullychosenstructureoftherewardR     andthecontinuousactionspace the Bellmanequationsimpli esgreatly Inparticularde nethedesirabilityfunctionz   eV   as theexponentiatedcostto gofunction andde neq   eR   tobetheexponentiatedinstanta neousrewards Letnbethenumberofstates andniandnbbethenumberofinternalandboundary statesrespectively Representz   andq   withndimensionalcolumnvectorszandq andthe transitiondynamicsP     withthenby nimatrixP wherecolumnindexcorrespondstosand rowindexcorrespondstos Letziandzbdenotethepartitionofzintoboundaryandinternalstates respectively andsimilarlyforqiandqb Finally letPidenotetheniby nisubmatrixofPcontaining transitionsbetweeninternalstates andPbdenotethenbby nisubmatrixofPcontainingtransitions frominternalstatestoboundarystates Asshownin theBellmanequationinthissettingreducesto   QiPi zi QiPbzb whereQi diag qi and becauseboundarystatesareabsorbing zb qb Theexponentiated Bellmanequationishencealinearsystem thekeyadvantageoftheLMDPframework Avarietyof specialproperties owfromthelinearityoftheBellmanequation whichweexploitinthefollowing Solvingforzimaybedoneexplicitlyaszi   QiPi QiPbzborviatheziterationmethod akintovalueiteration zi QiPizi QiPbzb Finally theoptimalpolicymaybecomputedinclosedformas                       wherethenormalizingconstantG     Ps           Detailedderivationsoftheseresults aregivenin Intuitively thehardmaximizationofEqn hasbeenreplacedbyasoft maximizationlog Pexp andthecontinuousactionspaceenablesclosedformcomputationof theoptimalpolicy Concurrentsubactionsanddistributedrepresentationsoftasks   OurhierarchicalschemeisbuiltontwokeypropertiesoftheLMDP Continuousconcurrentactions Compositionaloptimalpolicies Thespeci cformofEqn canseemtolimittheapplicabilityoftheLMDPframework Yetas showninavarietyofrecentwork andintheexamplesgivenlater moststandarddomainscan betranslatedtotheMDPframework andthereexistsageneralprocedureforembeddingtraditional MDPsintheLMDPframework Moregenerally wesuggestthatmostdomainsofinteresthavesomenotionof ef cient actions makingacontrolcostareasonablynaturalanduniversalphenomenon Indeed itispossiblethat thestandardMDPformulationisoverlygeneral discardingusefulstructureinmostrealworld domains namely apreferenceforef cientactions StandardMDPformulationscommonlyplace smallnegativerewardsoneachactiontoinstantiatethisef ciencygoal buttheyretainthe exibility to forinstance preferenergeticallyinef cienttrajectoriesbyplacingpositiverewardsoneach action Thedrawbackofthis exibilityistheunstructuredmaximizationofEqn whichprevents compositionality The episode   argmaxaEst   st min   st   Xt   st       BecauseofthecarefullychosenstructureoftherewardR     andthecontinuousactionspace the Bellmanequationsimpli esgreatly Inparticularde nethedesirabilityfunctionz   eV   as theexponentiatedcostto gofunction andde neq   eR   tobetheexponentiatedinstanta neousrewards Letnbethenumberofstates andniandnbbethenumberofinternalandboundary statesrespectively Representz   andq   withndimensionalcolumnvectorszandq andthe transitiondynamicsP     withthenby nimatrixP wherecolumnindexcorrespondstosand rowindexcorrespondstos Letziandzbdenotethepartitionofzintoboundaryandinternalstates respectively andsimilarlyforqiandqb Finally letPidenotetheniby nisubmatrixofPcontaining transitionsbetweeninternalstates andPbdenotethenbby nisubmatrixofPcontainingtransitions frominternalstatestoboundarystates Asshownin theBellmanequationinthissettingreducesto   QiPi zi QiPbzb whereQi diag qi and becauseboundarystatesareabsorbing zb qb Theexponentiated Bellmanequationishencealinearsystem thekeyadvantageoftheLMDPframework Avarietyof specialproperties owfromthelinearityoftheBellmanequation whichweexploitinthefollowing Solvingforzimaybedoneexplicitlyaszi   QiPi QiPbzborviatheziterationmethod akintovalueiteration zi QiPizi QiPbzb Finally theoptimalpolicymaybecomputedinclosedformas                       wherethenormalizingconstantG     Ps           Detailedderivationsoftheseresults aregivenin Intuitively thehardmaximizationofEqn hasbeenreplacedbyasoft maximizationlog Pexp andthecontinuousactionspaceenablesclosedformcomputationof theoptimalpolicy Concurrentsubactionsanddistributedrepresentationsoftasks   OurhierarchicalschemeisbuiltontwokeypropertiesoftheLMDP Continuousconcurrentactions Compositionaloptimalpolicies Thespeci cformofEqn canseemtolimittheapplicabilityoftheLMDPframework Yetas showninavarietyofrecentwork andintheexamplesgivenlater moststandarddomainscan betranslatedtotheMDPframework andthereexistsageneralprocedureforembeddingtraditional MDPsintheLMDPframework Moregenerally wesuggestthatmostdomainsofinteresthavesomenotionof ef cient actions makingacontrolcostareasonablynaturalanduniversalphenomenon Indeed itispossiblethat thestandardMDPformulationisoverlygeneral discardingusefulstructureinmostrealworld domains namely apreferenceforef cientactions StandardMDPformulationscommonlyplace smallnegativerewardsoneachactiontoinstantiatethisef ciencygoal buttheyretainthe exibility to forinstance preferenergeticallyinef cienttrajectoriesbyplacingpositiverewardsoneach action Thedrawbackofthis exibilityistheunstructuredmaximizationofEqn whichprevents compositionality The episode   argmaxaEst   st min   st   Xt   st       BecauseofthecarefullychosenstructureoftherewardR     andthecontinuousactionspace the Bellmanequationsimpli esgreatly Inparticularde nethedesirabilityfunctionz   eV   as theexponentiatedcostto gofunction andde neq   eR   tobetheexponentiatedinstanta neousrewards Letnbethenumberofstates andniandnbbethenumberofinternalandboundary statesrespectively Representz   andq   withndimensionalcolumnvectorszandq andthe transitiondynamicsP     withthenby nimatrixP wherecolumnindexcorrespondstosand rowindexcorrespondstos Letziandzbdenotethepartitionofzintoboundaryandinternalstates respectively andsimilarlyforqiandqb Finally letPidenotetheniby nisubmatrixofPcontaining transitionsbetweeninternalstates andPbdenotethenbby nisubmatrixofPcontainingtransitions frominternalstatestoboundarystates Asshownin theBellmanequationinthissettingreducesto   QiPi zi QiPbzb whereQi diag qi and becauseboundarystatesareabsorbing zb qb Theexponentiated Bellmanequationishencealinearsystem thekeyadvantageoftheLMDPframework Avarietyof specialproperties owfromthelinearityoftheBellmanequation whichweexploitinthefollowing Solvingforzimaybedoneexplicitlyaszi   QiPi QiPbzborviatheziterationmethod akintovalueiteration zi QiPizi QiPbzb Finally theoptimalpolicymaybecomputedinclosedformas                       wherethenormalizingconstantG     Ps           Detailedderivationsoftheseresults aregivenin Intuitively thehardmaximizationofEqn hasbeenreplacedbyasoft maximizationlog Pexp andthecontinuousactionspaceenablesclosedformcomputationof theoptimalpolicy Concurrentsubactionsanddistributedrepresentationsoftasks   OurhierarchicalschemeisbuiltontwokeypropertiesoftheLMDP Continuousconcurrentactions Compositionaloptimalpolicies Thespeci cformofEqn canseemtolimittheapplicabilityoftheLMDPframework Yetas showninavarietyofrecentwork andintheexamplesgivenlater moststandarddomainscan betranslatedtotheMDPframework andthereexistsageneralprocedureforembeddingtraditional MDPsintheLMDPframework Moregenerally wesuggestthatmostdomainsofinteresthavesomenotionof ef cient actions makingacontrolcostareasonablynaturalanduniversalphenomenon Indeed itispossiblethat thestandardMDPformulationisoverlygeneral discardingusefulstructureinmostrealworld domains namely apreferenceforef cientactions StandardMDPformulationscommonlyplace smallnegativerewardsoneachactiontoinstantiatethisef ciencygoal buttheyretainthe exibility to forinstance preferenergeticallyinef cienttrajectoriesbyplacingpositiverewardsoneach action Thedrawbackofthis exibilityistheunstructuredmaximizationofEqn whichprevents compositionality The episode   argmaxaEst   st min   st   Xt   st       BecauseofthecarefullychosenstructureoftherewardR     andthecontinuousactionspace the Bellmanequationsimpli esgreatly Inparticularde nethedesirabilityfunctionz   eV   as theexponentiatedcostto gofunction andde neq   eR   tobetheexponentiatedinstanta neousrewards Letnbethenumberofstates andniandnbbethenumberofinternalandboundary statesrespectively Representz   andq   withndimensionalcolumnvectorszandq andthe transitiondynamicsP     withthenby nimatrixP wherecolumnindexcorrespondstosand rowindexcorrespondstos Letziandzbdenotethepartitionofzintoboundaryandinternalstates respectively andsimilarlyforqiandqb Finally letPidenotetheniby nisubmatrixofPcontaining transitionsbetweeninternalstates andPbdenotethenbby nisubmatrixofPcontainingtransitions frominternalstatestoboundarystates Asshownin theBellmanequationinthissettingreducesto   QiPi zi QiPbzb whereQi diag qi and becauseboundarystatesareabsorbing zb qb Theexponentiated Bellmanequationishencealinearsystem thekeyadvantageoftheLMDPframework Avarietyof specialproperties owfromthelinearityoftheBellmanequation whichweexploitinthefollowing Solvingforzimaybedoneexplicitlyaszi   QiPi QiPbzborviatheziterationmethod akintovalueiteration zi QiPizi QiPbzb Finally theoptimalpolicymaybecomputedinclosedformas                       wherethenormalizingconstantG     Ps           Detailedderivationsoftheseresults aregivenin Intuitively thehardmaximizationofEqn hasbeenreplacedbyasoft maximizationlog Pexp andthecontinuousactionspaceenablesclosedformcomputationof theoptimalpolicy Concurrentsubactionsanddistributedrepresentationsoftasks wn OurhierarchicalschemeisbuiltontwokeypropertiesoftheLMDP Continuousconcurrentactions Compositionaloptimalpolicies Thespeci cformofEqn canseemtolimittheapplicabilityoftheLMDPframework Yetas showninavarietyofrecentwork andintheexamplesgivenlater moststandarddomainscan betranslatedtotheMDPframework andthereexistsageneralprocedureforembeddingtraditional MDPsintheLMDPframework Moregenerally wesuggestthatmostdomainsofinteresthavesomenotionof ef cient actions makingacontrolcostareasonablynaturalanduniversalphenomenon Indeed itispossiblethat thestandardMDPformulationisoverlygeneral discardingusefulstructureinmostrealworld domains namely apreferenceforef cientactions StandardMDPformulationscommonlyplace smallnegativerewardsoneachactiontoinstantiatethisef ciencygoal buttheyretainthe exibility to forinstance preferenergeticallyinef cienttrajectoriesbyplacingpositiverewardsoneach action Thedrawbackofthis exibilityistheunstructuredmaximizationofEqn whichprevents compositionality The episode   argmaxaEst   st min   st   Xt   st       BecauseofthecarefullychosenstructureoftherewardR     andthecontinuousactionspace the Bellmanequationsimpli esgreatly Inparticularde nethedesirabilityfunctionz   eV   as theexponentiatedcostto gofunction andde neq   eR   tobetheexponentiatedinstanta neousrewards Letnbethenumberofstates andniandnbbethenumberofinternalandboundary statesrespectively Representz   andq   withndimensionalcolumnvectorszandq andthe transitiondynamicsP     withthenby nimatrixP wherecolumnindexcorrespondstosand rowindexcorrespondstos Letziandzbdenotethepartitionofzintoboundaryandinternalstates respectively andsimilarlyforqiandqb Finally letPidenotetheniby nisubmatrixofPcontaining transitionsbetweeninternalstates andPbdenotethenbby nisubmatrixofPcontainingtransitions frominternalstatestoboundarystates Asshownin theBellmanequationinthissettingreducesto   QiPi zi QiPbzb whereQi diag qi and becauseboundarystatesareabsorbing zb qb Theexponentiated Bellmanequationishencealinearsystem thekeyadvantageoftheLMDPframework Avarietyof specialproperties owfromthelinearityoftheBellmanequation whichweexploitinthefollowing Solvingforzimaybedoneexplicitlyaszi   QiPi QiPbzborviatheziterationmethod akintovalueiteration zi QiPizi QiPbzb Finally theoptimalpolicymaybecomputedinclosedformas                       wherethenormalizingconstantG     Ps           Detailedderivationsoftheseresults aregivenin Intuitively thehardmaximizationofEqn hasbeenreplacedbyasoft maximizationlog Pexp andthecontinuousactionspaceenablesclosedformcomputationof theoptimalpolicy Concurrentsubactionsanddistributedrepresentationsoftasks wn OurhierarchicalschemeisbuiltontwokeypropertiesoftheLMDP Continuousconcurrentactions Compositionaloptimalpolicies Thespeci cformofEqn canseemtolimittheapplicabilityoftheLMDPframework Yetas showninavarietyofrecentwork andintheexamplesgivenlater moststandarddomainscan betranslatedtotheMDPframework andthereexistsageneralprocedureforembeddingtraditional MDPsintheLMDPframework Moregenerally wesuggestthatmostdomainsofinteresthavesomenotionof ef cient actions makingacontrolcostareasonablynaturalanduniversalphenomenon Indeed itispossiblethat thestandardMDPformulationisoverlygeneral discardingusefulstructureinmostrealworld domains namely apreferenceforef cientactions StandardMDPformulationscommonlyplace smallnegativerewardsoneachactiontoinstantiatethisef ciencygoal buttheyretainthe exibility to forinstance preferenergeticallyinef cienttrajectoriesbyplacingpositiverewardsoneach action Thedrawbackofthis exibilityistheunstructuredmaximizationofEqn whichprevents compositionality The episode   argmaxaEst   st min   st   Xt   st       BecauseofthecarefullychosenstructureoftherewardR     andthecontinuousactionspace the Bellmanequationsimpli esgreatly Inparticularde nethedesirabilityfunctionz   eV   as theexponentiatedcostto gofunction andde neq   eR   tobetheexponentiatedinstanta neousrewards Letnbethenumberofstates andniandnbbethenumberofinternalandboundary statesrespectively Representz   andq   withndimensionalcolumnvectorszandq andthe transitiondynamicsP     withthenby nimatrixP wherecolumnindexcorrespondstosand rowindexcorrespondstos Letziandzbdenotethepartitionofzintoboundaryandinternalstates respectively andsimilarlyforqiandqb Finally letPidenotetheniby nisubmatrixofPcontaining transitionsbetweeninternalstates andPbdenotethenbby nisubmatrixofPcontainingtransitions frominternalstatestoboundarystates Asshownin theBellmanequationinthissettingreducesto   QiPi zi QiPbzb whereQi diag qi and becauseboundarystatesareabsorbing zb qb Theexponentiated Bellmanequationishencealinearsystem thekeyadvantageoftheLMDPframework Avarietyof specialproperties owfromthelinearityoftheBellmanequation whichweexploitinthefollowing Solvingforzimaybedoneexplicitlyaszi   QiPi QiPbzborviatheziterationmethod akintovalueiteration zi QiPizi QiPbzb Finally theoptimalpolicymaybecomputedinclosedformas                       wherethenormalizingconstantG     Ps           Detailedderivationsoftheseresults aregivenin Intuitively thehardmaximizationofEqn hasbeenreplacedbyasoft maximizationlog Pexp andthecontinuousactionspaceenablesclosedformcomputationof theoptimalpolicy Concurrentsubactionsanddistributedrepresentationsoftasks OurhierarchicalschemeisbuiltontwokeypropertiesoftheLMDP Continuousconcurrentactions Compositionaloptimalpolicies Thespeci cformofEqn canseemtolimittheapplicabilityoftheLMDPframework Yetas showninavarietyofrecentwork andintheexamplesgivenlater moststandarddomainscan betranslatedtotheMDPframework andthereexistsageneralprocedureforembeddingtraditional MDPsintheLMDPframework Moregenerally wesuggestthatmostdomainsofinteresthavesomenotionof ef cient actions makingacontrolcostareasonablynaturalanduniversalphenomenon Indeed itispossiblethat thestandardMDPformulationisoverlygeneral discardingusefulstructureinmostrealworld domains namely apreferenceforef cientactions StandardMDPformulationscommonlyplace smallnegativerewardsoneachactiontoinstantiatethisef ciencygoal buttheyretainthe exibility to forinstance preferenergeticallyinef cienttrajectoriesbyplacingpositiverewardsoneach action Thedrawbackofthis exibilityistheunstructuredmaximizationofEqn whichprevents compositionality The episode   argmaxaEst   st min   st   Xt   st       BecauseofthecarefullychosenstructureoftherewardR     andthecontinuousactionspace the Bellmanequationsimpli esgreatly Inparticularde nethedesirabilityfunctionz   eV   as theexponentiatedcostto gofunction andde neq   eR   tobetheexponentiatedinstanta neousrewards Letnbethenumberofstates andniandnbbethenumberofinternalandboundary statesrespectively Representz   andq   withndimensionalcolumnvectorszandq andthe transitiondynamicsP     withthenby nimatrixP wherecolumnindexcorrespondstosand rowindexcorrespondstos Letziandzbdenotethepartitionofzintoboundaryandinternalstates respectively andsimilarlyforqiandqb Finally letPidenotetheniby nisubmatrixofPcontaining transitionsbetweeninternalstates andPbdenotethenbby nisubmatrixofPcontainingtransitions frominternalstatestoboundarystates Asshownin theBellmanequationinthissettingreducesto   QiPi zi QiPbzb whereQi diag qi and becauseboundarystatesareabsorbing zb qb Theexponentiated Bellmanequationishencealinearsystem thekeyadvantageoftheLMDPframework Avarietyof specialproperties owfromthelinearityoftheBellmanequation whichweexploitinthefollowing Solvingforzimaybedoneexplicitlyaszi   QiPi QiPbzborviatheziterationmethod akintovalueiteration zi QiPizi QiPbzb Finally theoptimalpolicymaybecomputedinclosedformas                       wherethenormalizingconstantG     Ps           Detailedderivationsoftheseresults aregivenin Intuitively thehardmaximizationofEqn hasbeenreplacedbyasoft maximizationlog Pexp andthecontinuousactionspaceenablesclosedformcomputationof theoptimalpolicy Concurrentsubactionsanddistributedrepresentationsoftasks OurhierarchicalschemeisbuiltontwokeypropertiesoftheLMDP Continuousconcurrentactions Compositionaloptimalpolicies Thespeci cformofEqn canseemtolimittheapplicabilityoftheLMDPframework Yetas showninavarietyofrecentwork andintheexamplesgivenlater moststandarddomainscan betranslatedtotheMDPframework andthereexistsageneralprocedureforembeddingtraditional MDPsintheLMDPframework Moregenerally wesuggestthatmostdomainsofinteresthavesomenotionof ef cient actions makingacontrolcostareasonablynaturalanduniversalphenomenon Indeed itispossiblethat thestandardMDPformulationisoverlygeneral discardingusefulstructureinmostrealworld domains namely apreferenceforef cientactions StandardMDPformulationscommonlyplace smallnegativerewardsoneachactiontoinstantiatethisef ciencygoal buttheyretainthe exibility to forinstance preferenergeticallyinef cienttrajectoriesbyplacingpositiverewardsoneach action Thedrawbackofthis exibilityistheunstructuredmaximizationofEqn whichprevents compositionality The episode   argmaxaEst   st min   st   Xt   st       BecauseofthecarefullychosenstructureoftherewardR     andthecontinuousactionspace the Bellmanequationsimpli esgreatly Inparticularde nethedesirabilityfunctionz   eV   as theexponentiatedcostto gofunction andde neq   eR   tobetheexponentiatedinstanta neousrewards Letnbethenumberofstates andniandnbbethenumberofinternalandboundary statesrespectively Representz   andq   withndimensionalcolumnvectorszandq andthe transitiondynamicsP     withthenby nimatrixP wherecolumnindexcorrespondstosand rowindexcorrespondstos Letziandzbdenotethepartitionofzintoboundaryandinternalstates respectively andsimilarlyforqiandqb Finally letPidenotetheniby nisubmatrixofPcontaining transitionsbetweeninternalstates andPbdenotethenbby nisubmatrixofPcontainingtransitions frominternalstatestoboundarystates Asshownin theBellmanequationinthissettingreducesto   QiPi zi QiPbzb whereQi diag qi and becauseboundarystatesareabsorbing zb qb Theexponentiated Bellmanequationishencealinearsystem thekeyadvantageoftheLMDPframework Avarietyof specialproperties owfromthelinearityoftheBellmanequation whichweexploitinthefollowing Solvingforzimaybedoneexplicitlyaszi   QiPi QiPbzborviatheziterationmethod akintovalueiteration zi QiPizi QiPbzb Finally theoptimalpolicymaybecomputedinclosedformas                       wherethenormalizingconstantG     Ps           Detailedderivationsoftheseresults aregivenin Intuitively thehardmaximizationofEqn hasbeenreplacedbyasoft maximizationlog Pexp andthecontinuousactionspaceenablesclosedformcomputationof theoptimalpolicy Concurrentsubactionsanddistributedrepresentationsoftasks OurhierarchicalschemeisbuiltontwokeypropertiesoftheLMDP Continuousconcurrentactions Compositionaloptimalpolicies Thespeci cformofEqn canseemtolimittheapplicabilityoftheLMDPframework Yetas showninavarietyofrecentwork andintheexamplesgivenlater moststandarddomainscan betranslatedtotheMDPframework andthereexistsageneralprocedureforembeddingtraditional MDPsintheLMDPframework Moregenerally wesuggestthatmostdomainsofinteresthavesomenotionof ef cient actions makingacontrolcostareasonablynaturalanduniversalphenomenon Indeed itispossiblethat thestandardMDPformulationisoverlygeneral discardingusefulstructureinmostrealworld domains namely apreferenceforef cientactions StandardMDPformulationscommonlyplace smallnegativerewardsoneachactiontoinstantiatethisef ciencygoal buttheyretainthe exibility to forinstance preferenergeticallyinef cienttrajectoriesbyplacingpositiverewardsoneach action Thedrawbackofthis exibilityistheunstructuredmaximizationofEqn whichprevents compositionality The episode   argmaxaEst   st min   st   Xt   st       BecauseofthecarefullychosenstructureoftherewardR     andthecontinuousactionspace the Bellmanequationsimpli esgreatly Inparticularde nethedesirabilityfunctionz   eV   as theexponentiatedcostto gofunction andde neq   eR   tobetheexponentiatedinstanta neousrewards Letnbethenumberofstates andniandnbbethenumberofinternalandboundary statesrespectively Representz   andq   withndimensionalcolumnvectorszandq andthe transitiondynamicsP     withthenby nimatrixP wherecolumnindexcorrespondstosand rowindexcorrespondstos Letziandzbdenotethepartitionofzintoboundaryandinternalstates respectively andsimilarlyforqiandqb Finally letPidenotetheniby nisubmatrixofPcontaining transitionsbetweeninternalstates andPbdenotethenbby nisubmatrixofPcontainingtransitions frominternalstatestoboundarystates Asshownin theBellmanequationinthissettingreducesto   QiPi zi QiPbzb whereQi diag qi and becauseboundarystatesareabsorbing zb qb Theexponentiated Bellmanequationishencealinearsystem thekeyadvantageoftheLMDPframework Avarietyof specialproperties owfromthelinearityoftheBellmanequation whichweexploitinthefollowing Solvingforzimaybedoneexplicitlyaszi   QiPi QiPbzborviatheziterationmethod akintovalueiteration zi QiPizi QiPbzb Finally theoptimalpolicymaybecomputedinclosedformas                       wherethenormalizingconstantG     Ps           Detailedderivationsoftheseresults aregivenin Intuitively thehardmaximizationofEqn hasbeenreplacedbyasoft maximizationlog Pexp andthecontinuousactionspaceenablesclosedformcomputationof theoptimalpolicy Concurrentsubactionsanddistributedrepresentationsoftasks OurhierarchicalschemeisbuiltontwokeypropertiesoftheLMDP Continuousconcurrentactions Compositionaloptimalpolicies Thespeci cformofEqn canseemtolimittheapplicabilityoftheLMDPframework Yetas showninavarietyofrecentwork andintheexamplesgivenlater moststandarddomainscan betranslatedtotheMDPframework andthereexistsageneralprocedureforembeddingtraditional MDPsintheLMDPframework Moregenerally wesuggestthatmostdomainsofinteresthavesomenotionof ef cient actions makingacontrolcostareasonablynaturalanduniversalphenomenon Indeed itispossiblethat thestandardMDPformulationisoverlygeneral discardingusefulstructureinmostrealworld domains namely apreferenceforef cientactions StandardMDPformulationscommonlyplace smallnegativerewardsoneachactiontoinstantiatethisef ciencygoal buttheyretainthe exibility to forinstance preferenergeticallyinef cienttrajectoriesbyplacingpositiverewardsoneach action Thedrawbackofthis exibilityistheunstructuredmaximizationofEqn whichprevents compositionality The episode   argmaxaEst   st min   st   Xt   st       BecauseofthecarefullychosenstructureoftherewardR     andthecontinuousactionspace the Bellmanequationsimpli esgreatly Inparticularde nethedesirabilityfunctionz   eV   as theexponentiatedcostto gofunction andde neq   eR   tobetheexponentiatedinstanta neousrewards Letnbethenumberofstates andniandnbbethenumberofinternalandboundary statesrespectively Representz   andq   withndimensionalcolumnvectorszandq andthe transitiondynamicsP     withthenby nimatrixP wherecolumnindexcorrespondstosand rowindexcorrespondstos Letziandzbdenotethepartitionofzintoboundaryandinternalstates respectively andsimilarlyforqiandqb Finally letPidenotetheniby nisubmatrixofPcontaining transitionsbetweeninternalstates andPbdenotethenbby nisubmatrixofPcontainingtransitions frominternalstatestoboundarystates Asshownin theBellmanequationinthissettingreducesto   QiPi zi QiPbzb whereQi diag qi and becauseboundarystatesareabsorbing zb qb Theexponentiated Bellmanequationishencealinearsystem thekeyadvantageoftheLMDPframework Avarietyof specialproperties owfromthelinearityoftheBellmanequation whichweexploitinthefollowing Solvingforzimaybedoneexplicitlyaszi   QiPi QiPbzborviatheziterationmethod akintovalueiteration zi QiPizi QiPbzb Finally theoptimalpolicymaybecomputedinclosedformas                       wherethenormalizingconstantG     Ps           Detailedderivationsoftheseresults aregivenin Intuitively thehardmaximizationofEqn hasbeenreplacedbyasoft maximizationlog Pexp andthecontinuousactionspaceenablesclosedformcomputationof theoptimalpolicy Concurrentsubactionsanddistributedrepresentationsoftasks OurhierarchicalschemeisbuiltontwokeypropertiesoftheLMDP Continuousconcurrentactions Compositionaloptimalpolicies Thespeci cformofEqn canseemtolimittheapplicabilityoftheLMDPframework Yetas showninavarietyofrecentwork andintheexamplesgivenlater moststandarddomainscan betranslatedtotheMDPframework andthereexistsageneralprocedureforembeddingtraditional MDPsintheLMDPframework Moregenerally wesuggestthatmostdomainsofinteresthavesomenotionof ef cient actions makingacontrolcostareasonablynaturalanduniversalphenomenon Indeed itispossiblethat thestandardMDPformulationisoverlygeneral discardingusefulstructureinmostrealworld domains namely apreferenceforef cientactions StandardMDPformulationscommonlyplace smallnegativerewardsoneachactiontoinstantiatethisef ciencygoal buttheyretainthe exibility to forinstance preferenergeticallyinef cienttrajectoriesbyplacingpositiverewardsoneach action Thedrawbackofthis exibilityistheunstructuredmaximizationofEqn whichprevents compositionality The episode   argmaxaEst   st min   st   Xt   st       BecauseofthecarefullychosenstructureoftherewardR     andthecontinuousactionspace the Bellmanequationsimpli esgreatly Inparticularde nethedesirabilityfunctionz   eV   as theexponentiatedcostto gofunction andde neq   eR   tobetheexponentiatedinstanta neousrewards Letnbethenumberofstates andniandnbbethenumberofinternalandboundary statesrespectively Representz   andq   withndimensionalcolumnvectorszandq andthe transitiondynamicsP     withthenby nimatrixP wherecolumnindexcorrespondstosand rowindexcorrespondstos Letziandzbdenotethepartitionofzintoboundaryandinternalstates respectively andsimilarlyforqiandqb Finally letPidenotetheniby nisubmatrixofPcontaining transitionsbetweeninternalstates andPbdenotethenbby nisubmatrixofPcontainingtransitions frominternalstatestoboundarystates Asshownin theBellmanequationinthissettingreducesto   QiPi zi QiPbzb whereQi diag qi and becauseboundarystatesareabsorbing zb qb Theexponentiated Bellmanequationishencealinearsystem thekeyadvantageoftheLMDPframework Avarietyof specialproperties owfromthelinearityoftheBellmanequation whichweexploitinthefollowing Solvingforzimaybedoneexplicitlyaszi   QiPi QiPbzborviatheziterationmethod akintovalueiteration zi QiPizi QiPbzb Finally theoptimalpolicymaybecomputedinclosedformas                       wherethenormalizingconstantG     Ps           Detailedderivationsoftheseresults aregivenin Intuitively thehardmaximizationofEqn hasbeenreplacedbyasoft maximizationlog Pexp andthecontinuousactionspaceenablesclosedformcomputationof theoptimalpolicy Concurrentsubactionsanddistributedrepresentationsoftasks OurhierarchicalschemeisbuiltontwokeypropertiesoftheLMDP Continuousconcurrentactions Compositionaloptimalpolicies Thespeci cformofEqn canseemtolimittheapplicabilityoftheLMDPframework Yetas showninavarietyofrecentwork andintheexamplesgivenlater moststandarddomainscan betranslatedtotheMDPframework andthereexistsageneralprocedureforembeddingtraditional MDPsintheLMDPframework Moregenerally wesuggestthatmostdomainsofinteresthavesomenotionof ef cient actions makingacontrolcostareasonablynaturalanduniversalphenomenon Indeed itispossiblethat thestandardMDPformulationisoverlygeneral discardingusefulstructureinmostrealworld domains namely apreferenceforef cientactions StandardMDPformulationscommonlyplace smallnegativerewardsoneachactiontoinstantiatethisef ciencygoal buttheyretainthe exibility to forinstance preferenergeticallyinef cienttrajectoriesbyplacingpositiverewardsoneach action Thedrawbackofthis exibilityistheunstructuredmaximizationofEqn whichprevents compositionality The Instantaneous	reward	qbDesirabliityfunction	ziepisode   argmaxaEst   st min   st   Xt   st       BecauseofthecarefullychosenstructureoftherewardR     andthecontinuousactionspace the Bellmanequationsimpli esgreatly Inparticularde nethedesirabilityfunctionz   eV   as theexponentiatedcostto gofunction andde neq   eR   tobetheexponentiatedinstanta neousrewards Letnbethenumberofstates andniandnbbethenumberofinternalandboundary statesrespectively Representz   andq   withndimensionalcolumnvectorszandq andthe transitiondynamicsP     withthenby nimatrixP wherecolumnindexcorrespondstosand rowindexcorrespondstos Letziandzbdenotethepartitionofzintoboundaryandinternalstates respectively andsimilarlyforqiandqb Finally letPidenotetheniby nisubmatrixofPcontaining transitionsbetweeninternalstates andPbdenotethenbby nisubmatrixofPcontainingtransitions frominternalstatestoboundarystates Asshownin theBellmanequationinthissettingreducesto   QiPi zi QiPbzb whereQi diag qi and becauseboundarystatesareabsorbing zb qb Theexponentiated Bellmanequationishencealinearsystem thekeyadvantageoftheLMDPframework Avarietyof specialproperties owfromthelinearityoftheBellmanequation whichweexploitinthefollowing Solvingforzimaybedoneexplicitlyaszi   QiPi QiPbzborviatheziterationmethod akintovalueiteration zi QiPizi QiPbzb Finally theoptimalpolicymaybecomputedinclosedformas                       wherethenormalizingconstantG     Ps           Detailedderivationsoftheseresults aregivenin Intuitively thehardmaximizationofEqn hasbeenreplacedbyasoft maximizationlog Pexp andthecontinuousactionspaceenablesclosedformcomputationof theoptimalpolicy Concurrentsubactionsanddistributedrepresentationsoftasks OurhierarchicalschemeisbuiltontwokeypropertiesoftheLMDP Continuousconcurrentactions Compositionaloptimalpolicies Thespeci cformofEqn canseemtolimittheapplicabilityoftheLMDPframework Yetas showninavarietyofrecentwork andintheexamplesgivenlater moststandarddomainscan betranslatedtotheMDPframework andthereexistsageneralprocedureforembeddingtraditional MDPsintheLMDPframework Moregenerally wesuggestthatmostdomainsofinteresthavesomenotionof ef cient actions makingacontrolcostareasonablynaturalanduniversalphenomenon Indeed itispossiblethat thestandardMDPformulationisoverlygeneral discardingusefulstructureinmostrealworld domains namely apreferenceforef cientactions StandardMDPformulationscommonlyplace smallnegativerewardsoneachactiontoinstantiatethisef ciencygoal buttheyretainthe exibility to forinstance preferenergeticallyinef cienttrajectoriesbyplacingpositiverewardsoneach action Thedrawbackofthis exibilityistheunstructuredmaximizationofEqn whichprevents compositionality The Sampletrajectories               EndStartHierarchy Through Composition with Multitask LMDPs
+
+task weighting   can be found as
+
+argminw  cid     Qbw cid 
+
+subject to Qbw    
+
+ 
+
+The technical requirement Qbw     is due to the relationship     exp    such that negative values of   are not
+possible  In practice this can be approximately solved as
+      bq  where   denotes the pseudoinverse  and negative
+elements of   are projected back to zero 
+Here the coef cients of the task blend   constitute   distributed representation of the current task to be performed 
+Although the set of basis tasks Qb is  xed and  nite  they
+permit an in nite space of tasks to be performed through
+their concurrent linear composition  Figure   demonstrates this ability of the Multitask LMDP module in the
+context of      robot arm reaching task  From knowledge
+of how to reach individual points in space  the module can
+instantly act optimally to reach to   rectangular region 
+
+  Stacking the module  Concurrent
+
+Hierarchical LMDPs
+
+To build   hierarchy out of this Multitask LMDP module  we
+construct   stack of MLMDPs in which higher levels select
+the instantaneous reward structure that de nes the current
+task for lower levels  To take   navigation example    high
+level module might specify that the lower level module
+should reach room   but not   by placing instantaneous
+rewards in room   but no rewards in room    Crucially 
+the  ne details of achieving this subgoal can be left to the
+lowlevel module  Critical to the success of this hierarchical
+scheme is the  exible  optimal composition afforded by
+the Multitask LMDP module  the speci   reward structure
+commanded by the higher layer will often be novel for the
+lower level  but will still be performed optimally provided it
+lies in the basis of learned tasks 
+
+Figure   Stacking Multitask LMDPs  Top  Deep hierarchy for
+navigation through      corridor  Lowerlevel MLMDPs are abstracted to form higherlevel MLMDPs by choosing   set of  subtask  states which can be accessed by the lower level  grey lines
+between levels depict passive subtask transitions    
+    Lower levels
+access these subtask states to indicate completion of   subgoal
+and to request more information from higher levels  higher levels
+communicate new subtask state instantaneous rewards  and hence
+the concurrent task blend  to the lower levels  Red lines indicate
+higher level access points for one sample trajectory starting from
+leftmost state and terminating at rightmost state  Bottom  Panels  ac  depict distributed task blends arising from accessing the
+hierarchy at points denoted in left panel  The higher layer states
+accessed are indicated by  lled circles      Just the second layer
+of hierarchy is accessed  resulting in higher weight on the task to
+achieve the next subgoal and zero weights on already achieved
+subgoals      The second and third levels are accessed  yielding
+new task blends for both      All levels are accessed yielding task
+blends at   range of scales 
+
+      
+
+   Ql
+
+  Constructing   hierarchy of MLMDPs
+
+  cid  that we
+  cid  at level    we aug 
+
+must solve  where here the superscript denotes the hierarchy
+level  Fig    This serves as the base case for our recursive
+scheme for generating   hierarchy  For the inductive step 
+
+We start with the MLMDP      cid          
+given an MLMDP      cid Sl       ql
+ment the state space  Sl   Sl   Sl
+  with   set of Nt terminal
+boundary states Sl
+  that we call subtask states  Semantically 
+entering one of these states will correspond to   decision by
+the layer   MLMDP to access the next level of the hierarchy 
+The transitions to subtask states are governed by   new    
+tby    
+    which is chosen by the
+designer to encode the structure of the domain  Choosing
+fewer subtask states than interior states will yield   higher
+level which operates in   smaller state space  yielding state
+abstraction  In the augmented MLMDP  the passive dynam 
+
+  passive dynamics matrix    
+
+       
+
+      
+
+  cid  where the operation
+
+ics become           cid    
+    renormalizes each column to sum to one 
+It remains to specify the matrix of subtaskstate instantaneous rewards Rl
+  for this augmented MLMDP  Often hierarchical schemes require designing   pseudoreward function
+to encourage successful completion of   subtask  Here
+we also pick   set of reward functions over subtask states 
+however  the performance of our scheme is only weakly
+dependent on this choice  we require only that our chosen
+reward functions form   good basis for the set of subtasks
+that the higher layer will command  Any set of tasks which
+can linearly express the required space of reward structures
+speci ed by the higher level is suitable  In our experiments 
+we de ne    
+  tasks  one for each subtask state  and set each
+instantaneous reward to negative values on all but   single  goal  subtask state  Then the augmented MLMDP is
+
+        States             Hierarchy Through Composition with Multitask LMDPs
+
+      Ql
+
+  cid cid 
+
+  cid Ql
+
+      cid   Sl        ql
+ cid Sl
+
+        ql 
+
+The higher
+
+ 
+
+ 
+
+level
+  Ql 
+
+is itself an MLMDP       
+
+ cid  de ned not over the entire state
+
+space but just over the    
+  subtask states of the layer below  To construct this  we must compute an appropriate
+passive dynamics and reward structure    natural de nition
+for the passive dynamics is the probability of starting at one
+subtask state and terminating at another under the lower
+layer   passive dynamics 
+
+ 
+
+    
+    
+
+ 
+
+      
+      
+
+           
+          
+
+ 
+
+       lT
+       lT
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+
+In this way  the higherlevel LMDP will incorporate the
+transition constraints from the layer below  The interiorstate reward structure can be similarly de ned  as the reward
+accrued under the passive dynamics from the layer below 
+However for simplicity in our implementation  we simply
+set small negative rewards on all internal states 
+Hence  from   base MLMDP     and subtask transition matrix    
+the above construction yields an augt  
+mented MLDMP      at the same layer and unaugmented
+MLDMP      at the next higher layer  This procedure may be iterated to form   deep stack of MLMDPs
+
+ cid                        cid    where all but the highest is
+
+augmented with subtask states  The key choice for the designer is    
+    the transition structure from internal states to
+subtask states for each layer  Through Eqns    this
+matrix speci es the state abstraction used in the next higher
+layer  Fig    illustrates this scheme for an example of navigation through      corridor 
+
+  Instantaneous rewards and task blends 
+
+Communication between layers
+
+Bidirectional communication between layers happens via
+subtask states and their instantaneous rewards  The higher
+layer sets the instantaneous boundary rewards over subtask
+states for the lower layer  and the lower layer signals that it
+has completed   subtask and needs new guidance from the
+higher layer by transitioning to   subtask state 
+In particular  suppose we have solved   higherlevel
+MLMDP using any method we like  yielding the optimal
+action al  This will make transitions to some states more
+likely than they would be under the passive dynamics  indicating that they are more attractive than usual for the current
+task  It will make other transitions less likely than the passive dynamics  indicating that transitions to these states
+should be avoided  We therefore de ne the instantaneous
+rewards for the subtask states at level   to be proportional to
+the difference between controlled and passive dynamics at
+
+the higher level      
+
+    al 
+rl
+
+ 
+
+      pl 
+
+ 
+
+   
+
+ 
+
+This effectively inpaints extra rewards for the lower layer 
+indicating which subtask states are desirable from the perspective of the higher layer 
+The lower layer MLMDP then uses its basis of tasks to determine   task weighting wl which will optimally achieve
+the reward structure rl
+  speci ed by the higher layer by solving   The reward structure speci ed by the higher layer
+may not correspond to any one task learned by the lower
+layer  but it will nonetheless be performed well by forming
+  concurrent blend of many different tasks and leveraging
+the compositionality afforded by the LMDP framework 
+This scheme may also be interpreted as implementing  
+parametrized option  but with performance guarantees for
+any parameter setting  Masson et al   
+We now describe the execution model  see Supplementary
+Material for pseudocode listing  The true state of the agent
+is represented in the base level      and next states are
+drawn from the controlled transition distribution  If the next
+state is an interior state  one unit of time passes and the state
+is updated as usual  If the next state is   subtask state  the
+next layer of the hierarchy is accessed at its corresponding
+state  no  real  time passes during this transition  The higher
+level then draws its next state  and in so doing can access
+the next level of hierarchy by transitioning to one of its
+subtask states  and so on  At some point    level will elect
+not to access   subtask state  it then transmits its desired
+rewards from Eqn    to the layer below it  The lower
+layer then solves its multitask LMDP problem to compute
+its own optimal actions  and the process continues down
+to the lowest layer      which  after updating its optimal
+actions  again draws   transition  Lastly  if the next state is
+  terminal boundary state  the layer terminates itself  This
+corresponds to   level of the hierarchy determining that it
+no longer has useful information to convey  Terminating
+  layer disallows future transitions from the lower layer
+to its subtask states  and corresponds to inpainting in nite
+negative rewards onto the lower level subtask states 
+
+  Computational complexity advantages of
+
+hierarchical decomposition
+
+To concretely illustrate the value of hierarchy  consider navigation through      ring of   states  where the agent must
+perform   different tasks corresponding to navigating to
+each particular state  We take the passive dynamics to be
+local    nonzero probability of transitioning just to adjacent
+states in the ring  or remaining still  In one step of   iteration  Eqn    the optimal value function progresses at best
+   states per iteration because of the local passive dynamics  see Precup et al    for   similar argument  It
+
+Hierarchy Through Composition with Multitask LMDPs
+
+therefore requires       iterations in    at implementation
+for   useful value function signal to arrive at the furthest
+point in the ring for each task  As there are   tasks  the
+ at implementation requires       iterations to learn all
+of them 
+Instead suppose that we construct   hierarchy by placing  
+subtask every     log   states  and do this recursively to
+form   layers  The recursion terminates when          
+yielding     logM    With the correct higher level policy
+sequencing subtasks  each policy at   given layer only needs
+to learn to navigate between adjacent subtasks  which are
+no more than   states apart  Hence   iteration can be
+terminated after       iterations  At level            
+of the hierarchy  there are       subtasks  and       
+boundary reward tasks to learn  Overall this yields
+
+  cid   
+
+     
+
+ 
+
+    cid        log    
+
+  cid   
+
+total iterations  see Supplementary Material for derivation
+and numerical veri cation    similar analysis shows that
+this advantage holds for memory requirements as well  The
+ at scheme requires       nonzero elements of   to encode all tasks  while the hierarchical scheme requires only
+    log     Hence hierarchical decomposition can yield
+qualitatively more ef cient solutions and resource requirements  reminiscent of theoretical results obtained for perceptual deep learning  Bengio    Bengio   LeCun   
+We note that this advantage only occurs in the multitask
+setting  the  at scheme can learn one speci   task in time
+      Hence hierarchy is bene cial when performing an
+ensemble of tasks  due to the reuse of component policies
+across many tasks  see also Solway et al   
+
+Figure   Rooms domain      Four room domain with subtask locations marked as red dots  free space in white and obstacles in black 
+and derived higherlevel passive dynamics shown as weighted links
+between subtasks      Convergence as trajectory length over learning epochs with and without the help of the hierarchy      Sample
+trajectory  gray line  from upper left to goal location in bottom
+right      Evolution of distributed task weights on each subtask
+location over the course of the trajectory in panel    
+
+one preinitialized using Ziteration  From the start of learning  the hierarchy is able to drive the agent to the vicinity
+of the goal  Fig   cd  illustrates the evolving distributed
+task representation commanded by the higher layer to the
+lower layer over the course of   trajectory  At each time
+point  several subtasks have nonzero weight  highlighting
+the concurrent execution in the system 
+
+  Experiments
+  Conceptual Demonstration
+To illustrate the operation of our scheme  we apply it to  
+   gridworld  rooms  domain  Fig      The agent is
+required to navigate through an environment consisting of
+four rooms with obstacles to   goal location in one of the
+rooms  The agent can move in the four cardinal directions or
+remain still  To build   hierarchy  we place six higher layer
+subtask goal locations throughout the domain  Fig      red
+dots  The inferred passive dynamics for the higher layer
+MLMDP is shown in Fig      as weighted lines between
+these subtask states  The higher layer passive dynamics conform to the structure of the problem  with the probability of
+transition between higher layer states roughly proportional
+to the distance between those states at the lower layer 
+As   basic demonstration that the hierarchy conveys useful
+information  Fig      shows Zlearning curves for the base
+layer policy with and without an omniscient hierarchy      
+
+Figure   Desirability functions 
+    Desirability function over
+states as agent moves through environment  showing the effect
+of reward inpainting from the hierarchy      Desirability function
+over states as goal location moves  Higher layers inpaint rewards
+into subtasks that will move the agent nearer the goal 
+
+Fig      shows the composite desirability function resulting
+from the concurrent task blend for different agent locations 
+Fig      highlights the multitasking ability of the system 
+
+Trajectory lengthEpochsStepsTask blend weightsABCDEFB                 FLATHIERARCHICAL     Hierarchy Through Composition with Multitask LMDPs
+
+showing the composite desirability function as the goal
+location is moved  The leftmost panel  for instance  shows
+that rewards are painted concurrently into the upper left and
+bottom right rooms  as these are both equidistant to the goal 
+
+  Quantitative Comparison
+In order to quantitatively demonstrate the performance improvements possible with our method we consider the problem of   mobile robot navigating through an of ce block in
+search of   charging station  This domain is shown in Fig   
+and is taken from previous experiments in transfer learning
+ Fern ndez   Veloso   
+Although the agent again moves in one of the four cardinal
+directions at each time step  the agent is additionally provided with   policy to navigate to each room in the of ce
+block  with goal locations marked by an     in Fig    The
+goal of the agent is to learn   policy to navigate to the nearest charging station from any location in the of ce block 
+given that there are   number of different charging stations
+available  one per room  but only in some of the rooms 
+This corresponds to an  OR  navigation problem  navigating
+to location   OR    while knowing separately   policy to
+get to    and   policy to get to    Concretely  the problem is
+to navigate to the nearest of two unknown subtask locations 
+The agent is randomly initialized at interior states  and the
+trajectory lengths are capped at   steps 
+
+Figure   The of ce building domain  Each  subtask  or  option 
+policy navigates the agent to one of the rooms 
+
+We compare   onelayer deep implementation of our method
+to   simple implementation of the options framework  Sutton et al    In the options framework the agent   action
+space is augmented with the full set of option policies  The
+initialization set for these options is the full state space  so
+that any option may be executed at any time  The termination condition is de ned such that the option terminates
+only when it reaches its goal state  To minimize the action
+space for the options agent  we remove the primitive actions  reducing the learning problem to simply choosing the
+single correct option from each state  The options learning
+problem is solved using Qlearning with sigmoidal learning
+rate decrease and  greedy exploitation  These parameters
+were optimized on   coarse grid to yield the fastest learning
+curves  Results are averaged over   runs 
+
+Figure   Learning rates  Our method jumpstarts performance
+in the OR task  while the options agent must learn   stateaction
+mapping 
+
+Fig    shows that our agent receives   signi cant jumpstart
+in learning  By leveraging the distributed representation
+provided by our scheme  the agent is required only to learn
+when to request information from the higher layer  Although the task is novel  the higher layer can express it as  
+combination of prior tasks  Conversely  the options agent
+must learn   unique mapping between all states and actions 
+This issue is exacerbated as the number of available options
+grows  Rosman   Ramamoorthy   
+
+  Conclusion
+The Multitask LMDP module provides   novel approach
+to control hierarchies  based on   distributed representation of tasks and parallel execution  Rather than learn to
+perform one task or    xed library of tasks  it exploits the
+compositionality provided by linearly solvable Markov decision processes to perform an in nite space of task blends
+optimally  Stacking the module yields   deep hierarchy
+abstracted in state space and time  with the potential for
+qualitative ef ciency improvements 
+Experimentally  we have shown that the distributed representation provided by our framework can speed up learning
+in   simple navigation task  by representing   new task as  
+combination of prior tasks 
+While   variety of sophisticated reinforcement learning
+methods have made use of deep networks as capable function approximators  Mnih et al    Lillicrap et al   
+Levine et al    in this work we have sought to transfer some of the underlying intuitions  such as parallel distributed representations and stackable modules  to the control setting  In the future this may allow other elements
+of the deep learning toolkit to be brought to bear in this
+setting  most notably gradientbased learning of the subtask
+structure itself 
+
+Trajectory LengthEpochsOptionsOur MethodHierarchy Through Composition with Multitask LMDPs
+
+Acknowledgements
+We thank our reviewers for thoughtful comments  AMS
+acknowledges support from the Swartz Program in Theoretical Neuroscience at Harvard  AE and BR acknowledge
+support from the National Research Foundation of South
+Africa 
+
+References
+Barreto     Munos     Schaul     and Silver     Successor
+Features for Transfer in Reinforcement Learning  arXiv   
+
+Barto       and Madadevan     Recent Advances in Hierarchical
+Reinforcement Learning  Discrete Event Dynamic Systems 
+Theory and Applications     
+
+Bellman       Dynamic Programming  Princeton University Press 
+
+Princeton  NJ   
+
+Bengio     Learning Deep Architectures for AI  Foundations and
+
+Trends in Machine Learning     
+
+Bengio     and LeCun     Scaling learning algorithms towards AI 
+In Bottou     Chapelle     DeCoste     and Weston      eds 
+LargeScale Kernel Machines  MIT Press   
+
+Bonarini     Lazaric     and Restelli    
+
+Incremental Skill
+Acquisition for Selfmotivated Learning Animats 
+In Nol 
+   Baldassare     Calabretta     Hallam     Marocco    
+Miglino     Meyer       and Parisi      eds  Proceedings of
+the Ninth International Conference on Simulation of Adaptive
+Behavior  SAB  volume   pp    Heidelberg 
+  Springer Berlin 
+
+Borsa     Graepel     and ShaweTaylor     Learning Shared
+Representations in Multitask Reinforcement Learning  arXiv 
+ 
+
+Botvinick       Niv     and Barto       Hierarchically organized
+behavior and its neural foundations    reinforcement learning
+perspective  Cognition       
+
+Burridge        Rizzi        and Koditschek       Sequential
+Composition of Dynamically Dexterous Robot Behaviors  The
+International Journal of Robotics Research     
+ 
+
+Dayan    
+
+Improving Generalization for Temporal Difference
+Learning  The Successor Representation  Neural Computation 
+     
+
+Dayan     and Hinton     Feudal Reinforcement Learning  In
+
+NIPS   
+
+Dietterich       Hierarchical Reinforcement Learning with the
+MAXQ Value Function Decomposition  Journal of Arti cial
+Intelligence Research     
+
+Drummond     Composing functions to speed up reinforcement
+learning in   changing world  In   dellec     and Rouveirol    
+ eds  Machine Learning  ECML  pp    Heidelberg 
+  Springer Berlin 
+
+Dvijotham     and Todorov    
+
+Inverse Optimal Control with
+
+LinearlySolvable MDPs  In ICML   
+
+Dvijotham     and Todorov       uni ed theory of linearly solvable
+
+optimal control  Uncertainty in Arti cial Intelligence   
+
+Fern ndez     and Veloso     Probabilistic policy reuse in   reinforcement learning agent  Proceedings of the  fth international
+joint conference on Autonomous agents and multiagent systems 
+pp     
+
+Foster     and Dayan     Structure in the Space of Value Functions 
+
+Machine Learning     
+
+Hinton       and Salakhutdinov       Reducing the dimensionality
+of data with neural networks  Science     
+ 
+
+Hinton       Osindero     and Teh         Fast Learning
+Algorithm for Deep Belief Nets  Neural Computation   
+   
+
+Howard       Dynamic Programming and Markov Processes 
+
+MIT Press  Cambridge  MA   
+
+Jonsson     and   mez     Hierarchical LinearlySolvable Markov
+
+Decision Problems  In ICAPS   
+
+Kappen       Linear Theory for Control of Nonlinear Stochastic
+
+Systems  Physical Review Letters       
+
+Levine     Finn     Darrell     and Abbeel     Endto End
+Training of Deep Visuomotor Policies  Journal of Machine
+Learning Research     
+
+Lillicrap       Hunt       Pritzel     Heess     Erez     Tassa 
+   Silver     and Wierstra     Continuous control with deep
+reinforcement learning  arXiv   
+
+Masson     Ranchod     and Konidaris       Reinforcement
+Learning with Parameterized Actions  In Proceedings of the
+Thirtieth AAAI Conference on Arti cial Intelligence  pp   
+     
+
+Mausam and Weld       Planning with Durative Actions in
+Stochastic Domains  Journal of Arti cial Intelligence Research 
+   
+
+Mnih     Kavukcuoglu     Silver     Rusu       Veness    
+Bellemare       Graves     Riedmiller     Fidjeland      
+Ostrovski     Petersen     Beattie     Sadik     Antonoglou 
+   King     Kumaran     Wierstra     Legg     and Hassabis 
+   Humanlevel control through deep reinforcement learning 
+Nature     
+
+Pan     Theodorou       and Kontitsis     Sample Ef cient Path
+
+Integral Control under Uncertainty  In NIPS   
+
+Parr     and Russell     Reinforcement learning with hierarchies
+
+of machines  In NIPS   
+
+Precup     Sutton     and Singh     Theoretical results on reinforcement learning with temporally abstract options  In ECML 
+ 
+
+RibasFernandes         Solway     Diuk     McGuire       Barto 
+     Niv     and Botvinick         neural signature of
+hierarchical reinforcement learning  Neuron     
+ 
+
+Hierarchy Through Composition with Multitask LMDPs
+
+Rosman     and Ramamoorthy     What good are actions  Accelerating learning using learned action priors  In   IEEE
+International Conference on Development and Learning and
+Epigenetic Robotics  ICDL  number November  IEEE     
+
+Ruvolo     and Eaton     ELLA  An ef cient lifelong learning
+algorithm  Proceedings of the  th International Conference
+on Machine Learning     
+
+Schaul     Horgan     Gregor     and Silver     Universal Value
+Function Approximators  Proceedings of The  nd International Conference on Machine Learning  pp     
+
+Solway     Diuk       rdova     Yee     Barto       Niv    
+and Botvinick       Optimal Behavioral Hierarchy  PLoS
+Computational Biology         
+
+Sutton       and Barto       Reinforcement Learning  An Intro 
+
+duction  The MIT Press   
+
+Sutton       Precup     and Singh     Between MDPs and semiMDPs    framework for temporal abstraction in reinforcement
+learning  Arti cial Intelligence       
+
+Taylor       and Stone     Transfer Learning for Reinforcement
+Learning Domains    Survey  Journal of Machine Learning
+Research     
+
+Todorov     Linearlysolvable Markov decision problems  In NIPS 
+
+ 
+
+Todorov     Ef cient computation of optimal actions  Proceedings
+of the National Academy of Sciences     
+   
+
+Todorov     Compositionality of optimal control laws  In NIPS 
+
+   
+
+

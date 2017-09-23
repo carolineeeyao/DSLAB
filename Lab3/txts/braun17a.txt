@@ -1,0 +1,1130 @@
+Lazifying Conditional Gradient Algorithms
+
+  abor Braun     Sebastian Pokutta     Daniel Zink    
+
+Abstract
+
+Conditional gradient algorithms  also often called
+FrankWolfe algorithms  are popular due to their
+simplicity of only requiring   linear optimization
+oracle and more recently they also gained significant traction for online learning  While simple
+in principle  in many cases the actual implementation of the linear optimization oracle is costly 
+We show   general method to lazify various conditional gradient algorithms  which in actual computations leads to several orders of magnitude of
+speedup in wallclock time  This is achieved by
+using   faster separation oracle instead of   linear
+optimization oracle  relying only on few linear
+optimization oracle calls 
+
+     
+
+min
+   
+
+ 
+
+  Introduction
+Convex optimization is an important technique both from
+  theoretical and an applications perspective  Gradient descent based methods are widely used due to their simplicity
+and easy applicability to many realworld problems  We are
+interested in solving constraint convex optimization problems of the form
+
+where   is   smooth convex function and   is   polytope 
+with access to   being limited to  rstorder information 
+     we can obtain rf     and       for   given       and
+access to   via   linear minimization oracle which returns
+    argminv   cx for   given linear objective   
+When solving Problem   using gradient descent approaches in order to maintain feasibility  typically   projection step is required  This projection back into the feasible
+region   is potentially computationally expensive  especially for complex feasible regions in very large dimensions 
+As such projectionfree methods gained   lot of attention
+recently  in particular the FrankWolfe algorithm  Frank
+
+ ISyE  Georgia Institute of Technology  Atlanta  GA  Corre 
+
+spondence to  Daniel Zink  daniel zink gatech edu 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright   by
+the author   
+
+  start vertex  LPP linear minimization oracle
+
+Algorithm   FrankWolfe Algorithm  Frank   Wolfe 
+ 
+Input  smooth convex   function with curvature        
+Output  xt points in  
+  for       to       do
+ 
+vt   LPP  rf  xt 
+xt           xt    tvt with       
+ 
+  end for
+
+  
+
+  Wolfe     also known as conditional gradient descent  Levitin   Polyak    see also  Jaggi    for
+an overview  and its online version  Hazan   Kale   
+due to their simplicity  We recall the basic FrankWolfe
+algorithm in Algorithm   These methods eschew the projection step and rather use   linear optimization oracle to
+stay within the feasible region  While convergence rates
+and regret bounds are often suboptimal  in many cases the
+gain due to only having to solve   single linear optimization
+problem over the feasible region in every iteration still leads
+to signi cant computational advantages  see       Hazan
+  Kale    Section   This led to conditional gradients algorithms being used for      online optimization
+and more generally machine learning and the property that
+these algorithms naturally generate sparse distributions over
+the extreme points of the feasible region  sometimes also
+refereed to as atoms  is often helpful  Further increasing
+the relevance of these methods  it was shown recently that
+conditional gradient methods can also achieve linear convergence  see       Garber   Hazan    LacosteJulien
+  Jaggi    Garber   Meshi    as well as that the
+number of total gradient evaluations can be reduced while
+maintaining the optimal number of oracle calls as shown in
+ Lan   Zhou   
+
+accuracy        objective value 
+
+Oracle   Weak Separation Oracle LPsepP            
+Input      Rn linear objective        point       
+Output  Either         vertex with               or
+  false               for all        
+Unfortunately  for complex feasible regions even solving the
+linear optimization problem might be timeconsuming and
+as such the cost of solving the LP might be nonnegligible 
+
+Lazifying Conditional Gradient Algorithms
+
+This could be the case       when linear optimization over
+the feasible region is   hard problem or when solving largescale optimization problems or learning problems  As such
+it is natural to ask the following questions 
+
+    Does the linear optimization oracle have to be called
+
+in every iteration 
+
+ ii  Does one need approximately optimal solutions for
+
+convergence 
+
+ iii  Can one reuse information across iteration 
+
+We will answer these questions in this work  showing that    
+the LP oracle is not required to be called in every iteration 
+that  ii  much weaker guarantees are suf cient  and that  iii 
+we can reuse information  To signi cantly reduce the cost
+of oracle calls while maintaining identical convergence rates
+up to small constant factors  we replace the linear optimization oracle by    weak  separation oracle  see Oracle  
+which approximately solves   certain separation problem
+within   multiplicative factor and returns improving vertices
+ or atoms  We stress that the weak separation oracle is
+signi cantly weaker than approximate minimization  which
+has been already considered in  Jaggi    In fact  if the
+oracle returns an improving vertex then this vertex does not
+imply any guarantee in terms of solution quality with respect
+to the linear minimization problem  It is this relaxation of
+the dual guarantees that will provide   signi cant speedup
+as we will see later  At the same time  in case that the oracle
+returns false  we directly obtain   dual bound via convexity 
+   weak  separation oracle can be realized by   single call
+to   linear optimization oracle  however with two important
+differences  It allows for caching and early termination 
+Previous solutions are cached  and  rst it is veri ed whether
+any of the cached solutions satisfy the oracle   separation
+condition  The underlying linear optimization oracle has to
+be called  only when none of the cached solutions satisfy
+the condition  and the linear optimization can be stopped as
+soon as   satisfactory solution with respect to the separation
+condition is found  See Algorithm   for pseudocode  early
+termination is implicit in line  
+We call this technique lazy optimization and we will demonstrate signi cant speedups in wallclock performance  see
+     Figure   while maintaining identical theoretical convergence rates 
+To exemplify our approach we provide conditional gradient algorithms employing the weak separation oracle for
+the standard FrankWolfe algorithm as well as the variants
+in  Hazan   Kale    Garber   Meshi    Garber
+  Hazan    which have been chosen due to requiring modi ed convergence arguments that go beyond those
+required for the vanilla FrankWolfe algorithm  Complementing the theoretical analysis we report computational
+
+accuracy        objective value 
+
+  false               for all        
+
+Oracle   LPsepP             via LP oracle
+Input      Rn linear objective        point       
+Output  Either         vertex with               or
+  if       cached with               exists then
+ 
+  else
+ 
+ 
+ 
+ 
+ 
+ 
+  end if
+
+return    Cache call 
+compute     argmaxx         LP call 
+if               then
+else
+
+return   and add   to cache
+
+return false
+
+end if
+
+results demonstrating effectiveness of our approach via  
+signi cant reduction in wallclock running time compared
+to their linear optimization counterparts 
+
+Related Work
+There has been extensive work on FrankWolfe algorithms
+and conditional gradient descent algorithms and we will be
+only able to review work most closely related to ours  The
+FrankWolfe algorithm was originally introduced in  Frank
+  Wolfe     also known as conditional gradient descent
+ Levitin   Polyak    and has been intensely studied in
+particular in terms of achieving stronger convergence guarantees as well as af neinvariant versions  We demonstrate
+our approach for the vanilla FrankWolfe algorithm  Frank
+  Wolfe     see also  Jaggi    as an introductory example  We then consider more complicated variants
+that require nontrivial changes to the respective convergence proofs to demonstrate the versatility of our approach 
+This includes the linearly convergent variant via local linear optimization  Garber   Hazan    as well as the
+pairwise conditional gradient variant of  Garber   Meshi 
+  which is especially ef cient in terms of implementation  However  our technique also applies to the AwayStep
+FrankWolfe algorithm  the FullyCorrective FrankWolfe
+algorithm  as well as the BlockCoordinate FrankWolfe algorithm  Recently  in  Freund   Grigas    guarantees
+for arbitrary stepsize rules were provided and an analogous analysis can be also performed for our approach  On
+the other hand  the analysis of the inexact variants      
+with approximate linear minimization does not apply to our
+case as our oracle is signi cantly weaker than approximate
+minimization as pointed out earlier  For more information 
+we refer the interested reader to the excellent overview in
+ Jaggi    for FrankWolfe methods in general as well as
+ LacosteJulien   Jaggi    for an overview with respect
+to global linear convergence 
+
+Lazifying Conditional Gradient Algorithms
+
+It was also recently shown in  Hazan   Kale    that
+the FrankWolfe algorithm can be adjusted to the online
+learning setting and here we provide   lazy version of this
+algorithm  Combinatorial convex online optimization has
+been investigated in   long line of work  see       Kalai
+  Vempala    Audibert et al    Neu   Bart ok 
+  It is important to note that our regret bounds hold
+in the structured online learning setting       our bounds
+depend on the  diameter or sparsity of the polytope  rather
+than its ambient dimension for arbitrary convex functions
+ see       Cohen   Hazan    Gupta et al    We
+refer the interested reader to  Hazan    for an extensive
+overview 
+  key component of the new oracle is the ability to cache
+and reuse old solutions  which accounts for the majority
+of the observed speed up  The idea of caching of oracle
+calls was already explored in various other contexts such
+as cutting plane methods  see       Joachims et al   
+as well as the BlockCoordinate FrankWolfe algorithm in
+ Shah et al    Osokin et al    Our lazi cation
+approach  which uses caching  is different however in the
+sense that our weak separation oracle does not resemble an
+approximate linear optimization oracle with   multiplicative
+approximation guarantee  see  Osokin et al    Proof of
+Theorem   Appendix    and  LacosteJulien et al   
+for comparison to our setup  In fact  our weaker oracle does
+not imply any approximation guarantee and differs from
+approximate minimization as done      in  Jaggi   
+substantially 
+
+Contribution
+The main technical contribution of this paper is   new approach  whereby instead of  nding the optimal solution 
+the oracle is used only to  nd   good enough solution or  
+certi cate that such   solution does not exist  both ensuring the desired convergence rate of the conditional gradient
+algorithms 
+Our contribution can be summarized as follows 
+
+    Lazifying approach  We provide   general method to
+lazify conditional gradient algorithms  For this we replace
+the linear optimization oracle with   weak separation oracle 
+which allows us to reuse feasible solutions from previous
+oracle calls  so that in many cases the oracle call can be
+skipped  In fact  once   simple representation of the underlying feasible region is learned no further oracle calls are
+needed  We also demonstrate how parameterfree variants
+can be obtained 
+
+ ii  Lazi ed conditional gradient algorithms  We exemplify our approach by providing lazy versions of the vanilla
+FrankWolfe algorithm as well as of the conditional gradient
+methods in  Hazan   Kale    Garber   Hazan   
+
+Garber   Meshi   
+
+ iii  Weak separation through augmentation  We show in
+the case of   polytopes how to implement   weak separation oracle with at most   calls to an augmentation oracle
+that on input     Rn and       provides either an improving solution       with cx   cx or ensures optimality 
+where   denotes the  diameter of     This is useful when
+the solution space is sparse 
+
+ iv  Computational experiments  We demonstrate computational superiority by extensive comparisons of the weak
+separation based versions with their original versions  In
+all cases we report signi cant speedups in wallclock time
+often of several orders of magnitude 
+
+It is important to note that in all cases  we inherit the same
+requirements  assumptions  and properties of the baseline
+algorithm that we lazify  This includes applicable function classes  norm requirements  as well as smoothness and
+ strong  convexity requirements  We also maintain identical
+convergence rates up to  small  constant factors 
+
+Outline
+We brie   recall notation and notions in Section   and consider conditional gradients algorithms in Section   In Section   we explain how parameterfree variants of the proposed algorithms can be obtained  Finally  in Section  
+we provide some experimental results  In the supplemental
+material we consider two more variants of conditional gradients algorithms  Sections   and    we show that we can
+realize   weak separation oracle with an even weaker oracle
+in the case of combinatorial problem  Section    and we
+provide additional computational results  Section   
+
+  Preliminaries
+Let     be an arbitrary norm on Rn  and let      denote
+the dual norm of      We will specify the applicable
+norm in the later sections    function   is LLipschitz
+if                Lky   xk for all        dom     
+convex function   is smooth with curvature at most   if
+                          rf                  for
+all        dom   and             function   is Sstrongly
+  ky   xk  for
+convex if                 rf              
+all        dom    Unless stated otherwise Lipschitz continuity and strong convexity will be measured in the norm
+     Moreover  let Br                 yk      be the ball
+around   with radius   with respect to      In the following 
+  will denote the feasible region    polytope and the vertices
+of   will be denoted by            vN 
+
+Lazifying Conditional Gradient Algorithms
+
+  Lazy Conditional Gradients
+We start with the most basic FrankWolfe algorithm as  
+simple example how   conditional gradient algorithm can
+be lazi ed by means of   weak separation oracle  We will
+also use the basic variant to discuss various properties and
+implications  We then show how the more complex FrankWolfe algorithms in  Garber   Hazan    and  Garber  
+Meshi    can be lazi ed  Throughout this section    
+denotes the  norm 
+
+  Lazy Conditional Gradients    basic example
+We start with lazifying the original FrankWolfe algorithm
+ arguably the simplest Conditional Gradients algorithm 
+adapting the baseline argument from  Jaggi    Theorem   While the vanilla version has suboptimal convergence rate       its simplicity makes it an illustrative
+example of the main idea of lazi cation  The lazy algorithm  Algorithm   maintains an upper bound    on the
+convergence rate  guiding its eagerness for progress when
+searching for an improving vertex vt  If the oracle provides
+an improving vertex vt we refer to this as   positive call and
+we call it   negative call otherwise 
+
+Algorithm   Lazy Conditional Gradients  LCG 
+Input  smooth convex   function with curvature        
+  start vertex  LPsepP weak linear separation oracle 
+accuracy       initial upper bound  
+
+    
+ 
+
+        
+vt   LPsepP  rf  xt  xt        
+if vt   false then
+
+ 
+
+    
+ 
+
+Output  xt points in  
+  for       to       do
+ 
+ 
+ 
+ 
+ 
+ 
+end if
+ 
+  end for
+
+else
+
+xt    xt
+xt           xt    tvt
+
+The step size    is chosen to  approximately  minimize   
+in Line   roughly    KC 
+Theorem   Assume   is convex and smooth with curvature    Then Algorithm   with         
+       has
+convergence rate
+
+   xt           
+
+  max           
+
+          
+
+ 
+
+where    is   minimum point of   over    
+
+Proof  We prove by induction that    xt               
+The claim is clear for       by the choice of   Assuming
+the claim is true for    we prove it for       We distin 
+
+guish two cases depending on the return value of the weak
+separation oracle in Line  
+When the oracle returns an improving solution vt  which we
+call the positive case  then rf  xt xt vt          which
+is used in the second inequality below  The  rst inequality
+follows by smoothness of    and the third inequality by the
+induction hypothesis 
+
+   xt         
+
+    
+ 
+
+ 
+
+     xt             trf  xt vt   xt   
+    
+ 
+
+     xt              
+
+  
+ 
+          
+
+ 
+
+  
+ 
+
+ 
+    
+ 
+
+ 
+
+ 
+
+    
+
+When the oracle returns no improving solution  then in particular rf  xt xt            hence by Line      xt   
+           xt            rf  xt xt          
+Finally  using the speci   values of    we prove the upper
+bound
+
+     
+
+  max           
+
+          
+
+by induction on    The claim is obvious for       The induction step is an easy computation relying on the de nition
+of    on Line  
+          
+
+  max     
+
+  max   
+
+    
+
+ 
+
+ 
+
+ 
+
+ 
+
+    
+
+      
+ 
+
+ 
+
+      
+ 
+      
+  
+
+    max           
+  max           
+
+ 
+
+          
+
+ 
+
+      
+
+              
+
+Here the second equation follows via pluggingin the choice
+for    for one of the    in the quadratic term and last inequality follows from       and the concrete choice of
+   
+Remark    Discussion of the weak separation oracle   
+few remarks are in order 
+
+    Interpretation of weak separation oracle  The weak
+separation oracle provides new extreme points  or vertices 
+vt that ensure necessary progress to converge at the proposed
+rate    or it certi es that we are already  tclose to the
+optimal solution  It is important to note that the two cases in
+Oracle   are not mutually exclusive  the oracle might return
+      with                positive call  returning  
+vertex   with improvement     while still             
+for all        negative call  certifying that there is no vertex
+
+Lazifying Conditional Gradient Algorithms
+
+  that can improve by   This   desirable property as it
+makes the separation problem much easier and the algorithm
+works with either answer in the ambiguous case 
+
+ ii  Choice of    The   parameter can be used to bias
+the oracle towards positive calls       returning improving
+directions  We would also like to point out that the algorithm
+above as well as those below will also work for      
+however we show in supplemental material  Section   
+that we can use an even weaker oracle to realize   weak
+separation oracle if       and for consistency  we require
+      throughout  In the case       the two cases in the
+oracle are mutually exclusive 
+
+ iii  Effect of caching and early termination  When realizing the weak separation oracle  the actual linear optimization oracle has to be only called if none of the previously
+seen vertices  or atoms  satis es the separation condition 
+Moreover  the weak separation oracle has to only produce
+  satisfactory solution and not an approximately optimal
+one  These two properties are responsible for the observed
+speedup  see Figure   Moreover  the convex combinations
+of vertices of   that represent the solutions xt are extremely
+sparse as we reuse  cached  vertices whenever possible 
+
+ iv  Dual certi cates  By not computing an approximately
+optimal solution  we give up dual optimality certi cates  For
+  given point         let        maxv   rf          
+denote the Wolfe gap  We have                     
+where      argminx         by convexity 
+In those
+rounds   where we obtain an improving vertex we have
+no information about   xt  However  if the oracle returns false in round    then we obtain the dual certi cate
+   xt              xt       
+    Rate of convergence    close inspection of the algorithm utilizing the weak separation oracle suggests that the
+algorithm converges only at the worstcase convergence rate
+that we propose with the    sequence  This however is only
+an artefact of the simpli ed presentation for the proof of
+the worstcase rate  We can easily adjust the algorithm to
+implicitly perform   search over the rate    combined with
+line search for   This leads to   parameterfree variant of
+Algorithm  as given in Section   and comes at the expense
+of    small  constant factor deterioration of the worstcase
+rate guarantee  see also Supplementary Material   iii  for
+an indepth discussion 
+
+We discuss potential implementation improvements in Supplementary Material   
+
+  Lazy Pairwise Conditional Gradients
+In this section we provide   lazy variant  Algorithm   of
+the Pairwise Conditional Gradient algorithm from  Garber
+
+  Meshi    using separation instead of linear optimization  We make identical assumptions  the feasible region
+is     polytope given in the form          Rn      
+      Ax      where   denotes the allone vector of
+compatible dimension  in particular all vertices of   have
+only   entries 
+
+Algorithm   Lazy Pairwise Conditional Gradients  LPCG 
+Input  polytope     smooth and Sstrongly convex function
+  with curvature    accuracy          nonincreasing
+stepsizes
+
+Output  xt points
+         arbitrary and                  
+  for                 do
+ 
+
+de ne  rf  xt    Rm as follows 
+ rf  xt    rf  xt  
+
+ 
+
+if  xt      
+if  xt      
+
+ 
+
+ 
+
+   
+
+    
+   
+
+        
+ct   rf  xt   rf  xt 
+            LPsepP   ct   xt  xt    
+
+            false then
+xt    xt
+     max                  
+xt    xt        
+
+         
+
+  
+
+   
+if    
+
+ 
+ 
+ 
+ 
+ 
+ 
+end if
+ 
+  end for
+
+else
+
+    
+
+Observe that Algorithm   calls LPsep on the cartesian product of   with itself  Choosing the objective function as
+in Line   allows us to simultaneously  nd an improving
+direction and an awaystep direction 
+Theorem   Let    be   minimum point of   in     and  
+an upper bound of               Furthermore  let     
+   
+     
+  card         KC      min    
+           and          card     
+   xt                        
+        
+
+rithm   has convergence rate
+
+  then Algo 
+
+   
+
+ 
+
+ 
+
+where           
+    
+We recall   technical lemma for the proof 
+Lemma    Garber   Meshi    Lemma   Let
+           There exists vertices vi of   such that    
+         with
+            vi  Pk
+Pk
+    ivi and    Pk
+       pcard   kx   yk 
+                andPk
+
+Lazifying Conditional Gradient Algorithms
+
+Proof of Theorem   The feasibility of the iterates xt is
+ensured by Line   and the monotonicity of the sequence
+      with the same argument as in  Garber   Meshi 
+  Lemma   and Observation  
+We  rst show by induction that    xt              For
+      we have                 Now assume the statement for some       In the negative case  Line   we use
+the guarantee of Oracle   to get ct xt  xt           
+for all             which is equivalent to  as ct xt  xt     
+ rf  xt      rf  xt        
+
+and therefore
+
+  
+
+  
+
+rf  xt          
+
+  
+  
+
+ 
+
+ 
+
+for all            with supp      supp xt  We further use Lemma   to write xt   Pk
+    ivi and     
+Pk
+         vi  Pk
+    iz with                 and
+        pcard   kxt             card     
+Pk
+ 
+    using the induction hypothesis and the strong convexity
+in the second inequality  Then    xt             xt 
+        rf  xt xt       Pk
+      vi          xt   
+    where we used Equation   for the last inequality 
+For the positive case  Lines   and   we get  using  rst
+smoothness of    then               and rf  xt   
+   
+           tK  and  nally the de nition of    
+                 
+   xt               xt        
+           
+         trf  xt   
+ 
+   
+       
+    
+ 
+ 
+
+ 
+   
+ 
+
+  
+ tK
+
+  
+   
+
+Plugging in the values of    and    to the de nition of   
+gives the desired bound 
+
+    
+
+       
+   
+      
+   
+     
+
+    
+
+        
+        
+
+     
+
+                
+        
+
+ 
+
+  Parameterfree Conditional Gradients via
+
+Weak Separation
+
+We now provide   parameterfree variant of the Lazy FrankWolfe Algorithm  We stress that the worstcase convergence
+rate is identical up to   small constant factor  Here we  nd  
+tight initial bound   with   single extra LP call  which can
+be also done approximately as long as   is   valid upper
+bound  Alternatively  one can perform binary search via the
+weak separation oracle as described earlier 
+Note that the accuracy parameter   in Algorithm   is  
+parameter of the oracle and not of the algorithm itself  We
+
+ Initial bound 
+
+Algorithm   Parameterfree Lazy Conditional Gradients
+ LCG 
+Input  smooth convex function           start vertex 
+LPsepP weak linear separation oracle  accuracy      
+Output  xt points in  
+      maxx   rf           
+  for       to       do
+ 
+vt   LPsepP  rf  xt  xt        
+if vt   false then
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+end if
+ 
+  end for
+
+xt    xt
+        
+else
+     argmin         xt    vt 
+xt           xt    tvt
+        
+
+ Update iterate 
+
+ Update  
+
+ 
+
+will show now that Algorithm   converges in the worstcase
+at   rate identical to Algorithm    up to   small constant
+factor 
+Theorem   Let   be   smooth convex function with curvature    Algorithm   converges at   rate proportional to
+    In particular to achieve   bound    xt             
+given an initial upper bound                   the
+number of required steps is upper bounded by
+
+    dlog           Kdlog  KCe  
+
+    
+
+ 
+
+ 
+
+Proof  The main idea of the proof is that while negative
+answers to oracle calls halve the dual upper bound    
+positive oracle calls signi cantly decrease the function value
+of the current point 
+We analyze iteration   of the algorithm  If Oracle   in Line  
+returns   negative answer       false  case   then this
+guarantees rf  xt xt            for all         in
+particular  using convexity     xt               xt   
+        rf  xt xt                 
+If Oracle   returns   positive answer  case   then we have
+  by smoothness
+   xt       xt                
+of    By minimality of     therefore    xt       xt   
+min        which is  
+  CK 
+if       KC  and              
+  if       KC 
+Now we bound the number    of consecutive positive oracle
+calls immediately following an iteration   with   negative
+oracle call  Note that the same argument bounds the number
+of initial consecutive positive oracle calls with the choice
+      as we only use    xt               below 
+
+Note that                    Therefore
+
+Lazifying Conditional Gradient Algorithms
+
+        xt           
+
+                  
+
+          
+
+ 
+
+ 
+
+    
+ CK 
+
+      
+
+     
+
+if       KC
+
+  if       KC
+
+ 
+
+which gives in the case      KC that       CK    and
+in the case      KC that
+
+    
+
+  
+     
+
+  
+
+ 
+
+ 
+
+    
+
+     KC  
+
+    
+       
+
+     
+
+Thus iteration   is followed by at most    consecutive
+positive oracle calls as long as      KC  and  CK    
+       ones for  KC         KC with      
+Adding up the number of oracle calls gives the desired rate 
+in addition to the positive oracle calls we also have at most
+dlog       negative oracle calls  where log  is the
+binary logarithm and   is the  additive  accuracy  Thus after
+  total of
+
+dlog    Kdlog  KCe 
+
+dlog KC eX 
+
+  
+    
+
+  dlog           Kdlog  KCe  
+
+ 
+
+iterations  or equivalently oracle calls  we have    xt   
+         
+Remark   Observe that Algorithm   might converge
+much faster due to the aggressive halving of the rate  In
+fact  Algorithm   convergences at   rate that is at most  
+factor     slower than the rate that the vanilla  nonlazy 
+FrankWolfe algorithm would realize for the same problem 
+In actual wallclock time Algorithm   is much faster though
+due to the use of the weaker oracle  see Figure   and  
+for   comparison and Section    for more experimental
+results 
+
+Negative oracle calls tend to be signi cantly more expensive timewise than positive oracle calls due to proving dual
+bounds  The following corollary is an immediate consequence of the argumentation from above 
+Corollary   Algorithm   makes at most dlog       
+negative oracle calls 
+
+If line search is too expensive we can choose     
+min     KC  in Algorithm   In this case an estimate of
+the curvature   is required  though no explicit knowledge
+of the sequence    is needed as compared to the textbook
+variant in Section  
+
+Figure   Performance gain due to caching and early termination
+for stochastic optimization over   maximum cut problem with
+linear losses  The red line is the OCG baseline  the green one is
+the lazy variant using only early termination  and the blue one
+uses caching and early termination  Left  loss vs  wallclock time 
+Right  loss vs  total time spent in oracle calls  Time limit was
+  seconds  Caching allows for   signi cant improvement in
+loss reduction in wallclock time  The effect is even more obvious
+in oracle time as caching cuts out   large number of oracle calls 
+
+  Experiments
+As mentioned before  lazy algorithms have two improvements  caching and early termination  Here we depict the
+effect of caching in Figure   comparing OCG  no caching 
+no early termination  LOCG  caching and early termination  and LOCG  only early termination   see Algorithm  
+We did not include   cachingonly OCG variant  because
+caching without early termination does not make much
+sense  in each iteration   new linear optimization problem
+has to be solved  previous solutions can hardly be reused as
+they are unlikely to be optimal for the new linear optimization problem 
+
+  Effect of  
+If the parameter   of the oracle can be chosen  which
+depends on the actual oracle implementation  then we can
+increase   to bias the algorithm towards performing more
+positive calls  At the same time the steps get shorter  As
+such there is   natural tradeoff between the cost of many
+positive calls vs    negative call  We depict the impact of
+the parameter choice for   in Figure  
+
+Lazifying Conditional Gradient Algorithms
+
+Figure   Performance on an instance of the video colocalization
+problem  We solve quadratic minimization over    ow polytope
+and report the achieved dual bound  or Wolfegap  over wallclock
+time in seconds in logscale on the left and over the number of actual
+LP calls on the right  We used the parameterfree variant of the
+Lazy CG algorithm  which performs in both measures signi cantly
+better than the nonlazy counterpart  The performance difference
+is more prominent in the number of LP calls 
+
+Figure   Performance on   large instance of the video colocalization problem using PCG and its lazy variant  We observe that
+lazy PCG is signi cantly better both in terms of function value and
+dual bound  Recall that the function value is normalized between
+   
+
+Figure   Performance of the two lazi ed variants LOCG  left
+column  and LPCG  right column  The feasible regions are  
+cut polytope on the left and the MIPLIB instance air  on the
+right  The objective functions are in both cases quadratic  on the
+left randomly chosen in every step  We show the performance
+over wall clock time in seconds  rst row  and over iterations
+ second row  The last row shows the number of call to the linear
+optimization oracle  The lazi ed versions perform signi cantly
+better in wall clock time compared to the nonlazy counterparts 
+
+Figure   Performance on   matrix completion instance  More
+information about this problem can be found in the supplemental
+material  Section    The performance is reported as the objective
+function value over wallclock time in seconds on the left and over
+LP calls on the right  In both measures after an initial phase the
+function value using LCG is much lower than with the nonlazy
+algorithm 
+
+Figure   Impact of the oracle approximation parameter   depicted for the Lazy CG algorithm  We can see that increasing
+  leads to   deterioration of progress in iterations but improves
+performance in wallclock time  The behavior is similar for other
+algorithms 
+
+ Wallclocktime   DualboundLCGCG LPcalls DualboundLCGCG Wallclocktime   FunctionvalueLCGCG LPcalls FunctionvalueLCGCG Wallclocktime   FunctionvalueLCGK LCGK LCGK LCGK LCGK LCGK Iterations FunctionvalueLCGK LCGK LCGK LCGK LCGK LCGK Lazifying Conditional Gradient Algorithms
+
+Acknowledgements
+We are indebted to Alexandre   Aspremont  Simon LacosteJulien  and George Lan for the helpful discussions and for
+providing us with relevant references  Research reported in
+this paper was partially supported by NSF CAREER award
+CMMI 
+
+References
+Achterberg  Tobias  Koch  Thorsten 
+
+and Martin 
+Alexander  MIPLIB   Operations Research
+Letters     
+ 
+  orl 
+URL http www zib de 
+Publications abstracts ZR 
+
+doi 
+
+Audibert  JeanYves  Bubeck    ebastien  and Lugosi    abor 
+Regret in online combinatorial optimization  Mathematics of Operations Research     
+
+Bodic  Pierre Le  Pavelka  Jeffrey    Pfetsch  Marc    and
+Pokutta  Sebastian  Solving MIPs via scalingbased augmentation  arXiv preprint arXiv   
+
+Cohen  Alon and Hazan  Tamir  Following the perturbed
+leader for online structured learning  In Proceedings of
+the  nd International Conference on Machine Learning
+ ICML  pp     
+
+Dash  Sanjeeb    note on QUBO instances de ned on
+
+Chimera graphs  preprint arXiv   
+
+Frank  Andr as and Tardos   Eva  An application of simultaneous Diophantine approximation in combinatorial optimization  Combinatorica     
+
+Frank  Marguerite and Wolfe  Philip  An algorithm for
+quadratic programming  Naval research logistics quarterly     
+
+Freund  Robert    and Grigas  Paul  New analysis and
+results for the frank wolfe method  Mathematical Programming      ISSN   doi 
+    URL http dx doi 
+org   
+
+Garber  Dan and Hazan  Elad    linearly convergent conditional gradient algorithm with applications to online and
+stochastic optimization  arXiv preprint arXiv 
+ 
+
+Garber  Dan and Meshi  Ofer 
+
+Linearmemory and
+decompositioninvariant linearly convergent conditional
+gradient algorithm for structured polytopes 
+arXiv
+preprint  arXiv    May  
+
+Gr otschel  Martin and Lov asz    aszlo  Combinatorial opti 
+
+mization    survey   
+
+Gupta  Swati  Goemans  Michel  and Jaillet  Patrick  Solving combinatorial games using products  projections
+and lexicographically optimal bases  arXiv preprint
+arXiv   
+
+Gurobi Optimization  Gurobi optimizer reference manual version     URL https www gurobi 
+com documentation refman 
+
+Hazan  Elad 
+
+Introduction to online convex optimization  Foundations and Trends in Optimization   
+    doi    URL
+http ocobook cs princeton edu 
+
+Hazan  Elad and Kale  Satyen  Projectionfree online learn 
+
+ing  arXiv preprint arXiv   
+
+Jaggi  Martin  Revisiting Frank Wolfe  Projectionfree
+sparse convex optimization  In Proceedings of the  th
+International Conference on Machine Learning  ICML 
+  pp     
+
+Joachims  Thorsten  Finley  Thomas  and Yu  ChunNam John  Cuttingplane training of structural svms 
+Machine Learning     
+
+Joulin  Armand  Tang  Kevin  and FeiFei  Li  Ef cient
+image and video colocalization with frankwolfe algorithm  In European Conference on Computer Vision  pp 
+  Springer   
+
+Kalai  Adam and Vempala  Santosh  Ef cient algorithms
+for online decision problems  Journal of Computer and
+System Sciences     
+
+Koch  Thorsten  Achterberg  Tobias  Andersen  Erling 
+Bastert  Oliver  Berthold  Timo  Bixby  Robert    Danna 
+Emilie  Gamrath  Gerald  Gleixner  Ambros    Heinz 
+Stefan  Lodi  Andrea  Mittelmann  Hans  Ralphs  Ted 
+Salvagnin  Domenico  Steffy  Daniel    and Wolter  Kati 
+MIPLIB   Mathematical Programming Computation      doi     
+  URL http mpc zib de index php 
+MPC article view 
+
+LacosteJulien  Simon and Jaggi  Martin  On the global
+linear
+convergence of Frank Wolfe optimization
+variants 
+In Cortes     Lawrence        Lee       
+Sugiyama     and Garnett      eds  Advances in
+Neural Information Processing Systems  volume   pp 
+  Curran Associates  Inc    URL http 
+ papers nips cc paper onthe 
+globallinear convergenceof frankwolfe optimizationvariants pdf 
+
+LacosteJulien  Simon  Jaggi  Martin  Schmidt  Mark  and
+Pletscher  Patrick  Blockcoordinate frankwolfe optimization for structural svms  In ICML   International
+Conference on Machine Learning  pp     
+
+Lazifying Conditional Gradient Algorithms
+
+Lan  Guanghui and Zhou  Yi  Conditional gradient sliding
+for convex optimization  OptimizationOnline preprint
+   
+
+Levitin  Evgeny   and Polyak  Boris    Constrained minimization methods  USSR Computational mathematics
+and mathematical physics     
+
+Neu  Gergely and Bart ok    abor  An ef cient algorithm
+for learning with semibandit feedback  In Algorithmic
+Learning Theory  pp    Springer   
+
+Oertel  Timm  Wagner  Christian  and Weismantel  Robert 
+Integer convex minimization by mixed integer linear optimization  Oper  Res  Lett     
+
+Osokin  Anton  Alayrac  JeanBaptiste  Lukasewitz  Isabella  Dokania  Puneet    and LacosteJulien  Simon 
+Minding the gaps for block frankwolfe optimization of
+structured svms  ICML   International Conference
+on Machine Learning   arXiv preprint arXiv 
+ 
+
+Schulz  Andreas   and Weismantel  Robert  The complexity
+of generic primal algorithms for solving general integer
+programs  Mathematics of Operations Research   
+   
+
+Schulz  Andreas    Weismantel  Robert  and Ziegler 
+  unter     integer programming  Optimization and
+augmentation are equivalent  In Algorithms   ESA  
+Proceedings  pp     
+
+Shah  Neel  Kolmogorov  Vladimir 
+
+and Lampert 
+Christoph      multiplane blockcoordinate frankwolfe
+algorithm for training structural svms with   costly maxoracle  In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition  pp   
+ 
+
+

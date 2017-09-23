@@ -1,0 +1,924 @@
+Estimating the unseen from multiple populations
+
+Aditi Raghunathan   Gregory Valiant   James Zou    
+
+Abstract
+
+Given samples from   distribution  how many
+new elements should we expect to  nd if we continue sampling this distribution  This is an important and actively studied problem  with many
+applications ranging from unseen species estimation to genomics  We generalize this extrapolation and related unseen estimation problems to
+the multiple population setting  where population
+  has an unknown distribution Dj from which we
+observe nj samples  We derive an optimal estimator for the total number of elements we expect
+to  nd among new samples across the populations  Surprisingly  we prove that our estimator  
+accuracy is independent of the number of populations  We also develop an ef cient optimization algorithm to solve the more general problem
+of estimating multipopulation frequency distributions  We validate our methods and theory
+through extensive experiments  Finally  on   real
+dataset of human genomes across multiple ancestries  we demonstrate how our approach for
+unseen estimation can enable cohort designs that
+can discover interesting mutations with greater
+ef ciency 
+
+  Introduction
+Given samples from   distribution  many settings in machine learning and statistics involves estimating properties
+of the unseen portion of the distribution       elements in
+the support of the distribution that are not observed in the
+samples collected so far  One important example of estimating the unseen is the problem of predicting the number
+of distinct new elements in additional samples collected 
+This question is famously illustrated by the case of Corbet  
+butter ies  Alexander Corbet was   British naturalist who
+ Stanford University  Stanford  CA  Chan Zuckerberg Biohub 
+San Francisco  CA  Correspondence to  Aditi Raghunathan  aditir stanford edu  Gregory Valiant  valiant stanford edu 
+James Zou  jamesz stanford edu 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+spent two years in Malaya trapping butter ies  He found
+  rare species of butter ies for which he found only one
+specimen  another   species with two specimens    with
+three specimens  etc  Corbet was naturally interested in
+the butter ies that are heretofore unseen  In particular  he
+wanted to estimate how many distinct new species of butter ies he can expect to discover if he were to conduct  
+new expedition to Malaya such an estimate could help
+determine whether   new experiment is warranted  GoodToulmin  extending earlier work of Ronald Fisher  came
+up with the remarkable estimate that the number of new
+species Corbet can expect to  nd is simply the alternating sum               The GoodToulmin estimator
+sparked the investigation into how to estimate the discovery rate of new elements and this remains an active area of
+research  Estimating the discovery rate has many important
+applications beyond the original species collection setting 
+In genomics  for example  an important question is  given
+the genetic variation already identi ed in the genomes of
+individuals from some population  say  East Asia  how
+many additional mutations do we expect to  nd by sequencing the genomes of additional individuals from East
+Asia  An accurate answer to this question can improve the
+cohort design of new population sequencing experiments 
+Predicting the number of new elements is   particular instance of estimating the unseen  In other applications  one
+may want to estimate different statistics that also depend on
+the currently unobserved elements  For example  one may
+want to predict how many new elements will be observed
+at least twice  for reproducibility  or at most three times  if
+the focus is on rare elements  More generally  one may
+want to estimate the histogram of the underlying distribution  which summarizes the frequency distribution of all the
+elements  see Sec    for precise de nition  and from which
+these other statistics can be derived 
+The unseen estimation literature has focused on the setting
+where there is   single distribution which generate current
+samples as well as any future samples 
+In practice  we
+often have multiple distinct distributions and we observe
+varying number of samples from each distribution  In the
+genomics example above  in addition to sequencing data
+from East Asians  we also have genome sequences of individuals from Europe  Africa  etc  The relevant question
+is  given we currently have the genomes of ni individuals
+
+Estimating the unseen from multiple populations
+
+from population               and we have identi ed
+all the genetic variants in this group  how many total new
+mutations do we expect to  nd if we sequence additional
+bi individuals from population    Moreover  given    nite
+budget Nnew of new genomes that we can sequence  how
+should we allocate this budget across the different populations to maximize the expected number of new mutations
+oberved  Similarly  suppose Corbet had also collected butter ies in Brunei and Indonesia  in addition to Malaya 
+Then he might want to know how many totally new species
+he can expect to  nd if he was to spend  say  another six
+month in Malaya and one year in Brunei  He might also be
+interested in estimating the joint frequency distribution of
+butter ies across all three regions 
+
+Our contributions 
+In this paper  we address the general problem of estimating the unseen when we have samples from multiple populations  each corresponding to  
+potentially distinct distribution  Despite being very natural  this multipopulation problem has not been systematically studied to the best of our knowledge  We derive  
+multipopulation generalization of the GoodToulmin estimator for the expected number of new elements  Surprisingly  we prove that the accuracy of our extrapolation estimator is independent of the number of populations  Moreover  it achieves the optimal superlinear extrapolation rate 
+Next  we develop an ef cient optimization method to estimate the more general multipopulation joint frequency
+distribution  This complements our extrapolation estimator  and outperforms the generalized GoodToulmin estimator in most settings  This more general approach also
+enables predictions for other statistics of interest  We systematically validate these two algorithms on synthetic data
+as well as real datasets from population genetics and from
+English books  Moreover  we illustrate that by estimating
+the joint frequency distribution  we can signi cantly improve the discovery power under   budget constraint 
+
+  Related works
+The problem of estimating the properties of the unobserved
+portion of   distribution  given   samples  and the related
+problem of estimating the number of new domain elements
+that are likely to be observed if an additional cn samples
+are collected  dates back to works of      Good and    Turing  Good    and      Fisher  Fisher et al   
+This was quickly followed by  Good   Toulmin   
+which introduced the GoodToulmin estimator  While the
+GoodToulmin estimator is always unbiased  the variance
+increases rapidly for       Subsequent works  including  Efron   Thisted    have suggested  smoothing 
+approaches that tradeoff the bias and variance for this type
+of approach  The recent work of Orlitsky et al    describes   clever variant that achieves good performance for
+
+      log    This ability to accurately estimate the number of domain elements seen in   second sample of size
+up to     log    where   denotes the size of the original
+sample  was concurrently shown via   different approach
+in  Valiant   Valiant    This logarithmic factor extrapolation matches the lower bounds of  Valiant   Valiant 
+  to constant factors  The linear estimators that we
+propose in Section   for the multiple population setting 
+and their analysis  are extensions of the smoothed GoodToulmin estimators of  Orlitsky et al   
+  different approach to this problem was proposed
+by Efron   Thisted   who considered   linearprogramming approach to estimating this property by implicitly  nding   labelless representation of the underlying distribution that was consistent with the observed frequency counts  then returning the support size of this distribution  This approach was adapted and rigorously analyzed in  Valiant   Valiant      who showed
+that it provably yields an accurate representation of the frequency distribution of the underlying distribution  which
+can subsequently be leveraged to yield estimates of distributional properties  including entropy  distance metrics
+between distributions  and approximations for the number
+of new elements that would be observed in larger samples 
+Recent works  Valiant   Valiant    Zou et al   
+also established that this approach can accurately estimate
+the number of new elements that will be observed in samples of size up to     log    Our optimizationbased algorithm  described in Section   generalizes this approach 
+
+      
+
+  nj
+
+  tj nj
+
+  De nitions and examples
+Let   denote the domain  and      Dm denote   probability distributions over   Di represents the frequency
+of elements in population    Note that it is not restrictive
+to assume that the populations share the same domain  
+since different Di   may have distinct supports  We model
+the multipopulation unseen estimation as   two stage process  In the  rst period  we observe nj independent samples from the jth population      
+  This is the
+seen data  In period two  which is in the future  we will
+sample additional tjnj samples from the jth population 
+    
+  The period two samples are unseen and
+we would like to estimate some statistic       
+   
+We can think of tj     as the extrapolation factors  If tj
+is large  then we will obtain many more samples from population   in the second period compared to what we have 
+and the problem of estimating   could be more challenging  We can take tj as given for the purpose of estimating
+   We later discuss how we to leverage our estimator of
+  to optimize the tj   in order to maximize the number of
+new discoveries  Note that in general  the nj   and tj   can
+differ arbitrarily across the populations 
+
+      
+
+      
+
+Estimating the unseen from multiple populations
+
+  particularly important statistic is     the total number
+    that are not observed in the peof new elements in     
+riod one samples     
+      good estimator for this   quanti es the expected information gain of the second period 
+In the one population setting  this statistic is the focus of
+GoodToulmin and   large number of papers  Other useful
+choices of   could be the number of distinct new elements
+that are observed at least twice in     
+    which could be
+relevant if we want some reproducibility 
+Beyond estimating these single parameters  we could also
+hope to use the samples     
+    to estimate the histogram of
+     Dm  The multipopulation histogram  de ned below  captures all of the information about the populations 
+other than the labels of the domain 
+De nition    Multipopulation histogram  Given   collection of   distributions            Dm over   common domain   the corresponding multipopulation histogram  
+is   mapping from            cid        For each
+                                            
+Dj                     where Di    is the probability
+mass of domain element    in the ith distribution Di 
+
+Any symmetric multipopulation statistic one that is invariant to permuting the labels of the domain is   function of only the histogram  Such statistics include distance
+metrics between the distributions populations  measures of
+the entropy of the populations  and the number of new elements that one is likely to observe in   second batch of
+samples  The multipopulation histogram is also of intrinsic interest  in population genetics    is exactly the joint
+frequency distribution of mutations  and reveals information about demographic history       historical variations
+in population size  and selective pressures  One bene   of
+focusing on the histogram is that  while it does not contain
+as much information as the actual labeled distributions  it
+can often be accurately recovered even when given too few
+samples to learn the  labeled  distributions to any signi 
+cant accuracy  Valiant   Valiant   
+Both for directly predicting   and estimating    we rely
+on   labelless representation of the samples  termed the
+ ngerprint of     
+    The  ngerprint of the samples is the
+analog of the histogram of the distributions  and captures
+all the information of     
+    that is relevant for estimating
+symmetric statistics 
+De nition    Multipopulation  ngerprint  Given the
+samples     
+    its  ngerprint is an mdimensional tensor
+  whose   imth entry     im  is the number of distinct
+elements observed exactly ij times in the samples from population    Here each ij can range from   to nj 
+Example   Suppose we have  ve samples from Population                    and seven from Population  
+                       The corresponding  dimensional
+ ngerprint of this data is given by the following matrix 
+
+ 
+ 
+ 
+
+ 
+ 
+ 
+
+ 
+ 
+ 
+
+ 
+ 
+
+The     entry is   because      are observed once in
+each set of samples  the     entry is   because exactly
+one element     is observed once in the samples from Population   and zero times in the samples from Population  
+By convention  we omit the     element 
+
+    linear estimator
+Unbiased estimator  Given the empirical  ngerprints  
+and the extrapolation factors tj             we de ne the
+following estimator
+
+        cid 
+  im cid  ij  
+
+    cid 
+
+  
+
+     im 
+
+ tj ij
+
+ 
+
+   is   weighted alternating sum of the empirical  ngerprints where the weights are determined by the extrapolation factors tj 
+Proposition   For any number of populations    and
+any extrapolation factors tj                  is an unbiased estimator of   
+
+   cid 
+
+Proof of the proposition appears in Appendix  
+   is linear in the  ngerprint entries 
+Its computational
+cost is linear in the total number of period one samples 
+  nj  since there can be at most   nonzero  ngerprint entries  To build more intuition for     we illustrate its
+application in two simple settings 
+Example   Consider the setting where all   distribution are identical       all the samples are drawn from the
+same discrete distribution    Let tj      for simplicity 
+After rearranging terms     can be written as
+
+ cid 
+
+  
+
+    
+
+   
+
+   cid 
+   im cid  ij   
+
+   
+
+   im
+
+Because the populations are identical 
+the sum in the
+parenthesis is just the number of elements that are observed
+  times from all the samples so far  Hence the general estimator    reduces to the one dimensional GoodToulmin
+estimator when all   populations are identical 
+Example   Suppose the supports of the distributions Di
+are disjoint  Then the only possible nonzero  ngerprint
+entries are    im where exactly one of the ij is great than
+  and all the other ij   are zero  For simplicity  assume
+    where
+is the marginal  ngerprint entry of the number of el 
+  
+ 
+ements that are observed   times in population    Hence
+
+tj     for all    Then       cid  
+
+ cid 
+     
+
+  
+
+Estimating the unseen from multiple populations
+
+when the populations are disjoint  the expected number of
+new elements is the sum of the expected number of new elements in each population  When the populations have overlapping support  we have the nontrivial interaction terms
+due to the crosspopulation  ngerprint entries 
+
+General weighted linear estimator  While    is unbiased 
+its variance could be large if some of the extrapolation factors tj   are greater than   This is because the powers of tj
+appear in Eqn    To address this issue  we introduce   general class of multipopulation weighted linear estimators 
+
+    cid 
+          cid 
+ij  cid  ij  
+               im      cid 
+   cid 
+
+ tj ij
+
+  
+
+     imW             im 
+ cid 
+
+    ij
+
+We focus on   particular weighting scheme  which is an
+extension of that introduced in  Orlitsky et al   
+where     Poi   
+and          tj     are the populations that we would
+If
+like to extrapolate beyond the original sample size 
+tj         then       and      is just the unbiased estimator     The Poisson rate   is   tuning parameter that determines the bias variance tradeoff of        As   increases  all
+the weights approaches   and      approaches the unbiased
+estimator     As   decreases  the  ngerprint entries    im
+with some large ij   which are also the terms with high
+variance are weighted by   factor that is close to   This
+reduces the total variance of      at the cost of introducing
+bias  We will see how to set   as   function of the nj   and
+tj   in order to minimize the overall estimation error  In the
+rest of the paper  unless otherwise speci ed  we will use
+     to denote the multipopulation linear estimator with
+Poisson weights 
+Performance guarantee of the weighted estimator  We
+use relative mean squared error   
+  to quantify the performance of        This is   natural error metric 
+
+because  cid  njtj is the number of samples in period two
+
+ cid cid          cid  nj tj
+
+ cid cid 
+
+and we care about how the error in the predicted number of
+new elements scales with the number of samples  Without
+loss of generality  we can relabel the populations so that
+     maxjtj  We are especially interested in the setting
+when              large extrapolation 
+Proposition   Suppose      maxj tj     and the Poisson rate is    
+
+  then
+
+  nj  tj  
+   
+
+ cid        cid 
+
+ cid 
+
+  nj
+
+   
+ 
+
+ 
+
+ 
+
+ 
+
+    
+
+log cid 
+ cid   
+
+ cid           cid  njtj
+
+ 
+
+Remark    log extrapolation factor  Suppose the rais bounded  then Prop    guarantees that for
+tio
+
+  cid 
+
+  nj
+
+ cid cid          cid  nj tj
+
+ cid cid 
+
+    with
+any       we can achieve  
+       log    log  This means that      has low
+relative error even when the largest extrapolation factor   
+is logarithmic in its initial sample size   
+Remark    no dependence on    Note that the relative
+error in Eqn    does not depend on the number of populations    This is somewhat surprising since the number of terms in      potentially grows exponentially with
+  and the variance of each  ngerprint entry    im also
+increases as the number of population increases  This population agnostic property of      guarantees its accuracy
+even when   is arbitrarily large 
+Remark    lower bound  Here we have focused on  
+speci   form of the estimator      where the weights  
+of the  ngerprint entries correspond to the tail probability of Poisson distributions    natural question is whether
+there exists   different form of the weights or   different estimator altogether that can consistently be more accurate
+than our current        The answer is essentially no due to
+the following lower bound for one population extrapolation  Orlitsky et al    Valiant   Valiant    There
+exists universal constants      cid  such that for all estimators
+    if the extrapolation factor        then   distribution such
+      cid    Here   is the number of samthat  
+ples drawn from this distribution in period one  This lower
+bound implies that in order to guarantee that the relative
+error is less than   in general  the extrapolation factor can
+be at most   log    log  matching Prop   
+
+ cid cid      
+
+ cid cid 
+
+nt
+
+Outline of the proof of Prop     detailed analysis is in
+the Appendix  To analyze the relative error  we separately
+quantify the bias and variance of      in terms of nj  tj    
+Lemma    Bias  Let   denote the rate of the Poisson
+
+nj tj    
+
+     
+ cid 
+
+ cid 
+weights  then cid cid cid              
+ cid cid cid   
+Var              cid 
+
+   
+
+Lemma    Variance  Without loss of generality  let     
+maxj tj and suppose        then
+
+nje       
+
+njtj 
+
+To obtain the optimal   given in the statement of Prop   
+we set   to balance the squared bias and variance 
+
+ 
+
+  Estimating the multipopulation frequency
+
+distribution
+
+While we have   linear estimator for the number of unseen elements in   new sample  it is challenging to con 
+
+Estimating the unseen from multiple populations
+
+struct good estimators of other statistics       number of
+new elements observed     directly from the  ngerprints 
+As discussed in Sec    we can also take the less direct
+approach of  rst trying to estimating the true underlying
+multipopulation histogram  Given an accurate reconstruction of this underlying histogram  we can then estimate any
+symmetric statistic of the future samples  We discuss some
+of the uses of such   representation in Section  
+
+Recovering the frequency distribution The core of our
+algorithm to recover the multipopulation histogram is  
+natural extension of the single population algorithm presented in Valiant   Valiant    
+
+Estimating the multipopulation histogram  Core
+Approach 
+Input  Multipopulation  ngerprint   of samples 
+Output  Two estimates   Hcounts and  Hll of histogram corresponding to the distributions underlying
+ ngerprint  
+
+  Compute  Hcounts and  Hll minimizing the fol 
+
+lowing expressions 
+
+ Hcounts   arg min
+ 
+
+ 
+      
+
+          
+
+ Hll   arg max
+ 
+
+log poi         
+
+ 
+
+ cid 
+ cid 
+ cid 
+
+ 
+
+  cid 
+
+Where         
+
+  
+
+bino    nj  ij 
+
+ 
+
+  
+
+The intuition behind these two optimization problems is the
+following  The histogram corresponding to   set of distributions is an unlabeled representation of the underlying
+distributions  hence it makes intuitive sense to try to recover the histogram that maximizes the likelihood of the
+unlabeled representation of the samples  namely the  ngerprint   Recent work  Acharya et al    provided
+rigorous support for this intuition 
+In general  however 
+this likelihood might be dif culty to compute  Nevertheless  an ef ciently computable proxy for this likelihood can
+be obtained by treating the distribution of the  ngerprint 
+corresponding to   histogram    as   product distribution 
+with    im distributed according to the Poisson distribution with appropriate expectation EH    im  The
+recent central limit theorem for  Poisson Multinomials 
+from  Valiant   Valiant    provides at least some corroboration for the reasonableness of having   proxy for the
+loglikelihood that decomposes linearly across the different elements of   The motivation for the
+scaling
+on the  rst proxy likelihood function is that this expression
+penalizes discrepancies between the observed and expected
+
+ 
+
+  
+
+the dimensionality of
+
+ ngerprint entries according to   rough approximation of
+the standard deviation of that  ngerprint entry  as the variance of   Poisson random variable is equal to its expectation  and the observed  ngerprint entry is an approximation
+for the expected  ngerprint entry given the true underlying
+histogram 
+The work  Valiant   Valiant    focused on recovering
+ Hcounts  as this optimization problem can be formulated as
+  linear program  whose variables correspond to    ne discretization of the potential support of the histogram  Unfortunately  in the present multidistribution setting  the number of variables required by this linear programming approach would scale exponentially with the number of distributions in question  Even for  ngerprints derived from
+modestsized samples from two distributions  the resulting
+linear program becomes impractical 
+Instead of pursuing the linear programming based approach  we instead propose   blackbox optimization
+approach to  nding   histogram that optimizes either
+In this opof the two proxy likelihood functions 
+timization approach 
+the optimization problem is speci ed by the user  and corresponds to the number of             im  tuples for which
+the returned histogram    is nonzero  Denoting this
+quantity by   
+the resulting optimization problem can
+be regarded as the problem of specifying   vectors
+                           hs                    These  
+vectors are then interpreted as   histogram   with
+       hj for all                  and        for
+all other vectors  
+The one additional modi cation that leads to   substantial
+improvement in runtime is to only evaluate the proxy likelihood expressions for  ngerprint entries    im     The
+intuition for this is twofold  First  the number of vectors
+            im  for which    im     will scale exponentially with    as opposed to scaling as some parameter
+of the sample sizes  this is clearly undesirable  Second 
+given that we wish to avoid evaluating the contribution to
+the proxy likelihood from  ngerprint entries that are zero 
+we must now be careful in dealing with  ngerprint entries
+that are equal to   Suppose we have   element with true
+  and suppose we observe that  ngerprint entry
+probability  
+       and the other  ngerprints near   are   Since we are
+ 
+maximizing the likelihood that         without taking into
+account the nearby   entries  we would assign roughly
+ 
+  which is undesirable  Removing
+elements to probability  
+the ones largely resolves this issue  Note that the       
+entries do not cause as much of an issue  as such collisions
+are unlikely to occur in regions of the  ngerprint in which
+there is not   signi cant number of domain elements 
+In this onedistribution example    constraint on the total
+probability mass being   would resolve this issue  though
+
+Estimating the unseen from multiple populations
+
+analogs of this issue in the multiple distribution setting cannot be resolved in this way  Hence  we adopt the crude  but
+effective approach of viewing all the empirical  ngerprint
+entries that are equal to   as being re ective of an element
+in the underlying set of distributions whose probability is
+close to the empirical probability of the corresponding element  We summarize the complete algorithm below 
+
+Estimating the multipopulation histogram  Full
+Algorithm 
+Input  Multipopulation  ngerprint   derived from
+samples from   distributions of respective sizes
+           nm 
+Output  Two estimates   Hcounts and  Hll of histogram
+corresponding to the distributions underlying  ngerprint  
+  Remove  ngerprint entries that are   and add to em 
+
+pirical portion of histogram 
+
+  Initialize mdistribution histogram  Hemp to be
+
+identically zero 
+
+  For each vector                 im  such that
+
+       set  Hemp    
+  
+
+          im
+nm
+
+     
+
+  Compute  Hcounts and  Hll minimizing the follow 
+
+ing expressions 
+
+ Hcounts   arg min
+ 
+
+ 
+      
+
+          
+
+ cid 
+
+    
+
+ cid 
+ cid 
+
+    
+
+  cid 
+
+ 
+
+  
+
+ Hll   arg max
+ 
+
+log poi         
+
+Where       
+
+  
+
+bino    nj  ij 
+
+Subject to the constraint that  together with  Hemp 
+the total mass in all the distributions is   Namely
+for all                 
+
+ cid 
+
+ 
+
+ cid 
+
+ 
+
+    Hll   
+
+          
+
+  Return the concatenation of the empirical portion
+of the histogram and the portion returned by the
+   Hcount    Hemp  and
+optimization 
+ Hll    Hll    Hemp
+
+ Hcount
+
+Leveraging    for approximating the value of additional
+data  An accurate representation of the histogram corresponding to the multipopulation distribution underlying  
+given set of observations can be leveraged to estimate  
+number of useful properties  These properties include estimating the number of new domain elements that would
+
+likely be seen given additional samples from the populations  Speci cally  given   histogram     corresponding to
+  populations  we can estimate the expected number of
+distinct elements that will be observed in samples from the
+  populations of respective sizes            nm via the simple formula 
+
+ cid 
+
+ cid 
+      cid 
+
+ cid 
+
+  num observed   
+
+   
+
+       ni
+
+ 
+
+ 
+
+ 
+
+  
+
+An accurate approximation to the histogram can also be
+leveraged to answer many other questions about the populations that can not be readily addressed via the linear estimators of Section   These include tasks such as estimating
+the amount of data that must be collected to capture  say 
+  of the mass of the distributions in question 
+  Experiments
+Evaluating the weighted linear estimator for large   
+We empirically evaluated the performance of the weighted
+linear estimator        The experiments were conducted
+for three types of distributions Uniform  Dirichlet and
+Geometric that are commonly used to evaluate extrapolation algorithms  Each experiment contains       populations  We have   total of   distinct elements 
+In
+the Uniform setting  each population has support on  
+elements that are randomly sampled from the   For
+Dirichlet  each population also has support on   random
+elements  from the   and the weights on these   elements are sampled from   Dirichlet prior  For the Geometric experiments  each population corresponds to   random
+ordering of the   elements and the kth element is assigned probability         kp  In period one  ten samples
+are observed in each of the   populations  In period two 
+  randomly chosen populations have extrapolation factor
+        and  ve populations have extrapolation factor
+    This simulates the setting where we can obtain substantially more samples from   subset of the populations 
+Figure           shows the results of the experiments for
+Uniform  Dirichlet  and Geometric with       respectively  The results for other parameter settings are
+qualitatively similar  The black curves indicate the true
+number of distinct new elements we expect to observe in
+period two by sampling from the true underlying distributions  The red curves are the predictions of the weighted
+linear estimator  shaded regions indicate one standard deviation across   experiments  In all three settings      
+provides accurate estimate with low variance when the
+maximum extrapolation factor is relatively small    
+For Uniform and Geometric distributions  the accuracy is
+high up to   fold extrapolation  For Zipf  the bias is low
+but variance becomes large for the maximum extrapolation
+factor around   The downward bias in the predictions
+
+Estimating the unseen from multiple populations
+
+Figure   Performance of the weighted linear estimator of Prop    for     Uniform      Dirichlet and     Geometric distributions  Each
+experiment contains   populations  The xaxis corresponds to the maximum extrapolation factor among the   populations     in
+Prop    The black curve indicates the true number of distinct new elements that we expect to observe in the new samples  and the red
+curve shows the predicted number of new elements  The red shaded region corresponds to one standard deviation over   independent
+experiments      The  population earthmover distance  EMD  between the recovered histograms and the true histogram corresponding
+to the populations from which the samples were drawn  The blue line corresponds to the histogram of the empirical distribution of the
+samples  and the red and green lines correspond to the histograms returned by our multipopulation histogram estimation algorithm 
+using the countobjective and likelihood objectives  respectively  Plots depict the mean and standard deviation over   independent runs 
+The true underlying distribution is supported on     domain elements      Estimating the number of new domain elements that will be
+observed given additional samples in the same  population setting  Estimates are made for when the new samples are evenly distributed
+among the populations  equal  and when the majority come from one population  skewed  Error bars depict one standard deviation
+about the mean  calculated based on   independent trials 
+
+Figure       Estimating the total number of unique words combining three different books using histopt counts  Predictions are based
+on  ngerprints of samples of words sampled without replacement either randomly  blue  or from   contiguous block of text  green 
+from each book  Error bars depict one standard deviation over   independent runs      Estimating the number of new mutations
+that would be observed given additional samples from four different populations using histopt counts  We consider different ratios of
+sampling within these populations and observe the change in number of new mutations that would be observed 
+
+is due to the weighting scheme  The relative error of the
+  is     and   for
+weighted estimator 
+the Uniform  Dirichlet and Geometric distributions when
+
+ cid          cid  nj tj
+
+ cid 
+
+the maximum extrapolation factor is   This con rms
+the theoretical results of Prop    on the accuracy of the
+weighted linear estimator 
+
+Estimating the unseen from multiple populations
+
+Evaluating the histogram estimators  We  rst validated
+the performance of  Hcount and  Hll on   three population
+setting with synthetic data  The true population consists of
+three uniform distributions over    elements  whose supports have    elements in common  and    elements
+unique to each distribution  In Figure     the xaxis corresponds to the number of samples we observe from each
+population  and the yaxis indicates the earthmover distance  EMD  between  Hcount   Hll and the true histogram 
+As   baseline  we also compute the EMD between the empirical histogram of the observed samples and the true histogram   Hcount and  Hll performed roughly equally well
+and both are substantially better than the empirical estimator especially when the number of observed samples is
+small  Figure     illustrates the extrapolation accuracy of
+our histogram estimators  We estimated  Hcount and  Hll using    from each population  and then used Eqn    to estimate the number of unseen elements in additional samples 
+We tested two different settings    when the additional
+samples are equally drawn from the three populations  and
+    skewed mixture where   of the new samples are from
+population   and   each are drawn from population  
+and    Hcount and  Hll gave extremely accurate predictions 
+In comparison  the weighted linear estimator      was accurate for the initial extrapolations but has downward bias
+when the extrapolation increases  consistent with Fig   ac 
+Additionally  we evaluate the performance of  Hcount on  
+real dataset  in which we sampled words from three books 
+Hamlet    total words  Treasure Island     and The
+Sun Also Rises     We used the true word frequencies
+ over the entire text  as the true histogram  We sampled  
+small number of words  equal in all books  either randomly
+or from   contiguous block of text and used  Hcounts to predict the total number of distinct words in total in all three
+books  In Figure     the red line is the true value  and blue
+and green lines are predictions based on  Hcount derived
+from samples of either random words  or words occurring
+in   random contiguous block of text  respectively  We obtain accurate estimates using   fraction of words    from
+each book  The estimates based on independent samples
+of words is more accurate than that based on contiguous
+blocks of text likely due to correlation in words that occur near each other 
+Optimizing discovery rate  Given the estimated histogram  Hcount or  Hll  we can optimize the allocation of
+new samples across the populations to maximize the number of unseen elements we can expect to discover given  
+  tjnj  To illustrate  we obtained genome sequencing data of    individuals from the Exome Aggregation Consortium  Lek et al    The individuals come
+from four ancestries  Europeans  Africans  East Asians and
+Latinos  We used all the observed mutations from the   
+
+bound on cid 
+
+samples to construct   four population frequency distribution  For the experiment  we treat this as the ground truth
+and sampled   mutations from each population to obtain
+ seen  data  Suppose we have budget to sample      
+variants   fold extrapolation from current sample size 
+how should we allocate these new samples across the four
+populations in order to maximize the number of new variants discovered  We use  Hcount to predict the extrapolation curves for three scenarios    all the samples are allocated to Europeans  current genomic studies are heavily
+enriched of Europeans   
+the samples are evenly allocated across the four populations    we explicitly optimize
+the factors tj using  Hcount  The dotted curves in Fig     
+correspond to the predictions  and the solid curves are the
+actual numbers using the true distribution  showing good
+agreement  Optimization using  Hcount led to     increase in the number of new variants discovered  This is  
+simplistic example  there are many other factors in the design of real cohorts  but it illustrate the potential power in
+having multipopulation histogram estimates  In Appendix
+Fig    we also show that  Hcount gives accurate predictions
+for   different statistic the number of new variants we expect to  nd at least twice in the new samples 
+
+  Discussion
+We introduce and formalize the problem of multipopulation unseen estimation  We provide   weighted linear estimator for the number of new elements and   general
+optimization algorithm to estimate the multipopulation
+histogram  These two approaches have complementary
+strength  The weighted linear estimator      speci cally
+estimates the number of unseen elements 
+It   accuracy
+is independent of the number of populations     and it is
+worstcase optimal  This can be   good method especially
+when   is large and the extrapolation factor is small compared to log of the number of observed samples  When the
+extrapolation is larger  however       is consistently downward biased due to its variancereducing weights  For relatively small number of populations            and larger
+extrapolation factors  the unseen predictions of our histogram estimators   Hcount and  Hll are signi cantly more
+accurate than        While both likely have comparable
+worstcase performance  the linear estimator nearly always
+incurs this worstcase loss and is largely incapable of extrapolating beyond this worstcase logarithmic factor 
+In
+contrast  the histogrambased estimators seem to perform
+well for much larger extrapolation factors on all of the distributions that we considered   Hcount and  Hll are computationally more expensive than        but are still tractable
+for many applications each run of our experiments took
+less than   minutes on   single laptop 
+
+Estimating the unseen from multiple populations
+
+Zou  James  Valiant  Gregory  Valiant  Paul  Karczewski 
+Konrad  Chan  Siu On  Samocha  Kaitlin  Lek  Monkol 
+Sunyaev  Shamil  Daly  Mark  and MacArthur  Daniel   
+Quantifying unobserved proteincoding variants in human populations provides   roadmap for largescale sequencing projects  Nature Communications     
+
+Acknowledgments
+Gregory Valiant   contributions were supported by NSF
+CAREER CCF  and   Sloan Research Fellowship 
+James Zou is   Chan Zuckerberg Biohub investigator and
+is supported by NSF CISE 
+
+References
+Acharya  Jayadev  Das  Hirakendu  Orlitsky  Alon  and
+Suresh  Ananda Theertha    uni ed maximum likelihood approach for optimal distribution property estimation  arXiv preprint arXiv   
+
+Efron  Bradley and Thisted  Ronald  Estimating the number of unsen species  How many words did shakespeare
+know  Biometrika  pp     
+
+Fisher  Ronald    Corbet    Steven  and Williams  Carrington    The relation between the number of species
+and the number of individuals in   random sample of an
+animal population  The Journal of Animal Ecology  pp 
+   
+
+Good  IJ and Toulmin  GH  The number of new species 
+and the increase in population coverage  when   sample
+is increased  Biometrika     
+
+Good  Irving    The population frequencies of species and
+the estimation of population parameters  Biometrika  pp 
+   
+
+Lek  Monkol  Karczewski  Konrad    Minikel  Eric   
+Samocha  Kaitlin    Banks  Eric  Fennell  Timothy 
+ODonnellLuria  Anne    Ware  James    Hill  Andrew    Cummings  Beryl    et al  Analysis of proteincoding genetic variation in   humans  Nature   
+   
+
+Orlitsky  Alon  Suresh  Ananda Theertha  and Wu  Yihong 
+Optimal prediction of the number of unseen species 
+Proceedings of the National Academy of Sciences  pp 
+   
+
+Valiant  Gregory and Valiant  Paul  Estimating the unseen 
+an   log    sample estimator for entropy and support
+size  shown optimal via new clts  In Proceedings of the
+fortythird annual ACM symposium on Theory of computing  pp    ACM   
+
+Valiant  Gregory and Valiant  Paul  Instance optimal learning of discrete distributions  In Proceedings of the  th
+Annual ACM SIGACT Symposium on Theory of Computing  pp    ACM   
+
+Valiant  Paul and Valiant  Gregory  Estimating the unseen 
+improved estimators for entropy and other properties  In
+Advances in Neural Information Processing Systems  pp 
+   
+
+

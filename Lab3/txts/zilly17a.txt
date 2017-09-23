@@ -1,0 +1,1050 @@
+Recurrent Highway Networks
+
+Julian Georg Zilly     Rupesh Kumar Srivastava     Jan Koutn       rgen Schmidhuber  
+
+Abstract
+
+Many sequential processing tasks require complex nonlinear transition functions from one step
+to the next  However  recurrent neural networks
+with  deep  transition functions remain dif cult
+to train  even when using Long ShortTerm Memory  LSTM  networks  We introduce   novel theoretical analysis of recurrent networks based on
+Ger gorin   circle theorem that illuminates several
+modeling and optimization issues and improves
+our understanding of the LSTM cell  Based on
+this analysis we propose Recurrent Highway Networks  which extend the LSTM architecture to allow stepto step transition depths larger than one 
+Several language modeling experiments demonstrate that the proposed architecture results in powerful and ef cient models  On the Penn Treebank
+corpus  solely increasing the transition depth from
+  to   improves wordlevel perplexity from  
+to   using the same number of parameters  On
+the larger Wikipedia datasets for character prediction  text  and enwik  RHNs outperform
+all previous results and achieve an entropy of  
+bits per character 
+
+  Introduction
+Network depth is of central importance in the resurgence of
+neural networks as   powerful machine learning paradigm
+ Schmidhuber    Theoretical evidence indicates that
+deeper networks can be exponentially more ef cient at representing certain function classes  see      Bengio   LeCun   Bianchini   Scarselli   and references
+therein  Due to their sequential nature  Recurrent Neural Networks  RNNs  Robinson   Fallside    Werbos 
+  Williams    have long credit assignment paths
+and so are deep in time  However  certain internal function
+
+ Equal contribution  ETH   rich  Switzerland  The Swiss AI
+Lab IDSIA  USISUPSI    NNAISENSE  Switzerland  Correspondence to  Julian Zilly  jzilly ethz ch  Rupesh Srivastava
+ rupesh idsia ch 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright   by
+the author   
+
+mappings in modern RNNs composed of units grouped in
+layers usually do not take advantage of depth  Pascanu et al 
+  For example  the state update from one time step to
+the next is typically modeled using   single trainable linear
+transformation followed by   nonlinearity 
+Unfortunately  increased depth represents   challenge when
+neural network parameters are optimized by means of error
+backpropagation  Linnainmaa      Werbos   
+Deep networks suffer from what are commonly referred to
+as the vanishing and exploding gradient problems  Hochreiter    Bengio et al    Hochreiter et al    since
+the magnitude of the gradients may shrink or explode exponentially during backpropagation  These training dif culties
+were  rst studied in the context of standard RNNs where
+the depth through time is proportional to the length of input
+sequence  which may have arbitrary size  The widely used
+Long ShortTerm Memory  LSTM  Hochreiter   Schmidhuber    Gers et al    architecture was introduced
+to speci cally address the problem of vanishing exploding
+gradients for recurrent networks 
+The vanishing gradient problem also becomes   limitation
+when training very deep feedforward networks  Highway
+Layers  Srivastava et al      based on the LSTM cell
+addressed this limitation enabling the training of networks
+even with hundreds of stacked layers  Used as feedforward
+connections  these layers were used to improve performance
+in many domains such as speech recognition  Zhang et al 
+  and language modeling  Kim et al    Jozefowicz
+et al    and their variants called Residual networks
+have been widely useful for many computer vision problems
+ He et al   
+In this paper we  rst provide   new mathematical analysis of
+RNNs which offers   deeper understanding of the strengths
+of the LSTM cell  Based on these insights  we introduce
+LSTM networks that have long credit assignment paths not
+just in time but also in space  per time step  called Recurrent
+Highway Networks or RHNs  Unlike previous work on deep
+RNNs  this model incorporates Highway layers inside the
+recurrent transition  which we argue is   superior method
+of increasing depth  This enables the use of substantially
+more powerful and trainable sequential models ef ciently 
+signi cantly outperforming existing architectures on widely
+used benchmarks 
+
+Recurrent Highway Networks
+
+  Related Work on Deep Recurrent
+
+Transitions
+
+In recent years    common method of utilizing the computational advantages of depth in recurrent networks is stacking
+recurrent layers  Schmidhuber    which is analogous
+to using multiple hidden layers in feedforward networks 
+Training stacked RNNs naturally requires credit assignment
+across both space and time which is dif cult in practice 
+These problems have been recently addressed by architectures utilizing LSTMbased transformations for stacking
+ Zhang et al    Kalchbrenner et al   
+  general method to increase the depth of the stepto step
+recurrent state transition  the recurrence depth  is to let an
+RNN tick for several micro time steps per step of the sequence  Schmidhuber    Srivastava et al    Graves 
+  This method can adapt the recurrence depth to the
+problem  but the RNN has to learn by itself which parameters to use for memories of previous events and which for
+standard deep nonlinear processing  It is notable that while
+Graves   reported improvements on simple algorithmic tasks using this method  no performance improvements
+were obtained on real world data 
+Pascanu et al    proposed to increase the recurrence
+depth by adding multiple nonlinear layers to the recurrent
+transition  resulting in Deep Transition RNNs  DTRNNs 
+and Deep Transition RNNs with Skip connections  DT   
+RNNs  While being powerful in principle  these architectures are seldom used due to exacerbated gradient propagation issues resulting from extremely long credit assignment
+paths  In related work Chung et al    added extra
+connections between all states across consecutive time steps
+in   stacked RNN  which also increases recurrence depth 
+However  their model requires many extra connections with
+increasing depth  gives only   fraction of states access to
+the largest depth  and still faces gradient propagation issues
+along the longest paths 
+Compared to stacking recurrent layers  increasing the recurrence depth can add signi cantly higher modeling power
+to an RNN  Figure   illustrates that stacking   RNN layers
+allows   maximum credit assignment path length  number
+of nonlinear transformations  of           between hidden
+states which are   time steps apart  while   recurrence depth
+of   enables   maximum path length of         While this
+allows greater power and ef ciency using larger depths  it
+also explains why such architectures are much more dif cult
+to train compared to stacked RNNs  In the next sections 
+we address this problem head on by focusing on the key
+mechanisms of the LSTM and using those to design RHNs 
+which do not suffer from the above dif culties 
+
+ Training of our proposed architecture is compared to these
+
+models in subsection  
+
+   
+
+   
+
+Figure   Comparison of     stacked RNN with depth  
+and     Deep Transition RNN of recurrence depth    both
+operating on   sequence of   time steps  The longest credit
+assignment path between hidden states   time steps is     
+for Deep Transition RNNs 
+
+  Revisiting Gradient Flow in Recurrent
+
+Networks
+
+Let   denote the total loss for an input sequence of length
+    Let        Rm and        Rn represent the output of  
+standard RNN at time        Rn   and     Rn   the
+input and recurrent weight matrices      Rn   bias vector
+and     pointwise nonlinearity  Then           Wx     
+Ry         describes the dynamics of   standard RNN 
+The derivative of the loss   with respect to parameters   of
+  network can be expanded using the chain rule 
+
+ cid 
+
+ cid 
+
+ cid 
+
+dL
+  
+
+ 
+
+dL   
+  
+
+ 
+
+    
+
+    
+
+     
+
+     
+     
+
+     
+     
+
+ 
+
+     
+
+ 
+ 
+
+ cid 
+
+The Jacobian matrix      
+        the key factor for the transport
+of the error from time step    to time step    is obtained by
+chaining the derivatives across all time steps 
+
+ cid 
+
+  cid diag cid   cid Ry   cid 
+
+     
+     
+
+ 
+
+     
+     
+
+ 
+
+      
+
+      
+
+ 
+where the input and bias have been omitted for simplicity 
+We can now obtain conditions for the gradients to vanish
+or explode  Let          
+      be the temporal Jacobian 
+  be   maximal bound on   cid Ry    and  max be the
+largest singular value of   cid  Then the norm of the Jacobian
+
+Recurrent Highway Networks
+
+ cid  
+centered around the diagonal values aii of   with radius
+    cid    aij  equal to the sum of the absolute values of
+the nondiagonal entries in each row of    Two example
+Ger gorin circles referring to differently initialized RNNs
+are depicted in Figure  
+Using GCT we can understand the relationship between the
+entries of   and the possible locations of the eigenvalues
+of the Jacobian  Shifting the diagonal values aii shifts the
+possible locations of eigenvalues  Having large offdiagonal
+entries will allow for   large spread of eigenvalues  Small
+offdiagonal entries yield smaller radii and thus   more
+con ned distribution of eigenvalues around the diagonal
+entries aii 
+Let us assume that matrix   is initialized with   zeromean
+Gaussian distribution  We can then infer the following 
+
+  If the values of   are initialized with   standard deviation close to   then the spectrum of    which is largely
+dependent on    is also initially centered around   An
+example of   Ger gorin circle that could then be corresponding to   row of   is circle   in Figure   The
+magnitude of most of     eigenvalues     are initially
+likely to be substantially smaller than   Additionally 
+employing the commonly used      weight regularization will also limit the magnitude of the eigenvalues 
+
+  Alternatively  if entries of   are initialized with   large
+standard deviation  the radii of the Ger gorin circles
+corresponding to   increase  Hence      spectrum
+may possess eigenvalues with norms greater   resulting in exploding gradients  As the radii are summed
+over the size of the matrix  larger matrices will have an
+associated larger circle radius  In consequence  larger
+matrices should be initialized with correspondingly
+smaller standard deviations to avoid exploding gradients 
+
+In general  unlike variants of LSTM  other RNNs have no
+direct mechanism to rapidly regulate their Jacobian eigenvalues across time steps  which we hypothesize can be ef cient
+and necessary for learning complex sequence processing 
+Le et al    proposed to initialize   with an identity
+matrix and small random values on the offdiagonals  This
+changes the situation depicted by GCT   the result of the
+identity initialization is indicated by circle   in Figure  
+Initially  since aii     the spectrum described in GCT is
+centered around   ensuring that gradients are less likely
+to vanish  However  this is not    exible remedy  During
+training some eigenvalues can easily become larger than
+one  resulting in exploding gradients  We conjecture that
+due to this reason  extremely small learning rates were used
+by Le et al   
+
+Figure   Illustration of the Ger gorin circle theorem  Two
+Ger gorin circles are centered around their diagonal entries
+aii  The corresponding eigenvalues lie within the radius
+of the sum of absolute values of nondiagonal entries aij 
+Circle   represents an exemplar Ger gorin circle for an
+RNN initialized with small random values  Circle   represents the same for an RNN with identity initialization of the
+diagonal entries of the recurrent matrix and small random
+values otherwise  The dashed circle denotes the unit circle
+of radius  
+
+satis es 
+
+ cid   cid   cid cid   cid cid cid cid cid cid diag cid   cid Ry   cid cid cid cid     max 
+
+ 
+
+which together with   provides the conditions for vanishing gradients  max     Note that   depends on
+the activation function          tanh cid         cid     
+          where   is   logistic sigmoid  Similarly  we
+ 
+can show that if the spectral radius   of   is greater than  
+exploding gradients will emerge since  cid   cid     
+This description of the problem in terms of largest singular values or the spectral radius sheds light on boundary
+conditions for vanishing and exploding gradients yet does
+not illuminate how the eigenvalues are distributed overall 
+By applying the Ger gorin circle theorem we are able to
+provide further insight into this problem 
+Ger gorin circle theorem  GCT   Ger gorin    For
+any square matrix     Rn   
+
+spec       cid 
+
+    
+
+      cid    aii cid       cid 
+
+    cid  
+
+   
+
+ aij 
+
+ 
+     the eigenvalues of matrix    comprising the spectrum
+of    are located within the union of the complex circles
+
+Recurrent Highway Networks
+
+  Recurrent Highway Networks  RHN 
+Highway layers  Srivastava et al      enable easy training of very deep feedforward networks through the use
+of adaptive computation  Let          WH      
+      WT            WC  be outputs of nonlinear transforms      and   with associated weight matrices  including biases  WH        and   typically utilize   sigmoid
+  nonlinearity and are referred to as the transform and
+the carry gates since they regulate the passing of the transformed input via   or the carrying over of the original input
+   The Highway layer computation is de ned as
+
+                  
+
+ 
+
+where   denotes elementwise multiplication 
+Recall that the recurrent state transition in   standard RNN is
+described by           Wx      Ry         We propose
+to construct   Recurrent Highway Network  RHN  layer
+with one or multiple Highway layers in the recurrent state
+transition  equal to the desired recurrence depth  Formally 
+let WH       Rn   and RH cid   cid   cid    Rn   represent the
+weights matrices of the   nonlinear transform and the  
+and   gates at layer  cid                 The biases are denoted
+by bH cid   cid   cid    Rn and let   cid  denote the intermediate output
+         Then an RHN layer with  
+at layer  cid  with     
+recurrence depth of   is described by
+
+    
+ cid        
+
+ cid 
+
+where
+
+      
+
+ cid        
+
+ cid        
+ cid   
+
+ cid    tanh WH       cid    RH cid     
+    
+ WT       cid    RT cid     
+    
+ cid   
+ WCx     cid    RC cid     
+    
+ cid   
+
+ cid    bH cid   
+ cid    bT cid 
+ cid    bC cid 
+
+ 
+
+ 
+
+ 
+
+ 
+
+Jozefowicz et al    it retains the essential components
+of the LSTM   multiplicative gating units controlling the
+ ow of information through selfconnected additive cells 
+However  an RHN layer naturally extends to       extending the LSTM to model far more complex state transitions 
+Similar to Highway and LSTM layers  other variants can
+be constructed without changing the basic principles  for
+example by  xing one or both of the gates to always be
+open  or coupling the gates as done for the experiments in
+this paper 
+The simpler formulation of RHN layers allows for an analysis similar to standard RNNs based on GCT  Omitting the inputs and biases  the temporal Jacobian              
+for an RHN layer with recurrence depth of    such that
+                                 is given by
+
+    diag          cid diag     
+
+    cid diag          cid diag     
+
+  diag cid tanh cid RH     cid 
+  diag cid cid RT     cid 
+  diag cid cid RCy   cid 
+ cid 
+      cid cid cid cid        
+ cid cid  
+
+iih   
+ 
+
+      cid 
+
+ 
+
+iiy   
+      cid 
+
+    cid 
+ijy   
+
+ 
+
+    cid 
+
+ijh   
+ 
+
+ 
+
+ 
+ 
+ 
+
+iit   
+ 
+
+ cid cid cid 
+
+ 
+
+ 
+
+where
+
+  cid      cid 
+  cid      cid 
+  cid      cid 
+and has   spectrum of 
+
+spec       cid 
+    cid 
+ cid cid   cid 
+
+    
+    cid 
+
+ijt   
+
+    cid  
+
+and    is the indicator function 
+  schematic illustration of the RHN computation graph is
+shown in Figure   The output of the RHN layer is the
+output of the Lth Highway layer                 
+   
+Note that      is directly transformed only by the  rst Highway layer  cid      in the recurrent transition  and for this
+layer     
+ cid  is the RHN layer   output of the previous time
+step  Subsequent Highway layers only process the outputs
+of the previous layers  Dotted vertical lines in Figure  
+separate multiple Highway layers in the recurrent transition 
+For conceptual clarity  it is important to observe that an
+RHN layer with       is essentially   basic variant of an
+LSTM layer  Similar to other variants such as GRU  Cho
+et al    and those studied by Greff et al    and
+
+ This is not strictly necessary  but simply   convenient choice 
+
+Equation   captures the in uence of the gates on the eigenvalues of    Compared to the situation for standard RNN 
+it can be seen that an RHN layer has more  exibility in
+adjusting the centers and radii of the Ger gorin circles  In
+particular  two limiting cases can be noted 
+If all carry
+gates are fully open and transform gates are fully closed 
+we have                and   cid      cid          since   is
+saturated  This results in
+
+       
+
+                                 
+
+ 
+
+     all eigenvalues are set to   since the Ger gorin circle
+radius is shrunk to   and each diagonal entry is set to ci    
+In the other limiting case  if        and        then
+the eigenvalues are simply those of   cid  As the gates vary
+between   and   each of the eigenvalues of   can be dynamically adjusted to any combination of the above limiting
+behaviors 
+
+Recurrent Highway Networks
+
+Figure   Schematic showing computation within an RHN layer inside the recurrent loop  Vertical dashed lines delimit
+stacked Highway layers  Horizontal dashed lines imply the extension of the recurrence depth by stacking further layers    
+      are the transformations described in equations     and   respectively 
+
+The key takeaways from the above analysis are as follows 
+Firstly  GCT allows us to observe the behavior of the full
+spectrum of the temporal Jacobian  and the effect of gating
+units on it  We expect that for learning multiple temporal
+dependencies from realworld data ef ciently  it is not suf 
+cient to avoid vanishing and exploding gradients  The gates
+in RHN layers provide   more versatile setup for dynamically remembering  forgetting and transforming information
+compared to standard RNNs  Secondly  it becomes clear
+that through their effect on the behavior of the Jacobian 
+highly nonlinear gating functions can facilitate learning
+through rapid and precise regulation of the network dynamics  Depth is   widely used method to add expressive power
+to functions  motivating us to use multiple layers of     
+and   transformations  In this paper we opt for extending
+RHN layers to       using Highway layers in favor of
+simplicity and ease of training  However  we expect that in
+some cases stacking plain layers for these transformations
+can also be useful  Finally  the analysis of the RHN layer  
+ exibility in controlling its spectrum furthers our theoretical
+understanding of LSTM and Highway networks and their
+variants  For feedforward Highway networks  the Jacobian
+of the layer transformation       takes the place of the
+temporal Jacobian in the above analysis  Each Highway
+layer allows increased  exibility in controlling how various components of the input are transformed or carried 
+This  exibility is the likely reason behind the performance
+improvement from Highway layers even in cases where
+network depth is not high  Kim et al   
+
+  Experiments
+Setup  In this work  the carry gate was coupled to the
+transform gate by setting               similar to
+the suggestion for Highway networks  This coupling is
+also used by the GRU recurrent architecture  It reduces
+model size for    xed number of units and prevents an
+
+unbounded blowup of state values leading to more stable
+training  but imposes   modeling bias which may be suboptimal for certain tasks  Greff et al    Jozefowicz
+et al    An output nonlinearity similar to LSTM
+networks could alternatively be used to combat this issue 
+For optimization and Wikipedia experiments  we bias the
+transform gates towards being closed at the start of training 
+All networks use   single hidden RHN layer since we are
+only interested in studying the in uence of recurrence depth 
+and not of stacking multiple layers  which is already known
+to be useful  Detailed con gurations for all experiments are
+included in the supplementary material 
+Regularization of RHNs  Like all RNNs  suitable regularization can be essential for obtaining good generalization
+with RHNs in practice  We adopt the regularization technique proposed by Gal   which is an interpretation of
+dropout based on approximate variational inference  RHNs
+regularized by this technique are referred to as variational
+RHNs  For the Penn Treebank wordlevel language modeling task  we report results both with and without weighttying  WT  of input and output mappings for fair comparisons  This regularization was independently proposed by
+Inan   Khosravi   and Press   Wolf  
+
+  Optimization
+
+RHN is an architecture designed to enable the optimization
+of recurrent networks with deep transitions  Therefore  the
+primary experimental veri cation we seek is whether RHNs
+with higher recurrence depth are easier to optimize compared to other alternatives  preferably using simple gradient
+based methods 
+We compare optimization of RHNs to DTRNNs and DT   
+RNNs  Pascanu et al    Networks with recurrence
+depth of       and   are trained for next step prediction
+on the JSB Chorales polyphonic music prediction dataset
+
+Recurrent Highway Networks
+
+Figure   Swarm plot of optimization experiment results for various architectures for different depths on next step prediction
+on the JSB Chorales dataset  Each point is the result of optimization using   random hyperparameter setting  The number of
+network parameters increases with depth  but is kept the same across architectures for each depth  For architectures other
+than RHN  the random search was unable to  nd good hyperparameters when depth increased  This  gure must be viewed
+in color 
+
+ BoulangerLewandowski et al    Network sizes are
+chosen such that the total number of network parameters
+increases as the recurrence depth increases  but remains the
+same across architectures    hyperparameter search is then
+conducted for SGDbased optimization of each architecture and depth combination for fair comparisons  In the
+absence of optimization dif culties  larger networks should
+reach   similar or better loss value compared to smaller
+networks  However  the swarm plot in Figure   shows that
+both DTRNN and DT   RNN become considerably harder
+to optimize with increasing depth  Similar to feedforward
+Highway networks  increasing the recurrence depth does
+not adversely affect optimization of RHNs 
+
+  Sequence Modeling
+
+  PENN TREEBANK
+
+To examine the effect of recurrence depth we train RHNs
+with  xed total parameters      and recurrence depths
+ranging from   to   for word level language modeling on
+the Penn TreeBank dataset  Marcus et al    preprocessed by Mikolov et al    The same hyperparameters
+are used to train each model  For each depth  we show the
+test set perplexity of the best model based on performance
+on the validation set in Figure     Additionally we also
+report the results for each model trained with WT regularization  In both cases the test score improves as the recurrence
+depth increases from   to   For the best   layer model 
+reducing the weight decay further improves the results to
+
+  validation test perplexity 
+As the recurrence depth increases from   to   layers the
+ width  of the network decreases from   to   units
+since the number of parameters was kept  xed  Thus  these
+results demonstrate that even for small datasets utilizing
+parameters to increase depth can yield large bene ts even
+though the size of the RNN  state  is reduced  Table  
+compares our result with the best published results on this
+dataset  The directly comparable baseline is Variational
+LSTM WT  which only differs in network architecture and
+size from our models  RHNs outperform most single models
+as well as all previous ensembles  and also bene   from
+WT regularization similar to LSTMs  Solely the yet to be
+analyzed architecture found through reinforcement learning
+and hyperparamater search by Zoph   Le   achieves
+better results 
+
+  WIKIPEDIA
+
+The task for this experiment is next symbol prediction on
+the challenging Hutter Prize Wikipedia datasets text  and
+enwik   Hutter    with   and   unicode symbols
+in total  respectively  Due to its size     characters in total  and complexity  inclusion of Latin nonLatin alphabets 
+XML markup and various special characters for enwik 
+these datasets allow us to stress the learning and generalization capacity of RHNs  We train various variational RHNs
+with recurrence depth of   or   and   or   units per
+hidden layer  obtaining stateof theart results  On text   
+
+Recurrent Highway Networks
+
+Table   Validation and test set perplexity of recent state of the art wordlevel language models on the Penn Treebank dataset 
+The model from Kim et al    uses feedforward highway layers to transform   characteraware word representation
+before feeding it into LSTM layers  dropout indicates the regularization used by Zaremba et al    which was applied to
+only the input and output of recurrent layers  Variational refers to the dropout regularization from Gal   based on
+approximate variational inference  RHNs with large recurrence depth achieve highly competitive results and are highlighted
+in bold 
+
+Model
+RNNLDA   KN    cache  Mikolov   Zweig   
+Conv Highway LSTM dropout  Kim et al   
+LSTM dropout  Zaremba et al   
+Variational LSTM  Gal   
+Variational LSTM   WT  Press   Wolf   
+Pointer SentinelLSTM  Merity et al   
+Variational LSTM   WT   augmented loss  Inan et al   
+Variational RHN
+Neural Architecture Search with base    Zoph   Le   
+Variational RHN   WT
+Neural Architecture Search with base     WT  Zoph   Le   
+Neural Architecture Search with base     WT  Zoph   Le   
+
+Size
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+
+Best Val 
+
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Test
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Table   Entropy in Bits Per Character  BPC  on the
+enwik  test set  results under   BPC   without dynamic
+evaluation  LN refers to the use of layer normalization  Lei
+Ba et al   
+
+Table   Entropy in Bits Per Character  BPC  on the text 
+test set  results under   BPC   without dynamic evaluation  LN refers to the use of layer normalization  Lei Ba
+et al   
+
+Model
+GridLSTM  Kalchbrenner et al   
+MILSTM  Wu et al   
+mLSTM  Krause et al   
+LN HyperNetworks  Ha et al   
+LN HMLSTM  Chung et al   
+RHN   Rec  depth  
+RHN   Rec  depth  
+Large RHN   Rec  depth  
+
+BPC
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Size
+   
+   
+   
+   
+   
+   
+   
+   
+
+Model
+MILSTM  Wu et al   
+mLSTM  Krause et al   
+BN LSTM  Cooijmans et al   
+HMLSTM  Chung et al   
+LN HMLSTM  Chung et al   
+RHN   Rec  depth  
+Large RHN   Rec  depth  
+
+BPC
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Size
+   
+   
+   
+   
+   
+   
+   
+
+validation test set BPC of   for   model with  
+units and recurrence depth   is achieved  Similarly  on
+enwik    validation test set BPC of   is achieved
+for the same model and hyperparameters  The only difference between the models is the size of the embedding layer 
+which is set to the size of the character set  Table   and
+Table   show that RHNs outperform the previous best models on text  and enwik  with signi cantly fewer total
+parameters    more detailed description of the networks is
+provided in the supplementary material 
+
+  Analysis
+We analyze the inner workings of RHNs through inspection
+of gate activations  and their effect on network performance 
+For the RHN with   recurrence depth of six optimized on the
+JSB Chorales dataset  subsection   Figure     shows the
+mean transform gate activity in each layer over time steps
+
+for   example sequences  We note that while the gates are
+biased towards zero  white  at initialization  all layers are
+utilized in the trained network  The gate activity in the  rst
+layer of the recurrent transition is typically high on average 
+indicating that at least one layer of recurrent transition is
+almost always utilized  Gates in other layers have varied
+behavior  dynamically switching their activity over time in
+  different way for each sequence 
+Similar to the feedforward case  the Highway layers in
+RHNs perform adaptive computation      
+the effective
+amount of transformation is dynamically adjusted for each
+sequence and time step  Unlike the general methods mentioned in section   the maximum depth is limited to the
+recurrence depth of the RHN layer    concrete description
+of such computations in feedforward networks has recently
+been offered in terms of learning unrolled iterative estimation  Greff et al    This description carries over to
+RHNs   the  rst layer in the recurrent transition computes  
+rough estimation of how the memory state should change
+
+Recurrent Highway Networks
+
+   
+
+   
+
+Figure       Test set perplexity on Penn Treebank wordlevel language modeling using RHNs with  xed parameter budget
+and increasing recurrence depth  Increasing the depth improves performance up to   layers      Mean activations of the
+transform     gates in an RHN with   recurrence depth of   for   different sequences  AD  The activations are averaged
+over units in each Highway layer    high value  red  indicates that the layer transforms its inputs at   particular time step to
+  larger extent  as opposed to passing its input to the next layer  white 
+
+given new information  The memory state is then further
+re ned by successive layers resulting in better estimates 
+The contributions of the layers towards network performance can be quanti ed through   lesioning experiment
+ Srivastava et al      For one Highway layer at   time 
+all the gates are pushed towards carry behavior by setting
+the bias to   large negative value  and the resulting loss on
+the training set is measured  The change in loss due to the
+biasing of each layer measures its contribution to the network performance  For RHNs  we  nd that the  rst layer in
+the recurrent transition contributes much more to the overall
+performance compared to others  but removing any layer
+in general lowers the performance substantially due to the
+recurrent nature of the network    plot of obtained results
+is included in the supplementary material 
+
+  Conclusion
+We developed   new analysis of the behavior of RNNs based
+on the Ger gorin Circle Theorem  The analysis provided insights about the ability of gates to variably in uence learning
+in   simpli ed version of LSTMs  We introduced Recurrent Highway Networks    powerful new model designed to
+take advantage of increased depth in the recurrent transition
+while retaining the ease of training of LSTMs  Experiments
+con rmed the theoretical optimization advantages as well as
+improved performance on well known sequence modeling
+tasks 
+Acknowledgements  This research was partially supported
+by the    project  Intuitive Natural Prosthesis UTilization   INPUT    and SNSF grant  Advanced
+
+Reinforcement Learning    We thank Klaus Greff 
+Sjoerd van Steenkiste  Wonmin Byeon and Bas Steunebrink
+for many insightful discussions 
+
+References
+Bengio  Yoshua and LeCun  Yann  Scaling learning algorithms
+
+towards ai  Largescale kernel machines     
+
+Bengio  Yoshua  Simard  Patrice  and Frasconi  Paolo  Learning
+longterm dependencies with gradient descent is dif cult  IEEE
+transactions on neural networks     
+
+Bianchini  Monica and Scarselli  Franco  On the complexity of
+neural network classi ers    comparison between shallow and
+deep architectures  IEEE Transactions on Neural Networks 
+ 
+
+BoulangerLewandowski     Bengio     and Vincent     Modeling temporal dependencies in highdimensional sequences 
+Application to polyphonic music generation and transcription 
+ArXiv eprints  June  
+
+Cho  Kyunghyun  Van Merri nboer  Bart  Gulcehre  Caglar  Bahdanau  Dzmitry  Bougares  Fethi  Schwenk  Holger  and Bengio 
+Yoshua  Learning phrase representations using rnn encoderdecoder for statistical machine translation  arXiv preprint
+arXiv   
+
+Chung     Ahn     and Bengio     Hierarchical Multiscale Recur 
+
+rent Neural Networks  ArXiv eprints  September  
+
+Chung  Junyoung  Gulcehre  Caglar  Cho  Kyunghyun  and Bengio  Yoshua  Gated feedback recurrent neural networks  In
+International Conference on Machine Learning   
+
+Cooijmans     Ballas     Laurent         ehre    and Courville 
+   Recurrent Batch Normalization  ArXiv eprints  March  
+
+ Without weighttyingWith weighttying Recurrence depth Test perplexity Recurrent Highway Networks
+
+Gal  Yarin    theoretically grounded application of dropout in
+recurrent neural networks  arXiv preprint arXiv 
+ 
+
+Gers  Felix    Schmidhuber    rgen  and Cummins  Fred  Learning to forget  Continual prediction with lstm  Neural Computation       
+
+Ger gorin      ber die Abgrenzung der Eigenwerte einer Matrix 
+Bulletin de   Acad mie des Sciences de   URSS  Classe des
+sciences math matiques  no     
+
+Graves     Generating sequences with recurrent neural networks 
+
+ArXiv eprints  August  
+
+Graves     Adaptive Computation Time for Recurrent Neural
+
+Networks  ArXiv eprints  March  
+
+Greff     Srivastava        Koutn       Steunebrink        and
+Schmidhuber     LSTM    Search Space Odyssey  arXiv
+preprint arXiv   
+
+Greff  Klaus  Srivastava  Rupesh    and Schmidhuber    rgen 
+Highway and residual networks learn unrolled iterative estimation  arXiv preprint arXiv   
+
+Ha     Dai     and Le        HyperNetworks  ArXiv eprints 
+
+September  
+
+He     Zhang     Ren     and Sun     Deep residual learning for
+
+image recognition  arXiv preprint arXiv   
+
+Hochreiter     Untersuchungen zu dynamischen neuronalen Netzen 
+Master   thesis  Institut    Informatik  Technische Univ  Munich 
+ 
+
+Hochreiter     and Schmidhuber     Long shortterm memory 
+
+Neural Computation     
+
+Hochreiter     Bengio     Frasconi     and Schmidhuber     Gradient  ow in recurrent nets  the dif culty of learning longterm
+dependencies  In Kremer        and Kolen         eds    Field
+Guide to Dynamical Recurrent Neural Networks  IEEE Press 
+ 
+
+Hutter    
+
+The human knowledge compression contest 
+
+http prize hutter net   
+
+Inan     Khosravi     and Socher     Tying Word Vectors and
+Word Classi ers    Loss Framework for Language Modeling 
+ArXiv eprints  November  
+
+Inan  Hakan and Khosravi  Khashayar  Improved learning through
+
+augmenting the loss   
+
+Jozefowicz  Rafal  Zaremba  Wojciech  and Sutskever  Ilya  An
+empirical exploration of recurrent network architectures   
+
+Jozefowicz  Rafal  Vinyals  Oriol  Schuster  Mike  Shazeer  Noam 
+and Wu  Yonghui  Exploring the limits of language modeling 
+arXiv preprint arXiv   
+
+Kalchbrenner  Nal  Danihelka  Ivo  and Graves  Alex  Grid long
+shortterm memory  CoRR  abs    URL http 
+ arxiv org abs 
+
+Kim  Yoon  Jernite  Yacine  Sontag  David  and Rush  Alexander    Characteraware neural language models  arXiv preprint
+arXiv   
+
+Krause     Lu     Murray     and Renals     Multiplicative LSTM
+
+for sequence modelling  ArXiv eprints  September  
+
+Le        Jaitly     and Hinton          Simple Way to Initialize
+Recurrent Networks of Recti ed Linear Units  ArXiv eprints 
+April  
+
+Lei Ba     Kiros        and Hinton        Layer Normalization 
+
+ArXiv eprints  July  
+
+Linnainmaa     The representation of the cumulative rounding
+error of an algorithm as   taylor expansion of the local rounding
+errors  Master   thesis  Univ  Helsinki   
+
+Linnainmaa  Seppo  Taylor expansion of the accumulated rounding
+error  BIT Numerical Mathematics      ISSN
+ 
+
+Marcus  Mitchell    Marcinkiewicz  Mary Ann  and Santorini 
+Beatrice  Building   large annotated corpus of english  The
+penn treebank  Comput  Linguist    June  
+ISSN  
+
+Merity     Xiong     Bradbury     and Socher     Pointer Sentinel
+
+Mixture Models  ArXiv eprints  September  
+
+Mikolov  Tomas and Zweig  Geoffrey  Context dependent recurrent
+
+neural network language model  SLT     
+
+Mikolov  Tomas  Kara    Martin  Burget  Lukas  Cernock    Jan 
+and Khudanpur  Sanjeev  Recurrent neural network based language model  In Interspeech  volume   pp     
+
+Pascanu     Gulcehre     Cho     and Bengio     How to construct deep recurrent neural networks  ArXiv eprints  December
+ 
+
+Press     and Wolf     Using the Output Embedding to Improve
+
+Language Models  ArXiv eprints  August  
+
+Robinson        and Fallside     The utility driven dynamic
+error propagation network 
+Technical Report CUED FINFENG TR  Cambridge University Engineering Department 
+ 
+
+Schmidhuber    rgen  Reinforcement learning in markovian and
+nonmarkovian environments  In Advances in Neural Information Processing Systems   MorganKaufmann   
+
+Schmidhuber    rgen  Learning complex  extended sequences
+using the principle of history compression  Neural Computation 
+   
+
+Schmidhuber    rgen  Deep learning in neural networks  An
+
+overview  Neural Networks     
+
+Srivastava  Rupesh    Greff  Klaus  and Schmidhuber  Juergen 
+Training very deep networks  In Advances in Neural Information Processing Systems   pp    Curran Associates 
+Inc     
+
+Srivastava  Rupesh Kumar  Steunebrink  Bas    and Schmidhuber 
+  rgen  First experiments with powerplay  Neural Networks 
+   
+
+Srivastava  Rupesh Kumar  Greff  Klaus  and Schmidhuber    rgen 
+Highway networks  arXiv preprint arXiv     
+
+Recurrent Highway Networks
+
+Werbos  Paul    System Modeling and Optimization  Proceedings of the  th IFIP Conference New York City  USA  August
+    September     chapter Applications of advances in
+nonlinear sensitivity analysis  pp    Springer Berlin
+Heidelberg   
+
+Werbos  Paul    Generalization of backpropagation with application to   recurrent gas market model  Neural Networks   
+   
+
+Williams        Complexity of exact gradient computation algorithms for recurrent neural networks  Technical Report NUCCS  Boston  Northeastern University  College of Computer Science   
+
+Wu     Zhang     Zhang     Bengio     and Salakhutdinov    
+On Multiplicative Integration with Recurrent Neural Networks 
+ArXiv eprints  June  
+
+Zaremba     Sutskever     and Vinyals     Recurrent Neural
+
+Network Regularization  ArXiv eprints  September  
+
+Zhang  Yu  Chen  Guoguo  Yu  Dong  Yao  Kaisheng  Khudanpur 
+Sanjeev  and Glass  James  Highway long shortterm memory
+RNNS for distant speech recognition  In   IEEE  ICASSP 
+ 
+
+Zoph  Barret and Le  Quoc    Neural architecture search with
+reinforcement learning  arXiv preprint arXiv   
+
+

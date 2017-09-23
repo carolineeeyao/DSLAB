@@ -1,0 +1,1192 @@
+Sliced Wasserstein Kernel for Persistence Diagrams
+
+Mathieu Carri ere   Marco Cuturi   Steve Oudot  
+
+Abstract
+
+Persistence diagrams  PDs  play   key role in
+topological data analysis  TDA  in which they
+are routinely used to describe topological properties of complicated shapes  PDs enjoy strong
+stability properties and have proven their utility
+in various learning contexts  They do not  however  live in   space naturally endowed with  
+Hilbert structure and are usually compared with
+nonHilbertian distances  such as the bottleneck
+distance  To incorporate PDs in   convex learning pipeline  several kernels have been proposed
+with   strong emphasis on the stability of the resulting RKHS distance        perturbations of the
+PDs  In this article  we use the Sliced Wasserstein approximation of the Wasserstein distance
+to de ne   new kernel for PDs  which is not only
+provably stable but also discriminative  with  
+bound depending on the number of points in the
+PDs        
+the  rst diagram distance between
+PDs  We also demonstrate its practicality  by developing an approximation technique to reduce
+kernel computation time  and show that our proposal compares favorably to existing kernels for
+PDs on several benchmarks 
+
+  Introduction
+Topological Data Analysis  TDA  is an emerging trend in
+data science  grounded on topological methods to design
+descriptors for complex data see       Carlsson    for
+an introduction to the subject  The descriptors of TDA can
+be used in various contexts  in particular statistical learning and geometric inference  where they provide useful insight into the structure of data  Applications of TDA can
+be found in   number of scienti   areas  including computer vision  Li et al    materials science  Hiraoka
+et al    and brain science  Singh et al    to name
+
+ INRIA Saclay  CREST  ENSAE  Universit   Paris
+Correspondence to  Mathieu Carri ere  math 
+
+Saclay 
+ieu carriere inria fr 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+  few  The tools developed in TDA are built upon persistent homology theory  Edelsbrunner   Harer    Oudot 
+  and their main output is   descriptor called persistence diagram  PD  which encodes the topology of   space
+at all scales in the form of   point cloud with multiplicities
+in the plane   see Section   for more details 
+PDs as features  The main strength of PDs is their stability with respect to perturbations of the data  Chazal et al 
+      On the downside  their use in learning tasks
+is not straightforward 
+Indeed    large class of learning
+methods  such as SVM or PCA  requires   Hilbert structure on the descriptors space  which is not the case for the
+space of PDs  Actually  many simple operators of Rn  such
+as addition  average or scalar product  have no analogues
+in that space  Mapping PDs to vectors in Rn or in some
+in nitedimensional Hilbert space is one possible approach
+to facilitate their use in discriminative settings 
+Related work    series of recent contributions have proposed kernels for PDs  falling into two classes  The  rst
+class of methods builds explicit feature maps  One can 
+for instance  compute and sample functions extracted from
+PDs  Bubenik    Adams et al    Robins   Turner 
+  sort the entries of the distance matrices of the
+PDs  Carri ere et al    treat the PD points as roots
+of   complex polynomial  whose coef cients are concatenated  Fabio   Ferri    The second class of methods  which is more relevant to our work  de nes implicitly
+feature maps by focusing instead on building kernels for
+PDs  For instance  Reininghaus et al    use solutions
+of the heat differential equation in the plane and compare
+them with the usual      dot product  Kusano et al 
+  handle   PD as   discrete measure on the plane  and
+follow by using kernel mean embeddings with Gaussian
+kernels see Section   for precise de nitions  Both kernels are provably stable  in the sense that the metric they
+induce in their respective reproducing kernel Hilbert space
+ RKHS  is bounded above by the distance between PDs 
+Although these kernels are injective  there is no evidence
+that their induced RKHS distances are discriminative and
+therefore follow the geometry of the bottleneck distances 
+which are more widely accepted distances to compare PDs 
+Contributions  In this article  we use the sliced Wasserstein  SW  distance  Rabin et al    to de ne   new ker 
+
+Sliced Wasserstein Kernel for Persistence Diagrams
+
+is de ned as        cid 
+
+        cid 
+
+nel for PDs  which we prove to be both stable and discriminative  Speci cally  we provide distortion bounds on the
+SW distance that quantify its ability to mimic bottleneck
+distances between PDs  This is in contrast to other kernels
+for PDs  which only focus on stability  We also propose
+  simple approximation algorithm to speed up the computation of that kernel  con rm experimentally its discriminative power and show that it outperforms experimentally
+both proposals of  Kusano et al    and  Reininghaus
+et al    in several supervised classi cation problems 
+
+  Background on TDA and Kernels
+We brie   review in this section relevant material on TDA 
+notably persistence diagrams  and technical properties of
+positive and negative de nite kernel functions 
+
+  Persistent Homology
+
+Persistent homology  Zomorodian   Carlsson   
+Edelsbrunner   Harer    Oudot    is   technique
+inherited from algebraic topology for computing stable signatures on realvalued functions  Given           as
+input  persistent homology outputs   planar point set with
+multiplicities  called the persistence diagram of   and denoted by Dg    See Figure   for an example  To understand the meaning of each point in this diagram  it suf ces
+to know that  to compute Dg    persistent homology considers the family of sublevel sets of         the sets of the
+form       for        and it records the topological events       creation or merge of   connected component  creation or  lling of   loop  void  etc 
+that occur in       as   ranges from   to   Then 
+each point     Dg   represents the lifespan of   particular topological feature  connected component  loop  void 
+etc  with its creation and destruction times as coordinates 
+See again Figure   for an illustration 
+For the interested reader  we point out that the mathematical tool used by persistent homology to track the topological events in the family of sublevel sets is homological
+algebra  which turns the parametrized family of sublevel
+sets into   parametrized family of vector spaces and linear
+maps  Computing persistent homology then boils down to
+computing   family of bases for the vector spaces  which
+are compatible with the linear maps 
+
+Distance between PDs  We now de ne the pth diagram
+distance between PDs  Let       and Dg  Dg  be two
+PDs  Let     Dg            Dg  be   partial bijection
+between Dg  and Dg  Then  for any point        the
+cost of   is de ned as         cid        cid    and for any
+point      Dg   cid  Dg        cid     the cost of   is de ned
+as   cid       cid        cid    where   is the projection
+onto the diagonal                     The cost   
+
+    cid      We then
+de ne the pth diagram distance dp as the cost of the best
+partial bijection between the PDs 
+
+dp Dg  Dg    inf
+ 
+
+  
+
+In the particular case       the cost of   is de ned
+as      max maxx       maxy  cid    The corresponding distance    is often called the bottleneck distance  One can show that dp      when        
+fundamental property of PDs is their stability with respect
+to  small  perturbations of their originating functions  Indeed  the stability theorem  Bauer   Lesnick    Chazal
+et al        CohenSteiner et al    asserts that
+for any               we have
+
+  Dg    Dg       cid       cid 
+
+ 
+
+See again Figure   for an illustration 
+In practice  PDs can be used as descriptors for data via the
+choice of appropriate  ltering functions         distance to
+the data in the ambient space  eccentricity  curvature  etc 
+The main strengths of the obtained descriptors are      to
+be provably stable as mentioned previously      to be invariant under reparametrization of the data  and     to encode information about the topology of the data  which is
+complementary and of an essentially different nature compared to geometric or statistical quantities  These properties have made persistence diagrams useful in   variety of
+contexts  including the ones mentioned in the introduction
+of the paper  For further details on persistent homology and
+on applications of PDs  the interested reader can refer     
+to  Oudot    and the references therein 
+
+  Kernel Methods
+Positive De nite Kernels  Given   set      function
+              is called   positive de nite kernel if
+for all integers    for all families      xn of points in
+   the matrix    xi  xj     is itself positive semide nite 
+For brevity we will refer to positive de nite kernels as
+kernels in the rest of the paper  It is known that kernels
+generalize scalar products  in the sense that  given   kernel    there exists   Reproducing Kernel Hilbert Space
+ RKHS  Hk and   feature map         Hk such that
+           cid       cid Hk    kernel   also induces  
+distance dk on   that can be computed as the Hilbert norm
+of the difference between two embeddings 
+
+        def                               
+  
+
+We will be particularly interested in this distance  since one
+of the goals we will aim for will be that of designing   kernel   for persistence diagrams such that dk has low distortion with respect to   
+
+Sliced Wasserstein Kernel for Persistence Diagrams
+
+   
+
+   
+
+   
+
+Figure   Sketch of persistent homology      the horizontal lines are the boundaries of sublevel sets        which are colored in
+decreasing shades of grey  The vertical dotted lines are the boundaries of their different connected components  For instance    new
+connected component is created in the sublevel set       when           and it is merged  destroyed  when           its
+lifespan is represented by   copy of the point with coordinates              in the persistence diagram of    Figure           piecewiselinear approximation    blue  of the function    red  from sampled values      superposition of Dg    red  and Dg    blue  showing the
+partial matching of minimum cost  magenta  between the two persistence diagrams 
+
+        def  exp
+
+        
+
+ 
+
+ 
+
+ 
+
+Qr       
+
+ cid cid 
+ cid 
+
+ 
+
+ 
+
+ 
+
+Negative De nite and RBF Kernels    standard way
+to construct   kernel is to exponentiate the negative of  
+Euclidean distance  Indeed  the Gaussian kernel for vectors with parameter       does follow that template approach            exp
+  An important theorem of Berg et al     Theorem      states that
+such an approach to build kernels  namely setting
+
+ cid     cid 
+
+ cid 
+
+ cid 
+
+ 
+
+ 
+
+ cid 
+
+ cid 
+
+for an arbitrary function   can only yield   valid positive
+de nite kernel for all       if and only if   is   negative semide nite function  namely that  for all integers   
+  ai    
+
+      xn            an   Rn such that cid 
+ cid 
+    aiajf  xi  xj     
+
+Unfortunately  as observed in Appendix   of Reininghaus
+et al       is not negative semide nite  it only suf 
+ ces to sample   family of point clouds to observe experimentally that more often than not the inequality above will
+be violated for   particular weight vector    In this article 
+we use an approximation of    with the Sliced Wasserstein
+distance  which is provably negative semide nite  and we
+use it to de ne   RBF kernel that can be easily tuned thanks
+to its bandwidth parameter  
+
+  Wasserstein distance for unnormalized measures
+
+on  
+
+The Wasserstein distance  Villani      is   distance
+between probability measures  For reasons that will become clear in the next section  we will focus on   variant of
+that distance  the  Wasserstein distance for nonnegative 
+not necessarily normalized  measures on the real line  Santambrogio      Let   and   be two nonnegative mea 
+
+sures on the real line such that         and        
+are equal to the same number    We de ne the three following objects 
+
+       inf
+
+  
+
+              dx  dy 
+
+ cid 
+              dx
+
+      
+
+inf
+
+  Lipschitz
+
+     dx     dx 
+
+ 
+
+where     is the set of measures on    with marginals
+  and   and    and    the generalized quantile functions of the probability measures    and    respectively 
+Proposition   We have     Qr      Additionally    
+Qr is negative de nite on the space of measures of mass   
+ ii  for any three positive measures       such that    
+  we have                    
+Equation   is the generic Kantorovich formulation of optimal transport  which is easily generalized to other cost
+functions and spaces  the variant being that we consider an
+unnormalized mass by re ecting it directly in the set  
+The equality between   and   is only valid for probability measures on the real line  Because the cost function
+      is homogeneous  we see that the scaling factor   can be
+removed when considering the quantile function and multiplied back  The equality between   and   is due to the
+well known Kantorovich duality for   distance cost  Villani    Particular case   which can also be trivially
+generalized to unnormalized measures  proving therefore
+the main statement of the proposition  The de nition of
+Qr shows that the Wasserstein distance is the    norm of
+
+RXpqsRXp             Sliced Wasserstein Kernel for Persistence Diagrams
+
+rM    rN  and is therefore   negative de nite kernel
+ as the    distance between two direct representations of  
+and   as functions rM  and rN  proving point    
+The second statement is immediate 
+unnormalized uniform empirical measures      cid  
+and      cid  
+We conclude with an important practical remark  for two
+    xi
+ cid  
+    yi of the same size  with ordered     
+    xn and          yn  one has        
+    xi yi     cid      cid  where           xn    Rn
+and           yn    Rn 
+  The Sliced Wasserstein Kernel
+In this section we de ne   new kernel between PDs  called
+the Sliced Wasserstein  SW  kernel  based on the Sliced
+Wasserstein metric of Rabin et al    The idea underlying this metric is to slice the plane with lines passing
+through the origin  to project the measures onto these lines
+where   is computed  and to integrate those distances over
+all possible lines  Formally 
+De nition   Given        with  cid cid      let   
+denote the line              and let            
+ cid 
+be the orthogonal projection onto    Let Dg  Dg 
+    and  
+be two PDs  and let  
+   
+  where   is the
+orthogonal projection onto the diagonal  Then  the Sliced
+Wasserstein distance is de ned as 
+
+    and similarly for  
+
+  Dg 
+
+  Dg 
+
+SW Dg  Dg  def 
+
+ 
+ 
+
+     
+
+   
+
+     
+
+   
+
+     cid 
+ cid 
+     
+
+     
+
+Note that  by symmetry  one can restrict on the halfcircle
+    and normalize by   instead of   Since Qr is neg 
+   
+ative semide nite  we can deduce that SW itself is negative semide nite 
+Lemma   Let   be the set of bounded and  nite PDs 
+Then  SW is negative semide nite on   
+
+ij     cid 
+
+  Dgk   cid        
+   Dgi  Then 
+     
+
+Proof  Let             an     such that cid 
+ cid 
+and    cid 
+Dg    Dgn      Given            we let  
+ cid 
+ cid 
+aiajW 
+ cid 
+aiajL 
+ cid 
+aiajL 
+aiajL 
+
+aiajQd 
+
+ cid 
+
+      
+
+ij   
+
+     
+
+     
+
+     
+
+     
+
+     
+
+    
+
+    
+
+     
+
+     
+
+     
+
+  
+
+  
+
+ 
+
+ 
+
+ 
+
+   
+
+   
+
+   
+
+   
+
+   
+
+The result follows by linearity of integration 
+
+      
+
+ij 
+
+       
+
+  ai     and
+     
+   
+  Dgk   cid        
+
+Hence  the theorem of Berg et al    allows us to de ne
+  valid kernel with 
+
+kSW Dg  Dg  def  exp
+
+SW Dg  Dg 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ cid 
+
+ cid 
+
+Metric equivalence  We now give the main theoretical
+result of this article  which states that SW is equivalent
+to    This has to be compared with  Reininghaus et al 
+  and  Kusano et al    which only prove stability and injectivity  Our equivalence result states that the
+kSW  in addition to be stable and injective  also preserves
+the metric between PDs  which should intuitively lead to
+an improvement of the classi cation power  This intuition
+is illustrated in Section   and Figure   where we show an
+improvement of classi cation accuracies on several benchmark applications 
+Theorem   Let   be the set of bounded PDs with cardinalities bounded by        Let Dg  Dg       Then 
+  SW Dg  Dg       Dg  Dg 
+
+  Dg  Dg 
+
+one has 
+
+  
+
+where                  
+Proof  Let      Dg     Dg    Dg     Dg  be the
+oneto one bijection between Dg     Dg  and Dg   
+  and let  
+ Dg  induced by   
+be the oneto one bijection between Dg     Dg  and
+Dg     Dg  induced by the partial bijection achieving
+  Dg  Dg 
+Upper bound  Recall that  cid cid      We have 
+
+     
+
+     
+
+   
+
+ cid 
+ cid 
+
+ cid           cid 
+ cid         cid 
+
+   
+
+     
+
+ cid 
+  
+     
+ cid           cid   
+ 
+     Dg  Dg 
+
+   
+ 
+
+     
+
+where the sum is taken over all     Dg     Dg  The
+upper bound follows by linearity 
+Lower bound  The idea is to use the fact that    is  
+piecewiseconstant function of   and that it has at most
+              critical values        in    
+    Indeed  it suf ces to look at all   such that  cid       cid      for
+ cid     
+some       in Dg     Dg  or Dg     Dg  Then 
+ cid 
+ cid 
+ 
+             Dg  Dg 
+
+ cid            cid 
+ cid            cid         
+
+ cid     
+ cid           cid   
+
+ cos               
+
+ cid 
+
+ 
+
+  
+
+  
+
+Sliced Wasserstein Kernel for Persistence Diagrams
+
+where the sum is again taken over all     Dg     Dg 
+and where the inequality used to lower bound the integral
+of the cosine is obtained by concavity  The lower bound
+follows then from the CauchySchwarz inequality 
+
+Note that the lower bound depends on the cardinalities of
+the PDs  and it becomes close to   if the PDs have   large
+number of points  On the other hand  the upper bound is
+oblivious to the cardinality    corollary of Theorem  
+is that dkSW  the distance induced by kSW in its RKHS  is
+also equivalent to    in   broader sense  there exist continuous  positive and monotone functions      such that
+            and          dkSW         
+When the condition on the cardinalities of PDs is relaxed       when we only assume the PDs to be  nite and
+bounded  with no uniform bound  the feature map  SW associated to kSW remains continuous and injective          
+This means that kSW can be turned into   universal kernel
+by considering exp kSW   cf Theorem   in  Kwitt et al 
+  This can be useful in   variety of tasks  including
+tests on distributions of PDs 
+
+ cid  
+
+Computation 
+In practice  we propose to approximate
+kSW in     log     time using Algorithm   This algorithm  rst samples   directions in the halfcircle   
+    it
+then computes  for each sample    and for each PD Dg 
+the scalar products between the points of Dg and     to sort
+them next in   vector     Dg  Finally  the  cid norm between the vectors is averaged over the sampled directions 
+SWM  Dg  Dg     
+    cid      Dg        Dg cid 
+ 
+Note that one can easily adapt the proof of Lemma   to
+show that SWM is negative semide nite by using the linearity of the sum  Hence  this approximation remains  
+kernel  If the two PDs have cardinalities bounded by   
+then the running time of this procedure is       log    
+This approximation of kSW is useful since  as shown in
+Section   we have observed empirically that just   few
+directions are suf cient to get good classi cation accuracies  Note that the exact computation of kSW is also possible in      log     time using the algorithm described
+in  Carri ere et al   
+
+  Experiments
+In this section  we compare kSW to kPSS and kPWG on
+several benchmark applications for which PDs have been
+proven useful  We compare these kernels in terms of classi cation accuracies and computational cost  We review
+ rst our experimental setting  and then all our tasks 
+Experimental setting All kernels are handled with
+the LIBSVM  Chang   Lin   
+implementation
+of CSVM  and results are averaged over   runs
+on    GHz Intel Xeon    Quad Core 
+The
+
+Algorithm   Computation of SWM
+Input  Dg       
+   Dg       
+Add  Dg  to Dg  and viceversa 
+Let SWM                  
+for           do
+
+      
+
+      
+
+     
+
+    cid  in an array   
+    cid  in an array   
+
+Store the products  cid   
+Store the products  cid   
+Sort    and    in ascending order 
+SWM   SWM     cid        cid 
+          
+
+end for
+Output   SWM  
+
+TASK
+ORBIT
+TEXTURE
+HUMAN
+AIRPLANE
+ANT
+BIRD
+FOURLEG
+OCTOPUS
+FISH
+
+TRAINING
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+TEST
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+LABELS
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Table   Number of instances in the training set  the test set and
+number of labels of the different applications 
+
+ cid 
+
+ cid 
+
+cost factor   is crossvalidated in the following grid 
+              Table   summarizes
+the number of labels  and the number of training and test instances for each task  Figure   illustrate how we use PDs to
+represent complex data  We  rst describe the two baselines
+we considered  along with their parameterization  followed
+by our proposal 
+PSS  The Persistence Scale Space kernel kPSS  Reininghaus et al    is de ned as the scalar product of
+the two solutions of the heat diffusion equation with initial Dirac sources located at the PD points 
+It has the
+following closed form expression  kPSS Dg  Dg   
+ 
+ 
+  
+where             is the symmetric of            along the
+diagonal  Since there is no clear heuristic on how to tune
+   this parameter is chosen in the applications by tenfold
+crossvalidation with random   trainingtest splits
+and with the following set of NPSS     values   
+                      and  
+PWG  Let         be positive parameters 
+Let   
+be the Gaussian kernel with parameter   and associated RKHS    Let Dg  Dg  be two PDs  and let
+arctan Kd                 
+ 
+be the kernel mean embedding of Dg  weigthed by
+Let   be de ned similarly 
+the diagonal distances 
+
+   cid 
+
+  exp
+
+  Dg 
+
+  Dg 
+
+exp
+
+ cid     cid 
+
+  
+
+  Dg 
+
+ cid     cid 
+
+  
+
+ 
+
+ cid 
+
+ 
+
+ cid 
+
+ cid 
+
+ cid 
+
+Sliced Wasserstein Kernel for Persistence Diagrams
+
+TASK
+ORBIT
+TEXTURE
+kPSS
+     
+     
+     
+     
+     
+     
+     
+
+kPSS  
+     
+     
+kPWG
+     
+     
+     
+     
+     
+     
+     
+
+kPSS  
+kSW  
+kPWG  
+                     
+     
+               
+kPSS
+
+kPWG  
+     
+     
+kSW
+             
+             
+             
+     
+       
+             
+             
+     
+
+kPWG
+       
+       
+       
+       
+       
+       
+               
+
+TASK
+HUMAN
+AIRPLANE
+ANT
+BIRD
+FOURLEG
+OCTOPUS
+FISH
+
+kSW       kSW       
+     
+     
+     
+     
+     
+     
+     
+
+     
+     
+     
+     
+     
+     
+     
+
+kSW       
+     
+     
+
+Table   Classi cation accuracies   and Gram matrices computation time     for the benchmark applications  As explained in the
+text    represents the size of the set of possible parameters  and we have       for kPSS                    for kPWG and
+              for kSW    is   constant that depends only on the training size  In all our applications  it is less than    
+
+Figure   Examples of PDs computed on orbits  texture images and    shapes 
+
+ cid 
+
+ cid 
+
+ 
+
+   
+
+ 
+
+    
+
+ cid cid   
+
+Let       The Persistence Weighted Gaussian kernel kPWG  Kusano et al      is de ned as
+the
+kPWG Dg  Dg    exp
+Gaussian kernel with parameter   on    The authors
+in  Kusano et al    provide heuristics to compute
+     and   and give   rule of thumb to tune    Hence 
+in the applications we select   according to the rule of
+thumb  and we use tenfold crossvalidation with random
+  trainingtest splits to chose      and   The
+ranges of possible values is obtained by multiplying the
+values computed with the heuristics with the following
+range of   factors          and   leading to
+NPWG                 different sets of parameters 
+Parameters for kSW  The kernel we propose has only
+one parameter 
+the bandwidth   in Eq    which we
+choose using tenfold crossvalidation with random  
+  trainingtest splits  The range of possible values is
+obtained by computing the squareroot of the median  the
+ rst and the last deciles of all SW Dgi  Dgj  in the training set  then by multiplying these values by the following
+range of   factors          and   leading to
+NSW             possible values 
+
+Parameter Tuning  The bandwidth of kSW is  in practice 
+easier to tune than the parameters of its two competitors
+when using grid search  Indeed  as is the case for all in 
+ nitely divisible kernels  the Gram matrix does not need to
+be recomputed for each choice of   since it only suf ces
+to compute all the Sliced Wasserstein distances between
+PDs in the training set once  On the contrary  neither kPSS
+nor kPWG share this property  and require recomputations
+for each hyperparameter choice  Note however that this
+improvement may no longer hold if one uses other methods to tune parameters  For instance  using kPWG without
+crossvalidation is possible with the heuristics given by the
+authors in  Kusano et al    and leads to smaller training times  but also to worse accuracies 
+
+     shape segmentation
+
+Our  rst task  whose goal is to produce point classi ers for
+   shapes  follows that presented in  Carri ere et al   
+Data  We use some categories of the mesh segmentation
+benchmark of Chen et al   Chen et al    which contains    shapes classi ed in several categories  airplane 
+ human   ant  For each category  our goal is to design
+  classi er that can assign  to each point in the shape   
+
+Label CanvasLabel CarpetLabel FootLabel HeadLabel Label Sliced Wasserstein Kernel for Persistence Diagrams
+
+Figure   The  rst row corresponds to the orbit recognition and the texture classi cation while the second row corresponds to    shape
+segmentation  On each row  the left plot shows the dependence of the accuracy on the number of directions  the middle plot shows the
+dependence of   single Gram matrix computation time  and the right plot shows the dependence of the ratio of the approximation of SW
+and the exact SW  Since the box plot of the ratio for orbit recognition is very similar to that of    shape segmentation  we only give the
+box plot of texture classi cation in the  rst row 
+
+label that describes the relative location of that point in the
+shape  For instance  possible labels are  for the human category   head   torso   arm  To train classi ers  we compute   PD per point using the geodesic distance function to
+this point see  Carri ere et al    for details  We use
+ dimensional persistent homology  dimensional would
+not be informative since the shapes are connected  leading
+to solely one point with coordinates     per PD  For
+each category  the training set contains one hundredth of
+the points of the  rst  ve    shapes  and the test set contains one hundredth of the points of the remaining shapes
+in that category  Points in training and test sets are evenly
+sampled  See Figure   Here  we focus on comparison
+between PDs  and not on achieving stateof theart results 
+It has been proven that PDs bring complementary information to classical descriptors in this task see  Carri ere
+et al    hence reinforcing their discriminative power
+with appropriate kernels is of great interest  Finally  since
+data points are in    we set the   parameter of kPWG to  
+Results  Classi cation accuracies are given in Table   For
+most categories  kSW outperforms competing kernels by  
+signi cant margin  The variance of the results over the run
+is also less than that of its competitors  However  training times are not better in general  Hence  we also provide
+the results for an approximation of kSW with   directions 
+As one can see from Table   and from Figure   this approximation leaves the accuracies almost unchanged  while
+the training times become comparable with the ones of the
+
+other competitors  Moreover  according to Figure   using
+even less directions would slightly decrease the accuracies 
+but still outperform the competitors performances  while
+decreasing even more the training times 
+
+  Orbit recognition
+
+In our second experiment  we use synthetized data  The
+goal is to retrieve parameters of dynamical system orbits 
+following an experiment proposed in  Adams et al   
+Data  We study the linked twist map    discrete dynamical
+system modeling  uid  ow  It was used in  Hertzsch et al 
+  to model  ows in DNA microarrays  Its orbits can
+be computed given   parameter       and initial positions
+                   as follows 
+
+ cid  xn    xn   ryn    yn 
+
+mod  
+yn    yn   rxn    xn  mod  
+
+Depending on the values of   
+the orbits may exhibit
+very different behaviors  For instance  as one can see in
+Figure   when   is   there seems to be no interesting
+topological features in the orbit  while voids form when  
+is   Following  Adams et al    we use   different
+parameters               that act as labels  For
+each parameter  we generate   orbits with   points
+and random initial positions  We then compute the PDs of
+the distance functions to the point clouds with the GUDHI
+
+ Number of directions log  SW approx   SW exact  Number of directions log  SW approx   SW exact  Sliced Wasserstein Kernel for Persistence Diagrams
+
+library  The GUDHI Project    and we use them  in all
+homological dimensions  to produce an orbit classi er that
+predicts the parameter values  by training over    
+trainingtest split of the data  Since data points are in   
+we set the   parameter of kPWG to  
+
+Results  Since the PDs contain thousands of points  we use
+kernel approximations to speed up the computation of the
+Gram matrices  In order for the approximation error to be
+bounded by   we use an approximation of kSW with  
+directions  as one can see from Figure   this has   small
+impact on the accuracy  we approximate kPWG with  
+random Fourier features  Rahimi   Recht    and we
+approximate kPSS using Fast Gauss Transform  Morariu
+et al    with   normalized error of   One can see
+from Table   that the accuracy is increased   lot with kSW 
+Concerning training times  there is also   large improvement since we tune the parameters with grid search  Indeed  each Gram matrix needs not be recomputed for each
+parameter when using kSW 
+
+  Texture classi cation
+
+Our last experiment is inspired from  Reininghaus et al 
+  and  Li et al    We use the OUTEX  data
+base  Ojala et al    for texture classi cation 
+Data  PDs are obtained for each texture image by computing  rst the sign component of CLBP descriptors  Guo
+et al    with radius       and       neighbors
+for each image  and then compute the persistent homology
+of this descriptor using the GUDHI library  The GUDHI
+Project    See Figure   Note that  contrary to the
+experiment of  Reininghaus et al    we do not downsample the images to       images  but keep the original
+      images  Following  Reininghaus et al   
+we restrict the focus to  dimensional persistent homology 
+We also use the  rst   trainingtest split given in
+the database to produce classi ers  Since data points are in
+   we set the   parameter of kPWG to  
+Results We use the same approximation procedure as in
+Section   According to Figure   even though the approximation of SW is rough  this has again   small impact
+on the accuracy  while reducing the training time by   signi cant margin  As one can see from Table   using kPSS
+leads to almost stateof theart results  Ojala et al   
+Guo et al    closely followed by the accuracies of
+kSW and kPWG  The best timing is given by kSW  again
+because we use grid search  Hence  kSW almost achieves
+the best result  and its training time is better than the ones
+of its competitors  due to the grid search parameter tuning 
+Metric Distortion  To illustrate the equivalence theorem 
+we also show in Figure     scatter plot where each point
+
+Figure   We show how the metric    is distorted  Each point represents   pair of PDs and its abscissae is the  rst diagram distance
+between them  Depending on the point color  its ordinate is the
+logarithm of the distance between PDs in the RKHS induced by
+either kPSS  blue points  kPWG  green points  kSW  red points 
+and   Gaussian kernel on     black points 
+
+represents the comparison of two PDs taken from the Airplane segmentation data set  Similar plots can be obtained
+with the other datasets considered here  For all points  the
+xaxis quanti es the  rst diagram distance    for that pair 
+while the yaxis is the logarithm of the RKHS distance induced by either kSW  kPSS  kPWG or   Gaussian kernel
+directly applied to    to obtain comparable quantities  We
+use the parameters given by the crossvalidation procedure
+described above  One can see that the distances induced
+by kSW are less spread than the others  suggesting that the
+metric induced by kSW is more discriminative  Moreover
+the distances given by kSW and the Gaussian kernel on   
+exhibit the same behavior  suggesting that kSW is the best
+natural equivalent of   Gaussian kernel for PDs 
+
+  Conclusion
+In this article  we introduce the Sliced Wasserstein kernel 
+  new kernel for PDs that is provably equivalent to the  rst
+diagram distance between PDs  We provide fast algorithms
+to approximate it  and show on several datasets substantial
+improvements in accuracy and training times  when tuning
+parameters is done with grid search  over competing kernels    particularly appealing property of that kernel is that
+it is in nitely divisible  substantially facilitating the tuning
+of parameters through cross validation 
+
+Acknowledgements  We thank the anonymous referees
+for their insightful comments  SO was supported by ERC
+grant Gudhi and by ANR project TopData  MC was supported by   chaire de   IDEX Paris Saclay 
+
+ First Diagram Distance Distance in RKHSPSSPWGSWexp   Sliced Wasserstein Kernel for Persistence Diagrams
+
+References
+Adams     Emerson     Kirby     Neville     Peterson 
+   Shipman     Chepushtanova     Hanson     Motta 
+   and Ziegelmeier     Persistence Images    Stable
+Vector Representation of Persistent Homology  Journal
+Machine Learning Research     
+
+Bauer     and Lesnick     Induced matchings and the algebraic stability of persistence barcodes  Journal of Computational Geometry     
+
+Berg     Christensen     and Ressel     Harmonic Analysis
+on Semigroups  Theory of Positive De nite and Related
+Functions  Springer   
+
+Bubenik     Statistical Topological Data Analysis using
+Persistence Landscapes  Journal Machine Learning Research     
+
+Carlsson     Topology and data  Bulletin American Math 
+
+ematical Society     
+
+Carri ere     Oudot     and Ovsjanikov     Stable Topological Signatures for Points on    Shapes  In Proceedings  th Symposium Geometry Processing   
+
+Carri ere     Cuturi     and Oudot    
+
+Sliced
+Wasserstein Kernel for Persistence Diagrams  CoRR 
+abs   
+
+Chang     and Lin     LIBSVM    library for support vector machines  ACM Transactions on Intelligent Systems and Technology      Software available at http www csie ntu edu 
+tw cjlin libsvm 
+
+Chazal     CohenSteiner     Glisse     Guibas     and
+Oudot     Proximity of persistence modules and their diagrams  In Proceedings  th Symposium Computational
+Geometry  pp       
+
+Chazal     CohenSteiner     Guibas       emoli    
+and Oudot     GromovHausdorff Stable Signatures for
+Shapes using Persistence  Computer Graphics Forum 
+pp       
+
+Chazal     de Silva     and Oudot     Persistence stability
+for geometric complexes  Geometriae Dedicata  pp   
+   
+
+Chazal     de Silva     Glisse     and Oudot     The
+structure and stability of persistence modules  Springer 
+ 
+
+Chen     Golovinskiy     and Funkhouser       Benchmark for    Mesh Segmentation  ACM Trans  Graph 
+   
+
+CohenSteiner     Edelsbrunner     and Harer     Stability
+of persistence diagrams  Discrete Computational Geometry     
+
+Edelsbrunner     and Harer     Computational Topology 
+
+an introduction  AMS Bookstore   
+
+Edelsbrunner  Herbert and Harer 
+
+Persistent
+homologya survey  Contemporary mathematics   
+   
+
+John 
+
+Fabio     Di and Ferri     Comparing persistence diagrams
+through complex vectors  CoRR  abs   
+
+Guo     Zhang     and Zhang       completed modeling
+of local binary pattern operator for texture classi cation 
+IEEE Trans  Image Processing  pp     
+
+Hertzsch       Sturman     and Wiggins     DNA microarrays  design principles for maximizing ergodic 
+chaotic mixing  In Small  volume   pp     
+
+Hiraoka     Nakamura     Hirata     Escolar     Matsue 
+   and Nishiura     Hierarchical structures of amorphous solids characterized by persistent homology 
+In
+Proceedings National Academy of Science  volume  
+ 
+
+Kusano     Fukumizu     and Hiraoka     Persistence
+Weighted Gaussian Kernel for Topological Data Analysis  In Proceedings  rd International Conference on
+Machine Learning  pp     
+
+Kusano     Fukumizu     and Hiraoka     Kernel
+method for persistence diagrams via kernel embedding
+and weight factor  CoRR  abs   
+
+Kwitt  Roland  Huber  Stefan  Niethammer  Marc  Lin 
+Weili  and Bauer  Ulrich  Statistical Topological Data
+Analysis     Kernel Perspective  In Advances in Neural Information Processing Systems   pp   
+ 
+
+Li     Ovsjanikov     and Chazal    
+
+PersistenceIn Proceedings ConferBased Structural Recognition 
+ence Computer Vision Pattern Recognition  pp   
+   
+
+Morariu     Srinivasan     Raykar     Duraiswami    
+and Davis     Automatic online tuning for fast Gaussian
+summation  In Advances Neural Information Processing
+Systems   pp     
+
+Ojala       aenp         Pietik ainen     Viertola    
+Kyll onen     and Huovinen     Outex   new framework
+for empirical evaluation of texture analysis algorithms 
+In Proceedings  th International Conference Pattern
+Recognition  pp     
+
+Sliced Wasserstein Kernel for Persistence Diagrams
+
+Oudot     Persistence Theory  From Quiver Representations to Data Analysis  American Mathematical Society 
+ 
+
+Rabin     Peyr       Delon     and Bernot     Wasserstein
+barycenter and its application to texture mixing  In International Conference Scale Space Variational Methods
+Computer Vision  pp     
+
+Rahimi     and Recht     Random Features for LargeScale
+Kernel Machines  In Advances Neural Information Processing Systems   pp     
+
+Reininghaus     Huber     Bauer     and Kwitt       Stable MultiScale Kernel for Topological Machine Learning  CoRR  abs   
+
+Reininghaus     Huber     Bauer     and Kwitt       Stable MultiScale Kernel for Topological Machine Learning  In Proceedings Conference Computer Vision Pattern
+Recognition   
+
+Robins     and Turner     Principal Component Analysis of
+Persistent Homology Rank Functions with case studies
+of Spatial Point Patterns  Sphere Packing and Colloids 
+Physica    Nonlinear Phenomena     
+
+Santambrogio  Filippo  Optimal transport for applied math 
+
+ematicians  Birk auser   
+
+Singh     Memoli     Ishkhanov     Sapiro     Carlsson 
+   and Ringach     Topological analysis of population
+activity in visual cortex  Journal of Vision     
+
+The GUDHI Project  GUDHI User and Reference Manual 
+GUDHI Editorial Board    URL http gudhi 
+gforge inria fr doc latest 
+
+Villani     Optimal transport   old and new  Springer 
+
+ 
+
+Zomorodian  Afra and Carlsson  Gunnar  Computing persistent homology  Discrete   Computational Geometry 
+   
+
+

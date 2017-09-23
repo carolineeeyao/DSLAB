@@ -1,0 +1,896 @@
+Continual Learning Through Synaptic Intelligence
+
+Friedemann Zenke     Ben Poole     Surya Ganguli  
+
+Abstract
+
+While deep learning has led to remarkable advances across diverse applications  it struggles
+in domains where the data distribution changes
+over the course of learning 
+In stark contrast 
+biological neural networks continually adapt to
+changing domains  possibly by leveraging complex molecular machinery to solve many tasks
+In this study  we introduce insimultaneously 
+telligent synapses that bring some of this biological complexity into arti cial neural networks 
+Each synapse accumulates task relevant information over time  and exploits this information to
+rapidly store new memories without forgetting
+old ones  We evaluate our approach on continual
+learning of classi cation tasks  and show that it
+dramatically reduces forgetting while maintaining computational ef ciency 
+
+  Introduction
+Arti cial neural networks  ANNs  have become an indispensable asset for applied machine learning  rivaling human performance in   variety of domainspeci   tasks  LeCun et al    Although originally inspired by biology
+ Rosenblatt    Fukushima   Miyake    the underlying design principles and learning methods differ substantially from biological neural networks  For instance 
+parameters of ANNs are learned on   dataset in the training
+phase  and then frozen and used statically on new data in
+the deployment or recall phase  To accommodate changes
+in the data distribution  ANNs typically have to be retrained on the entire dataset to avoid over tting and catastrophic forgetting  Choy et al    Goodfellow et al 
+ 
+On the other hand  biological neural networks exhibit continual learning in which they acquire new knowledge over
+
+ Equal contribution  Stanford University  Correspondence
+to  Friedemann Zenke  fzenke stanford edu  Ben Poole
+ poole cs stanford edu 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+  lifetime  It is therefore dif cult to draw   clear line between   learning and recall phase  Somehow  our brains
+have evolved to learn from nonstationary data and to update internal memories or beliefs onthe    While it is unknown how this feat is accomplished in the brain  it seems
+possible that the unparalleled biological performance in
+continual learning could rely on speci   features implemented by the underlying biological wetware that are not
+currently implemented in ANNs 
+Perhaps one of the greatest gaps in the design of modern ANNs versus biological neural networks lies in the
+complexity of synapses 
+In ANNs  individual synapses
+ weights  are typically described by   single scalar quantity 
+On the other hand  individual biological synapses make use
+of complex molecular machinery that can affect plasticity
+at different spatial and temporal scales  Redondo   Morris 
+  While this complexity has been surmised to serve
+memory consolidation  Fusi et al    Lahiri   Ganguli 
+  Zenke et al    Ziegler et al    Benna   Fusi 
+  few studies have illustrated how it bene ts learning
+in ANNs 
+Here we study the role of internal synaptic dynamics to enable ANNs to learn sequences of classi cation tasks  While
+simple  scalar onedimensional synapses suffer from catastrophic forgetting  in which the network forgets previously
+learned tasks when trained on   novel task  this problem
+can be largely alleviated by synapses with   more complex
+threedimensional state space 
+In our model  the synaptic state tracks the past and current parameter value  and
+maintains an online estimate of the synapse    importance 
+toward solving problems encountered in the past  Our importance measure can be computed ef ciently and locally
+at each synapse during training  and represents the local
+contribution of each synapse to the change in the global
+loss  When the task changes  we consolidate the important synapses by preventing them from changing in future
+tasks  Thus learning in future tasks is mediated primarily
+by synapses that were unimportant for past tasks  thereby
+avoiding catastrophic forgetting of these past tasks 
+
+  Prior work
+The problem of alleviating catastrophic forgetting has been
+addressed in many previous studies  These studies can be
+
+Continual Learning Through Synaptic Intelligence
+
+broadly partitioned into   architectural    functional 
+and   structural approaches 
+Architectural approaches to catastrophic forgetting alter
+the architecture of the network to reduce interference between tasks without altering the objective function  The
+simplest form of architectural regularization is freezing
+certain weights in the network so that they stay exactly
+the same  Razavian et al      slightly more relaxed approach reduces the learning rate for layers shared
+with the original task while  netuning to avoid dramatic
+changes in the parameters  Donahue et al    Yosinski et al    Approaches using different nonlinearities
+like ReLU  MaxOut  and local winnertake all have been
+shown to improve performance on permuted MNIST and
+sentiment analysis tasks  Srivastava et al    Goodfellow et al    Moreover  injecting noise to sparsify gradients using dropout also improves performance  Goodfellow et al    Recent work from Rusu et al    proposed more dramatic architectural changes where the entire
+network for the previous task is copied and augmented with
+new features while solving   new task  This entirely prevents forgetting on earlier tasks  but causes the architectural
+complexity to grow with the number of tasks 
+Functional approaches to catastrophic forgetting add   regularization term to the objective that penalizes changes in
+the inputoutput function of the neural network  In Li  
+Hoiem   the predictions of the previous task   network and the current network are encouraged to be similar
+when applied to data from the new task by using   form
+of knowledge distillation  Hinton et al    Similarly 
+Jung et al    regularize the  cid  distance between the
+ nal hidden activations instead of the knowledge distillation penalty  Both of these approaches to regularization
+aim to preserve aspects of the inputoutput mapping for the
+old task by storing or computing additional activations using the old task   parameters  This makes the functional
+approach to catastrophic forgetting computationally expensive as it requires computing   forward pass through the old
+task   network for every new data point 
+The third technique  structural regularization  involves
+penalties on the parameters that encourage them to stay
+close to the parameters for the old task  Recently  Kirkpatrick et al    proposed elastic weight consolidation
+ EWC    quadratic penalty on the difference between the
+parameters for the new and the old task  They used   diagonal weighting proportional to the diagonal of the Fisher
+information metric over the old parameters on the old task 
+Exactly computing the diagonal of the Fisher requires summing over all possible output labels and thus has complexity linear in the number of outputs  This limits the application of this approach to lowdimensional output spaces 
+
+  Synaptic framework
+To tackle the problem of continual learning in neural networks  we sought to build   simple structural regularizer
+that could be computed online and implemented locally
+at each synapse  Speci cally  we aim to endow each individual synapse with   local measure of  importance  in
+solving tasks the network has been trained on in the past 
+When training on   new task we penalize changes to important parameters to avoid old memories from being overwritten  To that end  we developed   class of algorithms
+which keep track of an importance measure  
+  which re 
+ ects past credit for improvements of the task objective   
+for task   to individual synapses     For brevity we use the
+term  synapse  synonymously with the term  parameter 
+which includes weights between layers as well as biases 
+
+Figure   Schematic illustration of parameter space trajectories
+and catastrophic forgetting  Solid lines correspond to parameter trajectories during training  Left and right panels correspond
+to the different loss functions de ned by different tasks  Task  
+and Task   The value of each loss function    is shown as  
+heat map  Gradient descent learning on Task   induces   motion
+in parameter space from from     to     Subsequent gradient descent dynamics on Task   yields   motion in parameter
+space from     to     This  nal point minimizes the loss on
+Task   at the expense of signi cantly increasing the loss on Task
+  thereby leading to catastrophic forgetting of Task   However 
+there does exist an alternate point     labelled in orange  that
+achieves   small loss for both tasks  In the following we show
+how to  nd this alternate point by determining that the component   was more important for solving Task   than   and then
+preventing   from changing much while solving Task   This
+leads to an online approach to avoiding catastrophic forgetting by
+consolidating changes in parameters that were important for solving past tasks  while allowing only the unimportant parameters to
+learn to solve future tasks 
+
+The process of training   neural network is characterized
+by   trajectory     in parameter space  Fig    The feat
+of successful training lies in  nding learning trajectories
+for which the endpoint lies close to   minimum of the loss
+function   on all tasks  Let us  rst consider the change in
+loss for an in nitesimal parameter update     at time   
+
+Task Task         ControlConsolidationL         Continual Learning Through Synaptic Intelligence
+
+In this case the change in loss is well approximated by the
+gradient       
+
+  and we can write
+
+                   cid 
+
+gk         
+
+ 
+
+ 
+
+which illustrates that each parameter change          cid 
+    
+contributes the amount gk        to the change in total
+loss 
+To compute the change in loss over an entire trajectory
+through parameter space we have to sum over all in nitesimal changes  This amounts to computing the path integral
+of the gradient vector  eld along the parameter trajectory
+from the initial point  at time    to the  nal point  at time
+  
+
+ cid    
+
+ cid 
+
+        
+
+ 
+
+  
+
+        cid   dt 
+
+ 
+
+As the gradient is   conservative  eld  the value of the integral is equal to the difference in loss between the end point
+and start point              Crucial to our approach  we can decompose Eq    as   sum over the individual parameters
+
+ cid    
+
+  
+
+        cid   dt  
+
+ cid    
+ cid 
+   cid 
+
+ 
+
+  
+
+ 
+   
+
+gk   cid 
+
+    dt
+
+ 
+
+ 
+
+         
+
+The  
+  now have an intuitive interpretation as the parameter speci   contribution to changes in the total loss  Note
+that we have introduced the minus sign in the second line 
+because we are typically interested in decreasing the loss 
+In practice  we can approximate  
+  online as the running
+with the
+sum of the product of the gradient gk        
+  
+parameter update  cid 
+     For batch gradient descent
+with an in nitesimal learning rate   
+  can be directly interpreted as the perparameter contribution to changes in the
+total loss  In most cases the true gradient is approximated
+by stochastic gradient descent  SGD  resulting in an approximation that introduces noise into the estimate of gk 
+As   direct consequence  the approximated perparameter
+importances will typically overestimate the true value of
+ 
+   
+How can the knowledge of  
+  be exploited to improve
+continual learning  The problem we are trying to solve is
+to minimize the total loss function summed over all tasks 
+     with the limitation that we do not have access
+to loss functions of tasks we were training on in the past 
+Instead  we only have access to the loss function    for
+  single task   at any given time  Catastrophic forgetting
+arises when minimizing    inadvertently leads to substantial increases of the cost on previous tasks    with      
+
+   cid 
+
+Figure   Schematic illustration of surrogate loss after learning
+one task  Consider some loss function de ned by Task    black 
+The quadratic surrogate loss  green  is chosen to precisely match
+  aspects of the descent dynamics on the original loss function 
+the total drop in the loss function            the total net motion in parameter space          and achieving  
+minimum at the endpoint      These   conditions uniquely determine the surrogate quadratic loss that summarizes the descent
+trajectory on the original loss  Note that this surrogate loss is different from   quadratic approximation de ned by the Hessian at
+the minimum  purple dashed line 
+
+ Fig    To avoid catastrophic forgetting of all previous
+tasks       while training task   we want to avoid drastic changes to weights which were particularly in uential in
+the past  The importance of   parameter    for   single task
+is determined by two quantities    how much an individual
+parameter contributed to   drop in the loss  
+  over the entire trajectory of training  cf  Eq    and   how far it moved
+                  To avoid large changes to im 
+ 
+portant parameters  we use   modi ed cost function     in
+which we introduced   surrogate loss which approximates
+the summed loss functions of previous tasks         
+Speci cally  we use   quadratic surrogate loss that has the
+same minimum as the cost function of the previous tasks
+  over the parameter distance     In
+and yields the same  
+other words  if learning were to be performed on the surrogate loss instead of the actual loss function  it would result in the same  nal parameters and change in loss during
+training  Fig    For two tasks this is achieved exactly by
+the following quadratic surrogate loss
+
+ cid 
+
+ 
+
+ 
+ 
+
+ cid       
+ cid cid 
+
+ cid 
+ cid 
+
+surrogate loss
+
+            
+
+ cid 
+
+ 
+
+where we have introduced the dimensionless strength parameter    the reference weight corresponding to the parameters at the end of the previous task           
+
+                LossLossonTask   Surrogateloss   Hessianapprox atminimumContinual Learning Through Synaptic Intelligence
+
+the parameter speci   path integral   
+version  
+try of   simple quadratic error function
+
+  and its normalized
+   Eq    correspond to in terms of the geome 
+
+ 
+
+and the perparameter regularization strength 
+
+ cid 
+
+ 
+
+ 
+
+   
+
+ 
+ 
+      
+
+ 
+
+ 
+
+   ensures that
+Note that the term in the denominator  
+the regularization term carries the same units as the loss
+   For practical reasons we also introduce an additional
+damping parameter    to bound the expression in cases
+      Finally    is   strength parameter which
+where  
+trades off old versus new memories 
+If the path integral
+ Eq    is evaluated precisely        would correspond to
+an equal weighting of old and new memories  However 
+due to noise in the evaluation of the path integral  Eq     
+typically has to be chosen smaller than one to compensate 
+Unless otherwise stated  the    are updated continuously
+during training  whereas the cumulative importance meak  and the reference weights    are only updated
+sures   
+at the end of each task  After updating the  
+   the    are
+set to zero  Although our motivation for Eq    as   surrogate loss only holds in the case of two tasks  we will show
+empirically that our approach leads to good performance
+when learning additional tasks 
+To understand how the particular choices of Eqs    and  
+affect learning  let us consider the example illustrated in
+Figure   in which we learn two tasks  We  rst train on
+Task   At time    the parameters have approached   local
+minimum of the Task   loss    But  the same parameter
+con guration is not close to   minimum for Task   Consequently  when training on Task   without any additional
+precautions  the    loss may inadvertently increase  Fig   
+black trajectory  However  when    remembers  that it
+was important to decreasing    it can exploit this knowledge during training on Task   by staying close to its current value  Fig    orange trajectory  While this will almost
+inevitably result in   decreased performance on Task   this
+decrease could be negligible  whereas the gain in performance on both tasks combined can be substantial 
+The approach presented here is similar to EWC  Kirkpatrick et al    in that more in uential parameters are
+pulled back more strongly towards   reference weight with
+which good performance was achieved on previous tasks 
+However  in contrast to EWC  here we are putting forward
+  method which computes an importance measure online
+and along the entire learning trajectory  whereas EWC relies on   point estimate of the diagonal of the Fisher information metric at the  nal parameter values  which has to be
+computed during   separate phase at the end of each task 
+
+  Theoretical analysis of special cases
+In the following we illustrate that our general approach recovers sensible  
+  in the case of   simple and analytically
+tractable training scenario  To that end  we analyze what
+
+ 
+ 
+
+    
+
+             
+
+ 
+with   minimum at   and   Hessian matrix    Further consider batch gradient descent dynamics on this error
+function  In the limit of small discrete time learning rates 
+this descent dynamics is described by the continuous time
+differential equation
+
+ 
+
+  
+dt
+
+      
+ 
+
+         
+
+ 
+
+where   is related to the learning rate  If we start from an
+initial condition   at time       an exact solution to the
+descent path is given by
+
+               
+
+       
+yielding the time dependent update direction
+
+ cid     
+
+  
+dt
+
+     
+ 
+
+He    
+
+       
+
+ 
+
+ 
+
+Now  under gradient descent dynamics  the gradient obeys
+dt   so the  
+  in   are computed as the diagonal
+        
+elements of the matrix
+
+     
+
+dt
+
+ 
+
+ 
+
+  
+dt
+
+  
+dt
+
+ 
+
+ cid   
+
+ 
+
+An explicit formula for   can be given in terms of the
+eigenbasis of the Hessian   
+In particular  let   and
+   denote the eigenvalues and eigenvectors of    and let
+              be the projection of the discrepancy
+between initial and  nal parameters onto the  th eigenvector  Then inserting   into   performing the change of
+basis to the eigenmodes of    and doing the integral yields
+
+Qij  
+
+      
+  
+
+          
+   
+
+ 
+
+ cid 
+
+ 
+
+Note that as   timeintegrated steady state quantity    no
+longer depends on the time constant   governing the speed
+of the descent path 
+At  rst glance  the   matrix elements depend in   complex manner on both the eigenvectors and eigenvalues of
+the Hessian  as well as the initial condition   To understand this dependence  let    rst consider averaging  
+over random initial conditions   such that the collection of discrepancies    constitute   set of zero mean iid
+random variables with variance   Thus we have the average  cid     cid      Performing this average over   then
+yields
+
+ cid Qij cid   
+
+ 
+ 
+
+     
+  
+
+   
+
+ 
+ 
+
+ Hij 
+
+ 
+
+ cid 
+
+ 
+
+Continual Learning Through Synaptic Intelligence
+
+Figure   Mean classi cation accuracy for the split MNIST benchmark as   function of the number of tasks  The  rst  ve panels show
+classi cation accuracy on the  ve tasks consisting of two MNIST digits each as   function of number of consecutive tasks  The rightmost
+panel shows the average accuracy  which is computed as the average over task accuracies for past tasks   with       where   is given by
+the number of tasks on the xaxis  Note that in this setup with multiple binary readout heads  an accuracy of   corresponds to chance
+level  Error bars correspond to SEM    
+
+Thus remarkably  after averaging over initial conditions 
+the   matrix  which is available simply by correlating parameter updates across pairs of synapses and integrating
+over time  reduces to the Hessian  up to   scale factor dictating the discrepancy between initial and  nal conditions 
+Indeed  this scale factor theoretically motivates the normalization in   the denominator in   at zero damping   
+averages to   thereby removing the scale factor   in  
+However  we are interested in what Qij computes for  
+single initial condition  There are two scenarios in which
+the simple relationship between   and the Hessian   is
+preserved without averaging over initial conditions  First 
+consider the case when the Hessian is diagonal  so that
+     iei where ei is the   th coordinate vector  Then
+  
+  and   indices are interchangeable and the eigenvalues
+of the Hessian are the diagonal elements of the Hessian 
+     Hii  Then   reduces to
+
+Qij    ij di Hii 
+
+ 
+
+Again the normalization in   at zero damping  removes
+the scale of movement in parameter space  di  and so
+the normalized   matrix becomes identical to the diagonal
+Hessian  In the second scenario  consider the extreme limit
+where the Hessian is rank   so that   is the only nonzero
+eigenvalue  Then   reduces to
+
+Qij  
+
+ 
+ 
+
+     
+
+     
+
+   
+
+ 
+ 
+
+   Hij 
+
+ 
+
+Thus again  the   matrix reduces to the Hessian  up to  
+scale factor  The normalized importances then become the
+diagonal elements of the nondiagonal but low rank Hessian  We note that the low rank Hessian is the interesting
+case for continual learning  low rank structure in the error
+function leaves many directions in synaptic weight space
+
+unconstrained by   given task  leaving open excess capacity for synaptic modi cation to solve future tasks without
+interfering with performance on an old task 
+It is important to stress that the path integral for importance
+is computed by integrating information along the entire
+learning trajectory  cf  Fig    For   quadratic loss function  the Hessian is constant along this trajectory  and so
+we  nd   precise relationship between the importance and
+the Hessian  But for more general loss functions  where
+the Hessian varies along the trajectory  we cannot expect
+any simple mathematical correspondence between the importance  
+  and the Hessian at the endpoint of learning  or
+related measures of parameter sensitivity  Pascanu   Bengio    Martens    Kirkpatrick et al    at the
+endpoint  In practice  however  we  nd that our importance
+measure is correlated to measures based on such endpoint
+estimates  which may explain their comparable effectiveness as we will see in the next section 
+
+  Experiments
+We evaluated our approach for continual learning on the
+split and permuted MNIST  LeCun et al    Goodfellow et al    and split versions of CIFAR  and
+CIFAR   Krizhevsky   Hinton   
+
+  Split MNIST
+
+We  rst evaluated our algorithm on   split MNIST benchmark  For this benchmark we split the full MNIST training
+data set into   subsets of consecutive digits  The   tasks
+correspond to learning to distinguish between two consecutive digits from   to   We used   small multilayer
+perceptron  MLP  with only two hidden layers consisting
+of   units each with ReLU nonlinearities  and   standard
+
+ Tasks AccuracyTask     or  Task     or  Task     or  Task     or  Task     or  Averagec   chanceContinual Learning Through Synaptic Intelligence
+
+categorical crossentropy loss function plus our consolidation cost term  with damping parameter           To
+avoid the complication of crosstalk between digits at the
+readout layer due to changes in the label distribution during training  we used   multihead approach in which the
+categorical cross entropy loss at the readout layer was computed only for the digits present in the current task  Finally 
+we optimized our network using   minibatch size of   and
+trained for   epochs  To achieve good absolute performance with   smaller number of epochs we used the adaptive optimizer Adam  Kingma   Ba           
+            In this benchmark the optimizer
+state was reset after training each task 
+To evaluate the performance  we computed the average
+classi cation accuracy on all previous tasks as   function
+of number of tasks trained  We now compare this performance between networks in which we turn consolidation
+dynamics on        against cases in which consolidation was off        During training of the  rst task the
+consolidation penalty is zero for both cases because there
+is no past experience that synapses could be regularized
+against  When trained on the digits   and    Task  
+both the model with and without consolidation show accuracies close to   on Task   However  on average the
+networks without synaptic consolidation show substantial
+loss in accuracy on Task    Fig    In contrast to that  networks with consolidation only undergo minor impairment
+with respect to accuracy on Task   and the average accuracy
+for both tasks stays close to   Similarly  when the network
+has seen all MNIST digits  on average  the accuracy on the
+ rst two tasks  corresponding to the  rst four digits  has
+dropped back to chance levels in the cases without consolidation whereas the model with consolidation only shows
+minor degradation in performance on these tasks  Fig   
+
+  Permuted MNIST benchmark
+
+In this benchmark  we randomly permute all MNIST pixels differently for each task  We trained   MLP with two
+hidden layers with   ReLUs each and softmax loss  We
+used Adam with the same parameters as before  However 
+here we used       and the value for       was determined via   coarse grid search on   heldout validation
+set  The mini batch size was set to   and we trained for
+  epochs  In contrast to the split MNIST benchmark we
+obtained better results by maintaining the state of the Adam
+optimizer between tasks  The  nal test error was computed
+on data from the MNIST test set  Performance is measured
+by the ability of the network to solve all tasks 
+To establish   baseline for comparison we  rst trained   network without synaptic consolidation        on all tasks sequentially  In this scenario the system exhibits catastrophic
+forgetting       it learns to solve the most recent task  but
+
+Figure   Average classi cation accuracy over all learned tasks
+from the permuted MNIST benchmark as   function of number
+of tasks  Our approach  blue  and EWC  gray  extracted and replotted from Kirkpatrick et al    maintain high accuracy as
+the number of tasks increase  SGD  green  and SGD with dropout
+of   on the hidden layers  red  perform far worse  The top panel
+is   zoomin on the upper part of the graph with the initial training
+accuracy on   single task  dotted line  and the training accuracy of
+the same network when trained on all tasks simultaneously  black
+arrow 
+
+Figure   Correlation matrices of weight importances   
+    for
+each task   on permuted MNIST  For both normal  netuning
+       top  and consolidation        bottom  the  rst layer
+weight importances  left  are uncorrelated between tasks since
+the permuted MNIST datasets are uncorrelated at the input layer 
+However  the second layer importances  right  become more correlated as more tasks are learned with  netuning 
+In contrast 
+consolidation prevents strong correlations in the  
+    consistent
+with the notion of different weights being used to solve new tasks 
+
+ Number of tasks Fraction correctOurs    EWCSGDSGD    dropout   TaskFirst layer weightsSecond layer weights Task   Task Continual Learning Through Synaptic Intelligence
+
+rapidly forgets about previous tasks  blue line  Fig    In
+contrast to that  when enabling synaptic consolidation  with
+  sensible choice for       the same network retains high
+classi cation accuracy on Task   while being trained on  
+additional tasks  Fig    Moreover  the network learns to
+solve all other tasks with high accuracy and performs only
+slightly worse than   network which had trained on all data
+simultaneously  Fig    Finally  these results were consistent across training and validation error and comparable to
+the results reported with EWC  Kirkpatrick et al   
+To gain   better understanding of the synaptic dynamics
+during training  we visualized the pairwise correlations of
+the  
+  across the different tasks    Fig      We found that
+without consolidation  the  
+  in the second hidden layer
+are correlated across tasks which is likely to be the cause
+of catastrophic forgetting  With consolidation  however 
+these sets of synapses contributing to decreasing the loss
+are largely uncorrelated across tasks  thus avoiding interference when updating weights to solve new tasks 
+
+  Split CIFAR CIFAR  benchmark
+
+To evaluate whether synaptic consolidation dynamics
+would also prevent catastrophic forgetting in more complex datasets and larger models  we experimented with  
+continual learning task based on CIFAR  and CIFAR 
+  Speci cally  we trained   CNN   convolutional  followed by   dense layers with dropout  see Appendix for
+details  We used the same multihead setup as in the case
+of split MNIST using Adam                
+      minibatch size   First  we trained the
+network for   epochs on the full CIFAR  dataset  Task
+  and sequentially on   additional tasks each corresponding to   consecutive classes from the CIFAR  dataset
+ Fig    To determine the best    we performed this experiment for different values in the parameter range    
+      Between tasks the state of the optimizer was reset  Moreover  we obtained values for two speci   control
+cases  On the one hand we trained the same network with
+      on all tasks consecutively  On the other hand we
+trained the same network from scratch on each task individually to assess generalization across tasks  Finally  to
+assess the magnitude of statistical  uctuations in accuracy 
+all runs were repeated       times 
+We found that after training on all tasks  networks with
+consolidation showed similar validation accuracy across all
+tasks  whereas accuracy in the network without consolidation showed   clear age dependent decline in which old
+tasks were solved with lower accuracy  Fig   
+Importantly  the performance of networks trained with consolidation was always better than without consolidation  except
+on the last task  Finally  when comparing the performance
+of networks trained with consolidation on all tasks with net 
+
+Figure   Validation accuracy on the split CIFAR  benchmark  Blue  Validation error  without consolidation       
+Green  Validation error  with consolidation        Gray 
+Network without consolidation trained from scratch on the single task only  Chancelevel in this benchmark is   Error bars
+correspond to SD    
+
+works trained from scratch only on   single task  Fig   
+green vs gray  the former either signi cantly outperformed
+the latter or yielded the same validation accuracy  while this
+trend was reversed in training accuracy  This suggests that
+networks without consolidation are more prone to over  tting  The only exception to that rule was Task   CIFAR 
+which is presumably due to its   larger number of examples per class  In summary  we found that consolidation not
+only protected old memories from being slowly forgotten
+over time  but also allowed networks to generalize better
+on new tasks with limited data 
+
+  Discussion
+We have shown that the problem of catastrophic forgetting
+commonly encountered in continual learning scenarios can
+be alleviated by allowing individual synapses to estimate
+their importance for solving past tasks  Then by penalizing
+changes to the most important synapses  novel tasks can
+be learned with minimal interference to previously learned
+tasks 
+The regularization penalty is similar to EWC as recently
+introduced by Kirkpatrick et al    However  our approach computes the persynapse consolidation strength in
+an online fashion and over the entire learning trajectory in
+parameter space  whereas for EWC synaptic importance is
+computed of ine as the Fisher information at the minimum
+of the loss for   designated task  Despite this difference 
+these two approaches yielded similar performance on the
+permuted MNIST benchmark which may be due to correlations between the two different importance measures 
+
+Task  Task  Task  Task  Task  Task  Validation accuracyCIFAR CIFAR    classes per taskCIFAR CIFAR    classes per taskCIFAR CIFAR    classes per taskFine tuningConsolidationFrom scratchContinual Learning Through Synaptic Intelligence
+
+Our approach requires individual synapses to not simply
+correspond to single scalar synaptic weights  but rather
+act as higher dimensional dynamical systems in their own
+right  Such higher dimensional state enables each of our
+synapses to intelligently accumulate task relevant information during training and retain   memory of previous parameter values  While we make no claim that biological
+synapses behave like the intelligent synapses of our model 
+  wealth of experimental data in neurobiology suggests that
+biological synapses act in much more complex ways than
+the arti cial scalar synapses that dominate current machine
+learning models  In essence  whether synaptic changes occur  and whether they are made permanent  or left to ultimately decay  can be controlled by many different biological factors  For instance  the induction of synaptic plasticity may depend on the history and the synaptic state of individual synapses  Montgomery   Madison    Moreover  recent synaptic changes may decay on the timescale
+of hours unless speci   plasticity related chemical factors
+are released  These chemical factors are thought to encode the valence or novelty of   recent change  Redondo
+  Morris    Finally  recent synaptic changes can be
+reset by stereotypical neural activity  whereas older synaptic memories become increasingly insensitive to reversal
+ Zhou et al   
+Here  we introduced one speci   higher dimensional
+synaptic model to tackle   speci   problem  catastrophic
+forgetting in continual learning  However  this suggests
+new directions of research in which we mirror neurobiology to endow individual synapses with potentially complex
+dynamical properties  that can be exploited to intelligently
+control learning dynamics in neural networks  In essence 
+in machine learning  in addition to adding depth to our networks  we may need to add intelligence to our synapses 
+
+Acknowledgements
+The authors thank Subhaneil Lahiri for helpful discussions 
+FZ was supported by the SNSF  Swiss National Science
+Foundation  and the Wellcome Trust  BP was supported
+by   Stanford MBC IGERT Fellowship and Stanford Interdisciplinary Graduate Fellowship  SG was supported by
+the Burroughs Wellcome  McKnight  Simons and James   
+McDonnell foundations and the Of ce of Naval Research 
+
+References
+Benna  Marcus    and Fusi  Stefano  Computational principles of synaptic memory consolidation  Nat Neurosci 
+advance online publication  October   ISSN  
+  doi   nn 
+
+Choy  Min Chee  Srinivasan  Dipti  and Cheu  Ruey Long 
+Neural networks for continuous online learning and
+
+IEEE Trans Neural Netw   
+control 
+November   ISSN   doi   TNN 
+ 
+
+Donahue  Jeff  Jia  Yangqing  Vinyals  Oriol  Hoffman 
+Judy  Zhang  Ning  Tzeng  Eric  and Darrell  Trevor  Decaf    deep convolutional activation feature for generic
+visual recognition  In International Conference in Machine Learning  ICML   
+
+Fukushima  Kunihiko and Miyake  Sei  Neocognitron 
+  SelfOrganizing Neural Network Model for   MechIn Competition
+anism of Visual Pattern Recognition 
+and Cooperation in Neural Nets  pp    Springer 
+Berlin  Heidelberg    DOI   
+   
+
+Fusi  Stefano  Drew  Patrick    and Abbott  Larry    Cascade models of synaptically stored memories  Neuron 
+  February   ISSN   doi 
+   neuron 
+
+Goodfellow  Ian    Mirza  Mehdi  Xiao  Da  Courville 
+Aaron  and Bengio  Yoshua  An Empirical Investigation of Catastrophic Forgetting in GradientBased Neural Networks  arXiv   cs  stat  December
+  arXiv   
+
+Hinton  Geoffrey  Vinyals  Oriol  and Dean  Jeff  Distilling
+the knowledge in   neural network  NIPS Deep Learning
+and Representation Learning Workshop   
+
+Jung  Heechul  Ju  Jeongwoo  Jung  Minju  and Kim 
+Junmo  Lessforgetting Learning in Deep Neural Networks 
+arXiv 
+ 
+
+arXiv   cs  July  
+
+Kingma  Diederik and Ba  Jimmy  Adam    Method for
+Stochastic Optimization  arXiv   cs  December   arXiv   
+
+Kirkpatrick  James  Pascanu  Razvan  Rabinowitz  Neil 
+Veness  Joel  Desjardins  Guillaume  Rusu  Andrei   
+Milan  Kieran  Quan  John  Ramalho  Tiago  GrabskaBarwinska  Agnieszka  Hassabis  Demis  Clopath  Claudia  Kumaran  Dharshan  and Hadsell  Raia  Overcoming catastrophic forgetting in neural networks  PNAS  pp 
+  March   ISSN    
+doi   pnas 
+
+Krizhevsky  Alex and Hinton  Geoffrey  Learning multiple
+
+layers of features from tiny images   
+
+Lahiri  Subhaneil and Ganguli  Surya    memory frontier for complex synapses  In Advances in Neural Information Processing Systems  volume   pp   
+Tahoe  USA    Curran Associates  Inc 
+
+Continual Learning Through Synaptic Intelligence
+
+LeCun  Yann  Cortes  Corinna  and Burges  Christopher JC  The MNIST database of handwritten digits 
+ 
+
+LeCun  Yann  Bengio  Yoshua  and Hinton  Geoffrey  Deep
+learning  Nature    May   ISSN
+  doi   nature 
+
+Li  Zhizhong and Hoiem  Derek  Learning without forgetting  In European Conference on Computer Vision  pp 
+  Springer   
+
+Martens  James  Secondorder optimization for neural net 
+
+works  PhD thesis  University of Toronto   
+
+Montgomery  Johanna    and Madison  Daniel    StateDependent Heterogeneity in Synaptic Depression between Pyramidal Cell Pairs  Neuron   
+February  
+doi   
+  
+
+ISSN  
+
+Zenke  Friedemann  Agnes  Everton    and Gerstner  Wulfram  Diverse synaptic plasticity mechanisms orchestrated to form and retrieve memories in spiking neural networks  Nat Commun    April   doi  doi 
+ ncomms 
+
+Zhou  Qiang  Tao  Huizhong    and Poo  MuMing  Reversal and Stabilization of Synaptic Modi cations in  
+Developing Visual System  Science   
+  June   doi   science 
+
+Ziegler  Lorric  Zenke  Friedemann  Kastner  David   
+and Gerstner  Wulfram  Synaptic Consolidation  From
+Synapses to Behavioral Modeling    Neurosci   
+  January   ISSN    
+doi   JNEUROSCI 
+
+Pascanu  Razvan and Bengio  Yoshua  Revisiting natarXiv preprint
+
+for deep networks 
+
+ural gradient
+arXiv   
+
+Razavian  Ali Sharif  Azizpour  Hossein  Sullivan 
+Josephine  and Carlsson  Stefan  Cnn features offthe 
+In Proshelf  an astounding baseline for recognition 
+ceedings of the IEEE Conference on Computer Vision
+and Pattern Recognition Workshops  pp     
+
+Redondo  Roger    and Morris  Richard       Making
+memories last  the synaptic tagging and capture hypothesis  Nat Rev Neurosci    January  
+ISSN     doi   nrn 
+
+Rosenblatt  Frank  The perceptron    probabilistic model
+for information storage and organization in the brain 
+Psychological review     
+
+Rusu  Andrei    Rabinowitz  Neil    Desjardins  Guillaume  Soyer  Hubert  Kirkpatrick  James  Kavukcuoglu 
+Koray  Pascanu  Razvan  and Hadsell  Raia  Progressive
+Neural Networks  arXiv   cs  June  
+arXiv   
+
+Srivastava  Rupesh    Masci  Jonathan  Kazerounian 
+Sohrob  Gomez  Faustino  and Schmidhuber  Juergen 
+Compete to Compute  In Burges           Bottou    
+Welling     Ghahramani     and Weinberger       
+ eds  Advances in Neural Information Processing Systems   pp    Curran Associates  Inc   
+
+Yosinski  Jason  Clune  Jeff  Bengio  Yoshua  and Lipson 
+Hod  How transferable are features in deep neural networks  In Advances in neural information processing
+systems  pp     
+
+

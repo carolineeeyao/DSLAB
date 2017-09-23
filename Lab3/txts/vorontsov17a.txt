@@ -1,0 +1,902 @@
+On orthogonality and learning recurrent networks with long term dependencies
+
+Eugene Vorontsov     Chiheb Trabelsi     Samuel Kadoury     Chris Pal    
+
+Abstract
+
+It is well known that it is challenging to train
+deep neural networks and recurrent neural networks for tasks that exhibit long term dependencies  The vanishing or exploding gradient problem is   well known issue associated with these
+challenges  One approach to addressing vanishing and exploding gradients is to use either soft
+or hard constraints on weight matrices so as to
+encourage or enforce orthogonality  Orthogonal matrices preserve gradient norm during backpropagation and may therefore be   desirable
+property  This paper explores issues with optimization convergence  speed and gradient stability when encouraging or enforcing orthogonality 
+To perform this analysis  we propose   weight
+matrix factorization and parameterization strategy through which we can bound matrix norms
+and therein control the degree of expansivity induced during backpropagation  We  nd that hard
+constraints on orthogonality can negatively affect the speed of convergence and model performance 
+
+  Introduction
+The depth of deep neural networks confers representational
+power  but also makes model optimization more challenging  Training deep networks with gradient descent based
+methods is known to be dif cult as   consequence of the
+vanishing and exploding gradient problem  Hochreiter  
+Schmidhuber    Typically  exploding gradients are
+avoided by clipping large gradients  Pascanu et al   
+or introducing an    or    weight norm penalty  The latter
+has the effect of bounding the spectral radius of the linear
+transformations  thus limiting the maximal gain across the
+transformation  Krueger   Memisevic   attempt to
+   Ecole Polytechnique de Montr eal  Montr eal  Canada
+ Montreal Institute for Learning Algorithms  Montr eal  Canada
+ CHUM Research Center  Montr eal  Canada  Correspondence to 
+Eugene Vorontsov  eugene vorontsov gmail com 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+stabilize the norm of propagating signals directly by penalizing differences in successive norm pairs in the forward
+pass and Pascanu et al    propose to penalize successive gradient norm pairs in the backward pass  These regularizers affect the network parameterization with respect to
+the data instead of penalizing weights directly 
+Both expansivity and contractivity of linear transformations can also be limited by more tightly bounding their
+spectra  By limiting the transformations to be orthogonal 
+their singular spectra are limited to unitary gain causing
+the transformations to be normpreserving  Le et al   
+and Henaff et al    have respectively shown that identity initialization and orthogonal initialization can be bene cial  Arjovsky et al    have gone beyond initialization  building unitary recurrent neural network  RNN 
+models with transformations that are unitary by construction which they achieved by composing multiple basic unitary transformations  The resulting transformations  for
+some ndimensional input  cover only some subset of possible       unitary matrices but appear to perform well on
+simple tasks and have the bene   of having low complexity
+in memory and computation 
+The entire set of possible unitary or orthogonal parameterizations forms the Stiefel manifold  At   much higher
+computational cost  gradient descent optimization directly
+along this manifold can be done via geodesic steps  Nishimori    Tagare    Recent work  Wisdom et al 
+  has proposed the optimization of unitary matrices
+along the Stiefel manifold using geodesic gradient descent 
+To produce   fullcapacity parameterization for unitary matrices they use some insights from Tagare   combining the use of canonical inner products and Cayley transformations  Their experimental work indicates that full capacity unitary RNN models can solve the copy memory problem whereas both LSTM networks and restricted capacity
+unitary RNN models having similar complexity appear unable to solve the task for   longer sequence length     
+   Harandi   Fernando    also  nd that the use of
+fully connected  Stiefel layers  improves the performance
+of some convolutional neural networks 
+We seek to gain   new perspective on this line of research by exploring the optimization of real valued matrices within   con gurable margin about the Stiefel mani 
+
+On orthogonality and learning RNNs with long term dependencies
+
+fold  We suspect that   strong constraint of orthogonality
+limits the model   representational power  hindering its performance  and may make optimization more dif cult  We
+explore this hypothesis empirically by employing   factorization technique that allows us to limit the degree of deviation from the Stiefel manifold  While we use geodesic gradient descent  we simultaneously update the singular spectra of our matrices along Euclidean steps  allowing optimization to step away from the manifold while still curving
+about it 
+
+  Vanishing and Exploding Gradients
+
+The issue of vanishing and exploding gradients as it pertains to the parameterization of neural networks can be illuminated by looking at the gradient backpropagation chain
+through   network 
+  neural network with   hidden layers has preactivations
+
+ai hi    Wi hi    bi            
+
+ 
+
+For notational convenience  we combine parameters Wi
+and bi to form an af ne matrix   We can see that for
+some loss function   at layer    the derivative with respect
+to parameters    is 
+
+  
+  
+
+ 
+
+ an 
+
+  
+
+  
+
+ an 
+
+ 
+
+The partial derivatives for the preactivations can be decomposed as follows 
+
+ ai 
+  
+
+ 
+
+ 
+
+ ai
+  
+ ai
+  
+
+ ai 
+ hi
+
+ hi
+ ai
+DiWi     ai 
+ ai
+
+ 
+
+  DiWi 
+
+where Di is the Jacobian corresponding to the activation
+function  containing partial derivatives of the hidden units
+at layer       with respect to the preactivation inputs  Typically    is diagonal  Following the above  the gradient in
+equation   can be fully decomposed into   recursive chain
+of matrix products 
+
+  
+  
+
+ 
+
+ ai
+  
+
+ DjWj 
+
+  
+
+ an 
+
+ 
+
+  cid 
+
+   
+
+where  Dt and  Wt are the largest singular values of the
+nonlinearity   Jacobian Dt and the transition matrix Wt 
+In RNNs  Wt is shared across time and can be simply denoted as   
+Equation   shows that the gradient can grow or shrink at
+each layer depending on the gain of each layer   linear
+transformation   and the gain of the Jacobian    The
+gain caused by each layer is magni ed across all time steps
+or layers 
+It is easy to have extreme ampli cation in  
+recurrent neural network where   is shared across time
+steps and   nonunitary gain in   is ampli ed exponentially  The phenomena of extreme growth or contraction
+of the gradient across time steps or layers are known as
+the exploding and the vanishing gradient problems  respecIt is suf cient for RNNs to have        at each
+tively 
+time   to enable the possibility of vanishing gradients  typically for some large number of time steps     The rate at
+which   gradient  or forward signal  vanishes depends on
+both the parameterization of the model and on the input
+data  The parameterization may be conditioned by placing
+appropriate constraints on    It is worth keeping in mind
+that the Jacobian   is typically contractive  thus tending
+to be normreducing  and is also datadependent  whereas
+  can vary from being contractive to normpreserving  to
+expansive and applies the same gain on the forward signal
+as on the backpropagated gradient signal 
+
+  Our Approach
+Vanishing and exploding gradients can be controlled to  
+large extent by controlling the maximum and minimum
+gain of    The maximum gain of   matrix   is given
+by the spectral norm which is given by
+
+      max
+
+ 
+
+ 
+
+ cid Wx 
+
+ cid 
+
+   
+
+By keeping our weight matrix   close to orthogonal  one
+can ensure that it is close to   normpreserving transformation  where the spectral norm is equal to one  but the
+minimum gain is also one  One way to achieve this is via
+  simple soft constraint or regularization term of the form 
+
+ WT
+
+  Wi     
+
+ 
+
+ cid 
+
+ 
+
+In  Pascanu et al    it is shown that the  norm of
+ ai 
+is bounded by the product of the norms of the non 
+ ai
+ layer
+
+linearity   Jacobian and transition matrix at time  
+   as follows 
+
+ cid cid cid cid cid cid cid cid     Dt   Wt     Dt  Wt      
+
+ cid cid cid cid cid cid cid cid   at 
+
+ at
+
+ 
+
+ Dt   Wt     
+
+ 
+
+However  it is possible to formulate   more direct parameterization or factorization for   which permits hard
+bounds on the amount of expansion and contraction induced by    This can be achieved by simply parameterizing   according to its singular value decomposition 
+which consists of the composition of orthogonal basis matrices   and   with   diagonal spectral matrix   containing the singular values which are real and positive by de 
+
+On orthogonality and learning RNNs with long term dependencies
+
+nition  We have
+
+    USVT  
+
+ 
+Since the spectral norm or maximum gain of   matrix is
+equal to its largest singular value  this decomposition allows us to control the maximum gain or expansivity of the
+weight matrix by controlling the magnitude of the largest
+singular value  Similarly  the minimum gain or contractivity of   matrix can be obtained from the minimum singular
+value 
+We can keep the bases   and   orthogonal via geodesic
+gradient descent along the set of weights that satisfy
+UT       and VT       respectively  The submanifolds
+that satisfy these constraints are called Stiefel manifolds 
+We discuss how this is achieved in more detail below  then
+discuss our construction for bounding the singular values 
+During optimization  in order to maintain the orthogonality
+of an orthogonallyinitialized matrix         where    
+         or       if so desired  we employ   Cayley
+transformation of the update step onto the Stiefel manifold
+of  semi orthogonal matrices  as in Nishimori   and
+Tagare   Given an orthogonallyinitialized parameter
+matrix   and its Jacobian    with respect to the objective
+function  an update is performed as follows 
+
+    GMT   MGT
+ 
+Mnew           
+ 
+
+       
+ 
+
+  
+
+ 
+
+where   is   skewsymmetric matrix  that depends on the
+Jacobian and on the parameter matrix  which is mapped to
+an orthogonal matrix via   Cayley transform and   is the
+learning rate 
+While the update rule in   allows us to maintain an orthogonal hidden to hidden transition matrix   if desired 
+we are interested in exploring the effect of stepping away
+from the Stiefel manifold  As such  we parameterize the
+transition matrix   in factorized form  as   singular value
+decomposition with orthogonal bases   and   updated by
+geodesic gradient descent using the Cayley transform approach above 
+If   is an orthogonal matrix  the singular values in the
+diagonal matrix   are all equal to one  However  in our
+formulation we allow these singular values to deviate from
+one and employ   sigmoidal parameterization to apply  
+hard constraint on the maximum and minimum amount of
+deviation  Speci cally  we de ne   margin   around  
+within which the singular values must lie  This is achieved
+with the parameterization
+si      pi         
+
+ 
+The singular values are thus restricted to the range
+              and the underlying parameters pi are updated freely via stochastic gradient descent  Note that this
+
+si    diag           
+
+parameterization strategy also has implications on the step
+sizes that gradient descent based optimization will take
+when updating the singular values   they tend to be smaller
+compared to models with no margin constraining their values  Speci cally    singular value   progression toward  
+margin is slowed the closer it is to the margin  The sigmoidal parameterization can also impart another effect on
+the step size along the spectrum which needs to be accounted for  Considering   the gradient backpropagation
+of some loss   toward parameters pi is found as
+
+dL
+dpi
+
+ 
+
+dsi
+dpi
+
+dL
+dsi
+
+    
+
+  pi 
+
+dpi
+
+dL
+dsi
+
+ 
+
+ 
+
+From   it can be seen that the magnitude of the update
+step for pi is scaled by the margin hyperparameter    This
+means for example that for margins less than one  the effective learning rate for the spectrum is reduced in proportion to the margin  Consequently  we adjust the learning
+rate along the spectrum to be independent of the margin by
+renormalizing it by    
+This margin formulation both guarantees singular values
+lie within   well de ned range and slows deviation from
+orthogonality  Alternatively  one could enforce the orthogonality of   and   and impose   regularization term corresponding to   mean one Gaussian prior on these singular values  This encourages the weight matrix   to be
+norm preserving with   controllable strength equivalent to
+the variance of the Gaussian  We also explore this approach
+further below 
+
+  Experiments
+In this section  we explore hard and soft orthogonality constraints on factorized weight matrices for recurrent neural
+network hidden to hidden transitions  With hard orthogonality constraints on   and    we investigate the effect
+of widening the spectral margin or bounds on convergence
+and performance  Loosening these bounds allows increasingly larger margins within which the transition matrix  
+can deviate from orthogonality  We con rm that orthogonal
+initialization is useful as noted in Henaff et al    and
+we show that although strict orthogonality guarantees stable gradient norm  loosening orthogonality constraints can
+increase the rate of gradient descent convergence  We begin
+our analyses on tasks that are designed to stress memory   
+sequence copying task and   basic addition task  Hochreiter
+  Schmidhuber    We then move on to tasks on real
+data that require models to capture longrange dependencies  digit classi cation based on sequential and permuted
+MNIST vectors  Le et al    LeCun et al    Finally  we look at   basic language modeling task using the
+Penn Treebank dataset  Marcus et al   
+The copy and adding tasks  introduced by Hochreiter  
+
+On orthogonality and learning RNNs with long term dependencies
+
+Schmidhuber   are synthetic benchmarks with pathologically hard long distance dependencies that require
+longterm memory in models  The copy task consists of an
+input sequence that must be remembered by the network 
+followed by   series of blank inputs terminated by   delimiter that denotes the point at which the network must
+begin to output   copy of the initial sequence  We use an
+input sequence of       elements that begins with   subsequence of   elements to copy  each containing   symbol ai           ap  out of       possible symbols  This
+subsequence is followed by       elements of the blank
+category    which is terminated at step   by   delimiter
+symbol ap  and   more elements of the blank category 
+The network must learn to remember the initial   element
+sequence for   time steps and output it after receiving the
+delimiter symbol 
+The goal of the adding task is to add two numbers together
+after   long delay  Each number is randomly picked at  
+unique position in   sequence of length     The sequence is
+composed of   values sampled from   uniform distribution
+in the range     with each value paired with an indicator
+value that identi es the value as one of the two numbers to
+remember  marked   or as   value to ignore  marked  
+The two numbers are positioned randomly in the sequence 
+      and the second in the range
+the  rst in the range    
+          where   marks the  rst element  The network
+   
+must learn to identify and remember the two numbers and
+output their sum 
+In the sequential MNIST task from Le et al    MNIST
+digits are  attened into vectors that can be traversed sequentially by   recurrent neural network  The goal is to
+classify the digit based on the sequential input of pixels 
+The simple variant of this task is with   simple  attening of
+the image matrices  the harder variant of this task includes
+  random permutation of the pixels in the input vector that
+is determined once for an experiment  The latter formulation introduces longer distance dependencies between pixels that must be interpreted by the classi cation model 
+The English Penn Treebank  PTB  dataset from Marcus
+et al    is an annotated corpus of English sentences 
+commonly used for benchmarking language models  We
+employ   sequential character prediction task  given   sentence    recurrent neural network must predict the next
+character at each step  from left to right  We use input sequences of variable length  with each sequence containing
+one sentence  We model   characters including lowercase letters  all strings are in lowercase  numbers  common punctuation  and an unknown character placeholder 
+We use two subsets of the data in our experiments  in the
+ rst  we  rst use   of the data with strings with up to
+  characters and in the second we include over   of the
+dataset  picking strings with up to   characters 
+
+  Loosening Hard Orthogonality Constraints
+
+In this section  we experimentally explore the effect of
+loosening hard orthogonality constraints through loosening
+the spectral margin de ned above for the hidden to hidden
+transition matrix 
+In all experiments  we employed RMSprop  Tieleman  
+Hinton    when not using geodesic gradient descent 
+We used minibatches of size   and for generated data  the
+copy and adding tasks  we assumed an epoch length of  
+minibatches  We cautiously introduced gradient clipping at
+magnitude    unless stated otherwise  in all of our RNN
+experiments although it may not be required and we consistently applied   small weight decay of   Unless otherwise speci ed  we trained all simple recurrent neural networks with the hidden to hidden matrix factorization as in
+  using geodesic gradient descent on the bases  learning
+rate   and RMSprop on the other parameters  learning
+rate   using   tanh transition nonlinearity  and clipping gradients of   magnitude  The neural network code
+was built on the Theano framework  Theano Development
+Team    When parameterizing   matrix in factorized
+form  we apply the weight decay on the composite matrix
+rather than on the factors in order to be consistent across
+experiments  For MNIST and PTB  hyperparameter selection and early stopping were performed targeting the best
+validation set accuracy  with results reported on the test set 
+
+  CONVERGENCE ON SYNTHETIC MEMORY TASKS
+
+For different sequence lengths   of the copy and adding
+tasks  we trained   factorized RNN with   hidden units
+and various spectral margins    For the copy task  we
+used Elman networks without   transition nonlinearity as
+in Henaff et al    We also investigated the use of nonlinearities  as discussed below 
+As shown in Figure   we see an increase in the rate of convergence as we increase the spectral margin  This observation generally holds across the tested sequence lengths
+                         however 
+large spectral margins hinder convergence on extremely
+long sequence lengths  At sequence length      
+parameterizations with spectral margins larger than  
+converge slower than when using   margin of   In addition  the experiment without   margin failed to converge
+on the longest sequence length  This follows the expected
+pattern where stepping away from the Stiefel manifold may
+help with gradient descent optimization but loosening orthogonality constraints can reduce the stability of signal
+propagation through the network 
+For the adding task  we trained   factorized RNN on
+      length sequences  using   ReLU activation function on the hidden to hidden transition matrix  The mean
+
+On orthogonality and learning RNNs with long term dependencies
+
+Figure   Accuracy curves on the copy task for different sequence lengths given various spectral margins  Convergence speed increases
+with margin size  however  large margin sizes are ineffective at longer sequence lengths     right 
+
+squared error  MSE  is shown for different spectral margins in Figure   Testing spectral margins            
+            and no margin  we  nd that the models
+with the purely orthogonal        and the unconstrained
+ no margin  transition matrices failed to begin converging
+beyond baseline MSE within   epochs 
+
+Figure   Mean squared error  MSE  curves on the adding task
+for different spectral margins      trivial solution of always outputting the same number has an expected baseline MSE of  
+
+We found that nonlinearities such as   recti ed linear unit
+ ReLU   Nair   Hinton    or hyperbolic tangent  tanh 
+made the copy task far more dif cult to solve  Using tanh 
+  short sequence length        copy task required both
+  soft constraint that encourages orthogonality and thousands of epochs for training 
+It is worth noting that in
+the unitary evolution recurrent neural network of Arjovsky
+et al    the nonlinearity  referred to as the  modReLU  is actually initialized as an identity operation that
+is free to deviate from identity during training  Furthermore  Henaff et al    derive   solution mechanism for
+the copy task that drops the nonlinearity from an RNN 
+To explore this further  we experimented with   parametric
+leaky ReLU activation function  PReLU  which introduces
+  trainable slope   for negative valued inputs    producing
+         max          min        He et al    Setting
+the slope   to one would make the PReLU equivalent to
+an identity function  We experimented with clamping   to
+    or   in   factorized RNN with   spectral margin of
+  and found that only the model with       solved the
+      length copy task  We also experimented with  
+trainable slope   initialized to   and found that it converges to   further suggesting the optimal solution for
+
+the copy task is without   transition nonlinearity  Since the
+copy task is purely   memory task  one may imagine that
+  transition nonlinearity such as   tanh or ReLU may be
+detrimental to the task as it can lose information  Thus 
+we also tried   recent activation function that preserves
+information  called an orthogonal permutation linear unit
+ OPLU   Chernodub   Nowicki    The OPLU preserves norm  making   fully normpreserving RNN possible  Interestingly  this activation function allowed us to
+recover identical results on the copy task to those without  
+nonlinearity for different spectral margins 
+
+  PERFORMANCE ON REAL DATA
+
+Having con rmed that an orthogonality constraint can negatively impact convergence rate  we seek to investigate the
+effect on model performance for tasks on real data  In Table   we show the results of experiments on ordered and
+permuted sequential MNIST classi cation tasks and on the
+PTB character prediction task 
+For the sequential MNIST experiments  loss curves are
+shown in Figure   and reveal an increased convergence rate
+for larger spectral margins  We trained the factorized RNN
+models with   hidden units for   epochs  We also
+trained an LSTM with   hidden units  tanh activation  on
+both tasks for   epochs  con gured with peephole connections  orthogonally initialized  and forget gate bias initialized to one  and trained with RMSprop  learning rate
+  clipping gradients of magnitude  
+For PTB character prediction  we evaluate results in terms
+of bits per character  bpc  and prediction accuracy  Prediction results are shown in   both for   subset of short
+sequences  up to   characters    of data  and for   subset of long sequences  up to   characters    of data 
+We trained factorized RNN models with   hidden units
+for   epochs with geodesic gradient descent on the bases
+ learning rate   and RMSprop on the other parameters
+ learning rate   using   tanh transition nonlinearity 
+and clipping gradients of   magnitude  As   rough point of
+reference  we also trained an LSTM with   hidden units
+for each of the data subsets  con gured as for MNIST 
+On sequences up to   characters  LSTM performance was
+
+ number of epochs accuracyCopy  length  number of epochs accuracyCopy  length  number of epochs accuracyCopy  length  number of epochs accuracyCopy  length            no margin number of epochs mseAdd  length          no marginOn orthogonality and learning RNNs with long term dependencies
+
+MNIST pMNIST
+accuracy accuracy bpc
+ 
+
+accuracy bpc
+ 
+
+ 
+
+accuracy
+
+ 
+
+PTBc 
+
+PTBc 
+
+margin
+
+ 
+
+initialization
+orthogonal
+orthogonal
+orthogonal
+orthogonal
+orthogonal
+orthogonal
+orthogonal
+
+ 
+ 
+ 
+ 
+ 
+none
+none Glorot normal
+none
+
+identity
+
+LSTM
+
+ 
+ 
+ 
+ 
+ 
+
+ 
+
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+
+ 
+
+ 
+ 
+ 
+ 
+
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Table   Performance on MNIST and PTB for different spectral margins and initializations  Evaluated on classi cation of sequential
+MNIST  MNIST  and permuted sequential MNIST  pMNIST  character prediction on PTB sentences of up to   characters  PTBc 
+and up to   characters  PTBc 
+
+It is
+Bengio    or initializing the matrix as identity 
+interesting to note that for the MNIST tasks  orthogonal
+initialization appears useful while orthogonality constraints
+appear mainly detrimental  This suggests that while orthogonality helps early training by stabilizing gradient  ow
+across many time steps  orthogonality constraints may need
+to be loosened on some tasks so as not to overconstrain the
+model   representational ability 
+Curiously  larger margins and even models without sigmoidal constraints on the spectrum  no margin  performed
+well as long as they were initialized to be orthogonal  suggesting that evolution away from orthogonality is not   serious problem on MNIST  It is not surprising that orthogonality is useful for the MNIST tasks since they depend
+on long distance signal propagation with   single output at
+the end of the input sequence  On the other hand  character prediction with PTB produces an output at every time
+step  Constraining deviation from orthogonality proved
+detrimental for short sentences and bene cial when long
+sentences were included  Furthermore  Glorot normal initialization did not perform worse than orthogonal initialization for PTB  Since an output is generated for every
+character in   sentence  short distance signal propagation is
+possible  Thus it is possible that the RNN is  rst learning
+very local dependencies between neighbouring characters
+and that given enough context  constraining deviation from
+orthogonality can help force the network to learn longer
+distance dependencies 
+
+  SPECTRAL AND GRADIENT EVOLUTION
+
+It is interesting to note that even long sequence lengths
+    in the copy task can be solved ef ciently with
+rather large margins on the spectrum  In Figure   we look
+at the gradient propagation of the loss from the last time
+step in the network with respect to the hidden activations 
+We can see that for   purely orthogonal parameterization of
+
+Figure   Loss curves for different factorized RNN parameterizations on the sequential MNIST task  left  and the permuted sequential MNIST task  right  The spectral margin is denoted by
+   models with no margin have singular values that are directly
+optimized with no constraints  Glorot refers to   factorized RNN
+with no margin that is initialized with Glorot normal initialization 
+Identity refers to the same  with identity initialization 
+
+limited by early stopping of training due to over tting 
+Interestingly  for both the ordered and permuted sequential MNIST tasks  models with   nonzero margin signi 
+cantly outperform those that are constrained to have purely
+orthogonal transition matrices  margin of zero  The best
+results on both the ordered and sequential MNIST tasks
+were yielded by models with   spectral margin of   at
+  accuracy and   accuracy  respectively  An
+LSTM outperformed the RNNs in both tasks  nevertheless 
+RNNs with hidden to hidden transitions initialized as orthogonal matrices performed admirably without   memory
+component and without all of the additional parameters associated with gates  Indeed  orthogonally initialized RNNs
+performed almost on par with the LSTM in the permuted
+sequential MNIST task which presents longer distance dependencies than the ordered task  Although the optimal
+margin appears to be   RNNs with large margins perform almost identically to an RNN without   margin  as
+long as the transition matrix is initialized as orthogonal 
+On these tasks  orthogonal initialization appears to significantly outperform Glorot normal initialization  Glorot  
+
+ number of epochs costMNIST number of epochs costPermuted MNISTm         no marginglorotidentityOn orthogonality and learning RNNs with long term dependencies
+
+the transition matrix  when the margin is zero  the gradient
+norm is preserved across time steps  as expected  We further observe that with increasing margin size  the number
+of update steps over which this norm preservation survives
+decreases  though surprisingly not as quickly as expected 
+
+Figure   The norm of the gradient of the loss from the last time
+step with respect to the hidden units at   given time step for  
+length   RNN over   update iterations for different margins 
+Iterations are along the abscissa and time steps are denoted along
+the ordinate  The  rst column margins are        The
+second column margins are      no margin  Gradient norms
+are normalized across the time dimension 
+
+Although the deviation of singular values from one should
+be slowed by the sigmoidal parameterizations  even parameterizations without   sigmoid  no margin  can be effectively trained for all but the longest sequence lengths  This
+suggests that the spectrum is not deviating far from orthogonality and that inputs to the hidden to hidden transitions
+are mostly not aligned along the dimensions of greatest
+expansion or contraction  We evaluated the spread of the
+spectrum in all of our experiments and found that indeed 
+singular values tend to stay well within their prescribed
+bounds and only reach the margin when using   very large
+learning rate that does not permit convergence  Furthermore  when transition matrices are initialized as orthogonal  singular values remain near one throughout training
+even without   sigmoidal margin for tasks that require long
+term memory  copy  adding  sequential MNIST  On the
+other hand  singular value distributions tend to drift away
+from one for PTB character prediction which may help
+explain why enforcing an orthogonality constraint can be
+helpful for this task  when modeling long sequences  Interestingly  singular values spread out less for longer sequence
+lengths  nevertheless  the    copy task could not be
+solved with no sigmoid on the spectrum 
+We visualize the spread of singular values for different model parameterizations on the permuted sequential
+MNIST task in Figure   Curiously  we  nd that the distribution of singular values tends to shift upward to   mean of
+approximately   on both the ordered and permuted sequential MNIST tasks  We note that in those experiments 
+  tanh transition nonlinearity was used which is contractive
+in both the forward signal pass and the gradient backward
+pass  An upward shift in the distribution of singular val 
+
+ues of the transition matrix would help compensate for that
+contraction  Indeed   Saxe et al    describe this as  
+possibly good regime for learning in deep neural networks 
+That the model appears to evolve toward this regime suggests that deviating from it may incur   cost  This is interesting because the cost function cannot take into account
+numerical issues such as vanishing or exploding gradients
+ or forward signals  we do not know what could make this
+deviation costly  That the transition matrix may be compensating for the contraction of the tanh is supported by
+further experiments  applying     preactivation gain appears to allow   model with   margin of   to nearly match
+the top performance reached on both of the MNIST tasks 
+Furthermore  when using the OPLU normpreserving activation function  Chernodub   Nowicki    we found
+that orthogonally initialized models performed equally well
+with all margins  achieving over   accuracy on the permuted sequential MNIST task  Unlike orthgonally initialized models  the RNN on the bottom right of Figure  
+with Glorot normal initialized transition matrices begins
+and ends with   wide singular spectrum  While there is
+no clear positive shift in the distribution of singular values 
+the mean value appears to very gradually increase for both
+the ordered and permuted sequential MNIST tasks  If the
+model is to be expected to positively shift singular values
+to compensate for the contractivity of the tanh nonlinearity  it is not doing so well for the Glorotinitialized case 
+however  this may be due to the inef ciency of training as
+  result of vanishing gradients  given that initialization 
+
+  Exploring Soft Orthogonality Constraints
+
+Having established that it may indeed be useful to step
+away from orthogonality  here we explore two forms of soft
+constraints  rather than hard bounds as above  on hidden to
+hidden transition matrix orthogonality  The  rst is   simple
+penalty that directly encourages   transition matrix   to
+be orthogonal  of the form  WT       
+  This is similar to the orthogonality penalty introduced by Henaff et al 
+  In sub gures     and     of Figure   we explore
+the effect of weakening this form of regularization  We
+trained both   regular nonfactorized RNN on the      
+copy task     and   factorized RNN with orthogonal bases
+on the       copy task     For the regular RNN 
+we had to reduce the learning rate to   Here again
+we see that weakening the strength of the orthogonalityencouraging penalty can increase convergence speed 
+The second approach we explore replaces the sigmoidal
+margin parameterization with   mean one Gaussian prior
+on the singular values  In sub gures     and     of Figure
+  we visualize the accuracy on the length   copy task 
+using geoSGD  learning rate   to keep   and   orthogonal and different strengths   of   Gaussian prior with
+   si     We
+
+mean one on the singular values si   cid 
+
+On orthogonality and learning RNNs with long term dependencies
+
+Figure   Singular value evolution on the permuted sequential MNIST task for factorized RNNs with different spectral margin sizes
+    The singular value distributions are summarized with the mean  green line  center  and standard deviation  green shading about
+mean  minimum  red  bottom  and maximum  blue  top  values  All models are initialized with orthogonal hidden to hidden transition
+matrices except for the model that yielded the plot on the bottom right  where Glorot normal initialization is used 
+
+Figure   Accuracy curves on the copy task for different strengths of soft orthogonality constraints  All sequence lengths are      
+except in     which is run on         soft orthogonality constraint is applied to the transition matrix   of   regular RNN in    
+and that of   factorized RNN in       mean one Gaussian prior is applied to the singular values of   factorized RNN in     and     the
+spectrum in     has   sigmoidal parameterization with   large margin of   Loosening orthogonality speeds convergence 
+
+trained these experiments with regular SGD on the spectrum and other nonorthogonal parameter matrices  using  
+  learning rate  We see that strong priors lead to slow
+convergence  Loosening the strength of the prior makes
+the optimization more ef cient  Furthermore  we compare
+  direct parameterization of the spectrum  no sigmoid  in
+    with   sigmoidal parameterization  using   large margin
+of   in     Without the sigmoidal parameterization  optimization quickly becomes unstable  on the other hand  the
+optimization also becomes unstable if the prior is removed
+completely in the sigmoidal formulation  margin   These
+results further motivate the idea that parameterizations that
+deviate from orthogonality may perform better than purely
+orthogonal ones  as long as they are suf ciently constrained
+to avoid instability during training 
+
+  Conclusions
+We have explored   number of methods for controlling
+the expansivity of gradients during backpropagation based
+
+learning in RNNs through manipulating orthogonality constraints and regularization on weight matrices  Our experiments indicate that while orthogonal initialization may be
+bene cial  maintaining hard constraints on orthogonality
+can be detrimental  Indeed  moving away from hard constraints on matrix orthogonality can help improve optimization convergence rate and model performance  However 
+we also observe with synthetic tasks that relaxing regularization which encourages the spectral norms of weight matrices to be close to one too much  or allowing bounds on
+the spectral norms of weight matrices to be too wide  can
+reverse these gains and may lead to unstable optimization 
+
+ACKNOWLEDGMENTS
+
+We thank the Natural Sciences and Engineeering Research
+Council  NSERC  of Canada and Samsung for supporting
+this research 
+
+ number of epochs singular valuem number of epochs singular valuem number of epochs singular valuem number of epochs singular valuem number of epochs singular valueno margin number of epochs singular valueno margin  glorot init number of epochs accuracyA number of epochs accuracyB number of epochs accuracyC number of epochs accuracyD On orthogonality and learning RNNs with long term dependencies
+
+References
+Arjovsky  Martin  Shah  Amar  and Bengio  Yoshua  Unitary evolution recurrent neural networks  arXiv preprint
+arXiv   
+
+Chernodub  Artem and Nowicki  Dimitri  Normpreserving
+orthogonal permutation linear unit activation functions
+ oplu  arXiv preprint arXiv   
+
+Glorot  Xavier and Bengio  Yoshua  Understanding the dif 
+ culty of training deep feedforward neural networks  In
+Aistats  volume   pp     
+
+Harandi  Mehrtash and Fernando  Basura  Generalized
+arXiv
+
+backpropagation   etude de cas  orthogonality 
+preprint arXiv   
+
+He  Kaiming  Zhang  Xiangyu  Ren  Shaoqing  and Sun 
+Jian  Delving deep into recti ers  Surpassing humanIn Prolevel performance on imagenet classi cation 
+ceedings of the IEEE international conference on computer vision  pp     
+
+Henaff  Mikael  Szlam  Arthur  and LeCun  Yann  Orthogonal rnns and longmemory tasks  arXiv preprint
+arXiv   
+
+Hochreiter  Sepp and Schmidhuber    urgen  Long shortterm memory  Neural computation   
+ 
+
+Pascanu  Razvan  Mikolov  Tomas  and Bengio  Yoshua 
+On the dif culty of training recurrent neural networks 
+ICML      
+
+Saxe  Andrew    McClelland  James    and Ganguli 
+Surya  Exact solutions to the nonlinear dynamics of
+learning in deep linear neural networks  arXiv preprint
+arXiv   
+
+Tagare  Hemant    Notes on optimization on stiefel manifolds  Technical report  Tech  Rep  Yale University 
+ 
+
+Theano Development Team  Theano    Python framework
+for fast computation of mathematical expressions  arXiv
+eprints  abs  May   URL http 
+arxiv org abs 
+
+Tieleman     and Hinton     Lecture  RmsProp  Divide the gradient by   running average of its recent magnitude  COURSERA  Neural Networks for Machine
+Learning   
+
+Wisdom  Scott  Powers  Thomas  Hershey  John  Le Roux 
+Jonathan  and Atlas  Les  Fullcapacity unitary recurrent neural networks  In Advances in Neural Information
+Processing Systems  pp     
+
+Krueger  David and Memisevic  Roland 
+
+ing rnns by stabilizing activations 
+arXiv   
+
+RegularizarXiv preprint
+
+Le  Quoc    Jaitly  Navdeep  and Hinton  Geoffrey     
+simple way to initialize recurrent networks of recti ed
+linear units  arXiv preprint arXiv   
+
+LeCun  Yann  Bottou    eon  Bengio  Yoshua  and Haffner 
+Patrick  Gradientbased learning applied to document
+recognition  Proceedings of the IEEE   
+   
+
+Marcus  Mitchell    Marcinkiewicz  Mary Ann  and Santorini  Beatrice  Building   large annotated corpus of
+english  The penn treebank  Computational linguistics 
+   
+
+Nair  Vinod and Hinton  Geoffrey    Recti ed linear units
+improve restricted boltzmann machines  In Proceedings
+of the  th International Conference on Machine Learning  ICML  pp     
+
+Nishimori  Yasunori    note on riemannian optimization
+methods on the stiefel and the grassmann manifolds 
+dim     
+
+

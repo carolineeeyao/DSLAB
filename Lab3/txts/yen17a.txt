@@ -1,0 +1,1219 @@
+Latent Feature Lasso
+
+Ian      Yen   WeiCheng Lee   SungEn Chang   Arun    Suggala   ShouDe Lin   Pradeep Ravikumar  
+
+Abstract
+
+The latent feature model  LFM  proposed in
+ Grif ths   Ghahramani    but possibly
+with earlier origins  is   generalization of   mixture model  where each instance is generated not
+from   single latent class but from   combination of latent features  Thus  each instance has
+an associated latent binary feature incidence vector indicating the presence or absence of   feature  Due to its combinatorial nature  inference
+of LFMs is considerably intractable  and accordingly  most of the attention has focused on nonparametric LFMs  with priors such as the Indian
+Buffet Process  IBP  on in nite binary matrices 
+Recent efforts to tackle this complexity either
+still have computational complexity that is exponential  or sample complexity that is highorder
+polynomial       
+the number of latent features 
+In this paper  we address this outstanding problem of tractable estimation of LFMs via   novel
+atomicnorm regularization  which gives an algorithm with polynomial runtime and sample complexity without impractical assumptions on the
+data distribution 
+
+  Introduction
+Latent variable models are widely used in unsupervised
+learning  in part because they provide compact and interpretable representations of the distribution over the observed data  The most common and simplest such latent
+variable model is   mixture model  which associates each
+observed object with   latent class  However  in many
+realworld applications  observations are better described
+by   combination of latent features than   single latent
+class  Accordingly  admixture or mixed membership models have been proposed  Airoldi et al    that in the
+simplest settings  assign each object to   convex combi 
+
+ Carnegie Mellon University        
+Correspondence to 
+
+University  Taiwan 
+ eyan cs cmu edu 
+
+ National Taiwan
+Ian      Yen
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+nation of latent classes  For instance    document object
+could be modeled as   convex combination of topic objects  There are many settings however where   convex
+combination might be too restrictive  and the objects are
+better modeled as simply   collection of latent classes  An
+example is web image  which can often described by multiple tags rather than   single class  or even by   convex
+combination of tag objects  Another example is the model
+of user  who might have multiple interests in the context of
+  recommendation system  or be involved in multiple communities in   social network  With such settings in mind 
+ Grif ths   Ghahramani    proposed   latent feature
+model  LFM  where each observed object can be represented by   binary vector that indicates the presence or absence of each of   collection of latent features  Their proposed model extended earlier models with   similar  avor
+for specialized settings  such as  Ueda   Saito    for
+bag of words models for text  The latent feature model
+can also be connected to sparse PCA models    Aspremont
+et al    Jolliffe et al    by considering   pointwise product of the binary feature incidence vector with
+another realvalued vector  As  Grif ths   Ghahramani 
+  showed  LFM handily outperforms clustering as an
+ef cient and interpretable data representation  particularly
+in settings where the object can be naturally represented as
+  collection of latent features or parts 
+However  the estimation  inference  of an LFM from data
+is dif cult  due to the combinatorial nature of the binary
+feature incidence vectors  Indeed  with   samples  and  
+latent features  the number of possible binary matrices consisting of the   binary feature incidence vectors is      
+And not in the least  the loglikelihood of LFM is not  
+concave function of its parameters 
+Given that the  nite feature case seems intractable  right
+from the outset  attention has focused on the nonparametric in nite feature case  where   prior known as the Indian
+Buffet Process  IBP  has been proposed for the in nite binary matrices consisting of the feature incidence vectors
+given in nite set of latent features  Grif ths   Ghahramani    While the IBP prior provides useful structure 
+inference remains   dif cult problem  and in practice  one
+often relies on local search methods  Broderick et al   
+to  nd an estimate of parameters  or employ Markov Chain
+Monte Carlo  MCMC   DoshiVelez   Ghahramani   
+
+Latent Feature Lasso
+
+or variational methods  DoshiVelez et al    to obtain
+an approximate posterior distribution  However  none of
+these approaches can provide guarantees on the quality of
+solution in polynomial time 
+Note that both in the mixture model  as well as the admixture model cases  the parametric variants have been hugely
+popular alongside or perhaps even more so than the nonparametric variants      clustering procedures based on  
+nite number of clusters  or topic models with    nite number of topics  This is in part because the parametric variants
+have   lower model complexity  which might be desired
+under certain settings  and also have simpler inference procedures  However  in the LFM case  the parametric variant has received very little attention  which might suggest
+the relatively lesser popularity for LFMs when compared
+to mixture or admixture topic models 
+Accordingly  in this paper  we consider the question of
+computationally tractable estimation of parametric LFMs 
+In the nonparametric setting with an IBP prior   Tung  
+Smola    have proposed the use of spectral methods 
+which bypasses the problem of nonconcave loglikelihood
+by estimating the moments derived from the model  and
+then recovers parameters by solving   system of equations 
+Their spectral methods based procedure produces consistent estimates of LFMs in polynomial time  however with
+  sample complexity that has   highorder  more than sixorder  polynomial dependency on the number of latent features and the occurrence probability of each feature  Moreover  the application of spectral methods requires knowledge of the distribution  which results in nonrobustness
+to model misspeci cation in practice  Under   noiseless
+setting   Slawski et al    leveraged identi ability conditions under which the solution is unique  to propose an
+algorithm for   parametric LFM  Their algorithm is guaranteed to recover the parameters in the noiseless setting 
+but with the caveat that it has   computational complexity
+that is exponential in the number of latent features 
+We note that even under the assumption of an nonparametric LFM  speci cally an Indian Buffet Process with Linear
+Gaussian Observations  deriving its MAP point estimate
+under lowvariance asymptotics following the approach of
+MADBayes Asymptotics  Broderick et al    yields an
+objective similar to that of   parametric LFM with an additional term that is linear in the number of latent features 
+Thus  developing computationally tractable approaches for
+parametric LFMs would be broadly useful 
+In this work  we propose the Latent Feature Lasso    novel
+convex estimation procedure for the estimation of   Latent
+Feature Model using atomicnorm regularization  We construct   greedy algorithm with strong optimization guarantees for the estimator by relating each greedy step to  
+MAXCUT like problem  We also provide   risk bound
+
+for the estimator under general data distribution settings 
+which trades off between risk and sparsity  and has   sample complexity linear in the number of components and dimension  Under the noiseless setting  we also show that
+Latent Feature Lasso estimator recovers the parameters of
+LFM under an identi ability condition similar to  Slawski
+et al   
+
+  Problem Setup
+  Latent Feature Model represents data as   combination
+of latent features  Let     RD be an observed random
+vector that is generated as 
+
+              
+
+where          is   latent binary feature incidence
+vector that denotes the presence or absence of   features 
+    RK   is an unknown matrix of   latent features
+of dimension    and     RD is an unknown noise vector  We say that the model is biased when         
+                cid    and which we allow in our analysis 
+Suppose we observe   samples of the random vector    It
+will be useful in the sequel to collate the various vectors
+corresponding to the   samples into matrices  We collate
+the observations into   matrix     RN    the   latent
+incidence vectors into   matrix             and the
+noise vectors into an       matrix   We thus obtained the
+vectorized form of the model as     ZW    
+Most existing works on LFM make two strong assumptions  The  rst is that the model has zero bias         
+   Tung   Smola    Broderick et al    Grif ths
+  Ghahramani    Slawski et al    Zoubin   
+DoshiVelez   Ghahramani    DoshiVelez et al 
+  Hayashi   Fujimaki    The second common
+but strong class of assumptions is distributional  Hayashi
+  Fujimaki    Tung   Smola   
+
+                                Bern 
+
+where Bern  denotes the distribution of   independent
+Bernoulli with zk   Bern   
+In the Nonparametric
+Bayesian setting  Grif ths   Ghahramani    Zoubin 
+  DoshiVelez et al    DoshiVelez   Ghahramani    Broderick et al    one replaces Bern 
+with an Indian Buffet Process IBP  over the         binary incidence matrix             where     can be
+inferred from data instead of being speci ed apriori  We
+note that both classes of assumptions need not hold in practice  the zero bias assumption                is stringent
+given the linearity of the model  while the Bernoulli and
+IBP distributional assumptions are also restrictive  in part
+since they assume independence between the presence of
+two features zik and zik cid  Our method and analyses do not
+impose either of these assumptions 
+
+Latent Feature Lasso
+
+It is useful to contrast the different estimation goals ranging over the LFM literature  In the Bayesian approach line
+of work  Grif ths   Ghahramani    Broderick et al 
+  Zoubin    DoshiVelez   Ghahramani   
+Hayashi   Fujimaki    the goal is to infer the posterior
+distribution            given    The line of work using
+Spectral Methods  Tung   Smola    on the other hand
+aim to estimate             in turn by estimating parameters       In some other work  Slawski et al    they
+aim to estimate     leaving the distribution of   unmodeled 
+In this paper  we focus on the more realistic setting where
+we make no assumption on      except that of boundedness  and aim to  nd an LFM     that minimizes the risk
+
+           min
+
+   
+
+ cid           cid 
+
+ 
+ 
+
+ 
+
+where the expectation is over the random observation   
+
+  Latent Feature Lasso
+We  rst consider the nonconvex formulation that was also
+previously studied in  Broderick et al    as asymptotics of the MAP estimator of IBP LinearGaussian model 
+
+             RK  
+
+min
+
+ cid     ZW cid 
+
+         
+
+ 
+  
+
+The estimation problem in  Slawski et al    could also
+be cast in the above form with       and   treated as  
+ xed hyperparameter  while  Broderick et al    treats
+  as   variable and controls it through     is   combinatorial optimization of           integer variables  In
+the following we develop   tight convex approximation to
+  with  cid  regularization on     by introducing   type of
+atomic norm  Chandrasekaran et al   
+For    xed       consider the minimization over   of the
+ cid  regularized version of  
+
+min
+
+  RK  
+
+ cid     ZW cid 
+
+   
+
+ 
+  
+
+ cid   cid 
+   
+
+ 
+ 
+
+ 
+
+which is   convex minimization problem  Applying Lagrangian duality to   results in the following dual form
+
+max
+
+tr AAT        
+ 
+
+  xi Ai 
+
+   
+
+    
+
+  RN  
+where     ZZ         RN   are dual variables that
+satisfy        
+       at the optimum of   and   and
+          cid     cid     
+ cid cid  is the convex conjugate of
+ cid   cid         its second argument 
+square loss           
+Let         denote the objective in   for any  xed   
+and let         maxA         denote the optimal value
+
+ cid   
+
+ cid 
+
+Algorithm     Greedy Algorithm for Latent Feature Lasso
+           
+
+for        do
+
+ 
+ 
+  Minimize          coordinates in   via updates  
+ 
+
+Find   greedy atom zzT by solving  
+Add zzT to an active set   
+Eliminate  zjzT
+
+   cj     from   
+
+end for 
+
+of the objective when optimized over    The objective in
+  for    xed   could thus be simply reformulated as  
+minimization of this dualderived objective       It can
+be seen that       is   convex function          since it
+is the maximum of linear functions of    The key caveat
+however is the combinatorial structure on   since it has
+the form     ZZ                 We address this
+caveat by introducing the following atomic norm
+
+ cid 
+with      zzT           Note  cid   cid    cid 
+
+ cid   cid     min
+  
+
+    ca  
+  when ca in   are constrained at integer value    
+and it serves   convex approximation to   similar to the
+ cid norm used in Lasso for the approximation of cardinality 
+This results in the following Latent Feature Lasso estimator
+
+ca         
+
+  cid 
+
+caa 
+
+   
+
+   
+
+ 
+
+          cid   cid     
+
+min
+ 
+
+ 
+
+  Algorithm
+The estimator   seems intractable at  rst sight in part
+since the atomic norm involves   set   of    atoms  In
+this section  we study   variant of approximate greedy coordinate descent method for tractably solving problem  
+We begin by rewriting the optimization problem   as an
+ cid regularized problem with             coordinates  by
+expanding the matrix   in terms of the    atoms underlying the atomic norm  cid cid   
+
+     cid 
+
+  
+
+  
+
+ cid 
+
+ cid 
+
+ 
+ cid 
+
+cjzjzT
+ 
+
+ cid cid 
+
+     
+
+ cid cid 
+
+     
+
+min
+      
+ 
+
+ 
+
+ cid 
+
+ cid   cid 
+
+ 
+
+   enumerates all possible      patterns
+where  zj    
+except the   vector  Our overall algorithm is depicted in
+Algorithm   In each iteration  it  nds
+ jf    
+ cid       zjzT
+   cid 
+
+     arg max
+
+  arg max
+
+ 
+
+ 
+
+ 
+
+Latent Feature Lasso
+
+approximately with   constant approximation ratio via  
+reduction to   MAXCUT like problem  see Section  
+An active set   is maintained to contain all atoms zjzT
+ 
+with nonzero coef cients cj and the atom returned by the
+greedy search   Then we minimize   over coordinates
+in   by   sequence of proximal updates 
+
+ cid 
+cr       cr     
+
+ cid 
+
+   
+
+cr   
+
+         
+
+ 
+
+where   is the Lipschitzcontinuous constant of
+coordinatewise gradient  cj      
+
+ 
+
+the
+
+Computing cooordinatewise gradients  By Danskin  
+Theorem  the gradient of function       takes the form
+
+ cj         zjA     zj      
+
+ 
+
+which in turn requires  nding the maximizer    of  
+Computing    By taking advantage of the strong duality between   and   the maximizer    can be found by
+ nding the minimizer     of
+ cid     ZAW cid 
+
+ cid Wk cid 
+
+ cid 
+
+ 
+
+   
+
+min
+ 
+
+ 
+  
+
+ 
+ ck
+
+   
+
+and computing           ZAW   where ZA denotes
+        matrix of columns taking from the active atom
+basis  zk     
+Computing     There is   closedform solution     to
+  of the form
+
+         TAZA      diag cA   TAX 
+
+ 
+
+An ef cient way of computing   is to maintain   TAZA
+and   TAX whenever the active set of atoms   changes 
+This has   cost of     DKA  for   bound KA on the active
+size  which however is almost neglectable compared to the
+other costs when amortized over iterations  Then the evaluation of   would cost only             AD  for each
+evaluation of different    Similarly the matrix computation
+of   can be made more ef cient as  cf      
+
+diag   TAX     TAZAW    TAX     TAZAW     
+
+can be computed in              via the maintenance of
+  TAZA    TAX 
+The output of Algorithm   is the coef cient vector    and
+with the resulting latent feature matrix       given by
+  Since the solution could contain many atoms of small
+weight ck  In practice  we perform   rounding procedure
+that ranks atoms according to the score  ck cid Wk cid    
+and then pick top   atoms as the output    and solve  
+simple leastsquares problem to obtain the corresponding
+   
+
+  Greedy Atom Generation
+
+  key step to the greedy algorithm  Algorithm   is to  nd
+the direction   of steepest descent  which however is  
+convex maximization problem with binary constraints that
+in general cannot be exactly solved in polynomial time 
+Fortunately in this section  we show that   is equivalent to   MAXCUT like Boolean Quadratic Maximization problem that has ef cient Semide nite relaxation with
+constant approximation guarantee  Furthermore  the resulting Semide nite Programming  SDP  problem is of special
+structure that allows iterative method of complexity linear
+to the matrix size  Boumal et al    Wang   Kolter 
+ 
+In particular 
+mization problem
+
+let                    the maxi 
+
+ cid    zzT cid 
+
+max
+
+   
+
+ 
+
+can be reduced to an optimization problem over variables
+taking values in     via the transformation          
+which results in the problem
+
+ cid cid    yyT cid     cid     yT cid     cid       cid cid     
+
+max
+
+   
+
+ 
+ 
+
+where   denotes Ndimensional vector of all     By introducing   dummy variable      can be expressed as
+
+ cid    
+
+ cid   cid            
+
+ cid cid    
+
+ cid 
+
+ 
+ 
+
+ 
+
+ 
+
+ 
+
+  
+
+max
+
+        
+
+ 
+ 
+Note that one can ensure  nding   solution with        by
+ ipping signs of the solution vector to   since this does
+not change the quadratic form objective value  Denote the
+quadratic form matrix in   be     Problem of form  
+is   MAXCUTlike Boolean Quadratic problem  for which
+there is SDP relaxation of the form
+
+max
+   SN
+    
+
+ cid         cid 
+   cid    diag        
+
+ 
+
+rounding from which guarantees   solution    to   satisfying
+
+                  
+
+ 
+
+for        Nesterov et al    where      denotes the
+objective function of   and      denote the maximum 
+minimum value achievable by some            respectively  Note this result holds for any symmetric matrix
+    Since our problem has   positivesemide nite matrix    
+      and thus
+
+ jf                            
+
+ 
+
+Latent Feature Lasso
+
+for               where    is coordinate selected by
+rounding from   solution of   and    is the exact maximizer of  
+Finally  it is noteworthy that  although solving   general
+SDP is computationally expensive  SDP of the form  
+has been shown to allow much faster solver that has linear
+the matrix size nnz       Boumal et al   
+cost       
+Wang   Kolter    In our implementation we adopt
+the method of  Wang   Kolter    due to its strong empirical performance 
+
+  Analysis
+  Convergence Analysis
+
+The aim of this section is to show the convergence of Algorithm   under the approximation of greedy atom generation  In particular  we show the multiplicative approximation error incurred in the step   only contributes an
+additive approximation error proportional to   as stated in
+the following theorem 
+Theorem   The greedy algorithm proposed  Algorithm  
+satis es
+
+   ct             cid   cid 
+
+ 
+
+ 
+
+ 
+ 
+
+ 
+
+ cid 
+
+     
+
+ 
+
+ cid cid 
+
+ 
+
+ cid   cid 
+
+ 
+
+ cid 
+
+where    is any reference solution        is the approximation ratio given by   and   is the Lipschitzcontinuous
+constant of coordinatewise gradient  jf             
+
+The theorem thus shows that the iterates converge sublinearly to within statistical precision   of any reference
+solution    scaled in main by its  cid  norm  cid   cid  In the following theorem  we show that  with the additional assumption that       is strongly convex over   restricted support
+set    one can get   bound in terms of the  cid norm of  
+reference solution    with support   
+Theorem   Let            be   support set and     
+arg minc supp            Suppose       is strongly convex on    with parameter   The solution given by Algorithm   satis es
+
+   cT            cid   cid 
+
+ 
+
+     
+
+ 
+
+ 
+
+ cid   cid 
+
+ 
+
+ 
+
+ cid   
+
+ cid 
+
+ 
+
+ cid 
+
+matrix of diagonal elements Dkk  cid   
+
+Let         be the size of the atomic set  Any target latent
+structure       can be expressed as ZD         where  
+is an        dictionary matrix       is           diagonal
+      for
+columns corresponding to    and   
+      for the others 
+and      is     padded with   on rows in      ck    
+
+  with   
+
+Then since  cid   cid     cid   cid       Theorem   shows that
+our algorithm has an iteration complexity of      to
+ 
+achieve   error  with an additional error term proportional
+to  
+
+  due to the approximation made in  
+
+  Risk Analysis
+
+In this section  we investigate the performance of the output from Algorithm   in terms of the population risk   
+de ned in   Given coef cients   with support   obtained
+from algorithm   for   iterations  we construct the weight
+ 
+    TAA 
+matrix by      diag 
+where    is the maximizer of   as   function of    It can
+be seen that    satis es
+
+cA     with    cA     
+
+       
+
+ cid     ZA    cid   
+
+ 
+  
+
+ 
+ 
+
+ cid     cid 
+
+     cid cA cid 
+
+ 
+
+The following theorem gives   risk bound for      Without
+loss of generality  we assume   is bounded and scaled such
+that  cid   cid     
+ 
+cA    cA  be the weight
+Theorem   Let      diag 
+matrix obtained from   iterations of Algorithm   and   
+be the minimizer of the population risk   with   components and  cid     cid        We then have the following bound
+on population risk                        with probability
+      for
+
+     
+ 
+
+ 
+
+ 
+ 
+
+  and      
+
+DK
+ 
+
+log 
+
+RK
+ 
+
+ 
+
+with     chosen appropriately as functions of   
+
+Note the output of Algorithm   has number of components
+   bounded by number of iterations     Therefore  Theorem   gives us   tradeoff between risk and sparsity 
+one can guarantee to achieve  suboptimal risk compared
+to the optimal solution of size    via      components and    DK  samples  Notice the result   is obtained without any distributional assumption on      and
+     except that of boundedness  Comparatively  the theoretical result obtained from Spectral Method  Tung  
+Smola    requires the knowledge assumption of the
+distribution             which is sensitive to model misspeci cation in practice 
+
+  Identi ability
+It is noteworthy that the true parameters         might
+not be identi able 
+In particular  it is possible to have
+         cid          with ZW         in which case
+it is impossible to recover the true parameters        
+from           The following theorem introduces conditions that ensure uniqueness of the factorization    
+     
+Theorem   Let           be of rank    If
+
+Latent Feature Lasso
+
+      and solve   to obtain   solution         of  
+which satis es the following theorem 
+Theorem   Let         be   solution to   and
+ ZS  WS  be columns of   and rows of   corresponding
+to the set of nonzero indexes   of   respectively  Suppose
+the identi ability condition in Theorem   holds and WS has
+full rowrank  Then
+              
+
+      Wj           
+
+    
+
+   
+
+  
+
+Note since we can choose an arbitrarily small       to
+ nd   solution of   The approximation error due to
+approximate atom generation can be reduced to arbitrarily
+small 
+
+  Parameter Recovery under Noise
+
+ 
+
+In the noisy setting  parameter recovery is more tricky 
+When the model is unbiased                           by
+appealing to wellknown results in highdimensional estimation  Negahban et al    we can achieve   bound on
+the  cid  norm of the error       where    is coef cient vector
+corresponding to the groundtruth parameter        
+We defer the resulting Theorem   to Section   in the Appendix  The theorem bounds the  cid  error  cid       cid  as
+       where    is   term capturing the noise 
+   
+level     is   term capturing the restricted strong convexity
+of the objective  and de ned in detail in Section  
+However  extending this bound on  cid     cid  to derive bounds
+on  cid       cid  and  cid        cid  is   delicate matter that we
+defer to future work  in part due to the exponential size
+        of the atomic set  and since the size of   grows
+with    In particular  in the following theorem  we show
+that it is in general not possible to estimate    accurately
+even with   large number of samples 
+Theorem   Let           Consider the following
+noise model                 where            
+        and           Ei are       random variables with
+Ei         Moreover  suppose we know the true parameter         Then the Latent Feature Model estimator
+for    given by 
+
+     argmin
+   
+
+ cid     ZW  cid 
+
+ 
+  
+
+ 
+
+satis es the following 
+
+  cid         cid 
+
+    cN 
+
+for some positive constant   
+
+  Experiments
+In this section  we compare our proposed method with
+other stateof theart approaches on both synthetic and real
+
+Figure   The frequency of failures of condition in Theorem   out of   trials  for   spectrum of        Bernoulli
+parameter   and different    We use algorithm proposed
+in  Slawski et al    to check the condition ef ciently 
+
+  
+
+  
+
+   
+
+    
+
+    
+
+         
+
+        
+
+          and          are both of rank   
+  span                    
+Then for any rankK matrices         and       
+   ZW     implies       
+   and
+ Wj  
+The conditions in Theorem   are similar to that discussed
+in  Slawski et al    where an additional af ne constraint on   is considered  For random binary matrix of
+binary value     instead of     the conditions
+are known to hold with high probability when entries are
+       Bernoulli   Tao   Vu    Kahn et al   
+Here we also conduct numerical experiments for matrices
+of        Bernoulli    with   wide range of    Results in
+Figure   shows that the probability with which such condition fails is almost   when       while it increases when
+  becomes smaller than  
+
+  Parameter Recovery without Noise
+Let the true parameters be         with  cid    cid 
+      
+We can  nd some       such that the estimator   is equivalent to solving the following problem 
+
+ 
+  
+ cid   cid 
+
+ cid     Zdiag     cid     cid   cid 
+      
+
+ 
+
+min
+
+      
+
+           
+
+    
+where diag    is   diagonal matrix with diagkk     
+ck 
+In the noiseless setting       one can  nd   feasible
+solution to the following problem
+
+ 
+
+min
+
+      
+
+           
+
+    
+
+ cid   cid 
+ZD           cid   cid 
+
+      
+
+ 
+
+which is equivalent to problem   with any       for
+some       One can thus choose an arbitrarily small
+
+   numberof failuresFailProbK       Latent Feature Lasso
+
+Figure   From left to right  each column are results for Syn      Syn      Syn      and Syn     
+respectively  The  rst row shows the Hamming loss between the groundtruth binary assignment matrix    and the
+recovered ones     The second row shows RMSE between           and the estimated            
+
+Figure   From left to right are results for Tabletop  Mnist    YaleFace and Yeast  where Spectral Method does not appear
+in the plots for YaleFace and Yeast due to   much higher RMSE  and Variational method reports   runtime error when
+running on the YaleFace data set 
+
+Table   Data statistics 
+
+Dataset
+Syn 
+Syn 
+Syn 
+Syn 
+
+Tabletop
+Mnist  
+YaleFace
+
+Yeast
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+   
+   
+   
+
+ 
+ 
+
+ 
+ 
+ 
+   
+   
+   
+   
+
+nnz    
+  
+   
+ 
+ 
+ 
+   
+   
+   
+   
+
+data sets  The dataset statistics are listed in Table   For
+the synthetic data experiments  we used   benchmark simulated dataset Syn  that was also used in  Broderick et al 
+  Tung   Smola    But since this has only  
+small number of latent features        to make the task
+more challenging  we created additional synthetic datasets
+ which we denote Syn  Syn  Syn  with more latent fea 
+
+tures  Figure   shows example of our synthetic data  where
+we reshape dimension   into an image and pick   contiguous region  Each pixel          in the region is set as
+      while pixels not in the region are set to  
+In
+the examples of Figure   the region has size nnz        
+  Note the problem becomes harder when the region
+size nnz         number of features    or noise level  
+becomes larger  For real data  we use   benchmark Tabletop data set constructed by  Grif ths   Ghahramani   
+where there is   groundtruth number of features       for
+the   objects on the table  We also take two standard multilabel  multiclass  classi cation data sets Yeast and Mnist  
+from the LIBSVM repository   and one Face data set YaleFace from the Yale Face database  
+Given the estimated factorization         we use the following   evaluation metrics to compare different algorithms 
+
+ https www csie ntu edu tw  cjlin libsvmtools datasets 
+ http vision ucsd edu content yaleface database
+
+   HammingErrSyn Hamming   HammingErrSyn Hamming   HammingErrSyn Hamming   HammingErrSyn Hamming   RMSESyn RMSE   RMSESyn RMSE   RMSESyn RMSE   RMSESyn RMSEBPMeansLatentLassoMCMCMF BinarySpectralVariational   RMSETabletopRMSEnoisy   RMSEMnist kRMSEnoisy   RMSEYaleFaceRMSEnoisy   RMSEYeastRMSEnoisyBP MeansLatentLassoMCMCMFBinarySpectralVariationalLatent Feature Lasso
+
+      Syn  most of methods perform reasonably well 
+However  when the number of features becomes slightly
+larger             in Syn  Syn  most of algorithms
+lose their ability of recovering the hidden structure  and
+when they fail to do so  they can hardly  nd   good approximation to           even using   much larger
+number of components up to   We found the proposed
+LatentLasso method turns out to be the only method that
+can still recover the desired hidden structure on the Syn 
+and Syn  data sets  which gives   RMSE and Hamming
+Error  On Syn         data set  MFBinary and LatentLasso are the only two methods that achieve   RMSE
+and HammingError  However  MFBinary has   complexity growing exponential with    which results in its failure
+on Syn  and Syn  due to   running time more than one
+day when       The proposed LatentLasso algorithm
+actually runs signi cantly faster than other methods in our
+experiments  For example  on the Syn  dataset    
+      the runtime of LatentLasso is     while
+MCMC  Variational  MFBinary and BPMeans all take
+more than    to obtain their best results reported in
+the Figures  We provide   comparison of the time complexities of all compared methods in Section   in the Appendix  Our overall lower time complexity is also corroborated empirically by our experiments  We also observe that
+LatentLasso is the only method that has RMSE and Hamming error monotonically decreasing with    On Syn  and
+Tabletop which have groundtruth       we found most
+of algorithms could become unstable when trying to use
+  number of components   larger than the ground truth 
+Among all algorithms  Spectral  Variational methods are
+the most unstable  while BPMeans and MCMC are more
+stable possibly due to the large number of random retrials
+employed in their procedures 
+On real data sets  the LFM model assumption might not
+hold  and might serve at best as an approximation to the
+groundtruth  Even in such cases  we found that our LatentLasso method  nds   better approximation than other
+existing approaches  especially when using   larger number of components    We conjecture that for local search
+methods  the performance breakdown for larger   is possibly due to an exponentially increased number of local
+optimums  which makes strategies such as random restarts
+less effective for methods such as BPMeans and MCMC 
+On the other hand  the Spectral Method simply has   sample complexity bound with   highorder polynomial dependency on    which makes the estimation error increase dramatically as   becomes larger 
+
+Figure   Sample images from the synthetic data we created       Syn  Syn  Syn  The  rst row shows observations Xi  and the second row shows latent features Wk 
+
+ cid       cid 
+
+ 
+
+   
+
+ 
+
+  HammingError  minS    
+  RMSE   cid      ZW cid  
+ 
+  RMSEnoisy   cid   ZW cid  
+
+   
+
+ 
+
+ 
+
+ 
+
+   
+
+where the  rst two can only be applied when the ground
+truth    are     are given  For real data  we can only evaluate the noisy version of RMSE  which can be interpreted
+as trying to  nd   best approximation to the observation  
+via   factorization with binary components 
+   
+The methods in comparison are listed as follows 
+MCMC  An accelerated version of the Collapsed Gibbs
+sampler for the Indian Buffet Process  IBP  model  DoshiVelez   Ghahramani    We adopted the implementation published by   We ran it with   random restarts
+and recorded the best results for each        Variational 
+  Variational approximate inference method for IBP proposed in  DoshiVelez et al    We used implementation published by the author       MFBinary    Matrix
+Factorization with the Binary Components model  Slawski
+et al    which has recovery guarantees in the noiseless case but has          complexity and thus cannot
+scale to       on our machine  We use the implementation published by the author       BPMeans    local
+search method that optimizes   MADBayes Latent Feature objective function  Broderick et al    We used
+code provided by the author   We ran it with   random
+restarts and recorded the best result      Spectral  Spectral
+Method for IBP Linear Gaussian model proposed in  Tung
+  Smola    We used code from the author  The implementation has   memory requirement that restricts its
+use to           LatentLasso  The proposed Latent
+Feature Lasso method  Algorithm  
+The results are shown in Figure   and   On synthetic data 
+we observe that  when the number of features   is small
+
+ https github com davidandrzej PyIBP
+ http mloss org software view 
+ https sites google com site 
+
+slawskimartin code
+
+ https github com tbroderick bpmeans
+
+Latent Feature Lasso
+
+Acknowledgements      acknowledges the support of
+ARO via   NF  and NSF via IIS 
+IIS  and DMS  and NIH via   
+GM       Lin acknowledges the support of
+AOARD and MOST via    MY 
+
+References
+Airoldi  Edoardo    Blei  David  Erosheva  Elena    and
+Fienberg  Stephen    Handbook of Mixed Membership Models and Their Applications  Chapman and
+Hall CRC   
+
+Boumal  Nicolas  Voroninski  Vlad  and Bandeira  Afonso 
+The nonconvex burermonteiro approach works on
+In Advances in Neural
+smooth semide nite programs 
+Information Processing Systems  pp     
+
+Broderick  Tamara  Kulis  Brian  and Jordan  Michael   
+Madbayes  Mapbased asymptotic derivations from
+bayes  In ICML   pp     
+
+Chandrasekaran  Venkat  Recht  Benjamin  Parrilo 
+Pablo    and Willsky  Alan    The convex geometry of
+linear inverse problems  Foundations of Computational
+mathematics     
+
+  Aspremont  Alexandre  El Ghaoui  Laurent  Jordan 
+Michael    and Lanckriet  Gert RG    direct formulation
+for sparse pca using semide nite programming  SIAM
+review     
+
+DoshiVelez  Finale and Ghahramani  Zoubin  Accelerated
+sampling for the indian buffet process  In Proceedings
+of the  th annual international conference on machine
+learning  pp    ACM   
+
+DoshiVelez  Finale  Miller  Kurt    Van Gael  Jurgen  Teh 
+Yee Whye  and Unit  Gatsby  Variational inference for
+In Proceedings of the Intl 
+the indian buffet process 
+Conf  on Arti cial Intelligence and Statistics  volume  
+pp     
+
+Grif ths  Thomas   and Ghahramani  Zoubin  In nite laIn
+
+tent feature models and the indian buffet process 
+NIPS  volume   pp     
+
+Grif ths  Thomas   and Ghahramani  Zoubin  The indian
+buffet process  An introduction and review  Journal of
+Machine Learning Research   Apr   
+
+Hayashi  Kohei and Fujimaki  Ryohei  Factorized asymptotic bayesian inference for latent feature models  In Advances in Neural Information Processing Systems  pp 
+   
+
+Jolliffe  Ian    Trenda lov  Nickolay    and Uddin  Mudassir    modi ed principal component technique based
+
+on the lasso  Journal of computational and Graphical
+Statistics     
+
+Kahn  Jeff  Koml os    anos  and Szemer edi  Endre  On the
+probability that   random matrix is singular  Journal
+of the American Mathematical Society   
+ 
+
+Negahban  Sahand  Yu  Bin  Wainwright  Martin    and
+Ravikumar  Pradeep      uni ed framework for highdimensional analysis of mestimators with decomposIn Advances in Neural Information
+able regularizers 
+Processing Systems  pp     
+
+Nesterov  Yurii et al 
+
+Quality of semide nite relaxation for nonconvex quadratic optimization  Universit  
+Catholique de Louvain  Center for Operations Research
+and Econometrics  CORE   
+
+Shaban  Amirreza  Farajtabar  Mehrdad  Xie  Bo  Song  Le 
+and Boots  Byron  Learning latent variable models by
+improving spectral solutions with exterior point method 
+In UAI  pp     
+
+Slawski  Martin  Hein  Matthias  and Lutsik  Pavlo  Matrix
+In Advances in
+factorization with binary components 
+Neural Information Processing Systems  pp   
+ 
+
+Tao  Terence and Vu  Van  On the singularity probability
+of random bernoulli matrices  Journal of the American
+Mathematical Society     
+
+Tung  HsiaoYu and Smola  Alexander    Spectral methods for indian buffet process inference  In Advances in
+Neural Information Processing Systems  pp   
+ 
+
+Ueda  Naonori and Saito  Kazumi  Parametric mixture
+models for multilabeled text  Advances in neural information processing systems  pp     
+
+Wang  PoWei and Kolter    Zico  The mixing method for
+
+maxcutsdp problem  NIPS LHDS Workshop   
+
+Wu  Lingfei  Yen  Ian EH  Chen  Jie  and Yan  Rui  Revisiting random binning features  Fast convergence and
+strong parallelizability  In Proceedings of the  nd ACM
+SIGKDD International Conference on Knowledge Discovery and Data Mining  pp    ACM   
+
+Zhao  Han and Poupart  Pascal    sober look at spectral
+
+learning  arXiv preprint arXiv   
+
+Zoubin  Ghahramani  Scaling the indian buffet process via
+In Proceedings of the  th
+submodular maximization 
+International Conference on Machine Learning  ICML 
+  pp     
+
+

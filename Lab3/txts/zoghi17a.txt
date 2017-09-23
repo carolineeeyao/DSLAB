@@ -1,0 +1,1046 @@
+Online Learning to Rank in Stochastic Click Models
+
+Masrour Zoghi   Tomas Tunys   Mohammad Ghavamzadeh   Branislav Kveton   Csaba Szepesvari  
+
+Zheng Wen  
+
+Abstract
+
+Online learning to rank is   core problem in information retrieval and machine learning  Many
+provably ef cient algorithms have been recently
+proposed for this problem in speci   click models  The click model is   model of how the user
+interacts with   list of documents  Though these
+results are signi cant  their impact on practice is
+limited  because all proposed algorithms are designed for speci   click models and lack convergence guarantees in other models  In this work 
+we propose BatchRank  the  rst online learning
+to rank algorithm for   broad class of click models  The class encompasses two most fundamental click models  the cascade and positionbased
+models  We derive   gapdependent upper bound
+on the    step regret of BatchRank and evaluate
+it on   range of web search queries  We observe
+that BatchRank outperforms ranked bandits and
+is more robust than CascadeKLUCB  an existing
+algorithm for the cascade model 
+
+  Introduction
+Learning to rank  LTR  is   core problem in information
+retrieval  Liu    and machine learning  with numerous
+applications in web search  recommender systems and ad
+placement  The goal of LTR is to present   list of   documents out of   that maximizes the satisfaction of the user 
+This problem has been traditionally solved by training supervised learning models on manually annotated relevance
+judgments  However  strong evidence suggests  Agichtein
+
+ Independent Researcher  Vancouver  BC  Canada  Part
+of this work was done during an internship at Adobe Research   Czech Technical University  Prague  Czech Republic
+ DeepMind  Mountain View  CA  USA  This work was done
+while the author was at Adobe Research   Adobe Research  San
+Jose  CA  USA  University of Alberta  Edmonton  AB  Canada 
+Correspondence to  Branislav Kveton  kveton adobe com 
+Masrour Zoghi  masrour zoghi org 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+et al    Zoghi et al    that the feedback of users 
+that is clicks  can lead to major improvements over supervised LTR methods  In addition  billions of users interact
+daily with commercial LTR systems  and it is  nally feasible to interactively and adaptive maximize the satisfaction
+of these users from clicks 
+These observations motivated numerous papers on online
+LTR methods  which utilize user feedback to improve the
+quality of ranked lists  These methods can be divided into
+two groups  learning the best ranker in   family of rankers
+ Yue   Joachims    Hofmann et al    and learning the best list under some model of user interaction with
+the list  Radlinski et al      Slivkins et al    such
+as   click model  Chuklin et al    The click model is
+  stochastic model of how the user examines and clicks on
+  list of documents  In this work  we focus on online LTR
+in click models and address   shortcoming of all past work
+on this topic 
+More precisely  many algorithms have been proposed and
+analyzed for  nding the optimal ranked list in the cascade
+model  CM   Kveton et al      Combes et al   
+Kveton et al      Zong et al    Li et al    the
+dependentclick model  DCM   Katariya et al    and
+the positionbased model  PBM   Lagree et al    The
+problem is that if the user interacts with ranked lists using
+  different click model  the theoretical guarantees cease to
+hold  Then  as we show empirically  these algorithms may
+converge to suboptimal solutions  This is   grave issue because it is well known that no single click model captures
+the behavior of an entire population of users  Grotov et al 
+  Therefore  it is critical to develop ef cient learning
+algorithms for multiple click models  which is the aim of
+this paper 
+We make the following contributions 
+  We propose stochastic click bandits    learning framework for maximizing the expected number of clicks in
+online LTR in   broad class of click models  which includes both the PBM  Richardson et al    and CM
+ Craswell et al   
+
+  We propose the  rst algorithm  BatchRank  that is guaranteed to learn the optimal solution in   diverse class of
+click models  This is of   great practical signi cance  as
+
+Online Learning to Rank in Stochastic Click Models
+
+it is often dif cult or impossible to guess the underlying
+click model in advance 
+
+  We prove   gapdependent upper bound on the regret of
+BatchRank that scales well with all quantities of interest  The key step in our analysis is   KL scaling lemma
+ Section   which should be of   broader interest 
+
+  We evaluate BatchRank on both CM and PBM queries 
+Our results show that BatchRank performs signi cantly
+better than RankedExp   Radlinski et al      an adversarial online LTR algorithm  and is more robust than
+CascadeKLUCB  Kveton et al      an optimal online LTR algorithm for the CM 
+
+We de ne                    For any sets   and    we denote by AB the set of all vectors whose entries are indexed
+by   and take values from    We use boldface letters to
+denote important random variables 
+
+  Background
+This section reviews two fundamental click models  Chuklin et al    models of how users click on an ordered
+list of   documents  The universe of all documents is represented by ground set         and we refer to the documents in   as items  The user is presented   ranked list  an
+ordered list of   documents out of    We denote this list
+by                 dK          where            is
+the set of all Ktuples with distinct elements from   and
+dk is the kth item in    We assume that the click model
+is parameterized by   itemdependent attraction probabilities           where     is the probability that item  
+is attractive  The items attract the user independently  For
+simplicity and without loss of generality  we assume that
+                The reviewed models differ in how
+the user examines items  which leads to clicks 
+
+  PositionBased Model
+The positionbased model  PBM   Richardson et al   
+is   model where the probability of clicking on an item depends on both its identity and position  Therefore  in addition to itemdependent attraction probabilities  the PBM is
+parameterized by   positiondependent examination probabilities           where     is the examination probability of position   
+The user interacts with   list of items                 dK  as
+follows  The user examines position         with probability     and then clicks on item dk at that position with
+probability  dk  Thus  the expected number of clicks on
+list   is
+
+In practice  it is often observed that                
+
+      
+
+   dk   
+
+KXk 
+
+ Chuklin et al    and we adopt this assumption in this
+work  Under this assumption  the above function is maximized by the list of   most attractive items
+
+                   
+
+ 
+
+where the kth most attractive item is placed at position   
+In this paper  we focus on the objective of maximizing the
+number of clicks  We note that the satisfaction of the user
+may not increase with the number of clicks  and that other
+objectives have been proposed in the literature  Radlinski
+et al      The shortcoming of all of these objectives is
+that none directly measure the satisfaction of the user 
+
+  Cascade Model
+In the cascade model  CM   Craswell et al    the user
+scans   list of items                 dK  from the  rst item
+   to the last dK  If item dk is attractive  the user clicks on
+it and does not examine the remaining items  If item dk is
+not attractive  the user examines item dk  The  rst item
+   is examined with probability one 
+From the de nition of the model  the probability that item
+dk is examined is equal to the probability that none of the
+ rst       items are attractive  Since each item attracts the
+user independently  this probability is
+
+        
+
+  Yi 
+
+     di   
+
+ 
+
+The expected number of clicks on list   is at most   and
+is equal to the probability of observing any click 
+
+      
+
+KXk 
+
+      dk       
+
+KYk 
+
+     dk   
+
+This function is maximized by the list of   most attractive
+items    in   though any permutation of     would be
+optimal in the CM  Note that the list    is optimal in both
+the PBM and CM 
+
+  Online Learning to Rank in Click Models
+The PBM and CM  Section   are similar in many aspects 
+First  both models are parameterized by   itemdependent
+attraction probabilities  The items attract the user independently  Second  the probability of clicking on the item is  
+product of its attraction probability  which depends on the
+identity of the item  and the examination probability of its
+position  which is independent of the identity of the item 
+Finally  the optimal solution in both models is the list of  
+most attractive items    in   where the kth most attractive item is placed at position   
+
+Online Learning to Rank in Stochastic Click Models
+
+This suggests that the optimal solution in both models can
+be learned by   single learning algorithm  which does not
+know the underlying model  We propose this algorithm in
+Section   Before we discuss it  we formalize our learning
+problem as   multiarmed bandit  Auer et al    Lai  
+Robbins   
+
+  Stochastic Click Bandit
+We refer to our learning problem as   stochastic click bandit  An instance of this problem is   tuple             
+where   is the number of positions    is the number of
+items     is   distribution over binary vectors       and
+   is   distribution over binary matrices           
+The learning agent interacts with our problem as follows 
+Let  At  Xt  
+   be          random variables drawn from
+        where At        and At    is the attraction
+indicator of item   at time    and Xt            
+and Xt       is the examination indicator of position   in
+list          at time    At time    the agent chooses  
+list Rt    dt
+           which depends on past
+observations of the agent  and then observes clicks  These
+clicks are   function of Rt  At  and Xt  Let ct       
+be the vector of click indicators on all positions at time   
+Then
+
+          dt
+
+ct      Xt Rt    At dt
+  
+
+for any         the item at position   is clicked only if
+both Xt Rt         and At dt
+The goal of the learning agent is to maximize the number
+of clicks  Therefore  the number of clicks at time   is the
+reward of the agent at time    We de ne it as
+
+      
+
+rt  
+
+KXk 
+
+ct        Rt  At  Xt   
+
+ 
+
+where                                    is
+  reward function  which we de ne for any         
+          and               as
+
+            
+
+KXk 
+
+         dk   
+
+We adopt the same independence assumptions as in Section   In particular  we assume that items attract the user
+independently 
+Assumption   For any          
+
+   At       Qd   Ber           
+where Ber    denotes the probability mass function of  
+Bernoulli distribution with mean         which we de 
+ ne as Ber                 for any        
+
+Moreover  we assume that the attraction of any item is independent of the examination of its position 
+Assumption   For any list          and position   
+
+   ct   Rt              dk   
+
+where               and             Xt       is
+the examination probability of position   in list   
+We do not make any independence assumptions among the
+entries of Xt  and on other interactions of At and Xt 
+From our independence assumptions and the de nition of
+the reward in   the expected reward of list   is
+        At  Xt   
+We evaluate the performance of   learning agent by its expected cumulative regret
+
+      dk            
+
+KXk 
+
+           TXt 
+
+  Rt  At  Xt   
+
+where   Rt  At  Xt         At  Xt      Rt  At  Xt 
+is the instantaneous regret of the agent at time   and
+
+     arg max               
+
+is the optimal list of items  the list that maximizes the expected reward  To simplify exposition  we assume that the
+optimal solution  as   set  is unique 
+
+  Position Bandit
+The learning variant of the PBM in Section   can be formulated in our setting when
+
+                Xt         Xt      
+
+ 
+at any position         Under this assumption  the probability of clicking on item dt
+
+  at time   is
+   ct   Rt       dt
+
+    
+
+where     is de ned in Section   The expected reward
+of list Rt at time   is
+
+   rt  Rt   
+
+KXk 
+
+   dt
+
+    
+
+  Cascading Bandit
+The learning variant of the CM in Section   can be formulated in our setting when
+
+Xt        
+
+  Yi 
+
+    At di 
+
+ 
+
+Online Learning to Rank in Stochastic Click Models
+
+for any list          and position         Under this
+  at time
+assumption  the probability of clicking on item dt
+  is
+
+     dt
+
+   ct   Rt     Yi 
+KXk   Yi 
+
+The expected reward of list Rt at time   is
+     dt
+
+   rt  Rt   
+
+    dt
+    dt
+
+    
+
+    
+
+  Additional Assumptions
+The above assumptions are not suf cient to guarantee that
+the optimal list    in   is learnable  Therefore  we make
+four additional assumptions  which are quite natural 
+Assumption    Orderindependent examination  For any
+lists          and            and position        
+such that dk       and             dk                    
+Xt         Xt      
+The above assumption says that the examination indicator
+Xt       only depends on the identities of            dk 
+Both the CM and PBM satisfy this assumption  which can
+be validated from   and  
+Assumption    Decreasing examination  For any list   
+      and positions                               
+The above assumption says that   lower position cannot be
+examined more than   higher position  in any list    Both
+the CM and PBM satisfy this assumption 
+Assumption    Correct examination scaling  For any list
+         and positions                let  di   
+ dj  and            be the same list as   except that
+di and dj are exchanged  Then                
+The above assumption says that the examination probability of   position cannot increase if the item at that position
+is swapped for   lessattractive higherranked item  in any
+list    Both the CM and PBM satisfy this assumption  In
+the CM  the inequality follows directly from the de nition
+of examination in   In the PBM                 
+Assumption    Optimal examination  For any list   
+      and position                        
+This assumption says that any position   is least examined
+if the  rst       items are optimal  Both the CM and PBM
+satisfy this assumption  In the CM  the inequality follows
+from the de nition of examination in   In the PBM  we
+have that                
+  Algorithm BatchRank
+The design of BatchRank  Algorithm   builds on two key
+ideas  First  we randomize the placement of items to avoid
+
+for all      do
+
+cb        nb       
+
+for                     do
+
+Algorithm   BatchRank
+    Initialization
+  for                  do
+ 
+ 
+ 
+          bmax    
+                         
+  for                 do
+for all      do
+ 
+ 
+for all      do
+ 
+ 
+for all      do
+ 
+ 
+
+CollectClicks      
+
+DisplayBatch      
+
+UpdateBatch      
+
+biases due to the click model  Second  we divide and conquer  recursively divide the batches of items into more and
+less attractive items  The result is   sorted list of   items 
+where the kth most attractive item is placed at position   
+BatchRank explores items in batches  which are indexed
+by integers         batch   is associated with the initial
+set of items Bb     and   range of positions Ib      
+where Ib  is the highest position in batch    Ib  is the
+lowest position in batch    and len      Ib    Ib     
+is number of positions in batch    The batch is explored in
+stages  which we index by integers     The remaining
+items in stage   of batch   are Bb    Bb  The lengths of
+the stages quadruple  More precisely  any item     Bb  in
+stage   is explored    times  where          
+log Tm
+
+ 
+and       The current stage of batch   is    
+Method DisplayBatch  Algorithm   explores batches as
+follows  In stage   of batch    we randomly choose len   
+least observed items in Bb  and display them at randomly
+chosen positions in Ib  If the number of these items is less
+than len    we mix them with randomly chosen more observed items  which are not explored  This exploration has
+two notable properties  First  it is uniform in the sense that
+no item in Bb  is explored more than once than any other
+item in Bb  Second  any item in Bb  appears in any list
+over Bb  with that item with the same probability  This is
+critical to avoid biases due to click models 
+Method CollectClicks  Algorithm   collects feedback 
+We denote the number of observations of item   in stage  
+of batch   by nb    and the number of clicks on that item
+by cb    At the end of the stage  all items     Bb  are
+observed exactly    times and we estimate the probability
+of clicking on item   as
+
+ cb      cb       
+
+ 
+
+Online Learning to Rank in Stochastic Click Models
+
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Algorithm   DisplayBatch
+  Input  batch index    time  
+          nmin   mind Bb  nb   
+  Let              Bb  be   random permutation of items
+  Let      len   len    be   random permutation of
+  for     Ib          Ib  do
+ 
+
+Bb  such that nb              nb   Bb 
+position assignments
+
+dt
+        Ib 
+
+Algorithm   CollectClicks
+  Input  batch index    time  
+          nmin   mind Bb  nb   
+  for     Ib          Ib  do
+     nmin then
+ 
+     cb dt
+ 
+     nb dt
+ 
+
+if nb dt
+cb dt
+nb dt
+
+     ct   
+      
+
+Method UpdateBatch  Algorithm   updates batches and
+has three main parts  First  we compute KLUCB upper and
+lower con dence bounds  Garivier   Cappe    for all
+items     Bb   lines  
+
+Ub      arg max
+Lb      arg min
+
+  cb        DKL cb               
+    cb      DKL cb               
+
+where DKL pk    denotes the KullbackLeibler divergence
+between Bernoulli random variables with means   and   
+and      log       log log     Then we test whether batch
+  can be safely divided into   more attractive items and the
+rest  lines   If it can  we split the batch into two new
+batches  lines   The  rst batch contains   items and
+is over positions Ib          Ib          and the second
+batch contains the remaining items and is over the remaining positions  The stage indices of new batches are initialized to   If the batch can be divided at multiple positions
+   we choose the highest    If the batch is not divided  we
+eliminate items that cannot be at position Ib  or higher
+with   high probability  lines  
+The set of active batches is denoted by    and we explore
+and update these batches in parallel  The highest index of
+the latest added batch is bmax  Note that bmax       because any batch with at least two items is split at   unique
+position into two batches  BatchRank is initialized with  
+single batch over all positions and items  lines  
+Note that by the design of UpdateBatch  the following invariants hold  First  the positions of active batches   are  
+partition of     at any time    Second  any batch contains
+at least as many items as is the number of the positions in
+
+Algorithm   UpdateBatch
+  Input  batch index    time  
+    Endof stage elimination
+        
+  if mind Bb  nb         then
+ 
+ 
+ 
+
+Compute Ub    and Lb   
+
+for all     Bb  do
+Let              Bb  be any permutation of items Bb 
+such that Lb              Lb   Bb 
+for               len    do
+  
+                dk 
+      Bb      
+
+ 
+
+  Find   split at the position with the highest index
+     
+for               len        do
+if Lb dk    maxd    
+     
+if        and  Bb    len    then
+Bb        Bb    Ub      Lb dlen    
+
+  Next elimination stage
+
+Ub    then
+
+else if       then
+
+bmax     bmax          
+
+           
+  Split
+    
+Ibmax     Ib  Ib         
+Bbmax      
+    bmax     
+Ibmax     Ib       Ib 
+Bbmax          bmax     
+bmax   bmax    
+
+that batch  Finally  when Ib       the number of items
+in batch   is equal to the number of its positions 
+
+  Analysis
+In this section  we state our regret bound for BatchRank 
+Before we do so  we discuss our estimator of clicks in  
+In particular  we show that   is the attraction probability
+of item   scaled by the average examination probability in
+stage   of batch    The examination scaling preserves the
+order of attraction probabilities  and therefore BatchRank
+can operate on   in place of    
+
+  Con dence Radii
+Fix batch    positions Ib  stage   and items Bb  Then for
+any item     Bb  we can write the estimator in   as
+      
+
+ct   dt
+
+Ib Xk Ib 
+
+  Xt  
+
+ cb     
+
+ 
+
+ 
+
+Online Learning to Rank in Stochastic Click Models
+
+Figure   The expected perstep regret of BatchRank  red  CascadeKLUCB  blue  and RankedExp   gray  on three problems  The
+results are averaged over   runs 
+
+for some set of    time steps   and its expected value is
+ 
+The key step in the design of BatchRank is that we maintain con dence radii around   This is sound because the
+observations in  
+
+ cb         cb     
+
+ Xt Rt    At           dt
+
+    
+
+ 
+
+at any position    are        in time  More precisely  by the
+design of DisplayBatch  all displayed items from batch  
+are chosen randomly from Bb  and independently of the
+realizations of Xt Rt     and At    which are random as
+well  The last problem is that the policy for placing items
+at positions           Ib      can change independently of
+batch   because BatchRank splits batches independently 
+But this has no effect on Xt Rt     because the examination of position   does not depend on the order of higher
+ranked items  Assumption  
+
+  Correct Examination Scaling
+Fix batch    positions Ib  stage   and items Bb  Since the
+examination of   position does not depend on the order of
+higher ranked items  and does not depend on lower ranked
+items at all  Assumption   we can express the probability
+of clicking on any item     Bb  in   as
+
+   
+
+ Sd  XR Sd
+
+Ib Xk Ib 
+
+      dk       
+
+ 
+
+ cb     
+
+where
+
+Sd             eIb       eIb          eIb    
+
+ eIb          eIb     len   Bb  
+
+is the set of all lists with permutations of Bb  on positions
+Ib that contain item    for some  xed higher ranked items
+           eIb    Bb  Let      Bb  be any item such
+that           and  cb    and Sd  be de ned analogously to  cb    and Sd above  Then we argue that
+
+ cb         cb       
+
+ 
+
+the examination scaling of   less attractive item   is never
+higher than that of   more attractive item   
+Before we prove   note that for any list        there
+exists one and only one list in Sd  that differs from   only
+in that items   and    are exchanged  Let this list be   
+We analyze three cases  First  suppose that list   does not
+contain item    Then by Assumption   the examination
+probabilities of   in   and    in    are the same  Second 
+let item    be ranked higher than item   in    Then by
+Assumption   the examination probability of   in   is not
+higher than that of    in    Third  let item    be ranked
+lower than item   in    Then by Assumption   the examination probabilities of   in   and    in    are the same 
+since they do not depend on lower ranked items  Finally 
+from the de nition in   and that  Sd     Sd  we have
+that   holds 
+
+  Regret Bound
+For simplicity of exposition  let                    
+Let  max     and              for all        
+The regret of BatchRank is bounded below 
+Theorem   For any stochastic click bandit in Section  
+that satis es Assumptions   to   and       the expected
+   step regret of BatchRank is bounded as
+
+       
+
+    
+
+     max min
+
+log      KL         
+
+where  min   mink                
+Proof  The key idea is to bound the expected    step regret
+in any batch  Lemma   in Appendix  Since the number of
+batches is at most     the regret of BatchRank is at most
+   times larger than that of in any batch 
+The regret in   batch is bounded as follows  Let all con 
+dence intervals hold  Ib be the positions of batch    and the
+maximum gap in batch   be
+
+ max   maxd Ib Ib              
+
+ teS  ersteS regretC  on Tuery  teS     on Tuery  teS     on Tuery  Online Learning to Rank in Stochastic Click Models
+
+           
+min  log     because          where
+  is de ned in Katariya et al      Note that the gapdependent term nearly matches our upper bound 
+The KL con dence intervals in BatchRank are necessary
+to achieve sample ef ciency  The reason is  as we prove in
+Lemma   in Appendix  that
+
+      DKL       DKL    
+
+for any             and     max    This implies that any two items with the expected rewards of  
+and   can be distinguished in      observations for any scaling factor   when   is bounded away
+from   Suppose that     Then the expected perstep
+regret for choosing the suboptimal item is       and
+the expected cumulative regret is        The key
+observation is that the regret is independent of   This is  
+major improvement over UCB  con dence intervals  which
+only lead to        regret  Because   can be
+exponentially small  such   dependence is undesirable 
+The elimination of items in UpdateBatch  lines   is
+necessary  The regret of BatchRank would be quadratic in
+  otherwise 
+
+  Experiments
+We experiment with the Yandex dataset  Yandex    dataset
+of   million     search sessions  each of which may contain multiple search queries  Each query is associated with
+displayed documents at positions   to   and their clicks 
+We select   frequent search queries  and learn their CMs
+and PBMs using PyClick  Chuklin et al    which is
+an opensource library of click models for web search  In
+each query  our goal it to rerank       most attractive
+items with the objective of maximizing the expected number of clicks at the  rst       positions  This resembles  
+realworld setting  where the learning agent would only be
+allowed to rerank highly attractive items  and not allowed
+to explore unattractive items  Zoghi et al   
+BatchRank is compared to two methods  CascadeKLUCB
+ Kveton et al      and RankedExp   Radlinski et al 
+    CascadeKLUCB is an optimal algorithm for learning to rank in the cascade model  RankedExp  is   variant
+of ranked bandits  Section   where the base bandit algorithm is Exp   Auer et al    This approach is popular
+in practice and does not make any independence assumptions on the attractions of items 
+Many solutions in our queries are near optimal  and therefore the optimal solutions are hard to learn  Therefore  we
+decided to evaluate the performance of algorithms by their
+expected perstep regret  in up to    steps  If   solution
+is suboptimal and does not improve over time  its expected
+perstep regret remains constant and is bounded away from
+
+Figure   The comparison of BatchRank  red  CascadeKLUCB
+ blue  and RankedExp   gray  in the CM and PBM  In the top
+plots  we report the perstep regret as   function of time     averaged over   queries and   runs per query  In the bottom plots 
+we show the distribution of the regret at        
+
+If the gap of item   in batch   is     max  its regret is
+dominated by the time that the batch splits  and we bound
+this time in Lemma   in Appendix  Otherwise  the item is
+likely to be eliminated before the split  and we bound this
+time in Lemma   in Appendix  Now take the maximum of
+these upper bounds 
+
+  Discussion
+Our upper bound in Theorem   is logarithmic in the number of steps     linear in the number of items    and polynomial in the number of positions    To the best of our
+knowledge  this is the  rst gapdependent upper bound on
+the regret of   learning algorithm that has sublinear regret
+in both the CM and PBM  The gap  min characterizes the
+hardness of sorting       most attractive items  which is
+suf cient for solving our problem  In practice  the maximum attraction probability  max is bounded away from  
+Therefore  the dependence on      max  is not critical 
+For instance  in most queries in Section    max    
+We believe that the cubic dependence on   is not far from
+being optimal  In particular  consider the problem of learning the most clicked itemposition pair in the PBM  Section   which is easier than our problem  This problem
+can be solved as   stochastic rank  bandit  Katariya et al 
+    by Rank Elim  Now consider the following PBM 
+The examination probability of the  rst position is close to
+one and the examination probabilities of all other positions
+are close to zero  Then the    step regret of Rank Elim is
+
+ teS  ersteS regretC ersteS regret at      uPber of runs teS    ersteS regret at      Online Learning to Rank in Stochastic Click Models
+
+zero  and this can be easily observed even if the gap of the
+solution is small  We expect this when CascadeKLUCB is
+applied to the PBM because CascadeKLUCB has no guarantees in this model  The reported regret is averaged over
+periods of    steps to reduce randomness 
+We report the performance of all compared algorithms on
+two CMs and one PBM in Figure   The plots are chosen
+to represent general trends in this experiment  In the CM 
+CascadeKLUCB performs very well on most queries  This
+is not surprising since CascadeKLUCB is designed for the
+CM  BatchRank often learns the optimal solution quickly
+ Figure     but sometimes this requires close to       
+steps  Figure     In the PBM  CascadeKLUCB may converge to   suboptimal solution  Then its expected perstep
+regret remains constant and even RankedExp  can learn  
+better solution over time  Figure     We also observe that
+BatchRank outperforms RankedExp  in all experiments 
+We report the average performance of all compared algorithms in both click models in Figure   These trends con 
+ rm our earlier  ndings  In the CM  CascadeKLUCB outperforms BatchRank  while in the PBM  BatchRank outperforms CascadeKLUCB at        steps  The regret of
+CascadeKLUCB in the PBM  attens and is bounded away
+from zero  This trend can be explained by the histograms
+in Figure   They show that CascadeKLUCB converges to
+suboptimal solutions  whose regret is at least   in one
+sixth of its runs  The performance of BatchRank is more
+robust and we do not observe many runs whose regret is of
+that magnitude 
+We are delighted with the performance of BatchRank  Although it is not designed to be optimal  Section   it is
+more robust than CascadeKLUCB and clearly outperforms
+RankedExp  The performance of CascadeKLUCB is unexpectedly good  Although it does not have guarantees in
+the PBM  it performs very well on many queries  We plan
+to investigate this in our future work 
+
+  Related Work
+  popular approach to online learning to rank are ranked
+bandits  Radlinski et al      Slivkins et al    The
+key idea in ranked bandits is to model each position in the
+recommended list as an individual bandit problem  which
+is then solved by   base bandit algorithm  This algorithm
+is typically adversarial  Auer et al    because the distribution of clicks on lower positions is affected by higher
+positions  We compare to ranked bandits in Section  
+Online learning to rank in click models  Craswell et al 
+  Chuklin et al    was recently studied in several
+papers  Kveton et al      Combes et al    Kveton
+et al      Katariya et al    Zong et al    Li
+et al    Lagree et al    In all of these papers  the
+
+attraction probabilities of items are estimated from clicks
+and the click model  The learning agent has no guarantees
+beyond this model 
+The problem of  nding the most clicked itemposition pair
+in the PBM  which is arguably easier than our problem of
+ nding   most clicked itemposition pairs  can be solved
+as   stochastic rank  bandit  Katariya et al        We
+discuss our relation to these works in Section  
+Our problem can be also viewed as an instance of partial
+monitoring  where the attraction indicators of items are unobserved  General partialmonitoring algorithms  Agrawal
+et al    Bartok et al    Bartok   Szepesvari   
+Bartok et al    are unsuitable for our setting because
+their computational complexity is polynomial in the number of actions  which is exponential in   
+The click model is   model of how the user interacts with
+  list of documents  Chuklin et al    and many such
+models have been proposed  Becker et al    Richardson et al    Craswell et al    Chapelle   Zhang 
+  Guo et al        Two fundamental click models
+are the CM  Craswell et al    and PBM  Richardson
+et al    These models have been traditionally studied separately  In this work  we show that learning to rank
+problems in these models can be solved by the same algorithm  under reasonable assumptions 
+
+  Conclusions
+We propose stochastic click bandits    framework for online learning to rank in   broad class of click models that
+encompasses two most fundamental click models  the cascade and positionbased models  In addition  we propose  
+computationally and sample ef cient algorithm for solving
+our problems  BatchRank  and derive an upper bound on
+its    step regret  Finally  we evaluate BatchRank on web
+search queries  Our algorithm outperforms ranked bandits
+ Radlinski et al        popular online learning to rank
+approach  and is more robust than CascadeKLUCB  Kveton et al      an existing algorithm for online learning
+to rank in the cascade model 
+The goal of this work is not to propose the optimal algorithm for our setting  but to demonstrate that online learning to rank in multiple click models is possible with theoretical guarantees  We strongly believe that the design of
+BatchRank  as well as its analysis  can be improved  For
+instance  BatchRank resets its estimators of clicks in each
+batch  which is wasteful  In addition  based on the discussion in Section   our analysis may be loose by   factor
+of    We hope that the practically relevant setting  which
+is introduced in this paper  will spawn new enthusiasm in
+the community and lead to more work in this area 
+
+Online Learning to Rank in Stochastic Click Models
+
+References
+Agichtein  Eugene  Brill  Eric  and Dumais  Susan 
+
+Improving web search ranking by incorporating user behavior information  In Proceedings of the  th Annual
+International ACM SIGIR Conference  pp     
+
+Agrawal  Rajeev  Teneketzis  Demosthenis  and Anantharam  Venkatachalam  Asymptotically ef cient adaptive allocation schemes for controlled        processes 
+Finite parameter space  IEEE Transactions on Automatic
+Control     
+
+Auer  Peter  CesaBianchi  Nicolo  Freund  Yoav  and
+Schapire  Robert  Gambling in   rigged casino  The adversarial multiarmed bandit problem 
+In Proceedings
+of the  th Annual Symposium on Foundations of Computer Science  pp     
+
+Auer  Peter  CesaBianchi  Nicolo  and Fischer  Paul 
+Finitetime analysis of the multiarmed bandit problem 
+Machine Learning     
+
+Bartok  Gabor and Szepesvari  Csaba  Partial monitoring
+with side information  In Proceedings of the  rd International Conference on Algorithmic Learning Theory 
+pp     
+
+Bartok  Gabor  Zolghadr  Navid  and Szepesvari  Csaba 
+An adaptive algorithm for  nite stochastic partial monitoring  In Proceedings of the  th International Conference on Machine Learning   
+
+Bartok  Gabor  Foster  Dean  Pal  David  Rakhlin  Alexander  and Szepesvari  Csaba  Partial monitoring   classi 
+ cation  regret bounds  and algorithms  Mathematics of
+Operations Research     
+
+Becker  Hila  Meek  Christopher 
+
+and Chickering 
+David Maxwell  Modeling contextual factors of click
+rates  In Proceedings of the  nd AAAI Conference on
+Arti cial Intelligence  pp     
+
+Chapelle  Olivier and Zhang  Ya    dynamic Bayesian network click model for web search ranking  In Proceedings of the  th International Conference on World Wide
+Web  pp     
+
+Chuklin  Aleksandr  Markov  Ilya  and de Rijke  Maarten 
+Click Models for Web Search  Morgan   Claypool Publishers   
+
+Combes  Richard  Magureanu  Stefan  Proutiere  Alexandre  and Laroche  Cyrille  Learning to rank  Regret
+lower bounds and ef cient algorithms  In Proceedings
+of the   ACM SIGMETRICS International Conference on Measurement and Modeling of Computer Systems   
+
+Craswell  Nick  Zoeter  Onno  Taylor  Michael  and Ramsey  Bill  An experimental comparison of click positionbias models 
+In Proceedings of the  st ACM International Conference on Web Search and Data Mining  pp 
+   
+
+Garivier  Aurelien and Cappe  Olivier  The KLUCB algorithm for bounded stochastic bandits and beyond  In
+Proceeding of the  th Annual Conference on Learning
+Theory  pp     
+
+Grotov  Artem  Chuklin  Aleksandr  Markov  Ilya  Stout 
+Luka  Xumara  Finde  and de Rijke  Maarten    comparative study of click models for web search  In Proceedings of the  th International Conference of the CLEF Association   
+
+Guo  Fan  Liu  Chao  Kannan  Anitha  Minka  Tom  Taylor 
+Michael  Wang  Yi Min  and Faloutsos  Christos  Click
+chain model in web search  In Proceedings of the  th
+International Conference on World Wide Web  pp   
+     
+
+Guo  Fan  Liu  Chao  and Wang  Yi Min  Ef cient multipleclick models in web search  In Proceedings of the  nd
+ACM International Conference on Web Search and Data
+Mining  pp       
+
+Hoeffding  Wassily  Probability inequalities for sums of
+bounded random variables  Journal of the American Statistical Association     
+
+Hofmann  Katja  Schuth  Anne  Whiteson  Shimon  and
+de Rijke  Maarten  Reusing historical interaction data
+for faster online learning to rank for IR  In Proceedings
+of the  th ACM International Conference on Web Search
+and Data Mining  pp     
+
+Katariya  Sumeet  Kveton  Branislav  Szepesvari  Csaba 
+and Wen  Zheng  DCM bandits  Learning to rank with
+multiple clicks  In Proceedings of the  rd International
+Conference on Machine Learning  pp     
+
+Katariya  Sumeet  Kveton  Branislav  Szepesvari  Csaba 
+Vernade  Claire  and Wen  Zheng  Bernoulli rank  bandits for click feedback  In Proceedings of the  th International Joint Conference on Arti cial Intelligence 
+   
+
+Katariya  Sumeet  Kveton  Branislav  Szepesvari  Csaba 
+Vernade  Claire  and Wen  Zheng  Stochastic rank  bandits  In Proceedings of the  th International Conference
+on Arti cial Intelligence and Statistics     
+
+Kveton  Branislav  Szepesvari  Csaba  Wen  Zheng  and
+Ashkan  Azin  Cascading bandits  Learning to rank in
+the cascade model  In Proceedings of the  nd International Conference on Machine Learning     
+
+Online Learning to Rank in Stochastic Click Models
+
+Zong  Shi  Ni  Hao  Sung  Kenny  Ke  Nan Rosemary  Wen 
+Zheng  and Kveton  Branislav  Cascading bandits for
+largescale recommendation problems  In Proceedings
+of the  nd Conference on Uncertainty in Arti cial Intelligence   
+
+Kveton  Branislav  Wen  Zheng  Ashkan  Azin  and
+Szepesvari  Csaba  Combinatorial cascading bandits  In
+Advances in Neural Information Processing Systems  
+pp       
+
+Lagree  Paul  Vernade  Claire  and Cappe  Olivier 
+Multipleplay bandits in the positionbased model 
+In
+Advances in Neural Information Processing Systems  
+pp     
+
+Lai        and Robbins  Herbert  Asymptotically ef cient
+adaptive allocation rules  Advances in Applied Mathematics     
+
+Li  Shuai  Wang  Baoxiang  Zhang  Shengyu  and Chen 
+Wei  Contextual combinatorial cascading bandits 
+In
+Proceedings of the  rd International Conference on
+Machine Learning  pp     
+
+Liu  TieYan  Learning to Rank for Information Retrieval 
+
+Springer   
+
+Radlinski  Filip  Kleinberg  Robert 
+
+and Joachims 
+Thorsten  Learning diverse rankings with multiarmed
+bandits  In Proceedings of the  th International Conference on Machine Learning  pp       
+
+Radlinski  Filip  Kurup  Madhu  and Joachims  Thorsten 
+How does clickthrough data re ect retrieval quality  In
+Proceedings of the  th ACM Conference on Information and Knowledge Management  pp       
+
+Richardson  Matthew  Dominowska  Ewa  and Ragno 
+Robert  Predicting clicks  Estimating the clickthrough
+rate for new ads  In Proceedings of the  th International
+Conference on World Wide Web  pp     
+
+Slivkins  Aleksandrs  Radlinski  Filip  and Gollapudi 
+Sreenivas  Ranked bandits in metric spaces  Learning diverse rankings over large document collections  Journal
+of Machine Learning Research     
+
+Yandex 
+
+Yandex personalized web search challenge  https www kaggle com   yandexpersonalized 
+websearch challenge   
+
+Yue  Yisong and Joachims  Thorsten 
+
+Interactively optimizing information retrieval systems as   dueling bandits
+problem  In Proceedings of the  th International Conference on Machine Learning  pp     
+
+Zoghi  Masrour  Tunys  Tomas  Li  Lihong  Jose  Damien 
+Chen  Junyan  Chin  Chun Ming  and de Rijke  Maarten 
+Clickbased hot  xes for underperforming torso queries 
+In Proceedings of the  th International ACM SIGIR
+Conference on Research and Development in Information Retrieval  pp     
+
+

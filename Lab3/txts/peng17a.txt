@@ -1,0 +1,1087 @@
+Asynchronous Distributed Variational Gaussian Process for Regression
+
+Hao Peng   Shandian Zhe   Xiao Zhang   Yuan Qi  
+
+Abstract
+
+Gaussian processes  GPs  are powerful nonparametric function estimators  However  their
+applications are largely limited by the expensive
+computational cost of the inference procedures 
+Existing stochastic or distributed synchronous
+variational inferences  although have alleviated
+this issue by scaling up GPs to millions of samples  are still far from satisfactory for realworld
+large applications  where the data sizes are often orders of magnitudes larger  say  billions  To
+solve this problem  we propose ADVGP  the  rst
+Asynchronous Distributed Variational Gaussian
+Process inference for regression  on the recent
+largescale machine learning platform  PARAMETERSERVER  ADVGP uses   novel   exible
+variational framework based on   weight space
+augmentation  and implements the highly ef 
+cient  asynchronous proximal gradient optimization  While maintaining comparable or better predictive performance  ADVGP greatly improves upon the ef ciency of the existing variational methods  With ADVGP  we effortlessly
+scale up GP regression to   realworld application with billions of samples and demonstrate
+an excellent  superior prediction accuracy to the
+popular linear models 
+
+  Introduction
+Gaussian processes  GPs   Rasmussen   Williams   
+are powerful nonparametric Bayesian models for function estimation  Without imposing any explicit parametric
+form  GPs merely induce   smoothness assumption via the
+de nition of covariance function  and hence can  exibly infer various  complicated functions from data  In addition 
+GPs are robust to noise  resist over tting and produce uncertainty estimations  However    crucial bottleneck of GP
+
+ Purdue University  West Lafayette 
+
+IN  USA  Ant FiCorrespondence to  Hao Peng
+
+nancial Service Group 
+ pengh alumni purdue edu 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+models is their expensive computational cost  exact GP inference requires      time complexity and      space
+complexity    is the number of training samples  which
+limits GPs to very small applications  say    few hundreds
+of samples 
+To mitigate this limitation  many approximate inference algorithms have been developed  Williams   Seeger   
+Seeger et al    Qui noneroCandela   Rasmussen 
+  Snelson   Ghahramani    Deisenroth   Ng 
+  Most methods use sparse approximations  Basically  we  rst introduce   small set of inducing points  and
+then we develop an approximation that transfers the expensive computations from the entire large training data  such
+as the covariance and inverse covariance matrix calculations  to the small set of the inducing points  To this end 
+  typical strategy is to impose some simpli ed modeling
+assumption  For example  FITC  Snelson   Ghahramani 
+  makes   fully conditionally independent assumption 
+Recently  Titsias   proposed   more principled  variational sparse approximation framework  where the inducing points are also treated as variational parameters  The
+variational framework is less prone to over tting and often
+yields   better inference quality  Titsias    Bauer et al 
+  Based on the variational approximation  Hensman
+et al    developed   stochastic variational inference
+ SVI  algorithm  and Gal et al    used   tight variational lower bound to develop   distributed inference algorithm with the MAPREDUCE framework 
+While SVI and the distributed variational inference have
+successfully scaled up GP models to millions of samples
+    they are still insuf cient for realworld largescale applications  in which the data sizes are often orders
+of magnitude larger  say  over billions of samples    
+Speci cally  SVI  Hensman et al    sequentially processes data samples and requires too much time to complete
+even one epoch of training  The distributed variational algorithm in  Gal et al    uses the MAPREDUCE framework and requires massive synchronizations during training  where   large amount of time is squandered when the
+MAPPERS or REDUCERS are waiting for each other  or the
+failed nodes are restarted 
+To tackle this problem  we propose Asynchronous
+Distributed Variational Gaussian Process inference  AD 
+
+Asynchronous Distributed Variational Gaussian Process for Regression
+
+       
+
+   For simplicity  we usually use
+
+where        
+the zero mean function  namely         
+Given    we use an isotropic Gaussian model to sample the
+observed noisy output                           The
+joint probability of GP regression is
+
+              cid    Knn
+ cid             
+           cid    Knn      cid 
+
+Further  we can obtain the marginal distribution of   
+namely the model evidence  by marginalizing out   
+
+ 
+
+ 
+
+VGP  which enables GP regression on applications with
+ at least  billions of samples  To the best of our knowledge 
+this is the  rst variational inference that scales up GPs to
+this level  The contributions of our work are summarized
+as follows   rst  we propose   novel  general variational
+GP framework using   weight space augmentation  Section
+  The framework allows  exible constructions of feature mappings to incorporate various lowrank structures
+and to ful ll different variational model evidence lower
+bounds  ELBOs  Furthermore  due to the simple standard normal prior of the random weights  the framework
+enables highly ef cient  asynchronous proximal gradientbased optimization  with convergence guarantees as well
+as fast  elementwise and parallelizable variational posterior updates  Second  based on the new framework  we
+develop   highly ef cient  asynchronous variational inference algorithm in the recent distributed machine learning
+platform  PARAMETERSERVER  Li et al       Section
+  The asynchronous algorithm eliminates an enormous
+amount of waiting time caused by the synchronous coordination  and fully exploits the computational power and network bandwidth  as   result  our new inference  ADVGP 
+greatly improves on both the scalability and ef ciency of
+the prior variational algorithms  while still maintaining  
+similar or better inference quality  Finally  in   realworld
+application with billions of samples  we effortlessly train
+  GP regression model with ADVGP and achieve an excellent prediction accuracy  with   improvement over
+the popular linear regression implemented in Vowpal Wabbit  Agarwal et al    the stateof theart largescale
+machine learning software widely used in industry 
+
+              cid 
+
+  Gaussian Processes Review
+In this paper  we focus on Gaussian process  GP  regression  Suppose we aim to infer an underlying function
+    Rd     from an observed dataset            where
+   cid  is the input matrix and   is the output
+       cid 
+vector  Each row of    namely xi            is   ddimensional input vector  Correspondingly  each element
+of    namely yi  is an observed function value corrupted by
+some random noise  Note that the function   can be highly
+nonlinear  To estimate   from    we place   GP prior over
+   Speci cally  we treat the collection of all the function
+values as one realization of the Gaussian process  Therefore  the  nite projection of   over the inputs            
+                  xn  follows   multivariate Gaussian distriare the mean function values and Knn is the       covariance matrix  Each element of Knn is   covariance function    of two input vectors        Knn         xi  xj 
+We can choose any symmetric positive semide nite kernel as the covariance function      
+the ARD kernel 
+  xi  xj      
+
+ cid  where                           xn 
+
+   xi   xj cid diag xi   xj cid 
+
+bution        cid       Knn
+
+  exp cid   
+
+The inference of GP regression aims to estimate the appropriate kernel parameters and noise variance from the training data            such as       in ARD kernel and
+  To this end  we can maximize the model evidence in
+  with respect to those parameters  However  to maximize
+  we need to calculate the inverse and the determinant of
+the       matrix Knn      to evaluate the multivariate
+Gaussian term  This will take      time complexity and
+     space complexity and hence is infeasible for   large
+number of samples       large   
+For prediction  given   test input    since the test output   
+and training output   can be treated as another GP projection on   and    the joint distribution of    and   is also  
+multivariate Gaussian distribution  Then by marginalizing
+out    we can obtain the posterior distribution of   
+
+                       
+
+ 
+
+where
+
+  Knn        
+
+      cid 
+                cid 
+
+ 
+ 
+and kn                          xn cid  Note that the calculation also requires the inverse of Knn      and hence
+takes      time complexity and      space complexity 
+
+  Knn      kn 
+
+  Variational Framework Using Weight
+
+Space Augmentation
+
+Although GPs allow  exible function inference  they have
+  severe computational bottleneck  The training and prediction both require      time complexity and      space
+complexity  see     and   making GPs unrealistic
+for realworld  largescale applications  where the number
+of samples          are often billions or even larger  To
+address this problem  we propose ADVGP that performs
+highly ef cient  asynchronous distributed variational inference and enables the training of GP regression on extremely large data  ADVGP is based on   novel variational
+GP framework using   weight space augmentation  which
+is discussed below 
+
+Asynchronous Distributed Variational Gaussian Process for Regression
+
+the variational lower bound of the log model evidence 
+
+First  we construct an equivalent augmented model by introducing an       auxiliary random weight vector  
+    cid     We assume   is sampled from the standard
+normal prior distribution                  Given   
+we sample an       latent function values   from
+
+                 Knn    cid 
+
+ 
+
+where   is an       matrix                   xn cid 
+Here   represents   feature mapping that maps the original ddimensional input into an mdimensional feature
+space  Note that we need to choose an appropriate  
+to ensure the covariance matrix in   is symmetric positive semide nite  Flexible constructions of   enable us
+to ful ll different variational model evidence lower bounds
+ ELBO  for largescale inference  which we will discuss
+more in Section  
+Given    we sample the observed output   from the
+isotropic Gaussian model                        The
+joint distribution of our augmented model is then given by
+
+             
+                 Knn    cid               
+
+This model is equivalent to the original GP regression 
+when we marginalize out    we recover the joint distribution in   we can further marginalize out   to recover the
+model evidence in   Note that our model is distinct from
+the traditional weight space view of GP regression  Rasmussen   Williams    the feature mapping   is not
+equivalent to the underlying  nonlinear  feature mapping
+induced by the covariance function  see more discussions
+in Section   Instead    is de ned for computational
+purpose only that is  to construct   tractable variational
+evidence lower bound  ELBO  shown as follows 
+Now  we derive the tractable ELBO based on the weight
+space augmented model in   The derivation is similar
+to  Titsias    Hensman et al    Speci cally  we
+ rst consider the conditional distribution        Because
+where  cid cid    denotes the expectation under the distribution    we can use Jensen   inequality to obtain   lower
+bound 
+
+log          log cid               df   log cid        cid       
+
+log          log cid        cid           cid log        cid       
+
+log    yi cid xi         
+ 
+
+ kii 
+
+ 
+
+  cid 
+
+  
+
+ 
+
+where  kii is the ith diagonal element of Knn    cid 
+Next  we introduce   variational posterior      to construct
+
+ cid            
+
+ cid 
+
+    
+
+    
+
+log        log
+
+   cid log       cid        KL     cid     
+
+ 
+where KL cid  is the Kullback Leibler divergence  Replacing log        in   by the right side of   we obtain
+the following lower bound 
+
+  cid 
+
+log             KL      cid     
+
+ cid log    yi cid xi     cid 
+
+ 
+
+  
+
+        
+
+ 
+
+ kii 
+
+ 
+
+Note that this is   variational lower bound  the equality is
+obtained when      Knn and               To
+achieve equality  we need to set       and have  
+map the ddimensional input into an ndimensional feature
+space  In order to reduce the computational cost  however 
+we can restrict   to be very small and choose any family
+of mappings   that satisfy Knn    cid   cid    The  exible choices of   allows us to explore different approximations in   uni ed variational framework  For example 
+in our practice  we introduce an       inducing matrix
+                zm cid  and de ne
+
+    
+
+        cid km   
+
+ 
+where km                            zm cid  and   is
+the lower triangular Cholesky factorization of the inverse
+kernel matrix over   
+ Kmm         zi  zj  and
+It can be easily veri ed that  cid   
+mm   LL cid 
+  
+mmK cid 
+KnmK 
+nm  where Knm is the cross kernel matrix
+between   and          Knm ij     xi  zj  Therefore
+Knn     is always positive semide nite  because it can
+be viewed as   Schur complement of Knn in the block ma 
+  We discuss other choices of   in
+trix
+Section  
+
+ cid  Kmm   cid 
+
+nm
+Knm Knn
+
+ cid 
+
+  Delayed Proximal Gradient Optimization
+
+for ADVGP
+
+  major advantage of our variational GP framework is the
+capacity of using the asynchronous  delayed proximal gradient optimization supported by PARAMETERSERVER  Li
+et al      with convergence guarantees and scalability to huge data  PARAMETERSERVER is   wellknown 
+general platform for asynchronous machine learning algorithms for extremely large applications  It has   bipartite architecture where the computing nodes are partitioned into
+two classes  server nodes store the model parameters and
+worker nodes the data  PARAMETERSERVER assumes the
+learning procedure minimizes   nonconvex loss function
+
+ cid  
+
+  
+
+with the following composite form 
+
+    
+
+Gk      
+
+ 
+
+where   are the model parameters  Here Gk  is    possibly nonconvex  function associated with the data in worker
+  and therefore can be calculated by worker   independently     is   convex function with respect to  
+To ef ciently minimize the loss function in   PARAMETERSERVER uses   delayed proximal gradient updating
+method to perform asynchronous optimization  To illustrate it  let us  rst review the standard proximal gradient descent  Speci cally  for each iteration    we  rst take   gradi 
+ cid 
+  Gk  and then perform
+  proximal operation to project   toward the minimum
+of               Prox          
+   Gk   
+where    is the step size  The proximal operation is de ned
+as
+
+ent descent step according to cid 
+
+Prox      argmin
+
+ 
+
+    
+
+ cid     cid 
+ 
+
+ 
+  
+
+ 
+
+The standard proximal gradient descent guarantees to  nd
+  local minimum solution  However  the computation is
+inef cient  even in parallel 
+in each iteration  the server
+nodes wait until the worker nodes  nish calculating each
+ Gk    then the workers wait for the servers to  nish
+the proximal operation  This synchronization wastes much
+time and computational resources  To address this issue 
+PARAMETERSERVER uses   delayed proximal gradient updating approach to implement asynchronous computation 
+Speci cally  we set   delay limit       At any iteration    the servers do not enforce all the workers to  nish iteration    instead  as long as each worker has  nished an iteration no earlier than       the servers will
+ cid 
+proceed to perform the proximal updates            
+Prox      
+   Gk tk        tk      and notify all the workers with the new parameters     Once
+received the updated parameters  the workers compute and
+push the local gradient to the servers immediately  Obviously  this delay mechanism can effectively reduce the wait
+between the server and worker nodes  By setting different   we can adjust the degree of the asynchronous computation  when       we have no asynchronization and
+return to the standard  synchronous proximal gradient descent  when       we are totally asynchronous and there
+is no wait at all 
+  highlight is that given the composite form of the nonconvex loss function in   the above asynchronous delayed proximal gradient descent guarantees to converge according to Theorem  
+Theorem    Li et al    Assume the gradient of the
+function Gk is Lipschitz continuous  that is  there is   constant Ck such that  cid Gk     Gk cid cid    Ck     cid 
+
+ gi
+ 
+ gi
+  
+
+Asynchronous Distributed Variational Gaussian Process for Regression
+
+for any    cid  and            De ne      cid  
+
+   Ck 
+Also  assume we allow   maximum delay for the updates by
+  and   signi cantlymodi ed  lter on pulling the parameters with threshold      For any       the delayed
+proximal gradient descent converges to   stationary point
+if the learning rate    satis es                  
+Now  let us return to our variational GP framework   
+major bene   of our framework is that the negative variational evidence lower bound  ELBO  for GP regression has
+the same composite form as   Thereby we can apply
+the asynchronous proximal gradient descent for GP inference on PARAMETERSERVER  Speci cally  we explicitly
+assume                and obtain the negative variational ELBO  see  
+    
+
+ cid  
+
+ 
+
+gi    
+
+  
+
+where
+gi     log    yi cid xi     
+
+ cid xi xi 
+
+ 
+ 
+
+ 
+
+ 
+ 
+
+ kii 
+
+ cid  ln        tr     cid cid   
+
+   
+
+ 
+ 
+
+ 
+
+Instead of directly updating   we consider    the upper
+triangular Cholesky factor of              cid    This not
+only simpli es the proximal operation but also ensures the
+positive de niteness of   during computation  The partial
+derivatives of gi with respect to   and   are
+
+   cid yi xi     xi cid xi cid   
+
+ 
+
+   triu   xi cid xi 
+
+ 
+where triu  denotes the operator that keeps the upper triangular part of   matrix but leaves any other element zero It
+can be veri ed that the partial derivatives of gi with respect
+to   and   are Lipschitz continuous and   is also convex
+with respect to   and    According to Theorem   minimizing          maximizing    with respect to the variational parameters    and    using the asynchronous proximal gradient method can guarantee convergence  For other
+parameters  such as kernel parameters and inducing points 
+  is simply   constant  As   result  the delayed proximal
+updates for these parameters reduce to the delayed gradient
+descent optimization such as in  Agarwal   Duchi   
+We now present the details of ADVGP implementation on
+PARAMETERSERVER  We  rst partition the data for  
+workers and allocate the model parameters  such as the kernel parameters  the parameters of      and the inducing
+points    to server nodes  At any iteration    the server
+nodes aggregate all the local gradients and perform the
+
+Asynchronous Distributed Variational Gaussian Process for Regression
+
+  Dk
+
+   tk 
+
+     cid 
+
+proximal operation in   as long as each worker   has
+computed and pushed the local gradient on its own data
+subset Dk for some prior iteration tk          tk     
+   tk 
+  Note that the proximal operation is only performed for the parameters of      namely
+  and    since   is constant for the other model parameters  such as the kernel parameters and the inducing points 
+their gradient descent updates remain unchanged  Minimizing   by setting the derivatives to zero  we obtain the
+proximal updates for each element in   and   
+
+ 
+
+       
+
+       
+
+ cid 
+
+ 
+
+  
+
+ cid   
+ii
+       
+
+            
+
+ 
+ 
+
+ 
+
+ 
+
+ cid   
+   
+ 
+ cid   
+ij
+ cid   
+ii
+
+   
+
+ 
+
+ 
+
+   
+ 
+     
+
+ij
+
+     
+
+ii
+
+where
+
+ cid   
+ 
+ 
+
+     
+
+      
+
+ cid   
+ij
+
+ 
+
+       
+
+ij     
+
+ cid  
+ cid  
+
+  
+
+  
+
+ 
+
+ 
+
+   tk 
+ tk 
+   tk 
+    tk 
+
+ 
+
+ij
+
+ 
+
+ 
+
+The proximal operation comprises of elementwise  closedform computations  therefore making the updates of the
+variational posterior      highly parallelizable and ef 
+cient  The gradient calculation for the other parameters 
+including the kernel parameters and inducing points  although quite complicated  is pretty standard and we give
+the details in the supplementary material  Appendix    Finally  ADVGP is summarized in Algorithm  
+
+on data Dk 
+
+version  or iteration  tk 
+
+Algorithm   Delayed Proximal Gradient for ADVGP
+Worker   at iteration tk
+  Block until servers have new parameters ready 
+  Pull the parameters from servers and update the current
+  Compute the gradient    tk 
+  Push the gradient    tk 
+Servers at iteration  
+  if Each worker   completes iteration tk         then
+ 
+ 
+ 
+ 
+
+Aggregate gradients to obtain        cid   tk 
+
+Update   and   using     and  
+Update the other parameters using gradient descent 
+Notify all blocked workers of the new parameters
+and the version            
+Proceed to iteration      
+
+ 
+to servers 
+
+ 
+
+ 
+
+ 
+
+ 
+  end if
+
+  Discussion and Related Work
+Exact GP inference requires computing the full covariance matrix  and its inverse  and therefore is infeasible
+for large data  To reduce the computational cost  many
+sparse GP inference methods use   lowrank structure to
+approximate the full covariance  For example  Williams
+  Seeger   Peng   Qi   used the Nystr om approximation  Bishop   Tipping   used relevance vectors  constructed from covariance functions evaluated on  
+small subset of the training data    popular family of sparse
+GPs introduced   small set of inducing inputs and targets 
+viewed as statistical summary of the data  and de ne an approximate model by imposing some conditional independence between latent functions given the inducing targets 
+the inference of the inexact model is thereby much easier 
+Qui noneroCandela   Rasmussen   provided   uni 
+ ed view of those methods  such as SoR  Smola   Bartlett 
+  DTC  Seeger et al    PITC  Schwaighofer  
+Tresp    and FITC  Snelson   Ghahramani   
+Despite the success of those methods  their inference procedures often exhibit undesirable behaviors  such as underestimation of the noise and clumped inducing inputs  Bauer
+et al    To obtain   more favorable approximation 
+Titsias   proposed   variational sparse GP framework 
+where the approximate posteriors and the inducing inputs
+are both treated as variational parameters and estimated by
+maximizing   variational lower bound of the true model
+evidence  The variational framework is less prone to over 
+ tting and often yields   better inference quality  Titsias 
+  Bauer et al    Based on Titsias    work 
+Hensman et al    developed   stochastic variational inference for GP  SVIGP  by parameterizing the variational
+distributions explicitly  Gal et al    reparameterized
+the bound of Titsias   and developed   distributed optimization algorithm with MAPREDUCE framework  Further  Dai et al    developed   GPU acceleration using
+the similar formulation  and Matthews et al    developed GP ow library    TensorFlow implementation that exploit GPU hardwares 
+To further enable GPs on realworld  extremely large applications  we proposed   new variational GP framework using   weight space augmentation  The proposed augmented
+model  introducing an extra random weight vector   with
+standard normal prior  is distinct from the traditional GP
+weight space view  Rasmussen   Williams    and the
+recentering tricks used in GP MCMC inferences  Murray  
+Adams    Filippone et al    Hensman et al   
+In the conventional GP weight space view  the weight vector is used to combine the nonlinear feature mapping induced by the covariance function and therefore can be in 
+nite dimensional  in the recentering tricks  the weight vector is used to reparameterize the latent function values  to
+
+Asynchronous Distributed Variational Gaussian Process for Regression
+
+dispose of the dependencies on the hyperparameters  and
+to improve the mixing rate  In our framework  however  the
+weight vector   has    xed  much smaller dimension than
+the number of samples     cid     and is used to introduce
+an extra feature mapping       plays the key role
+to construct   tractable variational model evidence lower
+bound  ELBO  for large scale GP inference 
+The advantages of our framework are mainly twofold 
+First  by using the feature mapping   we are  exible
+to incorporate various low rank structures  and meanwhile
+still cast them into   principled variational inference framework  For example  in addition to   we can de ne
+
+   cid km   
+
+      diag 
+
+ 
+where   are   are eigenvectors and eigenvalues of Kmm 
+Then   is actually   scaled Nystr om approximation for
+eigenfunctions of the kernel used in GP regression  This
+actually ful lls   variational version of the EigenGP approximation  Peng   Qi    Further  we can extend
+  by combining   Nystr om approximations  Suppose
+we have   groups of inducing inputs             Zq  where
+each Zl consists of ml inducing inputs  Then the feature
+mapping can be de ned by
+
+  cid 
+
+     
+
+  diag   
+
+   cid 
+
+  kml    
+
+ 
+
+  
+
+where    and Ql are the eigenvalues and eigenvectors of
+the covariance matrix for Zl  This leads to   variational
+sparse GP based on the ensemble Nystr om approximation  Kumar et al    It can be trivially veri ed that
+both   and   satis ed Knn    cid   cid    in  
+In addition  we can also relate ADVGP to GP models with
+prede ned feature mappings  for instance  Relevance Vector Machines  RVMs   Bishop   Tipping    by setting
+      diag km    where   is an       vector 
+Note that to ensure Knn cid   cid    we have to add some
+constraint over the range of each    in  
+The second major advantage of ADVGP is that our variational ELBO is consistent with the composite nonconvex
+loss form favored by PARAMETERSERVER  therefore we
+can utilize the highly ef cient  distributed asynchronous
+proximal gradient descent in PARAMETERSERVER to scale
+up GPs to extremely large applications  see Section  
+Furthermore 
+the simple elementwise and closedform
+proximal operation enables exceedingly ef cient and parallelizable variational posterior update on the server side 
+
+  Experiments
+  Predictive Performance
+
+First  we evaluated the inference quality of ADVGP in
+terms of predictive performance  To this end  we used the
+
+US Flight data   Hensman et al    which recorded the
+arrival and departure time of the USA commercial  ights
+between January and April in   We performed two
+groups of tests  in the  rst group  we randomly chose   
+samples for training  in the second group  we randomly selected    training samples  Both groups used    samples for testing  We ensured that the training and testing
+data are nonoverlapping 
+We compared ADVGP with two existing scalable variational inference algorithms  SVIGP  Hensman et al   
+and DistGP  Gal et al    SVIGP employs an online
+training  and DistGP performs   distributed synchronous
+variational inference  We ran all the methods on   computer node with   CPU cores and   GB memory  While
+SVIGP uses   single CPU core  DistGP and ADVGP use
+all the CPU cores to perform parallel inference  We used
+ARD kernel for all the methods  with the same initialization of the kernel parameters  For SVIGP  we set the minibatch size to   consistent with  Hensman et al   
+For DistGP  we tested two optimization frameworks 
+local gradient descent  DistGPGD  and LBFGS  DistGPLBFGS  For ADVGP  we initialized              and
+used ADADELTA  Zeiler    to adjust the step size for
+the gradient descent before the proximal operation  To
+choose an appropriate delay   we sampled another set of
+training and test data  based on which we tuned   from
+            These tunning datasets do not overlap the test data in the evaluation  Note that when      
+the computation is totally synchronous  larger   results in
+more asynchronous computation  We chose       as it
+produced the best performance on the tunning datasets 
+Table   and Table   report the root mean square errors  RMSEs  of all the methods using different numbers of inducing
+points                 As we can see  ADVGP
+exhibits better or comparable prediction accuracy in all the
+cases  Therefore  while using asynchronous computation 
+ADVGP maintains the same robustness and quality for inference  Furthermore  we examined the prediction accuracy of each method along with the training time  under
+the settings         Figure   shows that during
+the same time span  ADVGP achieves the highest performance boost       RMSE is reduced faster than the competing methods  which demonstrates the ef ciency of ADVGP  It is interesting to see that in   short period of time
+since the beginning  SVIGP reduces RMSE as fast as ADVGP  however  after that  RMSE of SVIGP is constantly
+larger than ADVGP  exhibiting an inferior performance  In
+addition  DistGPLBFGS converges earlier than both ADVGP and SVIGP  However  RMSE of DistGPLBFGS is
+larger than both ADVGP and SVIGP at convergence  This
+implies that the LBFGS optimization converged to   sub 
+
+ http statcomputing org dataexpo 
+
+Asynchronous Distributed Variational Gaussian Process for Regression
+
+                 
+
+                 
+
+                 
+
+                 
+
+Figure   Root mean square errors  RMSEs  for US  ight data as   function of training time 
+
+optimal solution 
+
+Table   Root mean square errors  RMSEs  for      US
+Flight data 
+
+Method
+Prox GP
+
+GD Dist GP
+LBFG Dist GP
+
+SVIGP
+
+                 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+Table   RMSEs for      US Flight data 
+
+Method
+Prox GP
+
+GD Dist GP
+LBFG Dist GP
+
+SVIGP
+
+                 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+In our experiment 
+
+We also studied how the delay limit   affects the performance of ADVGP  Practically  when many machines are
+used  some worker may always be slower than the others due to environmental factors       unbalanced workloads  To simulate this scenario  we intentionally introduced   latency by assigning each worker   random sleep
+time of     or   seconds at initialization  hence  
+worker would pause for its given sleep time before each
+iteration 
+the average periteration
+running time was only   seconds  so the fastest
+worker could be hundreds of iterations ahead of the slowest one in the asynchronous setting  We examined    
+              and plotted RMSEs as   function of
+time in Figure   Since RMSE of the synchronous case
+      is much larger than the others  we do not show it
+in the  gure  When   is larger  ADVGP   performance is
+more  uctuating  Increasing   we  rst improved the prediction accuracy due to more ef cient CPU usage  however 
+later we observed   decline caused by the excessive asynchronization that impaired the optimization  Therefore  to
+use ADVGP for workers at various paces  we need to carefully choose the appropriate delay limit  
+
+Figure   Root mean square errors  RMSEs  as   function of time
+for different delay limits  
+
+  Scalability
+
+Next  we examined the scalability of our asynchronous
+inference method  ADVGP  To this end  we used the
+     dataset and compared with the synchronous
+inference algorithm DistGP  Gal et al    For   fair
+comparison  we used the local gradient descent version of
+DistGP       DistGPGD  We conducted two experiments
+on     xlarge instances of Amazon EC  cloud  where
+we set the number of inducing points      
+In the
+ rst experiment  we  xed the size of the training data  and
+increased the number of CPU cores from   to   We
+examined the periteration running time of both ADVGP
+and DistGPGD  Figure     shows that while both decreasing with more CPU cores  the periteration running
+time of ADVGP is much less than that of DistGPGD  This
+demonstrates the advantage of ADVGP in computational
+ef ciency 
+In addition  the periteration running time of
+ADVGP decays much more quickly than that of DistGPGD as the number of cores approaches   This implies
+that even the communication cost becomes dominant  the
+asynchronous mechanism of ADVGP still effectively reduces the latency and maintains   high usage of the computational power  In the second experiment  we simultaneously increased the number of cores and the size of training data  We started from    samples and   cores
+
+ Time    RMSE  ADVGPDistGP GDDistGP LBFGSSVIGP Time    RMSE  ADVGPDistGP GDDistGP LBFGSSVIGP    Time    RMSE  ADVGPDistGP GDDistGP LBFGSSVIGP    Time    RMSE  ADVGPDistGP GDDistGP LBFGSSVIGP Time    RMSE               Asynchronous Distributed Variational Gaussian Process for Regression
+
+and gradually increased them to    samples and  
+cores  As shown in Figure     the average periteration
+time of DistGPGD grows linearly  in contrast  the average periteration time of ADVGP stays almost constant 
+We speculate that without synchronous coordination  ADVGP can fully utilize the network bandwidth so that the
+increased amount of messages  along with the growth of
+the data size  affect little the network communication ef 
+ciency  This demonstrates the advantage of asynchronous
+inference from another perspective 
+
+processes  The delay limit   was selected as   We used
+Vowpal Wabbit to train   linear regression model  with default settings  We also took the average traveling time over
+the training data to obtain   simple mean prediction  In Figure     we report RMSEs of the linear regression and the
+mean prediction  as well as the GP regression along with
+running time  As we can see  ADVGP greatly outperforms
+the competing methods  Only after   minutes  ADVGP
+has improved RMSEs of the linear regression and the mean
+prediction by   and   respectively  the improvements
+continued for about   minutes  Finally  ADVGP reduced
+the RMSEs of the linear regression and the mean prediction
+by   and   respectively  The RMSEs are  ADVGP 
+  linear regression    meanprediction   
+
+   
+
+   
+
+    PerFigure   Scalability tests on    US  ight data 
+iteration time as   function of available cores in logscale     
+Periteration time when scaling the computational resources proportionally to dataset size 
+
+  NYC Taxi Traveling Time Prediction
+
+Finally  we applied ADVGP for an extremely large problem  the prediction of the taxi traveling time in New York
+city  We used the New York city yellow taxi trip dataset
+  which consist of   billions of trip records from January   to December   We excluded the trips that
+are outside the NYC area or more than   hours  The average traveling time is   seconds and the standard derivation is   seconds  To predict the traveling time  we used
+the following   features  time of the day  day of the week 
+day of the month  month  pickup latitude  pickup longitude  dropoff latitude  dropoff longitude  and travel distance  We used Amazon EC  cloud  and ran ADVGP on
+multiple Amazon   xlarge instances  each with   vCPUs and   GB memory  We compared with the linear
+regression model implemented in Vowpal Wabbit  Agarwal
+et al    Vowpal Wabbit is   stateof theart large scale
+machine learning software package and has been used in
+many industrialscale applications  such as clickthrough 
+rate prediction  Chapelle et al   
+We  rst randomly selected    training samples and
+   test samples  We set       and initialized the
+inducing points as the the Kmeans cluster centers from  
+subset of    training samples  We trained   GP regression
+model with ADVGP  using   Amazon instances with  
+
+ http www nyc gov html tlc html about 
+
+trip record data shtml
+
+       training samples
+
+       training samples
+
+Figure   RMSE as   function of training time on NYC Taxi Data 
+
+To further verify the advantage of GP regression in extremely large applications  we used    training and   
+testing samples  We used   inducing points  initialized
+by the Kmeans cluster centers from      training subset 
+We ran ADVGP using   Amazon instances with   processes and chose       As shown in Figure     the
+RMSE of GP regression outperforms the linear models by  
+large margin  After   minutes  ADVGP has improved the
+RMSEs of the linear regression and the mean prediction by
+  and   respectively  the improvement kept growing
+for about   hours  At the convergence  ADVGP outperforms the linear regression and the mean prediction by  
+and   respectively  The RMSEs are  ADVGP   
+linear regression    meanprediction    In addition  the average periteration time of ADVGP is only  
+seconds  These results con rm the power of the nonlinear
+regression in extremely large realworld scenarios  comparing with linear models  while the latter are much easier to
+be scaled up and hence more popular 
+  Conclusion
+We have presented ADVGP  an asynchronous  distributed
+variational inference algorithm for GP regression  which
+enables realworld extremely large applications  ADVGP
+is based on   novel variational GP framework  which allows
+ exible construction of low rank approximations and can
+relate to many sparse GP models 
+
+Number of cores Time per iteration    ADVGPDistGPGDNumber of coresDataset size Time per iteration    ADVGPDistGPGD Time    RMSE  ADVGPMeanVowpal Wabbit Time    RMSE  ADVGPMeanVowpal WabbitAsynchronous Distributed Variational Gaussian Process for Regression
+
+References
+Agarwal  Alekh and Duchi  John    Distributed delayed
+stochastic optimization  In Advances in Neural Information Processing Systems   pp    Curran Associates  Inc   
+
+Agarwal  Alekh  Chapelle  Oliveier  Dud    Miroslav  and
+Langford  John    reliable effective terascale linear
+learning system  Journal of Machine Learning Research 
+   
+
+Bauer  Matthias  van der Wilk  Mark  and Rasmussen 
+Carl Edward  Understanding probabilistic sparse Gaussian process approximations  In Advances in Neural Information Processing Systems   pp     
+
+Bishop  Christopher    and Tipping  Michael    Variational relevance vector machines  In Proceedings of the
+ th Conference in Uncertainty in Arti cial Intelligence
+ UAI   
+
+Chapelle  Olivier  Manavoglu  Eren  and Rosales  Romer 
+Simple and scalable response prediction for display advertising  ACM Transactions on Intelligent Systems and
+Technology  TIST    December  
+ISSN  
+
+Dai  Zhenwen  Damianou  Andreas  Hensman  James  and
+Lawrence  Neil    Gaussian process models with parallelization and GPU acceleration  In NIPS Workshop on
+Software Engineering for Machine Learning   
+
+Deisenroth  Marc and Ng  Jun    Distributed Gaussian
+In Proceedings of the  nd International
+processes 
+Conference on Machine Learning  pp     
+
+Filippone  Maurizio  Zhong  Mingjun  and Girolami  Mark 
+  comparative evaluation of stochasticbased inference
+methods for gaussian process models  Machine Learning     
+
+Gal  Yarin  van der Wilk  Mark  and Rasmussen  Carl  Distributed variational inference in sparse Gaussian process
+In Advances in
+regression and latent variable models 
+Neural Information Processing Systems   pp   
+   
+
+Hensman  James  Fusi  Nicolo  and Lawrence  Neil   
+In Proceedings of
+Gaussian processes for big data 
+the Conference on Uncertainty in Arti cial Intelligence
+ UAI   
+
+Hensman  James  Matthews  Alexander    Filippone  Maurizio  and Ghahramani  Zoubin  Mcmc for variationally
+sparse gaussian processes  In Advances in Neural Information Processing Systems  pp     
+
+Kumar  Sanjiv  Mohri  Mehryar  and Talwalkar  Ameet 
+Ensemble Nystr om method  In Bengio     Schuurmans 
+   Lafferty        Williams           and Culotta    
+ eds  Advances in Neural Information Processing Systems   pp    Curran Associates  Inc   
+
+Li  Mu  Andersen  David    and Smola  Alexander    DisIn NIPS
+tributed delayed proximal gradient methods 
+Workshop on Optimization for Machine Learning   
+
+Li  Mu  Andersen  David    Park  Jun Woo  Smola 
+Alexander    Ahmed  Amr  Josifovski  Vanja  Long 
+James  Shekita  Eugene    and Su  BorYiing  Scaling distributed machine learning with the parameter
+server  In  th USENIX Symposium on Operating Systems Design and Implementation  OSDI   pp   
+     
+
+Li  Mu  Andersen  David    Smola  Alexander  and Yu 
+Kai  Communication ef cient distributed machine learnIn Neural Information
+ing with the parameter server 
+Processing Systems      
+
+Matthews  Alexander   de    van der Wilk  Mark  Nickson  Tom  Fujii  Keisuke  Boukouvalas  Alexis  Le onVillagr    Pablo  Ghahramani  Zoubin  and Hensman 
+James  GP ow    Gaussian process library using TenJournal of Machine Learning Research   
+sorFlow 
+   
+
+Murray  Iain and Adams  Ryan    Slice sampling covariance hyperparameters of latent gaussian models  In Advances in Neural Information Processing Systems   pp 
+   
+
+Peng  Hao and Qi  Yuan  EigenGP  Sparse Gaussian process models with adaptive eigenfunctions  In Proceedings of the  th International Joint Conference on Arti 
+ cial Intelligence  pp     
+
+Qui noneroCandela  Joaquin and Rasmussen  Carl Edward    unifying view of sparse approximate Gaussian
+process regression  The Journal of Machine Learning
+Research     
+
+Rasmussen  Carl    and Williams  Christopher       Gaussian Processes for Machine Learning  The MIT Press 
+ 
+
+Schwaighofer  Anton and Tresp  Volker  Transductive and
+inductive methods for approximate Gaussian process regression  In Advances in Neural Information Processing
+Systems   pp    MIT Press   
+
+Seeger  Matthias  Williams  Christopher  and Lawrence 
+Neil  Fast forward selection to speed up sparse Gaussian
+process regression  In Proceedings of the Ninth International Workshop on Arti cial Intelligence and Statistics 
+ 
+
+Asynchronous Distributed Variational Gaussian Process for Regression
+
+Smola  Alexander    and Bartlett  Peter    Sparse greedy
+Gaussian process regression  In Advances in Neural Information Processing Systems   MIT Press   
+
+Snelson  Edward and Ghahramani  Zoubin  Sparse GausIn Advances in
+sian processes using pseudoinputs 
+Neural Information Processing Systems  pp   
+ 
+
+Titsias  Michalis    Variational learning of inducing variIn Proceedings of
+ables in sparse Gaussian processes 
+the Twelfth International Conference on Arti cial Intelligence and Statistics  pp     
+
+Williams  Christopher and Seeger  Matthias  Using the
+In AdNystr om method to speed up kernel machines 
+vances in Neural Information Processing Systems   pp 
+   
+
+Zeiler  Matthew    ADADELTA  an adaptive learning rate
+
+method  arXiv   
+
+

@@ -1,0 +1,1024 @@
+Active Learning for Accurate Estimation of Linear Models
+
+Carlos Riquelme   Mohammad Ghavamzadeh   Alessandro Lazaric  
+
+Abstract
+
+We explore the sequential decisionmaking problem where the goal is to estimate   number of linear models uniformly well  given   shared budget
+of random contexts independently sampled from
+  known distribution  For each incoming context 
+the decisionmaker selects one of the linear models and receives an observation that is corrupted
+by the unknown noise level of that model  We
+present TraceUCB  an adaptive allocation algorithm that learns the models  noise levels while
+balancing contexts accordingly across them  and
+prove bounds for its simple regret in both expectation and highprobability  We extend the algorithm and its bounds to the high dimensional setting  where the number of linear models times
+the dimension of the contexts is more than the
+total budget of samples  Simulations with real
+data suggest that TraceUCB is remarkably robust  outperforming   number of baselines even
+when its assumptions are violated 
+
+  Introduction
+We study the problem faced by   decisionmaker whose
+goal is to estimate   number of regression problems equally
+well       with   small prediction error for each of them 
+and has to adaptively allocate   limited budget of samples
+to the problems in order to gather information and improve
+its estimates  Two aspects of the problem formulation are
+key and drive the algorithm design    The observations
+  collected from each regression problem depend on side
+information       contexts     Rd  and we model the relationship between   and   in each problem   as   linear
+function with unknown parameters      Rd  and   The
+ hardness  of learning each parameter    is unknown in advance and may vary across the problems  In particular  we
+
+ Stanford University  Stanford  CA  USA   DeepMind  Mountain View  CA  USA  The work was done when the author was
+with Adobe Research   Inria Lille  France  Correspondence to 
+Carlos Riquelme  rikel stanford edu 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+assume that the observations are corrupted by noise levels
+that are problemdependent and must be learned as well 
+This scenario may arise in   number of different domains
+where    xed experimentation budget  number of samples 
+should be allocated to different problems  Imagine   drug
+company that has developed several treatments for   particular form of disease  Now it is interested in having an accurate estimate of the performance of each of these treatments
+for   speci   population of patients       at   particular
+geographical location  Given the budget allocated to this
+experiment    number of patients   can participate in the
+clinical trial  Volunteered patients arrive sequentially over
+time and they are represented by   context     Rd summarizing their pro le  We model the health status of patient  
+after being assigned to treatment   by scalar Yi      which
+depends on the speci   drug through   linear function with
+parameter          Yi          The goal is to assign each
+incoming patient to   treatment in such   way that at the end
+of the trial  we have an accurate estimate for all       This
+will allow us to reliably predict the expected health status
+of each new patient   for any treatment    Since the parameters    and the noise levels are initially unknown  achieving this goal requires an adaptive allocation strategy for the
+  patients  Note that while   may be relatively small  as
+the ethical and  nancial costs of treating   patient are high 
+the distribution of the contexts         the biomarkers of
+cancer patients  can be precisely estimated in advance 
+This setting is clearly related to the problem of pure exploration and active learning in multiarmed bandits  Antos et al    where the learner wants to estimate the
+mean of    nite set of arms by allocating    nite budget
+of   pulls  Antos et al     rst introduced this setting
+where the objective is to minimize the largest mean square
+error  MSE  in estimating the value of each arm  While
+the optimal solution is trivially to allocate the pulls proportionally to the variance of the arms  when the variances
+are unknown an explorationexploitation dilemma arises 
+where variance and value of the arms must be estimated at
+the same time in order to allocate pulls where they are more
+needed       arms with high variance  Antos et al   
+proposed   forcing algorithm where all arms are pulled at
+least pn times before allocating pulls proportionally to the
+estimated variances  They derived bounds on the regret 
+measuring the difference between the MSEs of the learn 
+
+Active Learning for Accurate Estimation of Linear Models
+
+ing algorithm and an optimal allocation showing that the
+regret decreases as        similar result is obtained
+by Carpentier et al    that proposed two algorithms
+that use upper con dence bounds on the variance to estimate the MSE of each arm and select the arm with the
+larger MSE at each step  When the arms are embedded
+in Rd and their mean is   linear combination with an unknown parameter  then the problem becomes an optimal
+experimental design problem  Pukelsheim    where
+the objective is to estimate the linear parameter and minimize the prediction error over all arms  see      Wiens  
+Li   Sabato   Munos   In this paper  we consider
+an orthogonal extension to the original problem where    
+nite number of linear regression problems is available      
+the arms  and random contexts are observed at each time
+step  Similarly to the setting of Antos et al    we
+assume each problem is characterized by   noise with different variance and the objective is to return regularized
+leastsquares  RLS  estimates with small prediction error
+      MSE  While we leverage on the solution proposed
+by Carpentier et al    to deal with the unknown variances  in our setting the presence of random contexts make
+the estimation problem considerably more dif cult  In fact 
+the MSE in one speci   regression problem is not only determined by the variance of the noise and the number of
+samples used to compute the RLS estimate  but also by the
+contexts observed over time 
+Contributions  We propose TRACEUCB  an algorithm
+that simultaneously learns the  hardness  of each problem 
+allocates observations proportionally to these estimates 
+and balances contexts across problems  We derive performance bounds for TRACEUCB in expectation and highprobability  and compare the algorithm with several baselines  TRACEUCB performs remarkably well in scenarios
+where the dimension of the contexts or the number of instances is large compared to the total budget  motivating the
+study of the highdimensional setting  whose analysis and
+performance bounds are reported in App    of Riquelme
+et al      Finally  we provide simulations with synthetic data that support our theoretical results  and with real
+data that demonstrate the robustness of our approach even
+when some of the assumptions do not hold 
+
+  Preliminaries
+The problem  We consider   linear regression problems 
+where each instance                        is characterized
+by   parameter      Rd such that for any context     Rd 
+  random observation       is obtained as
+
+               
+
+ 
+
+where the noise    is an        realization of   Gaussian distribution      
+  and
+
+    We denote by  
+
+max   maxi  
+
+Ln      max
+    
+
+EDn Li         
+
+ 
+
+by      mPi  
+    the largest and the average variance 
+respectively  We de ne   sequential decisionmaking problem over   rounds  where at each round         the learning algorithm   receives   context Xt drawn        from
+      selects an instance It  and observes   random
+sample YIt   according to   By the end of the experiment 
+  training set Dn    Xt  It  YIt        has been collected
+and all the   linear regression problems are solved  each
+problem         with its own training set Di           subset of Dn containing samples with It      and estimates
+of the parameters             are returned  For each      
+we measure its accuracy by the meansquared error  MSE 
+Li           EX                          nk 
+We evaluate the overall accuracy of the estimates returned
+by the algorithm   as
+
+ 
+
+ 
+
+   is known 
+
+where the expectation is        the randomness of the contexts Xt and observations Yi   used to compute       The
+objective is to design an algorithm   that minimizes the
+loss   This requires de ning an allocation rule to select
+the instance It at each step   and the algorithm to compute the estimates            ordinary leastsquares  OLS 
+regularized leastsquares  RLS  or Lasso  In designing  
+learning algorithm  we rely on the following assumption 
+Assumption   The covariance matrix   of the Gaussian
+distribution generating the contexts  Xt  
+This is   standard assumption in active learning  since in
+this setting the learner has access to the input distribution and the main question is for which context she should
+ask for   label  Sabato   Munos    Riquelme et al 
+    Often times  companies  like the drug company
+considered in the introduction  own enough data to have
+an accurate estimate of the distribution of their customers
+ patients 
+While in the rest of the paper we focus on Ln    our algorithm and analysis can be easily extended to similar objectives such as replacing the maximum in   with average
+   EDn Li          and
+across all instances        mPm
+using weighted errors       maxi wi EDn Li          by
+
+updating the score to focus on the estimated standard deviation and by including the weights in the score  respectively  Later in the paper  we also consider the case where
+the expectation in   is replaced by the highprobability
+error  see Eq   
+Optimal static allocation with OLS estimates  While the
+distribution of the contexts is  xed and does not depend on
+the instance    the errors Li          directly depend on the
+variances  
+  of the noise     We de ne an optimal baseline
+
+Active Learning for Accurate Estimation of Linear Models
+
+   are known  In
+obtained when the noise variances  
+particular  we focus on   static allocation algorithm Astat
+that selects each instance   exactly ki   times  independently of the context  and returns an estimate      computed by OLS as
+
+    
+
+       XT
+
+  nXi   XT
+
+  nYi   
+
+ 
+
+where Xi     Rki     is the matrix of  random  samples
+obtained at the end of the experiment  and Yi     Rki  
+is its corresponding vector of observations  It is simple to
+show that the global error corresponding to Astat is
+
+Ln Astat    max
+    
+
+ 
+ 
+ki  
+
+Tr EDn   
+    
+
+ 
+
+  nXi   ki     Rd   is the empirical covariance matrix of the contexts assigned to instance    Since
+the algorithm does not change the allocation depending on
+    is distributed as an
+
+whereb       XT
+the contexts and Xt          
+
+inverseWishart and we may write   as
+
+Ln Astat    max
+    
+
+  
+ 
+
+ki          
+
+ 
+
+ 
+
+Thus  we derive the following proposition for the optimal
+static allocation algorithm   stat 
+Proposition   Given   linear regression problems  each
+characterized by   parameter     Gaussian noise with variance  
+    and Gaussian contexts with covariance   let
+            then the optimal OLS static allocation algorithm   stat selects each instance
+
+times  up to rounding effects  and incurs the global error
+
+       
+
+ 
+
+iPj  
+
+ 
+
+ 
+ 
+
+              
+   
+     
+      md
+
+ 
+
+ 
+
+      Ln   stat      md
+
+ 
+
+Proof  See Appendix   
+
+Proposition   divides the problems into two types  those
+for which  
+       wild instances  and those for which
+       mild instances  We see that for the  rst type 
+ 
+the second term in   is negative and the instance should
+be selected less frequently than in the contextfree case
+ where the optimal allocation is given just by the  rst term 
+On the other hand  instances whose variance is below the
+ This strategy can be obtained by simply selecting the  rst
+
+instance     times  the second one     times  and so on 
+
+ All the proofs can be found in the appendices of the extended
+
+version of the paper  Riquelme et al     
+
+mean variance should be pulled more often  In any case 
+we see that the correction to the contextfree allocation
+      the second term  is constant  as it does not depend on
+   Nonetheless  it does depend on   and this suggests that
+in highdimensional problems  it may signi cantly skew
+the optimal allocation 
+While   stat effectively minimizes the prediction loss Ln 
+it cannot be implemented in practice since the optimal allocation     requires the variances  
+to be known at the
+ 
+beginning of the experiment  As   result  we need to devise
+  learning algorithm   whose performance approaches    
+as   increases  More formally  we de ne the regret of   as
+ 
+
+Rn      Ln      Ln   stat    Ln          
+
+and we expect Rn           In fact  any allocation
+strategy that selects each instance   linear number of times
+      uniform sampling  achieves   loss Ln        and
+thus    regret of order      However  we expect that the
+loss of an effective learning algorithm decreases not just at
+the same rate as     but also with the very same constant 
+thus implying   regret that decreases faster than     
+
+  The TRACEUCB Algorithm
+In this section  we present and analyze an algorithm of
+the form discussed at the end of Section   which we
+call TRACEUCB  whose pseudocode is in Algorithm  
+
+Select problem instance   exactly       times
+Compute its OLS estimates         and  
+
+Algorithm   TRACEUCB Algorithm
+  for                 do
+ 
+ 
+  end for
+  for steps                           do
+for problem instance           do
+ 
+ 
+
+Compute score
+
+      is de ned in  
+
+      
+
+si        
+
+           
+
+ki   
+
+Tr   
+    
+
+end for
+Select problem instance It   arg maxi    si   
+Observe Xt and YIt  
+Update its OLS estimators  It   and  
+
+ 
+ 
+ 
+ 
+  end for
+  Return RLS estimates    
+
+   with regularization  
+
+     
+
+It  
+
+The regularization parameter          is provided to
+the algorithm as input  while in practice one could set  
+independently for each arm using crossvalidation 
+Intuition  Equation   suggests that while the parameters
+of the context distribution  particularly its covariance   do
+
+Active Learning for Accurate Estimation of Linear Models
+
+not impact the prediction error  the noise variances play the
+most important role in the loss of each problem instance 
+This is in fact con rmed by the optimal allocation      
+in   where only the variances  
+  appear  This evidence
+suggests that an algorithm similar to GAFSMAX  Antos
+et al    or CHAS  Carpentier et al    which
+were designed for the contextfree case       each instance  
+is associated to an expected value and not   linear function 
+would be effective in this setting as well  Nonetheless   
+holds only for static allocation algorithms that completely
+ignore the context and the history to decide which instance
+It to choose at time    On the other hand  adaptive learning
+algorithms create   strong correlation between the dataset
+Dt  collected so far  the current context Xt  and the decision It  As   result  the sample matrix Xi   is no longer  
+random variable independent of    and using   to design
+  learning algorithm is not convenient  since the impact of
+the contexts on the error is completely overlooked  Unfortunately  in general  it is very dif cult to study the potential
+correlation between the contexts Xi    the intermediate estimates       and the most suitable choice It  However  in
+the next lemma  we show that if at each step    we select It
+as   function of Dt  and not Xt  we may still recover an
+expression for the  nal loss that we can use as   basis for
+the construction of an effective learning algorithm 
+Lemma   Let   be   learning algorithm that selects
+the instances It as   function of the previous history 
+     Dt           YI          Xt  It  YIt   
+and computes estimatesb     using OLS  Then  its loss after
+  steps can be expressed as
+
+ 
+
+  nXi   ki   
+
+Ln      max
+    
+
+where ki    Pn
+
+Proof  See Appendix   
+
+ 
+ki  
+
+EDn   
+
+    
+Tr   
+     It      andb       XT
+
+timates of the parameter       and varianceb 
+
+Remark    assumptions  We assume noise and contexts
+are Gaussian  The noise Gaussianity is crucial for the esi   to be independent of each other  for each instance   and time    we
+actually need and derive   stronger result in Lemma   see
+Appendix    This is key in proving Lemma   as it allows
+us to derive   closed form expression for the loss function
+which holds under our algorithm  and is written in terms of
+the number of pulls and the trace of the inverse empirical
+
+   
+drives our decisions  One way to remove this assumption is
+by de ning and directly optimizing   surrogate loss equal
+to   instead of   On the other hand  the Gaussianity of
+contexts leads to the whitened inverse covariance estimate
+    being distributed as an inverse Wishart  As there
+
+covariance matrix  Note thatb     drives our loss  whileb 
+   
+
+is   convenient closed formula for its mean  we can  nd
+the exact optimal static allocation       in Proposition   see
+  In general  for subGaussian contexts  no such closed
+formula for the trace is available  However  as long as the
+optimal allocation       has no second order    terms for
+        it is possible to derive the same regret rate
+results that we prove later on for TRACEUCB 
+Equation   makes it explicit that the prediction error
+comes from two different sources  The  rst one is the noise
+in the measurements    whose impact is controlled by the
+unknown variances  
+  is  the
+more observations are required to achieve the desired accuracy  At the same time  the diversity of contexts across
+instances also impacts the overall prediction error  This is
+very intuitive  since it would be   terrible idea for the research center discussed in the introduction to estimate the
+parameters of   drug by providing the treatment only to  
+hundred almost identical patients  We say contexts are bal 
+
+      Clearly  the larger the  
+
+anced when       is well conditioned  Therefore    good
+
+algorithm should take care of both aspects 
+There are two extreme scenarios regarding the contributions of the two sources of error    If the number of
+contexts   is relatively large  since the context distribution is  xed  one can expect that contexts allocated to each
+instance eventually become balanced       TRACEUCB
+does not bias the distribution of the contexts  In this case 
+it is the difference in  
+     that drives the number of times
+each instance is selected    When the dimension   or the
+number of arms   is large           balancing contexts becomes critical  and can play an important role in the  nal
+prediction error  whereas the  
+     are less relevant in this
+scenario  While   learning algorithm cannot deliberately
+choose   speci   context       Xt is   random variable 
+we may need to favor instances in which the contexts are
+poorly balanced and their prediction error is large  despite
+the fact that they might have small noise variances 
+Algorithm  TRACEUCB is designed as   combination of
+the uppercon dencebound strategy used in CHAS  Carpentier et al    and the loss in   so as to obtain  
+learning algorithm capable of allocating according to the
+estimated variances and at the same time balancing the error generated by context mismatch  We recall that all the
+quantities that are computed at every step of the algorithm
+are indexed at the beginning and end of   step   by         
+     and                  respectively  At the end of
+each step    TRACEUCB  rst computes an OLS estimate
+  
+
+       
+       and then use it to estimate the varianceb 
+  tb     
+
+ki       Yi     XT
+
+which is the average squared deviation of the predictions
+
+    as
+
+ 
+
+     
+
+based on        We rely on the following concentration in 
+
+Active Learning for Accurate Estimation of Linear Models
+
+equality for the variance estimate of linear regression with
+Gaussian noise  whose proof is reported in Appendix   
+Proposition   Let the number of pulls ki           and
+    If         then for any instance   and
+    maxi  
+step             with probability at least    
+  we have
+   
+ mn
+
+  Rs  
+
+ki       log
+
+ 
+       
+
+        
+
+ 
+
+ 
+
+Given   we can construct an upperbound on the prediction error of any instance   and time step   as
+
+si     
+
+ 
+           
+
+ki   
+
+Tr   
+
+      
+
+ 
+
+and then simply select the instance which maximizes this
+score       It   arg maxi si    Intuitively  TRACEUCB
+favors problems where the prediction error is potentially
+large  either because of   large noise variance or because
+of signi cant unbalance in the observed contexts        the
+target distribution with covariance     subtle but critical
+aspect of TRACEUCB is that by ignoring the current context Xt  but using all the past samples Xt  when choosing It  the distribution of the contexts allocated to each instance stays untouched and the second term in the score
+si         Tr   
+     naturally tends to   as more and
+more  random  contexts are allocated to instance    This is
+shown by Proposition   whose proof is in Appendix   
+Proposition   Force the number of samples ki          
+If         for any         and step             with
+probability at least       we have
+Tr   
+    
+     CTrs  
+    CTrs  
+ki   
+ki   
+with CTr         log nm   
+
+While Proposition   shows that the error term due to context mismatch tends to the constant   for all instances   as
+the number of samples tends to in nity  when   is small
+         and    correcting for the context mismatch may
+
+ 
+
+ 
+
+turned by the algorithm  Finally  note that while TRACE 
+
+signi cantly improve the accuracy of the estimatesb     reUCB uses OLS to compute estimates        it computes its
+returned parameters       by ridge regression  RLS  with
+
+regularization parameter   as
+
+ 
+     XT
+
+  nXi        XT
+
+  nYi   
+
+ 
+
+ 
+
+As we will discuss later  using RLS makes the algorithm
+more robust and is crucial in obtaining regret bounds both
+in expectation and high probability 
+Performance Analysis  Before proving   regret bound for
+TRACEUCB  we report an intermediate result  proof in
+
+App     that shows that TRACEUCB behaves similarly
+to the optimal static allocation 
+Theorem   Let     With probability at least      
+the total number of contexts that TRACEUCB allocates to
+each problem instance   after   rounds satis es
+
+ki            
+
+      CTr
+
+min   nd
+
+ 
+
+where      
+        log mn  and  min    
+
+max is known by the algorithm  and we de ned
+
+ 
+
+ min      
+min Pj  
+
+   
+
+We now report our regret bound for the TRACEUCB algorithm  The proof of Theorem   is in Appendix   
+Theorem   The regret of
+the TraceUCB algorithm 
+     the difference between its loss and the loss of optimal
+static allocation  see Eq    is upperbounded by
+
+Ln                
+
+ 
+
+min   
+
+ minn 
+
+ 
+
+Eq    shows that the regret decreases as      as expected  This is consistent with the contextfree results  Antos et al    Carpentier et al    where the regret
+decreases as    which is conjectured to be optimal 
+However  it is important to note that in the contextual case 
+the numerator also includes the dimensionality    Thus 
+when        the regret will be small  and it will be larger
+when        This motivates studying the highdimensional
+setting  App     Eq    also indicates that the regret
+depends on   problemdependent constant  min  which
+measures the complexity of the problem  Note that when
+min  we have  min      but  min could be
+ 
+max    
+much larger when  
+
+max    
+
+min 
+
+Remark   We introduce   baseline motivated by the
+contextfree problem  At round    let VARUCB selects
+the instance that maximizes the score 
+
+        
+
+ 
+           
+
+ki   
+
+ 
+
+ 
+
+The only difference with the score used by TRACEUCB
+is the lack of the trace term in   Moreover  the regret
+of this algorithm has similar rate in terms of   and   as
+that of TRACEUCB reported in Theorem   However  the
+simulations of Sect    show that the regret of VARUCB is
+actually much higher than that of TRACEUCB  specially
+when dm is close to    Intuitively  when   is close to dm 
+balancing contexts becomes critical  and VARUCB suffers
+because its score does not explicitly take them into account 
+Sketch of the proof of Theorem   The proof is divided
+into three parts    We show that the behavior of the ridge
+ Note that VARUCB is similar to both the CHAS and BAS
+
+algorithms in Carpentier et al   
+
+Active Learning for Accurate Estimation of Linear Models
+
+loss of TRACEUCB is similar to that reported in Lemma  
+for algorithms that rely on OLS  see Lemma   in Appendix    The independence of the      and  
+    estimates
+is again essential  see Remark   Although the loss of
+TRACEUCB depends on the ridge estimate of the parameters  
+     the decisions made by the algorithm at each
+round only depend on the variance estimates  
+    and observed contexts    We follow the ideas in Carpentier et al 
+  to lowerbound the total number of pulls ki   for
+each         under   good event  see Theorem   and its
+proof in Appendix      We  nally use the ridge regularization to bound the impact of those cases outside the
+good event  and combine everything in Appendix   
+The regret bound of Theorem   shows that the largest
+expected loss across the problem instances incurred by
+TRACEUCB quickly approaches the loss of the optimal
+static allocation algorithm  which knows the true noise
+variances  While Ln    measures the worst expected loss 
+at any speci   realization of the algorithm  there may be
+one of the instances which is very poorly estimated  As  
+result  it would also be desirable to obtain guarantees for
+the  random  maximum loss
+
+ 
+
+eLn      max
+
+In particular  we are able to prove the following high 
+
+             nk 
+ 
+probability bound oneLn    for TRACEUCB 
+Theorem   Let     and assume   ik      for all   
+for some       With probability at least      
+ 
+  min   
+min   
+
+ 
+ 
+
+mPj 
+         log
+
+eLn  
+
+  
+
+       
+
+ 
+
+ 
+
+Note that the  rst term in   corresponds to the  rst term
+of the loss for the optimal static allocation  and the second
+term is  again       deviation  However  in this case  the
+guarantees hold simultaneously for all the instances 
+Sketch of the proof of Theorem   In the proof we slightly
+modify the con dence ellipsoids for the         based
+on selfnormalized martingales  and derived in  AbbasiYadkori et al    see Thm    in App     By means of
+the con dence ellipsoids we control the loss in   Their
+radiuses depend on the number of samples per instance  and
+we rely on   highprobability events to compute   lower
+bound on the number of samples  In addition  we need to
+make sure the mean norm of the contexts will not be too
+large  see Corollary   in App     Finally  we combine the
+lower bound on ki   with the con dence ellipsoids to conclude the desired highprobability guarantees in Thm   
+HighDimensional Setting  Highdimensional linear models are quite common in practice  motivating the study of
+the     dm case  where the algorithms discussed so far
+
+break down  We propose SPARSETRACE UCB in Appendix    an extension of TRACEUCB that assumes and
+takes advantage of joint sparsity across the linear functions 
+The algorithm has twostages   rst  an approximate support is recovered  and then  TRACEUCB is applied to the
+induced lower dimensional space  We discuss and extend
+our highprobability guarantees to SPARSETRACE UCB
+under suitable standard assumptions in Appendix   
+
+  Simulations
+In this section  we provide empirical evidence to support
+our theoretical results  We consider both synthetic and realworld problems  and compare the performance  in terms of
+normalized MSE  of TRACEUCB to uniform sampling 
+optimal static allocation  which requires the knowledge of
+noise variances  and the contextfree algorithm VARUCB
+ see Remark   We do not compare to GFSPMAX and
+GAFSMAX  Antos et al    since they are outperformed by CHAS Carpentier et al    and VARUCB
+is the same as CHAS  except for the fact that we use the
+concentration inequality in Prop    since we are estimating
+the variance from   regression problem using OLS 
+First  we use synthetic data to ensure that all the assumptions of our model are satis ed  namely we deal with linear regression models with Gaussian context and noise 
+We set the number of problem instances to       and
+consider two scenarios  one in which all the noise variances are equal to   and one where they are not equal 
+and                   In the latter case 
+min     We study the impact of  independently 
+ 
+max 
+increasing dimension   and horizon   on the performance 
+while keeping all other parameters  xed  Second  we consider realworld datasets in which the underlying model is
+nonlinear and the contexts are not Gaussian  to observe
+how TRACEUCB behaves  relative to the baselines  in settings where its main underlying assumptions are violated 
+Synthetic Data  In Figures       we display the results
+for  xed horizon       and increasing dimension   
+For each value of    we run     simulations and report
+the median of the maximum error across the instances for
+each simulation  In Fig      where  
+     are equal  uniform
+sampling and optimal static allocation execute the same allocation since there is no difference in the expected losses
+of different instances  Nonetheless we notice that VARUCB suffers from poor estimation as soon as   increases 
+while TRACEUCB is competitive with the optimal performance  This difference in performance can be explained
+by the fact that VARUCB does not control for contextual
+balance  which becomes   dominant factor in the loss of  
+learning strategy for problems of high dimensionality  In
+Fig      in which  
+     are different  uniform sampling is
+no longer optimal but even in this case VARUCB performs
+
+Active Learning for Accurate Estimation of Linear Models
+
+                     
+
+                     
+
+                     
+
+                     
+
+                     
+
+                     
+
+Figure   White Gaussian synthetic data with       In Figures       we set       In Figures           we set      
+
+better than uniform sampling only for small       where
+it is more important to control for the  
+      For larger dimensions  balancing uniformly the contexts eventually becomes   better strategy  and uniform sampling outperforms
+VARUCB  In this case too  TRACEUCB is competitive
+with the optimal static allocation even for large    successfully balancing both noise variance and contextual error 
+Next  we study the performance of the algorithms          
+We report two different losses  one in expectation   and
+one in high probability   corresponding to the results
+we proved in Theorems   and   respectively  In order to
+approximate the loss in    Figures       we run    
+simulations  compute the average prediction error for each
+instance         and  nally report the maximum mean error across the instances  On the other hand  we estimate the
+loss in    Figures       by running     simulations 
+taking the maximum prediction error across the instances
+for each simulation  and  nally reporting their median 
+In Figures        we display the loss for  xed dimension
+      and horizon from       to   In Figure    
+TRACEUCB performs similarly to the optimal static allocation  whereas VARUCB performs signi cantly worse 
+
+ranging from   to   higher errors than TRACEUCB 
+due to some catastrophic errors arising from unlucky contextual realizations for an instance  In Fig      as the number of contexts grows  uniform sampling   simple context
+balancing approach is enough to perform as well as VARIn
+UCB that again heavily suffers from large mistakes 
+both  gures  TRACEUCB smoothly learns the  
+     and
+outperforms uniform sampling and VARUCB  Its performance is comparable to that of the optimal static allocation 
+especially in the case of equal variances in Fig     
+In Figure     TRACEUCB learns and properly balances
+observations extremely fast and obtains an almost optimal
+performance  Similarly to  gures       VARUCB struggles when variances  
+  are almost equal  mainly because it
+gets confused by random deviations in variance estimates
+    while overlooking potential and harmful context imbal 
+ 
+ances  Note that even when        rightmost point  its
+median error is still   higher than TRACEUCB    In
+Fig      as expected  uniform sampling performs poorly 
+due to mismatch in variances  and only outperforms VARUCB for small horizons in which uniform allocation pays
+off  On the other hand  TRACEUCB is able to success 
+
+   MSE  max  VarUCBUniform AllocationOptimal Static AllocationTraceUCB   MSE  max  VarUCBUniform AllocationOptimal Static AllocationTraceUCB   MSE  max  VarUCBUniform AllocationOptimal Static AllocationTraceUCB   MSE  max  VarUCBUniform AllocationOptimal Static AllocationTraceUCB   MSE  max  VarUCBUniform AllocationOptimal Static AllocationTraceUCB   MSE  max  VarUCBUniform AllocationOptimal Static AllocationTraceUCBActive Learning for Accurate Estimation of Linear Models
+
+Figure   Results on Jester  left  with             and MovieLens  right  with             Median over   simulations 
+
+fully handle the tradeoff between learning and allocating
+according to variance estimates  
+    while accounting for
+
+the contextual trace      even for very low    We observe
+
+that for large    VARUCB eventually reaches the performance of the optimal static allocation and TRACEUCB 
+In practice the loss in    gures       is often more relevant than   since it is in high probability and not in expectation  and TRACEUCB shows excellent performance
+and robustness  regardless of the underlying variances  
+   
+Real Data  TRACEUCB is based on assumptions such as
+linearity  and Gaussianity of noise and context that may not
+hold in practice  where data may show complex dependencies  Therefore  it is important to evaluate the algorithm
+with realworld data to see its robustness to the violation
+of its assumptions  We consider two collaborative  ltering datasets in which users provide ratings for items  We
+choose   dense subset of   users and   items  where every
+user has rated every item  Thus  each user is represented
+by   pdimensional vector of ratings  We de ne the user
+context by   out of her   ratings  and learn to predict her
+remaining           ratings  each one is   problem instance  All item ratings are  rst centered  so each item  
+mean is zero  In each simulation    out of the   users are selected at random to be fed to the algorithm  also in random
+order  Algorithms can select any instance as the dataset
+contains the ratings of every instance for all the users  At
+the end of each simulation  we compute the prediction error
+for each instance by using the       users that did not participate in training for that simulation  Finally  we report
+the median error across all simulations 
+Fig      reports the results using the Jester Dataset
+by  Goldberg et al    that consists of joke ratings in
+  continuous scale from   to   We take       joke
+ratings as context and learn the ratings for another   jokes 
+In addition  we add another function that counts the total
+number of movies originally rated by the user  The latter
+is also centered  bounded to the same scale  and has higher
+variance  without conditioning on    The number of to 
+
+tal users is       and       When the number
+of observations is limited  the advantage of TRACEUCB
+is quite signi cant  the improvement        uniform allocation goes from   to almost   for large    while       
+VARUCB it goes from almost   to roughly   even
+though the model and context distribution are far from linear and Gaussian  respectively 
+Fig 
+the MovieLens
+dataset  Maxwell Harper   Konstan    that consists of movie ratings between   and   with   increments 
+We select   popular movies rated by       users 
+and randomly choose       of them to learn  so
+      In this case  all problems have similar variance
+ 
+min     so uniform allocation seems appropriate  Both TRACEUCB and VARUCB modestly improve
+uniform allocation  while their performance is similar 
+
+max 
+
+results
+
+for
+
+   
+
+shows
+
+the
+
+  Conclusions
+We studied the problem of adaptive allocation of   contextual samples of dimension   to estimate   linear functions equally well  under heterogenous noise levels  
+ 
+that depend on the linear instance and are unknown to
+the decisionmaker  We proposed TRACEUCB  an optimistic algorithm that successfully solves the explorationexploitation dilemma by simultaneously learning the  
+     
+allocating samples accordingly to their estimates  and balancing the contextual information across the instances  We
+also provide strong theoretical guarantees for two losses of
+interest  in expectation and highprobability  Simulations
+were conducted in several settings  with both synthetic and
+real data  The favorable results suggest that TRACEUCB
+is reliable  and remarkably robust even in settings that fall
+outside its assumptions  thus    useful and simple tool to
+implement in practice 
+Acknowledgements     Lazaric is supported by French Ministry
+of Higher Education and Research  NordPas deCalais Regional
+Council and French National Research Agency projects ExTraLearn    ANR CE 
+
+   MSE  max  VarUCBUniform AllocationTraceUCB   MSE  max  VarUCBUniform AllocationTraceUCBActive Learning for Accurate Estimation of Linear Models
+
+Wainwright     Highdimensional statistics    non 
+
+asymptotic viewpoint  Draft   
+
+Wang     Liang     and Xing     Block regularized lasso
+for multivariate multiresponse linear regression  In AISTATS   
+
+Wiens     and Li     Voptimal designs for heteroscedastic regression  Journal of Statistical Planning and Inference     
+
+References
+AbbasiYadkori       al     and Szepesv ari  Cs  Improved
+algorithms for linear stochastic bandits  In Advances in
+Neural Information Processing Systems  pp   
+ 
+
+Antos     Grover     and Szepesv ari  Cs  Active learning
+in multiarmed bandits  In International Conference on
+Algorithmic Learning Theory  pp     
+
+Carpentier     Lazaric     Ghavamzadeh     Munos    
+and Auer     Uppercon dencebound algorithms for
+active learning in multiarmed bandits  In Algorithmic
+Learning Theory  pp    Springer   
+
+Goldberg     Roeder     Gupta     and Perkins     Eigentaste    constant time collaborative  ltering algorithm 
+Information Retrieval     
+
+Hastie     Tibshirani     and Wainwright     Statistical
+learning with sparsity  the lasso and generalizations 
+CRC Press   
+
+Maxwell Harper     and Konstan    
+
+The movielens
+datasets  History and context  ACM Transactions on Interactive Intelligent Systems  TiiS     
+
+Negahban     and Wainwright    
+
+Simultaneous support recovery in high dimensions  Bene ts and perils of
+blockregularization  IEEE Transactions on Information
+Theory     
+
+Obozinski     Wainwright     and Jordan     Support
+union recovery in highdimensional multivariate regression  The Annals of Statistics  pp     
+
+Pukelsheim     Optimal Design of Experiments  Classics in
+Applied Mathematics  Society for Industrial and Applied
+Mathematics   
+
+Raskutti     Wainwright        and Yu     Restricted
+eigenvalue properties for correlated gaussian designs 
+Journal of Machine Learning Research   
+   
+
+Riquelme     Ghavamzadeh     and Lazaric     Active
+learning for accurate estimation of linear models  arXiv
+preprint arXiv     
+
+Riquelme     Johari     and Zhang     Online active
+linear regression via thresholding  In ThirtyFirst AAAI
+Conference on Arti cial Intelligence     
+
+Sabato     and Munos     Active regression by strati 
+In Advances in Neural Information Processing
+
+cation 
+Systems  pp     
+
+Vershynin     Introduction to the nonasymptotic analysis
+
+of random matrices  arXiv   
+
+

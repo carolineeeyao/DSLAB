@@ -1,0 +1,1332 @@
+Adapting Kernel Representations Online Using Submodular Maximization
+
+Matthew Schlegel   Yangchen Pan   Jiecao Chen   Martha White  
+
+Abstract
+
+Kernel representations provide   nonlinear representation  through similarities to prototypes  but
+require only simple linear learning algorithms
+given those prototypes  In   continual learning
+setting  with   constant stream of observations 
+it is critical to have an ef cient mechanism for
+subselecting prototypes amongst observations 
+In this work  we develop an approximately submodular criterion for this setting  and an ef 
+cient online greedy submodular maximization algorithm for optimizing the criterion  We extend
+streaming submodular maximization algorithms
+to continual learning  by removing the need for
+multiple passes which is infeasible and instead introducing the idea of coverage time  We
+propose   general blockdiagonal approximation
+for the greedy update with our criterion  that enables updates linear in the number of prototypes 
+We empirically demonstrate the effectiveness of
+this approximation  in terms of approximation
+quality  signi cant runtime improvements  and
+effective prediction performance 
+
+  Introduction
+Kernel representations provide an attractive approach to
+representation learning  by facilitating simple linear prediction algorithms and providing an interpretable representation    kernel representation consists of mapping an input observation into similarity features  with similarities to
+  set of prototypes  Consequently  for an input observation    prediction can be attributed to those prototypes that
+are most similar to the observation  Further  the transformation to similarity features is nonlinear  enabling nonlinear function approximation while using linear learning
+algorithms that simply optimize for weights on these transformed features  Kernel representations are universal func 
+
+ Department of Computer Science 
+
+sity  Bloomington  Correspondence
+ martha indiana edu 
+
+Indiana Univerto  Martha White
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright   by
+the author   
+
+tion approximators  and the  exibility in choosing the kernel  similarity function  has enabled impressive prediction performance for   range of settings  including speech
+ Huang et al    computer vision  Mairal et al   
+and object recognition  Lu et al   
+In   continual learning setting  such as in online learning or
+reinforcement learning  there is   constant  effectively unending stream of data  necessitating some care when using
+kernel representations  The issue arises from the choice of
+prototypes  Before the advent of huge increases in dataset
+sizes    common choice was to use all of the training data
+as prototypes  This choice comes from the representer theorem  which states that for   broad class of functions  the
+empirical risk minimizer is   linear weighting of similarity
+features  to   set of prototypes that consists of the training
+data  For continual learning  however  the update should be
+independent of the the total number of samples  which is
+not clearly de ned for continual learning  Conversely  we
+want to permit selection of   suf ciently large number of
+prototypes  to maintain suf cient modeling power  For ef 
+ cient  continual updating  therefore  we require perstep
+prototype selection strategies that are approximately linear
+in the number of prototypes 
+Currently  most algorithms do not satisfy the criteria for  
+continual learning setting  Incremental selection of prototypes has been tackled in   wide range of areas  due to the
+fundamental nature of this problem  Within the streaming
+community  approaches typically assume that the batch of
+data  though large  is accessible and  xed  The most related of these areas  include active set selection for Gaussian process regression  Seeger et al    with streaming submodular maximization approaches  Krause et al 
+      Badanidiyuru et al    incremental Nystrom methods within kernel recursive leastsquares  KRLS 
+
+ Radial basis function networks are an example of   kernel
+representation  that have been shown to be universal function approximators  Park   Sandberg    Further  the representer
+theorem further characterizes the approximation capabilities under empirical risk minimization for   broad class of functions 
+
+ Facility location  kmedians and kcenters are three problems
+that focus on selecting representative instances from   set      
+ Guha et al    The criteria and algorithms are not designed
+with the intention to use the instances for prediction and so we do
+not consider them further here 
+
+Adapting Kernel Representations Online Using Submodular Maximization
+
+ Rudi et al    and functional gradients that sample
+random bases which avoid storing prototypes but require
+storing   scalars  for   training samples  Dai et al   
+Kernel representation algorithms designed speci cally for
+the online setting  on the other hand  are typically too
+computationally expensive in terms of the number of prototypes  Kernel leastmean squares  KLMS  algorithms
+use stochastic updates  maintaining the most recent prototypes and truncating coef cients on the oldest  Kivinen
+et al    Schraudolph et al    Cheng et al   
+though ef cient given suf cient truncation  this truncation
+can introduce signi cant errors  Van Vaerenbergh   Santamaria    Random feature approximations  Rahimi  
+Recht    can be used online  but require   signi cant
+number of random features  Gaussian process regression
+approaches have online variants  Csat     Opper   
+Cheng   Boots    however  they inherently require
+at least quadratic computation to update the variance parameters  KRLS can be applied online  but has   threshold parameter that makes it dif cult to control the number of prototypes and requires quadratic computation and
+space  Engel et al    More ef cient coherence heuristic have been proposed  Richard et al    Van Vaerenbergh et al    Chen et al    Van Vaerenbergh  
+Santamaria    but provide no approximation quality
+guarantees 
+In this work  we provide   simple and ef cient greedy algorithm for selecting prototypes for continual learning  by
+extending recent work in prototype selection with submodular maximization  We introduce   generalized coherence
+criterion for selecting prototypes  which uni es two previously proposed criteria  the coherence criterion and the log
+determinant  Because this criterion is  approximately  submodular  we pursue   generalization to streaming submodular maximization algorithms  We avoid the need for multiple passes over the data which is not possible in continual
+learning  by introducing the idea of coverage time  which
+re ects that areas of the observation space are repeatedly
+visited under suf cient mixing  We prove that our online
+submodular maximization achieves an approximationratio
+of   with   small additional approximation introduced
+due to coverage time and from using an estimate of the submodular function  We then provide   lineartime algorithm
+for approximating one instance of our submodular criterion  by exploiting the blockdiagonal form of the kernel
+matrix  We empirically demonstrate that this approximation closely matches the true value  despite using signi 
+cantly less computation  and show effective prediction performance using the corresponding kernel representation 
+
+ There is   large literature on fast Nystrom methods using related approaches  such as determinant point processes for sampling landmark points  Li et al    The primary goal for these
+methods  however  is to approximate the full kernel matrix 
+
+  Using kernel representations
+  kernel representation is   transformation of observations
+into similarity features  consisting of similarities to prototypes    canonical example of such   representation is   radial basis function network  with radial basis kernels such
+as the Gaussian kernel  however  more generally any kernel
+similarity can be chosen  More formally  for observations
+       the kernel representation consists of similarities to
+  set of prototypes                 zb  
+
+                          zb    Rb 
+
+for kernel             The observations need not be
+numerical  as long as   similarity   can be de ned between
+two observations  kernel representations can be used and
+conveniently provide   numeric feature vector in Rb  We
+use the term prototype  instead of center  to emphasize that
+the chosen observations are representative instances  that
+are subselected from observed data 
+  fundamental result for kernel representations is the representer theorem  with signi cant recent generalizations  Argyriou   Dinuzzo    which states that for   broad
+class of function spaces    the empirical risk minimizer
+   has the simple form
+     on   training set  xi  yi  
+
+     
+
+ ik  xi 
+
+nXi 
+
+nXi 
+
+nXi 
+
+This result makes use of   key property  the kernel function can be expressed as an inner product    xi  xj   
+  xi   xj   for some implicit expansion   The function   can be written    Pn
+
+      xj  with
+
+            
+
+   xj    
+
+ ih     xj   
+
+It is typically impractical to use all xi as prototypes  and
+  subset needs to be chosen  Recently  there has been several papers  Krause et al        Krause   Gomes   
+Badanidiyuru et al    showing that prototypes can be
+effectively selected in the streaming setting using greedy
+submodular maximization on the logdeterminant of the
+kernel matrix  KS   Rb   where  KS ij     zi  zj 
+Given some ground set   and its powerset    submodular functions            are set functions  with  
+diminishing returns property  the addition of   point to  
+given set increases the value less or equal than adding  
+point to   subset of that set  For prototype selection  the
+ground set considered are sets of all observations     so
+          The logdeterminant of the resulting kernel
+matrix  log det KS  is   submodular function of    Though
+maximizing submodular functions is NPhard  greedy approximation algorithms have been shown to obtain reasonable approximation ratios  even for the streaming setting
+
+Adapting Kernel Representations Online Using Submodular Maximization
+
+ Krause   Gomes    Badanidiyuru et al    and
+the resulting algorithms are elegantly simple and theoretically sound 
+In the following sections  we derive   novel criterion for
+prototype selection  that includes the logdeterminant as  
+special case  Then  we provide an ef cient prototype selection algorithm for the continual learning setting  using
+submodular maximization 
+
+  Selecting kernel prototypes
+Many prototype selection strategies are derived based on
+diversity measures  The coherence criterion  Engel et al 
+  approximates how effectively the set of prototypes
+spans the set of given observations  The logdeterminant
+measures the spread of eigenvalues for the kernel matrix 
+and is related to information gain  Seeger    These
+selection criteria are designed for    nite set of observed
+points  here  we step back and reconsider   suitable objective for prototype selection for continual learning 
+Our goal is to select prototypes that minimize distance to
+the optimal function  In this section  we begin from this
+objective and demonstrate that the coherence criterion and
+logdeterminant are actually upper bounds on this objective  and special cases of   more general such upper bound 
+The analysis justi es that the logdeterminant is   more
+suitable criteria for continual learning  which we then pursue in the remainder of this work 
+
+ 
+
+min
+
+min
+   
+
+    jk  xi  according to the loss
+ Rb kf   fS   
+nXi 
+
+  Criteria to select prototypes from    nite set
+Let                 xn  be   set of points  with corresponding labels            yn  We will not assume that this
+is   batch of data  but could rather consist of all possible observations for    nite observation space  Ideally  we
+would learn                 zb  
+and corresponding
+fS   Pb
+   zj 
+wherekf   fS    
+      such that     Pn
+   zj 
+ 
+nXi 
+ 
+   zj 
+
+for the optimal   for the set of points     Because we do not
+have    we derive an upper bound on this value  Introducing
+dummy variables    
+
+    min
+nXi 
+
+bXj 
+bXj 
+
+   xi   
+
+   xi   
+
+   xi   
+
+  min
+   
+
+     Rb
+
+bXj 
+
+      
+
+   
+     
+
+   
+
+   
+
+min
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+     xi               xi  zb  the interior minimiza 
+
+For ki
+tion can be rewritten as
+
+   xi   
+
+   
+
+bXj 
+
+min
+
+   
+
+ 
+
+   zj 
+bXj 
+
+   xi 
+
+  min
+
+ 
+
+   KS         ki    
+
+    xi  xi 
+
+To provide more stable approximations  we regularize
+
+    min
+   
+
+  min
+   
+
+min
+
+   
+
+min
+   
+
+nXi 
+nXi 
+
+ 
+
+       
+
+ 
+
+   
+
+   zj 
+
+   KS              ki
+
+   
+
+    xi  xi 
+For       the inequality is equality  Otherwise adding regularization theoretically increases the upper bound  though
+in practice will be key for stability 
+Solving gives          KS      ki  and so
+   KS              ki    
+   
+
+   KS      ki
+
+   KS      ki    
+
+    xi  xi 
+
+    
+
+    
+
+   
+
+    xi  xi 
+
+   
+
+    xi  xi     
+
+    
+
+   KS      ki
+
+We can now simplify the above upper bound
+
+    min
+    xi  xi     
+   
+and obtain equivalent optimization
+
+    
+
+   KS      ki 
+
+ 
+    
+
+   KS      ki 
+
+nXi 
+nXi 
+
+   
+
+argmax
+
+This criteria closely resembles the coherence criterion  Engel et al    The key idea for the coherence criterion is to add   prototype xi  to kernel matrix KS if
+  ki     for some threshold parameter   The
+    kiK 
+coherence criterion 
+
+  
+   KS      ki
+
+   
+
+argmax
+
+nXi 
+because Pn
+  Pn
+
+optimal
+
+the
+
+function  with
+
+therefore  can be seen as an upper bound on the
+redistance
+laxation
+ 
+max 
+The relationship to another popular criterion the log
+determinant  arises when we consider the extension to an
+in nite state space 
+
+further
+   KS      ki
+
+   KS      ki 
+
+           
+
+     
+
+    
+
+    
+
+Adapting Kernel Representations Online Using Submodular Maximization
+
+  Criteria to select prototypes from an in nite set
+The criterion above can be extended to an uncountably in 
+ nite observation space     For this setting  the optimal
+    RX
+     dx  for   function     Rd      Let
+                                zb  Then  using   similar
+analysis to above 
+
+  XZX
+ Rbkf   fS      min
+
+min
+
+min
+   
+
+          dx
+
+          KS             dx 
+
+ ZX
+    ZX
+
+and so the resulting goal is to optimize
+
+argmax
+
+          KS             dx   
+
+This provides   nice relation to the log determinant criterion  with normalized kernels              If        
+maps to   unique kernel vector           and the function
+      also maps onto       then for        
+          KS             dx
+
+ZX
+     KS        dk
+
+  det KS      
+
+In general  it is unlikely to have   bijection       More
+generally  we can obtain the above criterion by setting the
+coef cient function   so that each possible kernel vector
+    Rb has uniform weighting  or implicitly so the integration is uniformly over           Because log is monotonically increasing  maximizing det KS       with    xed  
+is equivalent to maximizing log det KS      
+This derivation of an upper bound on the distance to the optimal function provides new insights into the properties of
+the logdeterminant  clari es the connection between the
+coherence criterion and the logdeterminant  and suggesting potential routes for providing criteria based on the prediction utility of   prototype  The choice of weighting   to
+obtain the logdeterminant removes all information about
+the utility of   prototype and essentially assumes   uniform distribution over the kernel vectors    For more general coef cient functions   let                 and
+      Cov         where the expectations are ac 
+   dx 
+
+cording to density    for normalizer     RX
+
+By the quadratic expectations properties  Brookes   
+
+    argmax
+
+   
+
+tr KS        
+
+     KS        
+
+ 
+
+   kernel can be normalized by        pk             
+
+This more general form in   enables prototypes to be
+more highly weighted based on the magnitude of values
+in   We focus in this work  rst on online prototype selection for the popular logdeterminant  and leave further
+investigation into this more general criteria to future work 
+We nonetheless introduce the form here to better motivate
+the logdeterminant  as well as demonstrate that the above
+analysis is amenable to   host of potential directions for
+more directed prototype selection 
+
+  Online submodular maximization
+In this section  we introduce an OnlineGreedy algorithm
+for submodular maximization  to enable optimization of the
+prototype selection objective from an online stream of data 
+Current submodular maximization algorithms are designed
+for the streaming setting  which deals with incrementally
+processing large but  xed datasets  Consequently  the objectives are speci ed for    nite batch of observations and
+the algorithms can do multiple passes over the dataset  For
+the online setting  both of these conditions are restrictive 
+We show that  with   minor modi cation to StreamGreedy
+ Krause   Gomes    we can obtain   comparable approximation guarantee that applies to the online setting 
+We would like to note that there is one streaming algorithm 
+called Sieve Streaming  designed to only do one pass of the
+data and avoid too many calls to the submodular function
+ Badanidiyuru et al    however  it requires keeping
+parallel solutions  which introduces signi cant complexity
+and which we found prohibitively expensive  In our experiments  we show it is signi cantly slower than our approach
+and found it typically maintained at least   parallel solutions  For this reason  we opt to extend the simpler StreamGreedy algorithm  and focus on ef cient estimates of the
+submodular function  since we will require more calls to
+this function than Sieve Streaming 
+Our goal is to solve the submodular maximization problem
+
+max
+
+        
+
+    
+
+ 
+
+where   is   general space of observations and   is   submodular function  The key modi cation is to enable   to be
+  large  in nite or even uncountable space  For such     we
+will be unable to see all observations  let alone make multiple passes  Instead  we will use   related notion to mixing
+time  where we see   cover of the space 
+The greedy algorithm consists of greedily adding in   new
+prototype if it is an improvement on   previous prototype 
+The resulting greedy algorithm given in Algorithm   is
+similar to StreamGreedy  and so we term it OnlineGreedy 
+The algorithm queries the submodular function on each
+set  with   previous prototype removed and the new observation added  To make this ef cient  we will rely on us 
+
+Adapting Kernel Representations Online Using Submodular Maximization
+
+Algorithm   OnlineGreedy
+
+Input  threshold parameter     where   prototype is only
+added if there is suf cient improvement
+      
+for           do St   St    xt 
+while interacting                  do
+
+   St    xt 
+
+     argmax
+  St 
+St   St    xt 
+if    St       St      then
+
+St   St 
+
+ing only an approximation to the submodular function   
+We will provide   lineartime algorithm in the number of
+prototypes  for querying replacement to all prototypes  as
+opposed to   naive solution which would be cubic in the
+number of prototypes  This will enable us to use this simple
+greedy approach  rather than more complex streaming submodular maximization approaches that attempt to reduce
+the number of calls to the submodular function 
+We bound approximation error  relative to the optimal solution  We extend an algorithm that uses multiple passes 
+our approach suggests more generally how algorithms from
+the streaming setting can be extended to an online setting 
+To focus the on this extension  we only consider submodular functions here  in Appendix    we generalize the result
+to approximately submodular functions  Many set functions are approximately submodular  rather than submodular  but still enjoy similar approximation properties  The
+logdeterminant is submodular  however  it is more likely
+that  for the variety of choices for   the generalized coherence criterion is only approximately submodular  For
+this reason  we provide this generalization to approximate
+submodularity  as it further justi es the design of  approximately  submodular criteria for prototype selection 
+We compare our solution to the optimal solution
+                       
+
+     argmax
+        
+
+Assumption    Submodularity    is monotone increasing
+and submodular 
+Assumption    Approximation error  We have access to
+  set function    that approximates    for some        for
+all        with       
+
+               
+
+Assumption    Submodular coverage time  For    xed
+       and     there exists         such that for all    
+  where        with probability       for any        
+an observation   is observed within   steps  starting from
+any point in     that is similar to    in that
+
+                        
+
+This  nal assumption characterizes that the environment is
+suf ciently mixing  to see   cover of the space  We introduce the term coverage  instead of cover time for  nitestate  to indicate   relaxed notion of observing   covering
+of the space rather than observing all states 
+For simplicity of the proof  we characterize the coverage
+time in terms of the submodular function  We show that the
+submodular function we consider the logdeterminant 
+satis es this assumption  given   more intuitive assumption
+that instead requires that observations be similar according
+to the kernel  The statement and proof are in Appendix   
+Now we prove our main result 
+Theorem   Assume Assumptions   and that      is
+ nite and        Then  for             all sets St
+chosen by OnlineGreedy using    satisfy  with probability
+     
+
+  St   
+
+ 
+ 
+
+      
+
+ 
+ 
+
+             
+
+Proof  The proof follows closely to the proof of Krause
+  Gomes   Theorem   The key difference is that
+we cannot do multiple passes through    xed dataset  and
+instead use submodular coverage time 
+Case   There have been            iterations  and St
+has always changed within   iterations       there has never
+been   consecutive iterations where St remained the same 
+This mean that for each   iterations     St  must have been
+improved by at least     which is the minimum threshold for
+improvement  This means that over the   iterations       
+has improved by at least    each  
+
+         tt     tt                     
+The solution is within    of      and we are done 
+Case   At some time    St was not changed for   iterations 
+     St    St          St  Order the prototypes in the
+set as zi   argmaxz St              zi     with
+
+                  zi                 zi 
+
+By Lemma            
+Because the point that was observed ri that was closest to
+    was not added to    we have the following inequalities
+
+       ri          ri    
+       ri           zb      
+       ri                 
+
+where the last inequality is true for all     with probability
+    Using these inequalities  as shown more explicitly in
+the proof in the appendix  we get
+
+                                     
+
+Adapting Kernel Representations Online Using Submodular Maximization
+
+Algorithm   BlockGreedy  OnlineGreedy for Prototype
+Selection using   BlockDiagonal Approximation
+    blocksize  with set of blocks          
+     bookkeeping maps  with                     for  
+leading to smallest utility loss   if removed from block   
+ge     is the incremental estimate of logdeterminant
+
+for           do  St   St    xt 
+while interacting                  do
+
+if added   new prototypes since last clustering then
+
+cluster St into bb rc blocks with kmeans 
+initialize with previous clustering  update       ge
+
+BlockGreedySwap xt 
+
+                 
+
+By the de nition of submodularity                   
+Pb
+                    
+Putting this all together  with probability      
+               
+bXi 
+bXi 
+          bXi 
+bXi 
+
+                    
+
+             zi                 zi 
+
+                  
+
+        
+
+        
+
+        
+
+                
+
+                      zb                  
+     St                  
+
+where the last inequality uses          St  which follows
+ 
+from monotonicity 
+
+  Blockdiagonal approximation for ef cient
+
+computation of the submodular function
+
+The computation of the submodular function   is the critical bottleneck in OnlineGreedy and other incremental submodular maximization techniques  In this section  we propose   time and memory ef cient greedy approach to computing   submodular function on KS  enabling each step
+of OnlineGreedy to cost   db  where   is the feature dimension and   is the budget size  The key insight is to take
+advantage of the blockdiagonal structure of the kernel matrix  particularly due to the fact that the greedy algorithm
+intentionally selects diverse prototypes  Consequently  we
+can approximately cluster prototypes into small groups of
+
+Algorithm   BlockGreedySwap   
+
+  returns the nearest block to  
+
+                
+    then
+
+return with no update if low percentage improvement
+
+                
+
+  remove point from same block
+
+  using Appendix   
+
+     getblock   
+         argmax
+    
+if ge     and   ge
+ge
+         argmax
+      
+if         then
+
+            
+update     
+ge   ge     
+            
+               
+update          
+ge   ge     
+
+else
+
+  remove point from   different block
+
+  using Appendix   
+
+size    and perform updates on only these blocks 
+Approximations to the kernel matrix have been extensively
+explored  but towards the aim of highly accurate approximations for use within prediction  These methods include
+lowrank approximations  Bach   Jordan    Nystrom
+methods  Drineas   Mahoney    Gittens   Mahoney 
+  and   blockdiagonal method for dense kernel matrices  focused on storage ef ciency  Si et al    Because
+these approximations are used for prediction and because
+they are designed for    xed batch of data and so do not
+take advantage of incrementally updating values  they are
+not suf ciently ef cient for use on each step  and require at
+least      computation  For OnlineGreedy  however  we
+only need   more coarse approximation to KS to enable
+effective prototype selection  By taking advantage of this
+fact  saving computation with incremental updating and using the fact that our kernel matrix is not dense making it
+likely that many offdiagonal elements are near zero  we
+can reduce storage and computation to linear in   
+The key steps in the algorithm are to maintain   clustering
+of prototypes  compute all pairwise swaps between prototypes within   block which is much more ef cient than
+pairwise swaps between all prototypes  and  nally perform   single swap between two blocks  The computational
+complexity of Algorithm   on each step is   bd     
+for block size    see Appendix   for an indepth explanation  We assume that  with   blockdiagonal KS with
+blocks    the submodular function separates into       
+PB        For both the logdeterminant and the trace
+of the inverse of KS  this is the case because the inverse of   blockdiagonal matrix corresponds to   blockdiagonal matrix of the inverses of these blocks  Therefore 
+log det KS   PB   log det KB 
+
+We use this property to avoid all pairwise comparisons  If  
+is added to    it gets clustered into its nearest block  based
+
+Adapting Kernel Representations Online Using Submodular Maximization
+
+ 
+
+ 
+
+ 
+
+Log 
+
+Determinant
+ 
+
+ 
+
+ 
+
+ 
+
+BlockGreedy Estimation
+
+FullGreedy
+
+BlockGreedy
+
+SieveStreaming
+
+BlockGreedy without clustering
+
+Random
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+Samples Processed
+    log det of  
+
+ 
+
+ 
+
+Percentage
+ 
+Accuracy
+
+ 
+
+ 
+
+ 
+
+ 
+
+Block Greedy
+
+Block Greedy with
+
+only local replacement
+
+Block Greedy without clustering
+
+ 
+
+ 
+Block Size
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+Time
+
+ 
+ seconds 
+ 
+
+ 
+
+ 
+
+ 
+
+FullGreedy
+
+SieveStreaming
+
+BlockGreedy
+
+ 
+
+ 
+
+ 
+
+Budget Size
+
+ 
+
+ 
+
+ 
+
+    Estimate Accuracy  with      
+
+    Runtime with increasing  
+
+Figure   Performance of BlockGreedy in Telemonitoring  Figure     shows the true log determinant of   for the prototypes selected
+by each algorithm  Our algorithm  BlockGreedy  achieves almost the same performance as FullGreedy  which uses no approximation to
+  to compute the logdeterminant  Figure     shows the accuracy of the log determinant estimate as the block size increases  We can
+see that clustering is key  and that for smaller block sizes  comparing between blocks is key  Figure     shows the runtime of the main
+prototype selection competitors  FullGreedy and SieveStreaming  versus BlockGreedy with block size      
+
+on distance to the mean of that cluster  To compute the
+logdeterminant for the new    we simply need to recompute the logdeterminant for the modi ed block  as the logdeterminant for the remaining blocks is unchanged  Therefore  if KS really is blockdiagonal  computing all pairwise
+swaps with   is equivalent to  rst computing the least useful point   in the closest cluster to    and then determining
+if          would be least reduced by removing   or
+removing the least useful prototype from another cluster 
+With some bookkeeping  we maintain the leastuseful prototype for each cluster  to avoid recomputing it each step 
+
+  Experiments
+We empirically illustrate the accuracy and ef ciency of our
+proposed method as compared to OnlineGreedy with no
+approximation to the submodular function  which we call
+Full Greedy  Sieve Streaming  and various naive versions
+of our algorithm  We also show this method can achieve
+reasonable regression accuracy as compared with KRLS
+ Engel et al    For these experiments we use four
+well known datasets  Boston Housing  Lichman   
+Parkinson   Telemonitoring  Tsanas et al    Sante Fe
+   Weigend    and Census    Lichman    Further details about each dataset are in Appendix    We use  
+Gaussian kernel for the  rst three datasets  and   Hamming
+distance kernel for Census  which has categorical features 
+To investigate the effect of the blockdiagonal approximation  we select the logdeterminant as the criterion  which
+is an instance of our criterion  and set      
+Quality of the logdeterminant approximation 
+We  rst investigate the quality of prototypes selection and
+their runtimes  depicted in Figure   We compare our al 
+
+gorithm with the FullGreedy  SieveStreaming and   random prototype selection baseline  We also use variants of
+our algorithm including without clustering naively dividing prototypes into equalsized blocks and one where we
+only consider replacement in the closest block  We include these variants to indicate the importance of clustering
+and of searching between blocks as well within blocks  in
+BlockGreedy  For all experiments on maximization quality 
+we use percentage gain with   threshold of       
+We plot the log determinant with increasing samples  in
+Figure     Experiments on the other datasets are included
+in Appendix    BlockGreedy maximizes the submodular
+function within   of the FullGreedy method  Though
+BlockGreedy achieves nearly as high   log determinant
+value  we can see that its approximation of the log determinant is an overestimate for this small block size       
+Our next experiment 
+focuses on the estimate accuracy of BlockGreedy with increasing block
+size  in Figure     The accuracy is computed by    
+  gactual gestimate
+  We can see our algorithm  BlockGreedy
+performs much better as compared to the other variants 
+ranging in accuracy from   to   This suggests that
+one can choose reasonably small block sizes  without incurring   signi cant penalty in maximizing the log determinant  In Figure     the estimate is inaccurate by about
+  but follows the same trend of the full log determinant
+and picks similar prototypes to those chosen by FullGreedy 
+The runtime of our algorithm should be much less than
+that of FullGreedy  and memory overhead much less than
+SieveStreaming  In Figure     we can see our method
+scales much better than FullGreedy and even has gains in
+speed over SieveStreaming  Though not shown  the number
+of sieves generated by SieveStreaming is large  in many instances well over   introducing   signi cant amount of
+
+therefore 
+
+gactual
+
+Adapting Kernel Representations Online Using Submodular Maximization
+
+ 
+
+ 
+
+ 
+ Root  
+  Mean   
+Square 
+ Error  
+
+ 
+
+ 
+
+ 
+
+KRLS
+
+Sieve Streaming
+
+Full Greedy
+
+ 
+
+ 
+
+ 
+Samples Processed
+
+ 
+
+Block Greedy
+ 
+ 
+
+Random
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+Root
+Mean
+ 
+Square
+Error
+ 
+
+ 
+
+SieveStreaming
+
+ 
+
+ 
+
+ 
+
+Random
+
+BlockGreedy without Clustering
+
+BlockGreedy
+
+KRLS
+
+FullGreedy
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+Samples Processed
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+True continuation
+
+BlockGreedy
+prediction
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+Time Steps  
+
+    Boston housing
+
+    Telemonitoring
+
+    Santa Fe Data Set  
+
+Figure   Figure     is the learning curve on Bostondata  averaged over   runs  with       On average  KRLS uses  
+prototypes  Figure     is the learning curve on the Telemonitoring data set  over   runs  with       and       Figure     plots
+the predicted values of our algorithm and true values  The regularizer       and the utility threshold is       
+
+overhead  Overall  by taking advantage of the block structure of the kernel matrix  our algorithm obtains signi cant
+runtime and memory improvements  while also producing
+  highly accurate estimate of the log determinant 
+Learning performance for regression problems 
+While the maximization of the submodular function is
+useful in creating   diverse collection of prototypes  ultimately we would like to use these representations for prediction  In Figure   we show the effectiveness of solving
+ KS          for the three regression datasets  by using
+our algorithm to select prototypes for KS  For all regression experiments  we use   threshold of        unless
+otherwise speci ed 
+For Boston housing data  in  gure     we see that BlockGreedy can perform almost as well as FullGreedy and
+SieveStreaming  and outperforms KRLS at early learning
+and  nally converges to almost same performance  We set
+the parameters for KRLS using the same parameter settings
+for this dataset as in their paper  Engel et al    For
+our algorithms we set the budget size to       which is
+smaller than what KRLS used  and chose   block size of
+  We also have lower learning variance than KRLS  likely
+because we use explicit regularization  whereas KRLS uses
+its prototype selection mechanism for regularization 
+On the Telemonitoring dataset  the competitive algorithms
+all perform equally well  reaching   RMSE of approximately   BlockGreedy  however  uses signi cantly
+less computation for selecting prototypes  We used   budget of       and   block size of         block size
+of       for this many prototypes impacted the log determinant estimation enough that it was only able to reach
+  RMSE of about   With the larger block size  BlockGreedy obtained   log determinant value within   of
+FullGreedy 
+
+On the benchmark time series data set Santa Fe Data Set
+   we train on the  rst   time steps in the series and
+predict the next   steps  calculating the normalized MSE
+ NMSE  as stated in the original competition  We set the
+width parameter and budget size to that used with KRLS
+after one iteration on the training set  The NMSE of our
+algorithm and KRLS were   and   respectively 
+While our method performs worse  note that KRLS actually
+runs on       samples according to its description  Engel et al    but with   samples it performs worse
+with   NMSE of   We demonstrate the  step forecast with BlockGreedy  in Figure     we include forecast
+plots for the other algorithms in Figure   Appendix   
+
+  Conclusion
+We developed   memory and computation ef cient incremental algorithm  called BlockGreedy  to select centers for
+kernel representations in   continual learning setting  We
+derived   criterion for prototype selection  and showed that
+the logdeterminant is an instance of this criterion  We extended results from streaming submodular maximization 
+to obtain an approximation ratio for OnlineGreedy  We
+then derived the ef cient variant  BlockGreedy  to take advantage of the blockdiagonal structure of the kernel matrix  which enables separability of the criteria and faster
+local computations  We demonstrated that  by taking advantage of this structure  BlockGreedy can signi cantly reduce computation without incurring much penalty in maximizing the logdeterminant and maintaining competitive
+prediction performance  Our goal within continual learning
+was to provide   principled  nearlinear time algorithm for
+prototype selection  in terms of the number of prototypes 
+We believe that BlockGreedy provides one of the  rst such
+algorithms  and is an important step towards effective kernel representations for continual learning settings  like online learning and reinforcement learning 
+
+Adapting Kernel Representations Online Using Submodular Maximization
+
+Acknowledgements
+This research was supported in part by NSF CCF 
+IIS  and the Precision Health Initiative at Indiana
+University  We would also like to thank Inhak Hwang for
+helpful discussions 
+
+References
+Argyriou     and Dinuzzo       Unifying View of RepreIn International Conference on Ma 
+
+senter Theorems 
+chine Learning   
+
+Bach        and Jordan        Predictive lowrank decomposition for kernel methods  In International Conference
+on Machine Learning   
+
+Badanidiyuru     Mirzasoleiman     Karbasi     and
+Krause     Streaming submodular maximization  massive data summarization on the     Conference on
+Knowledge Discovery and Data Mining   
+
+Brookes     Matrix reference manual  Imperial College
+
+London   
+
+Chen     Zhao     Zhu     and Principe        Quantized Kernel Recursive Least Squares Algorithm  IEEE
+Transactions on Neural Networks and Learning Systems 
+ 
+
+Cheng       and Boots     Incremental Variational Sparse
+Gaussian Process Regression  Advances in Neural Information Processing Systems   
+
+Cheng     Vishwanathan           Schuurmans     Wang 
+   and Caelli        Implicit Online Learning with Kernels  In Advances in Neural Information Processing Systems   
+
+Csat       and Opper     Sparse OnLine Gaussian Pro 
+
+cesses  dx doi org   
+
+Dai     Xie     He     Liang     Raj     Balcan    
+      and Song     Scalable Kernel Methods via Doubly
+Stochastic Gradients  Advances in Neural Information
+Processing Systems   
+
+Das     and Kempe    
+
+Submodular meets Spectral 
+Greedy Algorithms for Subset Selection  Sparse Approximation and Dictionary Selection  arXiv org   
+
+Drineas     and Mahoney        On the Nystr om Method
+for Approximating   Gram Matrix for Improved KernelBased Learning  Journal of Machine Learning Research 
+ 
+
+Gittens     and Mahoney        Revisiting the Nystrom
+In
+
+method for improved largescale machine learning 
+International Conference on Machine Learning   
+
+Guha     Meyerson     Mishra     Motwani     and
+  Callaghan     Clustering Data Streams  Theory and
+Practice  IEEE Transaction on Knowledge and Data Engineering   
+
+Huang        Avron     and Sainath        Kernel methods
+match deep neural networks on timit  IEEE International
+Conference on Acoustics  Speech and Signal Processing 
+ 
+
+Kivinen     Smola     and Williamson        Online learning with kernels  IEEE Transactions on Signal Processing   
+
+Krause     and Gomes        Budgeted nonparametric
+learning from data streams  In International Conference
+on Machine Learning   
+
+Krause     McMahon        Guestrin     and Gupta    
+Robust Submodular Observation Selection  Journal of
+Machine Learning Research     
+
+Krause     Singh        and Guestrin     NearOptimal
+Sensor Placements in Gaussian Processes  Theory  Ef 
+cient Algorithms and Empirical Studies  Journal of Machine Learning Research     
+
+Li     Jegelka     and Sra     Fast DPP Sampling for NysIn Interna 
+
+trom with Application to Kernel Methods 
+tional Conference on Machine Learning   
+
+Lichman     UCI machine learning repository  URL
+
+http archive  ics  uci  edu ml   
+
+Lu     May     Liu     Garakani        Guo     Bellet 
+   Fan     Collins     Kingsbury     Picheny     and
+Sha     How to Scale Up Kernel Methods to Be As Good
+As Deep Neural Nets  CoRR abs   
+
+Mairal     Koniusz     Harchaoui     and Schmid     Con 
+
+volutional Kernel Networks  NIPS   
+
+Matic     Inequalities with determinants of perturbed positive matrices  Linear Algebra and its Applications   
+
+Park     and Sandberg     Universal Approximation Using
+RadialBasis Function Networks  Neural Computation 
+ 
+
+Rahimi     and Recht     Random features for largescale
+In Advances in Neural Information
+
+kernel machines 
+Processing Systems   
+
+Engel     Mannor     and Meir     The kernel recursive
+IEEE Transactions on Signal
+
+leastsquares algorithm 
+Processing   
+
+Richard     Bermudez           and Honeine     Online Prediction of Time Series Data With Kernels  IEEE
+Transactions on Signal Processing   
+
+Adapting Kernel Representations Online Using Submodular Maximization
+
+Rudi     Camoriano     and Rosasco     Less is More 
+Nystr om Computational Regularization  Advances in
+Neural Information Processing Systems   
+
+Schraudolph        Smola        and Joachims     Step
+size adaptation in reproducing kernel Hilbert space 
+Journal of Machine Learning Research   
+
+Seeger     Greedy Forward Selection in the Informative
+
+Vector Machine   
+
+Seeger     Williams     and Lawrence     Fast Forward
+Selection to Speed Up Sparse Gaussian Process Regression  Arti cial Intelligence and Statistics   
+
+Si     Hsieh       and Dhillon     Memory ef cient kernel
+approximation  In International Conference on Machine
+Learning   
+
+Tsanas     Little        and McSharry        Accurate Telemonitoring of Parkinson   Disease Progression
+by Noninvasive Speech Tests 
+IEEE transactions on
+Biomedical Engineering   
+
+Van Vaerenbergh     and Santamaria       comparative
+study of kernel adaptive  ltering algorithms 
+In Digital Signal Processing and Signal Processing Education
+Meeting   
+
+Van Vaerenbergh     Santamar       Liu     and Principe 
+      Fixedbudget kernel recursive leastsquares 
+In
+IEEE International Conference on Acoustics  Speech
+and Signal Processing   
+
+Weigend        Time Series Prediction  Forecasting the
+Future and Understanding the Past  Santa Fe Institute
+Studies in the Sciences of Complexity   
+
+

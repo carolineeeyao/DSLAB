@@ -1,0 +1,988 @@
+ZeroShot Task Generalization with MultiTask Deep Reinforcement Learning
+
+Junhyuk Oh   Satinder Singh   Honglak Lee     Pushmeet Kohli  
+
+Abstract
+
+As   step towards developing zeroshot task generalization capabilities in reinforcement learning
+ RL  we introduce   new RL problem where the
+agent should learn to execute sequences of instructions after learning useful skills that solve
+subtasks  In this problem  we consider two types
+of generalizations  to previously unseen instructions and to longer sequences of instructions  For
+generalization over unseen instructions  we propose   new objective which encourages learning correspondences between similar subtasks by
+making analogies  For generalization over sequential instructions  we present   hierarchical
+architecture where   meta controller learns to use
+the acquired skills for executing the instructions 
+To deal with delayed reward  we propose   new
+neural architecture in the meta controller that
+learns when to update the subtask  which makes
+learning more ef cient  Experimental results on
+  stochastic    domain show that the proposed
+ideas are crucial for generalization to longer instructions as well as unseen instructions 
+
+  Introduction
+The ability to understand and follow instructions allows
+us to perform   large number of new complex sequential tasks even without additional learning  For example 
+we can make   new dish following   recipe  and explore
+  new city following   guidebook  Developing the ability to execute instructions can potentially allow reinforcement learning  RL  agents to generalize quickly over tasks
+for which such instructions are available  For example 
+factorytrained household robots could execute novel tasks
+in   new house following   human user   instructions      
+tasks involving household chores  going to   new place 
+picking up manipulating new objects  etc  In addition to
+generalization over instructions  an intelligent agent should
+also be able to handle unexpected events       low bat 
+
+ University of Michigan  Google Brain  Microsoft Research 
+
+Correspondence to  Junhyuk Oh  junhyuk umich edu 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+Figure   Example of    world and instructions  The agent is
+tasked to execute longer sequences of instructions in the correct
+order after training on short sequences of instructions  in addition  previously unseen instructions can be given during evaluation  blue text  Additional reward is available from randomly
+appearing boxes regardless of instructions  green circle 
+
+tery  arrivals of reward sources  while executing instructions  Thus  the agent should not blindly execute instructions sequentially but sometimes deviate from instructions
+depending on circumstances  which requires balancing between two different objectives 
+
+Problem  To develop such capabilities  this paper introduces the instruction execution problem where the agent  
+overall task is to execute   given list of instructions described by   simple form of natural language while dealing
+with unexpected events  as illustrated in Figure   More
+speci cally  we assume that each instruction can be executed by performing one or more highlevel subtasks in sequence  Even though the agent can prelearn skills to perform such subtasks        Pick up  Pig  in Figure   and the
+instructions can be easily translated to subtasks  our problem is dif cult due to the following challenges 
+  Generalization  Pretraining of skills can only be done
+on   subset of subtasks  but the agent is required to perform previously unseen subtasks       going to   new
+place  in order to execute unseen instructions during testing  Thus  the agent should learn to generalize to new
+subtasks in the skill learning stage  Furthermore  the
+agent is required to execute previously unseen and longer
+sequences of instructions during evaluation 
+
+  Delayed reward  The agent is not told which instruction
+to execute at any point of time from the environment but
+just given the full list of instructions as input  In addition 
+the agent does not receive any signal on completing in 
+
+ZeroShot Task Generalization with MultiTask Deep Reinforcement Learning
+
+dividual instructions from the environment       successreward is provided only when all instructions are executed correctly  Therefore  the agent should keep track
+of which instruction it is executing and decide when to
+move on to the next instruction 
+
+  Interruption  As described in Figure   there can be unexpected events in uncertain environments  such as opportunities to earn bonuses       windfalls  or emergencies       low battery  It can be better for the agent to interrupt the ongoing subtask before it is  nished  perform
+  different subtask to deal with such events  and resume
+executing the interrupted subtask in the instructions after
+that  Thus  the agent should achieve   balance between
+executing instructions and dealing with such events 
+
+  Memory  There are loop instructions        Pick up  
+pig  which require the agent to perform the same subtask  Pick up  Pig  multiple times and take into account
+the history of observations and subtasks in order to decide when to move on to the next instruction correctly 
+
+Due to these challenges  the agent should be able to execute
+  novel subtask  keep track of what it has done  monitor
+observations to interrupt ongoing subtasks depending on
+circumstances  and switch to the next instruction precisely
+when the current instruction is  nished 
+
+Our Approach and Technical Contributions  To address the aforementioned challenges  we divide the learning problem into two stages    learning skills to perform
+  set of subtasks and generalizing to unseen subtasks  and
+  learning to execute instructions using the learned skills 
+Speci cally  we assume that subtasks are de ned by several
+disentangled parameters  Thus  in the  rst stage our architecture learns   parameterized skill  da Silva et al    to
+perform different subtasks depending on input parameters 
+In order to generalize over unseen parameters  we propose
+  new objective function that encourages making analogies
+between similar subtasks so that the underlying manifold of
+the entire subtask space can be learned without experiencing all subtasks  In the second stage  our architecture learns
+  meta controller on top of the parameterized skill so that
+it can read instructions and decide which subtask to perform  The overall hierarchical RL architecture is shown in
+Figure   To deal with delayed reward as well as interruption  we propose   novel neural network  see Figure   that
+learns when to update the subtask in the meta controller 
+This not only allows learning to be more ef cient under delayed reward by operating at   larger timescale but also allows interruptions of ongoing subtasks when an unexpected
+event is observed 
+
+Main Results  We developed      visual environment
+using Minecraft based on Oh et al    where the
+agent can interact with many objects  Our results on multiple sets of parameterized subtasks show that our pro 
+
+posed analogymaking objective can generalize successfully  Our results on multiple instruction execution problems show that our meta controller   ability to learn when
+to update the subtask plays   key role in solving the overall problem and outperforms several hierarchical baselines  The demo videos are available at the following
+website  https sites google com   umich 
+edu junhyukoh taskgeneralization 
+The rest of the sections are organized as follows  Section  
+presents related work  Section   presents our analogymaking objective for generalization to parameterized tasks
+and demonstrates its application to different generalization
+scenarios  Section   presents our hierarchical architecture
+for the instruction execution problem with our new neural
+network that learns to operate at   large timescale  In addition  we demonstrate our agent   ability to generalize over
+sequences of instructions  as well as provide   comparison
+to several alternative approaches 
+
+  Related Work
+Hierarchical RL    number of hierarchical RL approaches are designed to deal with sequential tasks  Typically these have the form of   meta controller and   set of
+lowerlevel controllers for subtasks  Sutton et al    Dietterich    Parr and Russell    Ghavamzadeh and
+Mahadevan    Konidaris et al    Konidaris and
+Barto    However  much of the previous work assumes that the overall task is  xed       Taxi domain  Dietterich    In other words  the optimal sequence of
+subtasks is  xed during evaluation       picking up   passenger followed by navigating to   destination in the Taxi
+domain  This makes it hard to evaluate the agent   ability
+to compose prelearned policies to solve previously unseen
+sequential tasks in   zeroshot fashion unless we retrain the
+agent on the new tasks in   transfer learning setting  Singh 
+    McGovern and Barto    Our work is also
+closely related to Programmable HAMs  PHAMs   Andre
+and Russell      in that   PHAM is designed to
+execute   given program  However  the program explicitly
+speci es the policy in PHAMs which effectively reduces
+the stateaction search space  In contrast  instructions are  
+description of the task in our work  which means that the
+agent should learn to use the instructions to maximize its
+reward 
+Hierarchical Deep RL  Hierarhical RL has been recently combined with deep learning  Kulkarni et al   
+proposed hierarchical Deep QLearning and demonstrated
+improved exploration in   challenging Atari game  Tessler
+et al    proposed   similar architecture  but the highlevel controller is allowed to choose primitive actions directly  Bacon et al    proposed the optioncritic architecture  which learns options without pseudo reward
+and demonstrated that it can learn distinct options in Atari
+
+ZeroShot Task Generalization with MultiTask Deep Reinforcement Learning
+
+Figure   Architecture of parameterized skill  See text for details 
+
+games  Heess et al    formulated the actions of the
+meta controller as continuous variables that are used to
+modulate the behavior of the lowlevel controller  Florensa
+et al    trained   stochastic neural network with mutual information regularization to discover skills  Most of
+these approaches build an openloop policy at the highlevel controller that waits until the previous subtask is  nished once it is chosen  This approach is not able to interrupt ongoing subtasks in principle  while our architecture
+can switch its subtask at any time 
+
+ZeroShot Task Generalization  There have been   few
+papers on zeroshot generalization to new tasks  For example  da Silva et al    introduced parameterized skills
+that map sets of task descriptions to policies  Isele et al 
+  achieved zeroshot task generalization through dictionary learning with sparsity constraints  Schaul et al 
+  proposed universal value function approximators
+ UVFAs  that learn value functions for state and goal pairs 
+Devin et al    proposed composing subnetworks that
+are shared across tasks and robots in order to achieve generalization to unseen con gurations of them  Unlike the
+above prior work  we propose    exible metric learning
+method which can be applied to various generalization scenarios  Andreas et al    proposed   framework to learn
+the underlying subtasks from   policy sketch which speci 
+ es   sequence of subtasks  and the agent can generalize
+over new sequences of them in principle  In contrast  our
+work aims to generalize over unseen subtasks as well as unseen sequences of them  In addition  the agent should handle unexpected events in our problem that are not described
+by the instructions by interrupting subtasks appropriately 
+
+Instruction Execution  There has been   line of work for
+building agents that can execute natural language instructions  Tellex et al      for robotics and MacMahon et al    Chen and Mooney   Mei et al 
+  for   simulated environment  However  these approaches focus on natural language understanding to map
+instructions to actions or groundings in   supervised setting  In contrast  we focus on generalization to sequences
+of instructions without any supervision for language understanding or for actions  Although Branavan et al   
+also tackle   similar problem  the agent is given   single
+instruction at   time  while our agent needs to learn how to
+align instructions and state given   full list of instructions 
+
+  Learning   Parameterized Skill
+In this paper    parameterized skill is   multitask policy
+corresponding to multiple tasks de ned by categorical input task parameters        Pick up     More formally  we
+de ne   parameterized skill as   mapping           
+where   is   set of observations    is   set of task parameters    is   set of primitive actions  and        
+indicates whether the task is  nished or not    space of
+tasks is de ned using the Cartesian product of task parameters                    where      is   set of the
+ith parameters            Visit  Pick up         
+Given an observation xt     at time   and task parameters
+
+   cid          cid       where      is   onehot vector  the
+
+parameterized skill is the following functions 
+
+Policy   at xt    
+Termination   bt xt    
+
+where   is the policy optimized for the task    and   is  
+termination function  Sutton et al    which is the probability that the state is terminal at time   for the given task
+   The parameterized skill is represented by   nonlinear
+function approximator     neural network in this paper 
+The neural network architecture of our parameterized skill
+is illustrated in Figure   The network maps input task parameters into   task embedding space     which is combined with the observation followed by the output layers 
+More details are described in the supplementary material 
+
+  Learning to Generalize by AnalogyMaking
+Only   subset of tasks    cid       are available during training  and so in order to generalize to unseen tasks during
+evaluation the network needs to learn knowledge about the
+relationship between different task parameters when learning the task embedding    
+To this end  we propose an analogymaking objective inspired by Reed et al    The main idea is to learn
+correspondences between tasks  For example  if target objects and  Visit Pick up  actions are independent       each
+action can be applied to any target object  we can enforce
+the analogy  Visit        Visit        Pick up        Pick up 
+   for any   and   in the embedding space  which means
+that the difference between  Visit  and  Pick up  is consistent regardless of target objects and vice versa  This allows
+the agent to generalize to unseen combinations of actions
+and target objects  such as performing  Pick up     after it
+has learned to perform  Pick up     and  Visit    
+More speci cally  we de ne several constraints as follows 
+if gA   gB   gC   gD
+if gA   gB  cid  gC   gD
+if gA  cid  gB 
+
+ cid   gA  gB       gC  gD cid     
+ cid   gA  gB       gC  gD cid     dis
+ cid 
+ cid   gA  gB cid     dif  
+  
+      
+
+ cid      are task parameters 
+
+where gk  
+
+          
+
+ 
+
+ObservationTaskparametersActionTermination TaskembeddingZeroShot Task Generalization with MultiTask Deep Reinforcement Learning
+
+   gA  gB     gA     gB  is the difference vector between two tasks in the embedding space  and  dis and  dif  
+are constant threshold distances  Intuitively  the  rst constraint enforces the analogy       parallelogram structure
+in the embedding space  see Mikolov et al    Reed
+et al    while the other constraints prevent trivial solutions  We incorporate these constraints into the following
+objectives based on contrastive loss  Hadsell et al   
+ cid 
+Lsim   EgA   Gsim
+Ldis   EgA   Gdis
+Ldif     EgA   Gdif  
+where     max  and Gsim Gdis Gdif   are sets of
+task parameters that satisfy corresponding conditions in the
+above three constraints  The  nal analogymaking objective is the weighted sum of the above three objectives 
+
+ cid cid   gA  gB       gC  gD cid cid 
+ cid 
+ cid 
+ dis    cid   gA  gB       gC  gD cid 
+ dif      cid   gA  gB cid 
+
+ 
+
+ 
+
+ 
+
+  Training
+The parameterized skill is trained on   set of tasks    cid      
+through the actorcritic method with generalized advantage
+estimation  Schulman et al    We also found that
+pretraining through policy distillation  Rusu et al   
+Parisotto et al    gives slightly better results as discussed in Tessler et al    Throughout training  the
+parameterized skill is also made to predict whether the current state is terminal or not through   binary classi cation
+objective  and the analogymaking objective is applied to
+the task embedding separately  The full details of the learning objectives are described in the supplementary material 
+
+  Experiments
+Environment  We developed      visual environment
+using Minecraft based on Oh et al    as shown in
+Figure   An observation is represented as        
+pixel RGB image  There are   different types of objects 
+Pig  Sheep  Greenbot  Horse  Cat  Box  and Ice  The
+topology of the world and the objects are randomly generated for every episode  The agent has   actions  Look
+ Left Right Up Down  Move  Forward Backward  Pick
+up  Transform  and No operation  Pick up removes the object in front of the agent  and Transform changes the object
+in front of the agent to ice    special object 
+Implementation Details  The network architecture of
+the parameterized skill consists of   convolution layers
+and one LSTM  Hochreiter and Schmidhuber    layer 
+We conducted curriculum training by changing the size
+of the world  the density of object and walls according
+to the agent   success rate  We implemented actorcritic
+method with   CPU threads based on Sukhbaatar et al 
+  The parameters are updated after   episodes for
+each thread  The details of architectures and hyperparameters are described in the supplementary material 
+
+Scenario
+
+Independent
+
+Objectdependent
+
+Inter Extrapolation
+
+Analogy
+
+ 
+ cid 
+ 
+ cid 
+ 
+ cid 
+
+Train
+
+   
+   
+   
+   
+   
+   
+
+Unseen
+
+   
+   
+   
+   
+   
+   
+
+Table   Performance on parameterized tasks  Each entry shows
+ Average reward  Success rate  We assume an episode is successful only if the agent successfully  nishes the task and its termination predictions are correct throughout the whole episode 
+
+ cid 
+
+Results  To see how useful analogymaking is for generalization to unseen parameterized tasks  we trained and
+evaluated the parameterized skill on three different sets of
+parameterized tasks de ned below 
+  Independent  The task space is de ned as            
+where      Visit  Pick up  Transform  and   is the set
+of object types  The agent should move on top of the
+target object given  Visit  task and perform the corresponding actions in front of the target given  Pick up 
+and  Transform  tasks  Only   subset of tasks are encountered during training  so the agent should generalize
+over unseen con gurations of task parameters 
+
+  Objectdependent  The task space is de ned as    
+   cid        where    cid         Interact with  We divided
+objects into two groups  each of which should be either
+picked up or transformed given  Interact with  task  Only
+  subset of target object types are encountered during
+training  so there is no chance for the agent to generalize
+without knowledge of the group of each object  We applied analogymaking so that analogies can be made only
+within the same group  This allows the agent to perform
+objectdependent actions even for unseen objects 
+
+  Interpolation Extrapolation  The task space is de ned
+as                where             The
+agent should perform   task for   given number of times
+        Only           is given during training 
+and the agent should generalize over unseen numbers
+        Note that the optimal policy for   task can be
+derived from        but predicting termination requires
+generalization to unseen numbers  We applied analogymaking based on arithmetic        Pick up          Pick
+up          Transform          Transform      
+
+As summarized in Table   the parameterized skill with
+our analogymaking objective can successfully generalize
+to unseen tasks in all generalization scenarios  This suggests that when learning   representation of task parameters  it is possible to inject prior knowledge in the form of
+the analogymaking objective so that the agent can learn to
+
+ The sets of subtasks used for training and evaluation are de 
+
+scribed in the supplementary material 
+
+ZeroShot Task Generalization with MultiTask Deep Reinforcement Learning
+
+Figure   Overview of our hierarchical architecture 
+
+generalize over unseen tasks in various ways depending on
+semantics or context without needing to experience them 
+
+  Learning to Execute Instructions using
+
+Parameterized Skill
+
+We now consider the instruction execution problem where
+the agent is given   sequence of simple natural language
+instructions  as illustrated in Figure   We assume an already trained parameterized skill  as described in Section  
+Thus  the main remaining problem is how to use the parameterized skill to execute instructions  Although the requirement that instructions be executed sequentially makes
+the problem easier  than       conditionalinstructions  the
+agent still needs to make complex decisions because it
+should deviate from instructions to deal with unexpected
+events       low battery  and remember what it has done to
+deal with loop instructions  as discussed in Section  
+To address the above challenges  our hierarchical RL architecture  see Figure   consists of two modules  meta controller and parameterized skill  Speci cally    meta controller reads the instructions and passes subtask parameters
+to   parameterized skill which executes the given subtask
+and provides its termination signal back to the meta controller  Section   describes the overall architecture of the
+meta controller for dealing with instructions  Section  
+describes   novel neural architecture that learns when to
+update the subtask in order to better deal with delayed reward signal as well as unexpected events 
+
+  Meta Controller Architecture
+As illustrated in Figure   the meta controller is   mapping
+                   where   is   list of instructions 
+Intuitively  the meta controller decides subtask parameters
+gt     conditioned on the observation xt      the list of
+instructions        the previously selected subtask gt 
+and its termination signal       
+In contrast to recent hierarchical deep RL approaches
+where the meta controller can update its subtask  or option 
+only when the previous one terminates or only after    xed
+number of steps  our meta controller can update the subtask
+at any time and takes the termination signal as additional
+input  This gives more  exibility to the meta controller and
+
+Figure   Neural network architecture of meta controller 
+
+enables interrupting ongoing tasks before termination 
+In order to keep track of the agent   progress on instruction
+execution  the meta controller maintains its internal state by
+computing   context vector  Section   and determines
+which subtask to execute by focusing on one instruction at
+  time from the list of instructions  Section  
+
+  CONTEXT
+Given the sentence embedding rt  retrieved at the previous timestep from the instructions  described in Section   the previously selected subtask gt  and the
+subtask termination bt    
+troller computes the context vector  ht  as follows 
+
+ cid  the meta con 
+ cid bt st  gt 
+ cid   
+st     cid xt  rt  gt  bt
+
+ht   LSTM  st  ht 
+
+where   is   neural network  Intuitively  gt  and bt provide information about which subtask was being solved by
+the parameterized skill and whether it has  nished or not 
+Thus  st is   summary of the current observation and the
+ongoing subtask  ht takes the history of st into account
+through the LSTM  which is used by the subtask updater 
+
+  SUBTASK UPDATER
+The subtask updater constructs   memory structure from
+the list of instructions  retrieves an instruction by maintaining   pointer into the memory  and computes the subtask
+parameters 
+
+sists of   list of words  mi  cid        mi cid  the subtask
+
+Instruction Memory  Given instructions as   list of sentences              mK  where each sentence conupdater constructs memory blocks     RE         each
+column is an Edimensional embedding of   sentence 
+The subtask updater maintains an instruction pointer  pt  
+RK  which is nonnegative and sums up to   indicating
+which instruction the meta controller is executing  Memory construction and retrieval can be written as 
+
+Memory                              mK 
+Retrieval  rt   Mpt 
+
+ 
+ 
+
+ObservationContextSubtaskparametersSubtaskparametersRetrieved instructionSubtasktermination InstructionmemorySubtaskupdaterUpdateYesNoInstructionsRecurrenceZeroShot Task Generalization with MultiTask Deep Reinforcement Learning
+
+Figure   Unrolled illustration of the meta controller with  
+learned timescale  The internal states           and the subtask
+    are updated only when       If       the meta controller
+continues the previous subtask without updating its internal states 
+where     mi    RE is the embedding of the ith sentence
+      Bagof words  and rt   RE is the retrieved sentence
+embedding which is used for computing the subtask parameters  Intuitively  if pt is   onehot vector  rt indicates
+  single instruction from the whole list of instructions  The
+meta controller should learn to manage pt so that it can
+focus on the correct instruction at each timestep 
+Since instructions should be executed sequentially  we use
+  locationbased memory addressing mechanism  Zaremba
+and Sutskever    Graves et al    to manage the
+instruction pointer  Speci cally  the subtask updater shifts
+the instruction pointer by     as follows 
+
+pt   lt   pt  where lt   Softmax cid shif   ht cid   
+
+ 
+where   is   convolution operator   shif   is   neural network  and lt      is   softattention vector over the three
+shift operations       The optimal policy should
+keep the instruction pointer unchanged while executing an
+instruction and increase the pointer by   precisely when
+the current instruction is  nished 
+
+Subtask Parameters  The subtask updater takes the context  ht  updates the instruction pointer  pt  retrieves an
+instruction  rt  and computes subtask parameters as 
+
+ ht  rt
+
+    
+ 
+
+ 
+
+ cid 
+
+ cid 
+ cid    exp
+
+ 
+
+   gt ht  rt   
+ cid 
+
+ ht  rt
+
+ 
+
+ cid 
+
+ cid 
+ cid 
+
+ 
+
+where  
+is   neural network for the ith subtask parameter 
+
+ ht  rt 
+
+ goal
+
+    
+ 
+
+ 
+
+  and  goal
+
+ 
+
+metacontroller policy that is not able to interrupt ongoing subtasks before termination  which is necessary to deal
+with unexpected events not speci ed in the instructions 
+To address this dilemma  we propose to learn the timescale
+of the meta controller by introducing an internal binary decision which indicates whether to invoke the subtask updater to update the subtask or not  as illustrated in Figure  
+
+This decision is de ned as  ct    cid update  st  ht cid 
+
+where   is   sigmoid function  If ct     the meta controller continues the current subtask without updating the
+subtask updater  Otherwise  if ct     the subtask updater
+updates its internal states       instruction pointer  and the
+subtask parameters  This allows the subtask updater to operate at   large timescale because one decision made by
+the subtask updater results in multiple actions depending
+on   values  The overall meta controller architecture with
+this update scheme is illustrated in Figure  
+SoftUpdate  To
+nondifferentiable variable  ct  we propose   softupdate
+
+rule by using ct    cid update  st  ht cid  instead of
+
+optimization
+
+ease
+
+sampling it  The key idea is to take the weighted sum of
+both  update  and  copy  scenarios using ct as the weight 
+This method is described in Algorithm   We found that
+training the meta controller using softupdate followed
+by  netuning by sampling ct is crucial for training the
+meta controller  Note that the softupdate rule reduces to
+the original formulation if we sample ct and lt from the
+Bernoulli and multinomial distributions  which justi es
+our initialization trick 
+
+the
+
+of
+
+Algorithm   Subtask update  Soft 
+
+ct    cid update  st  ht cid 
+ cid cid 
+lt   Softmax cid shif   cid ht
+ cid 
+
+Input  st  ht  pt  rt  gt 
+Output  ht  pt  rt  gt
+ ht   LSTM  st  ht 
+ pt   lt   pt 
+ rt     pt
+ cid 
+  Merge two scenarios  update copy  using ct as weight
+ pt  rt  ht    ct pt   rt   ht        ct   pt  rt  ht 
+    ct 
+    
+
+  Decide update weight
+  Update the context
+  Decide shift operation
+  Shift the instruction pointer
+  Retrieve instruction
+
+      ct      
+
+ ht   rt
+
+   
+
+    
+ 
+
+  Learning to Operate at   Large TimeScale
+Although the meta controller can learn an optimal policy by
+updating the subtask at each timestep in principle  making
+  decision at every timestep can be inef cient because subtasks do not change frequently  Instead  having temporallyextended actions can be useful for dealing with delayed
+reward by operating at   larger timescale  Sutton et al 
+  While it is reasonable to use the subtask termination
+signal to de ne the temporal scale of the meta controller as
+in many recent hierarchical deep RL approaches  see Section   this approach would result in   mostly openloop
+
+Integrating with Hierarchical RNN  The idea of learning the timescale of   recurrent neural network is closely
+related to hierarchical RNN approaches  Koutnik et al 
+  Chung et al    where different groups of recurrent hidden units operate at different timescales to capture
+both longterm and shortterm temporal information  Our
+idea can be naturally integrated with hierarchical RNNs by
+applying the update decision    value  only for   subset of
+recurrent units instead of all the units  Speci cally  we divide the context vector into two groups  ht  
+ 
+The lowlevel units      
+    are updated at every timestep 
+
+      
+
+    
+ 
+
+ cid 
+
+ cid 
+
+ 
+
+UpdateSubtaskUpdateSubtaskCopyCopyCopyUpdateZeroShot Task Generalization with MultiTask Deep Reinforcement Learning
+
+ 
+
+while the highlevel units      
+  are updated depending on
+the value of    This simple modi cation leads to   form of
+hierarchical RNN where the lowlevel units focus on shortterm temporal information while the highlevel units capture longterm dependencies 
+  Training
+The meta controller is trained on   training set of lists of
+instructions  Given   pretrained and  xed parameterized
+skill  the actorcritic method is used to update the parameters of the meta controller  Since the meta controller also
+learns   subtask embedding  gt  and has to deal with
+unseen subtasks during evaluation  analogymaking objective is also applied  The details of the objective function
+are provided in the supplementary material 
+  Experiments
+The experiments are designed to explore the following
+questions    Will the proposed hierarchical architecture
+outperform   nonhierarchical baseline    How bene 
+cial is the meta controller   ability to learn when to update
+the subtask  We are also interested in understanding the
+qualitative properties of our agent   behavior 
+
+Environment  We used the same Minecraft domain used
+in Section   The agent receives   time penalty  
+for each step and receives   reward when it  nishes the
+entire list of instructions in the correct order  Throughout
+an episode    box  including treasures  randomly appears
+with probability of   and transforming   box gives  
+reward 
+The subtask space is de ned as            and the semantics of each subtask are the same as the  Independent  case
+in Section   We used the bestperforming parameterized
+skill throughout this experiment 
+There are   types of instructions   Visit    Pick up   
+Transform    Pick up      Transform      Pick up     
+Transform      where     is the target object type  Note
+that the parameterized skill used in this experiment was
+not trained on loop instructions       Pick up      so the
+last four instructions require the meta controller to learn to
+repeat the corresponding subtask for the given number of
+times  To see how the agent generalizes to previously unseen instructions  only   subset of instructions and subtasks
+was presented during training 
+
+Implementation Details  The meta controller consists of
+  convolution layers and one LSTM layer  We also conducted curriculum training by changing the size of the
+world  the density of object and walls  and the number of
+instructions according to the agent   success rate  We used
+
+ For further analysis  we also conducted comprehensive experiments on      gridworld domain  However  due to space
+limits  those results are provided in the supplementary material 
+
+Test  Seen  Test  Unseen 
+
+ 
+
+ 
+
+Train
+
+ 
+
+Length of instructions
+Flat
+
+   
+
+   
+   
+HierarchicalLong        
+   
+   
+HierarchicalShort        
+   
+HierarchicalDynamic        
+Table   Performance on instruction execution  Each entry shows
+average reward and success rate   HierarchicalDynamic  is our
+approach that learns when to update the subtask  An episode is
+successful only when the agent solves all instructions correctly 
+the actorcritic implementation described in Section  
+
+Baselines  To understand the advantage of using the hierarchical structure and the bene   of our meta controller  
+ability to learn when to update the subtask  we trained three
+baselines as follows 
+  Flat  identical to our meta controller except that it directly chooses primitive actions without using the parameterized skill  It is also pretrained on the training
+set of subtasks 
+
+  HierarchicalLong  identical to our architecture except
+that the meta controller can update the subtask only when
+the current subtask is  nished  This approach is similar
+to recent hierarchical deep RL methods  Kulkarni et al 
+  Tessler et al   
+
+  HierarchicalShort 
+
+identical to our architecture except that the meta controller updates the subtask at every
+timestep 
+
+Overall Performance  The results on the instruction execution are summarized in Table   and Figure   It shows
+that our architecture  HierarchicalDynamic  can handle   relatively long list of seen and unseen instructions of
+length   with reasonably high success rates  even though
+it is trained on short instructions of length   Although
+the performance degrades as the number of instructions
+increases  our architecture  nishes   out of   seen instructions and   out of   unseen instructions on average  These results show that our agent is able to generalize
+to longer compositions of seen unseen instructions by just
+learning to solve short sequences of   subset of instructions 
+
+Flat vs  Hierarchy  Table   shows that the  at baseline
+completely fails even on training instructions  The  at controller tends to struggle with loop instructions       Pick up
+  pig  so that it learned   suboptimal policy which moves
+to the next instruction with   small probability at each step
+regardless of its progress  This implies that it is hard for the
+ at controller to detect precisely when   subtask is  nished 
+whereas hierarchical architectures can easily detect when  
+subtask is done  because the parameterized skill provides  
+termination signal to the meta controller 
+
+Effect of Learned TimeScale  As shown in Table   and
+Figure    HierarchicalLong  baseline performs signi 
+cantly worse than our architecture  We found that whenever
+
+ZeroShot Task Generalization with MultiTask Deep Reinforcement Learning
+
+Figure   Performance per number of instructions  From left to right  the plots show reward  success rate  the number of steps  and the
+average number of instructions completed respectively 
+
+Figure   Analysis of the learned policy   Update  shows our agent   internal update decision   Shift  shows our agent   instructionshift
+decision     and   from top to bottom  The bottom text shows the instruction indicated by the instruction pointer  while the top text
+shows the subtask chosen by the meta controller      the agent picks up the pig to  nish the instruction and moves to the next instruction 
+    When the agent observes   box that randomly appeared while executing  Pick up   pig  instruction  it immediately changes its subtask
+to  Transform  Box      After dealing with the event  transforming   box  the agent resumes executing the instruction  Pick up   pig 
+    The agent  nishes the  nal instruction 
+
+  subtask is  nished  this baseline puts   high probability
+to switch to  Transform  Box  regardless of the existence
+of box because transforming   box gives   bonus reward if
+  box exists by chance  However  this leads to wasting too
+much time  nding   box until it appears and results in  
+poor success rate due to the time limit  This result implies
+that an openloop policy that has to wait until   subtask  nishes can be confused by such an uncertain event because
+it cannot interrupt ongoing subtasks before termination 
+On the other hand  we observed that  HierarchicalShort 
+often fails on loop instructions by moving on to the next
+instruction before it  nishes such instructions  This baseline should repeat the same subtask while not changing the
+instruction pointer for   long time and the reward is even
+more delayed given loop instructions  In contrast  the subtask updater in our architecture makes fewer decisions by
+operating at   large timescale so that it can get more direct
+feedback from the longterm future  We conjecture that this
+is why our architecture performs better than this baseline 
+This result shows that learning when to update the subtask
+using the neural network is bene cial for dealing with delayed reward without compromising the ability to interrupt 
+
+Analysis of The Learned Policy  We visualized our
+agent   behavior given   long list of instructions in Figure   Interestingly  when the agent sees   box  the meta
+controller immediately changes its subtask to  Transform 
+Box  to get   positive reward even though its instruction
+
+pointer is indicating  Pick up   pig  and resumes executing the instruction after dealing with the box  Throughout this event and the loop instruction  the meta controller
+keeps the instruction pointer unchanged as illustrated in
+ BC  in Figure  
+In addition  the agent learned to update the instruction pointer and the subtask almost only
+when it is needed  which provides the subtask updater with
+temporallyextended actions  This is not only computationally ef cient but also useful for learning   better policy 
+
+  Conclusion
+In this paper  we explored   type of zeroshot task generalization in RL with   new problem where the agent is required to execute and generalize over sequences of instructions  We proposed an analogymaking objective which
+enables generalization over unseen parameterized tasks in
+various scenarios  We also proposed   novel way to learn
+the timescale of the meta controller that proved to be more
+ef cient and  exible than alternative approaches for interrupting subtasks and for dealing with delayed sequential
+decision problems  Our empirical results on   stochastic
+   domain showed that our architecture generalizes well
+to longer sequences of instructions as well as unseen instructions  Although our hierarchical RL architecture was
+demonstrated in the simple setting where the set of instructions should be executed sequentially  we believe that our
+key ideas are not limited to this setting but can be extended
+to richer forms of instructions 
+
+ Num of instructions Reward Num of instructions Success rate Num of instructions steps Num of instructions instructions completedFlat  Seen Flat  Unseen HierarchicalLong  Seen HierarchicalLong  Unseen HierarchicalShort  Seen HierarchicalShort  Unseen HierarchicalDynamic  Seen HierarchicalDynamic  Unseen UpdateShiftABCDABCD SubtaskInstructionZeroShot Task Generalization with MultiTask Deep Reinforcement Learning
+
+Acknowledgement
+This work was supported by NSF grant IIS  Any
+opinions   ndings  conclusions  or recommendations expressed here are those of the authors and do not necessarily
+re ect the views of the sponsor 
+
+References
+   Andre and       Russell  Programmable reinforcement
+
+learning agents  In NIPS   
+
+   Andre and       Russell 
+programmable reinforcement
+AAAI IAAI   
+
+State abstraction for
+In
+
+learning agents 
+
+   Andreas     Klein  and    Levine  Modular multitask
+reinforcement learning with policy sketches  CoRR 
+abs   
+
+     Bacon     Harb  and    Precup  The optioncritic ar 
+
+chitecture  In AAAI   
+
+         Branavan     Chen        Zettlemoyer  and
+   Barzilay  Reinforcement learning for mapping instructions to actions  In ACL IJCNLP   
+
+      Chen and       Mooney  Learning to interpret natural
+language navigation instructions from observations  In
+AAAI   
+
+   Chung     Ahn  and    Bengio  Hierarchical multiscale
+
+recurrent neural networks  In ICLR   
+
+      da Silva     Konidaris  and       Barto  Learning
+
+parameterized skills  In ICML   
+
+   Heess     Wayne     Tassa        Lillicrap        Riedmiller  and    Silver  Learning and transfer of modulated
+locomotor controllers  arXiv preprint arXiv 
+ 
+
+   Hochreiter and    Schmidhuber  Long shortterm mem 
+
+ory  Neural computation     
+
+   Isele     Rostami  and    Eaton  Using task features
+for zeroshot knowledge transfer in lifelong learning  In
+IJCAI   
+
+   Konidaris and       Barto  Building portable options 
+Skill transfer in reinforcement learning  In IJCAI   
+
+   Konidaris     Scheidwasser  and       Barto  Transfer
+in reinforcement learning via shared features  Journal of
+Machine Learning Research     
+
+   Koutnik     Greff     Gomez  and    Schmidhuber   
+
+clockwork rnn  In ICML   
+
+      Kulkarni        Narasimhan     Saeedi  and      
+Tenenbaum  Hierarchical deep reinforcement learning 
+Integrating temporal abstraction and intrinsic motivation  arXiv preprint arXiv   
+
+   MacMahon     Stankiewicz  and    Kuipers  Walk
+the talk  Connecting language  knowledge  and action
+in route instructions  In AAAI   
+
+   McGovern and       Barto  Autonomous discovery of
+temporal abstractions from interaction with an environment  PhD thesis  University of Massachusetts   
+
+   Mei     Bansal  and       Walter  Listen  attend  and
+walk  Neural mapping of navigational instructions to action sequences  arXiv preprint arXiv   
+
+   Devin     Gupta     Darrell     Abbeel  and    Levine 
+Learning modular neural network policies for multitask
+and multirobot transfer  In ICRA   
+
+   Mikolov        Le  and    Sutskever  Exploiting similarities among languages for machine translation  arXiv
+preprint arXiv   
+
+      Dietterich  Hierarchical reinforcement learning with
+the maxq value function decomposition  Journal of Arti cial Intelligence Research     
+
+   Florensa     Duan  and    Abbeel  Stochastic neural networks for hierarchical reinforcement learning  In ICLR 
+ 
+
+   Ghavamzadeh and    Mahadevan  Hierarchical policy
+
+gradient algorithms  In ICML   
+
+   Graves     Wayne  and    Danihelka  Neural turing ma 
+
+chines  arXiv preprint arXiv   
+
+   Hadsell     Chopra  and    LeCun  Dimensionality reIn CVPR 
+
+duction by learning an invariant mapping 
+ 
+
+   Oh     Chockalingam     Singh  and    Lee  Memorybased control of active perception and action in
+minecraft  In ICML   
+
+   Parisotto        Ba  and    Salakhutdinov  Actormimic 
+Deep multitask and transfer reinforcement learning  In
+ICLR   
+
+   Parr and       Russell  Reinforcement learning with hi 
+
+erarchies of machines  In NIPS   
+
+      Reed     Zhang     Zhang  and    Lee  Deep visual
+
+analogymaking  In NIPS   
+
+      Rusu        Colmenarejo     Gulcehre     DesJ  Kirkpatrick     Pascanu     Mnih 
+Policy distilla 
+
+jardins 
+   Kavukcuoglu  and    Hadsell 
+tion  In ICLR   
+
+ZeroShot Task Generalization with MultiTask Deep Reinforcement Learning
+
+   Schaul     Horgan     Gregor  and    Silver  Universal
+
+value function approximators  In ICML   
+
+   Schulman     Moritz     Levine     Jordan  and
+   Abbeel  Highdimensional continuous control using
+generalized advantage estimation  In ICLR   
+
+      Singh  The ef cient learning of multiple task se 
+
+quences  In NIPS   
+
+      Singh  Transfer of learning by composing solutions of
+elemental sequential tasks  Machine Learning   
+   
+
+   Sukhbaatar     Szlam     Synnaeve     Chintala  and
+   Fergus  Mazebase    sandbox for learning from
+games  arXiv preprint arXiv   
+
+      Sutton     Precup  and    Singh  Between mdps
+and semimdps    framework for temporal abstraction
+in reinforcement learning  Arti cial intelligence   
+   
+
+   Tellex     Kollar     Dickerson        Walter       
+Banerjee        Teller  and    Roy  Understanding natural language commands for robotic navigation and mobile manipulation  In AAAI   
+
+   Tellex        Knepper     Li     Rus  and    Roy  Asking
+
+for help using inverse semantics  In RSS   
+
+   Tessler     Givony     Zahavy        Mankowitz  and
+   Mannor    deep hierarchical approach to lifelong
+learning in minecraft  In AAAI   
+
+   Zaremba and    Sutskever  Reinforcement learning neural turing machines  arXiv preprint arXiv 
+ 
+
+

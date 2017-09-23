@@ -1,0 +1,1297 @@
+Deep Generative Models for Relational Data with Side Information
+
+Changwei Hu   Piyush Rai   Lawrence Carin  
+
+Abstract
+
+We present   probabilistic framework for overlapping community discovery and link prediction for relational data  given as   graph  The
+proposed framework has      deep architecture
+which enables us to infer multiple layers of latent features communities for each node  providing superior link prediction performance on more
+complex networks and better interpretability of
+the latent features  and     regression model
+which allows directly conditioning the node latent features on the side information available in
+form of node attributes  Our framework handles
+both   and   via   clean  uni ed model  which
+enjoys full local conjugacy via data augmentation  and facilitates ef cient inference via closed
+form Gibbs sampling  Moreover  inference cost
+scales in the number of edges which is attractive for massive but sparse networks  Our framework is also easily extendable to model weighted
+networks with countvalued edges  We compare
+with various stateof theart methods and report
+results  both quantitative and qualitative  on several benchmark data sets 
+
+  Introduction
+Statistical modeling of complex realworld networks is
+an important problem  drawing attention from diverse domains  such as social network analysis  biology  political
+science  etc   Fortunato    Goldenberg et al  Schmidt
+  Morup    The goal in statistical modeling of networks is usually to discover the underlying groups or community structure in the network  and or predicting the existence of potential links between nodes    common way
+
+ Yahoo  Research  New York  NY  USA  CSE Department 
+IIT Kanpur  Kanpur  UP  India  Duke University  Durham  NC 
+USA  Correspondence to  Changwei Hu  changweih yahooinc com  Piyush Rai  piyush cse iitk ac in  Lawrence Carin
+ lcarin duke edu  This work was done when Changwei Hu
+was   Ph    student at Duke University 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+of accomplishing this is by embedding the nodes in   latent space via latent space models  Hoff et al   
+Extensions of the latent space model include stochastic
+blockmodels  Nowicki   Snijders    and variants
+thereof  Miller et al    Airoldi et al    Latouche
+et al    which can learn node embeddings that are interpretable       sparse  and can therefore re ect the underlying structure of the network  An appealing class of models is the latent feature relational model  LFRM   Miller
+et al    often also called the overlapping stochastic
+blockmodel  Latouche et al    which associates with
+each node   latent binary vector that can be thought of as
+the node   overlapping memberships to one or more latent
+clusters in the network 
+The modeling  exibility offered by overlapping stochastic
+blockmodels  however  comes at   price  Inference in these
+models  typically performed by MCMC methods  Miller
+et al    Latouche et al    can be particularly challenging and is not easy to scale to networks with very large
+number of nodes  Moreover  many realworld networks exhibit considerably more complex interactions which may
+not be explained by the  at embeddings learned via these
+models  This problem can be further exacerbated due to the
+extreme sparsity of the observed links  and although leveraging some side information that might be available for
+each node can help alleviate this issue to some extent  Kim
+et al    this can make inference even more complex
+to scale to large networks  Kim et al    Besides 
+communities in realworld networks often tend to have
+interdependencies hierarchical structures that are usually
+ignored by these single layer models 
+Motivated by these limitations  we present an overarching
+framework that enables us to address these challenges via
+  uni ed  fully Bayesian model  Speci cally  we develop
+  model that learns multiple layers of latent features of the
+nodes in the network  effectively learning   more expressive representation of the nodes which can better explain
+the interactions among the nodes in more complex networks  as compared to the existing methods  At the same
+time  the hierarchy of multiple layers of latent features allows imposing exploiting the correlations among the clusters  which is usually not possible with single layer models 
+Another appealing aspect of our model is its ability to in 
+
+Deep Generative Models for Relational Data with Side Information
+
+corporate side information  given as node attributes  via  
+regression model that maps the node attributes to node latent features  This provides the model robustness when the
+network is highly sparse and or in  coldstart  problems
+where   new node may not have formed links with any existing nodes and we may still want to predict its cluster
+memberships and or links with the existing nodes 
+Our model also enjoys excellent computational scalability 
+In particular  leveraging dataaugmentation techniques allows us achieve full local conjugacy and enables us to develop   simple Gibbs sampler for model inference  Moreover  the inference cost in our model scales in the number of observed edges in the network  which makes it
+especially appealing for large realworld networks which
+are inherently sparse  Finally  although in this exposition 
+we only focus on unweighted networks  given as binary
+symmetric asymmetric adjacency matrix  our framework 
+based on   gammaPoisson construction  can readily be applied to weighted networks  Aicher et al    where the
+edges may have countvalued weights 
+  The Model
+We denote the network being modeled as   binary adjacency matrix              where   is the number
+of nodes  The network may be symmetric  undirected  or
+asymmetric  directed  In addition to    we may be also
+given side information associated with each node  The side
+information  when given  will be denoted using an      
+matrix    with   being the number of observed features in
+the side information  and si   RD  row   in    denoting
+the side information associated with node   
+Following the overlapping stochastic blockmodel  Latouche et al    Miller et al    Zhu    approach
+to statistical network modeling  we assume that each node
+  in the network can be described as binary latent feature
+vector zi of size    where zik     if node   belongs to the
+latent cluster community    and   otherwise  Note that the
+model allows each node to belong to more than one cluster community  Given the node latent features  the probability of   link Aij between nodes   and   can then be
+de ned as    bilinear  function of the latent features zi and
+   zj  where   is         mazj         Aij           cid 
+trix  with    cid  modulating the probability of link between
+two nodes belonging to clusters   and  cid  Here   is   function  described in Sec    which turns realvalued scores
+  cid 
+   zj into probabilities 
+Unlike overlapping stochastic blockmodels  Latouche
+et al    Miller et al    Zhu    for relational
+data  however  which can only learn   single layer binary
+latent feature representation for the nodes in form of an
+     binary matrix        cid 
+    we present   hierarchical architecture  shown in Fig    which allows learning
+
+          cid 
+
+multiple layers of latent features    cid  
+ cid  where   denotes the number of layers    cid           cid  and   cid  is
+the number of latent features in layer  cid 
+Note that our proposed framework is similar in spirit to
+deep sigmoid beliefnets  Neal    Gan et al   
+originally proposed for vectorvalued observations  In contrast  our focus here is to model relational data given as
+pairwise observations  Moreover  our framework also allows conditioning the latent features directly on the side
+information using   regression model  We now describe
+the various components of our framework in the following
+subsections 
+    Structured Hierarchical Latent Feature Model
+
+Akin to the deep sigmoid beliefnets  Neal    Gan
+et al    we condition each node   latent features in
+layer  cid  on its latent features in layer  cid      via   weight matrix   cid    RK cid   cid   Fig    Thus  for node    we have
+
+ik        cid 
+
+    cid 
+                 cid cid                   
+
+ik      cid 
+
+   cid   cid 
+
+ 
+
+   
+
+    cid 
+
+      
+
+ik          
+
+ik        
+
+                   KL
+
+    RK cid  denotes the kth row of   cid  and
+              cid 
+  is vector of biases  Note that      
+  cid 
+
+where   cid 
+  cid       cid 
+corresponds to   single layer model 
+  key bene   of the multilayer   layers or more  architecture is that the  nd layer latent features allow modeling and
+leveraging the correlations among the layer   latent features
+      clusters  which directly touch the data  In contrast   
+ at   layer model will not be able to model correlations 
+
+Figure   The full model with hierarchical architecture and side
+information  Hyperparameters not shown for brevity
+
+  Incorporating Side Information
+
+If available  side information associated with the nodes in
+the network can be incorporated in this framework by conditioning the bottommost layer       layer   latent features    on the side information  Fig    Conditional distributions of the latent features                 in all other
+
+Deep Generative Models for Relational Data with Side Information
+
+layers remain unchanged as before  Sec    whereas the
+layer   latent features for node   are now modeled as
+
+   cid   
+
+      cid 
+
+    
+
+  si     
+   
+
+ik          
+
+ 
+where mk   RD denotes the regression weights  which
+map the observed features si to the latent features zi  Note
+that although we only condition the layer   latent features
+on the side information  rest of the layers can also be conditioned on the side information in the same way 
+Note that  as opposed to conditioning the link Aij on the
+side information  in our model construction we choose to
+condition the latent features of each node on its side information  This allows the side information to directly in uence the latent features  which is useful for predicting the
+latent features for new nodes that do not have any existing
+links in the network  This modeling choice has also been
+employed in  Kim et al    an extension of mixedmembership stochastic blockmodels  Airoldi et al   
+where each node   cluster membership probabilities are directly conditioned on the metadata  observed features  associated with that node 
+  Generating the Network
+
+The layer   latent features    generate the observed network    graphical model shown in Fig    Speci cally 
+each edge Aij       is generated by thresholding   latent count random variable Xij  Each of these latent counts
+Xij  in turn  is de ned as   summation of another set of
+ smaller  latent counts Xijk    which are de ned as bilinear functions of the layer   latent features    Formally 
+
+Aij    Xij     Xij  
+
+Xijk   
+
+  cid 
+
+  cid 
+
+  
+
+  
+
+       
+jk 
+
+ 
+
+Marginalizing out the latent counts Xij from Eq   
+
+Xijk      Poisson   
+ cid 
+
+ik 
+
+  Aij       Bernoulli
+
+ 
+
+ cid 
+
+    exp   
+
+ 
+
+ cid 
+
+   
+   
+
+ 
+
+Note that only the bottom layer  layer   latent features directly touch the data layer  the observed links nonlinks 
+The construction in Eq    based on decomposing   discrete random variable into   set of latent counts has also
+been used previously in modeling discrete  count or binary 
+data  Dunson   Herring    Gopalan et al    Zhou 
+  This construction has the appealing property that
+if Aij     then the associated latent counts are zero with
+probability one and need not be estimated during model
+inference  Therefore  this can lead to huge computational
+speedups for sparse data with many zeros  which is usually
+the case with real world networks which are very sparse 
+In the case of modeling relational data such as networks 
+this implies that the inference cost scales in the number
+
+of edges in the network  unlike other overlapping stochastic blockmodels such as LFRM  Miller et al    Zhu 
+  These models use   logistic link function for the
+edges  which requires likelihood evaluations for both edges
+as well as nonedges  Consequently  the inference cost is
+quadratic in the number of nodes  making these models
+prohibitive for large networks  Note that the model readily
+applies to graphs with countvalued edges  the additional
+step of latentcount thresholding would not be required 
+Note that   similar construction for network generation was
+recently employed in  Zhou    However  our framework differs from  Zhou    in   number of key ways  In
+particular  unlike  Zhou    in which the latent features
+are positive reals  in our framework the latent features are
+binary  in the spirit of stochastic blockmodels  Miller et al 
+  Zhu    The binary latent features are also crucial for   deep sigmoid belief net construction  Moreover 
+unlike the model in  Zhou    which cannot leverage
+side information  our framework allows incorporating the
+side information of each node in predicting the node   latent features  This capability allows our framework to work
+in the coldstart settings where   new node may not yet have
+formed any links with the existing nodes 
+  The Full Generative Model
+
+The full generative model for the observed network   
+along with the latent variables  parameters  and hyperparameters of the model  is given below
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+
+ 
+
+ 
+
+Xij  
+
+  cid 
+
+Aij    Xij    
+
+  cid 
+Xijk      Poisson   
+ik   Bernoulli cid 
+  cid 
+ik  
+
+  
+
+  
+
+ik 
+
+Xijk   
+
+        
+jk 
+
+ 
+
+ 
+
+                 cid cid                
+
+   cid   cid 
+
+   cid 
+  si     cid 
+   
+  if  cid      and side info si available 
+
+    cid 
+
+ 
+
+   cid 
+
+   cid   cid 
+
+ 
+
+    cid 
+   
+
+  if  cid      and side info si not available 
+
+ cid 
+ik  
+
+     
+        Gamma gk       ck   
+
+    if  cid     
+
+ cid       
+
+if
+if
+
+    cid    
+       
+
+   
+
+gk     
+
+ 
+     Gamma            Gamma       
+  cid 
+ 
+ 
+
+  cid    mk          
+
+         
+
+ 
+
+ 
+
+  cid  and the regression weights  mk  
+
+To impose sparsity on the between layer connection
+weights    cid 
+      
+  
+we use automatic relevance determination  ARD  priors
+on these 
+In particular  the ARD prior on the regression
+weights mk also helps in selecting the relevant features in
+
+Deep Generative Models for Relational Data with Side Information
+
+ 
+
+ 
+
+ 
+
+  
+
+ cid 
+
+ bck   
+
+  
+ik 
+
+  
+jk 
+
+ 
+  ck   
+
+    
+  
+
+   
+
+the side information that are the most relevant in predicting
+the node   binary latent features 
+Another appealing property of the resulting link function
+ Eq    is that it encourages generation of networks that are
+inherently sparse  To see this  note that using the likelihood
+model given by Eq    readily leads to   lower bound on the
+number of zeros in the   matrix 
+Lemma  
+network   
+of zeros in   
+bounded by    Ezi zj  
+    exp
+where we have made use of the fact that the expectation of
+         is  nite  The proof of the
+
+The level of sparsity of
+the observed
+ cid 
+as measured by the expected number
+       Aij     is lower
+ cid cid 
+ 
+
+ cid cid    
+ cid 
+the term cid 
+
+       cid  
+ cid cid  
+ cid   
+
+          zik  zjk 
+
+dom variables with xr   Pois    and    cid  
+     cid  
+
+Lemma is given in the Supplementary Material 
+  Inference
+The model described in   is not conjugate  However  leveraging data augmentation techniques  we endow
+the model with full local conjugacy and derive   simple and
+ef cient Gibbs sampler for model inference  The  rst data
+augmentation technique we use is based on the Poissonmultinomial equivalence  Zhou et al   
+Lemma   Suppose that            xR are independent ranr  xr  Set
+       let                yR  be another set of random variables such that     Pois  and             yR    
+Mult     
+Then the distribution of    
+               xR  is the same as the distribution of    
+               yR 
+Using this equivalence  given Xij  the smaller latent counts
+ cid 
+Xijk     can be easily sampled as
+ Xijk      Mult
+
+              
+
+   
+
+ cid 
+
+   
+
+Xij 
+
+ 
+
+       
+jk 
+     
+       
+jk 
+
+ik 
+
+ cid  
+
+ cid  
+
+ik 
+
+  
+
+The second data augmentation we use is based on
+the   olyaGamma  PG  strategy
+ Polson et al   
+which allows reexpressing logisticBernoulli likelihoods
+on the   cid 
+ik    as Gaussians and consequently allows deriving closedform posterior updates for the betweenlayer
+weights   cid 
+and the regression weights mk  note that
+ 
+each of these are given Gaussian priors  According to the
+PG augmentation  given likelihoods expressible in the form
+ exp    
+ exp       and given   olyaGamma random variable random variables     PG     
+    exp          exp   
+where    is the density of the PG variable  and    
+
+exp       
+
+ cid   
+
+ exp    
+
+ 
+
+       This result transforms the logisticBernoulli into
+  Gaussian  when conditioned on the PG random variables 
+For example  for sampling   cid 
+    we draw     olyaGamma
+        cid 
+random variables  cid 
+     cid 
+     one for each
+ Bernoullidrawn    cid 
+ik   as
+
+ik   PG     cid 
+ cid 
+
+   cid   cid 
+
+ 
+
+    cid 
+   
+
+where PG  denotes the   olyaGamma distribution  Polson et al    Conditioned on  cid 
+the logistick  
+Bernoulli likelihood on   cid 
+ik turns into   Gaussian and consequently the posterior distribution of   cid 
+  will also be  
+Gaussian  The same data augmentation strategy is followed
+for sampling the regression weights mk  for which conditioned on the layer   PG variables  
+    the posterior of mk
+is   Gaussian  The details are given in the next subsection 
+  Gibbs Sampling
+
+Gibbs sampling for our model proceeds as follows 
+Sample Xij  For each nonzero observation Aij     in the
+network  the associated latent count Xij is sampled from  
+zerotruncated Poisson distribution as
+
+  cid 
+
+  cid 
+
+Xij   Pois 
+
+  
+ik 
+
+       
+jk 
+
+ 
+
+  
+
+  
+
+Sample Xijk    Having sampled Xij  the latent counts 
+Xijk    can be sampled using the Poissonmultinomial
+equivalence  Lemma  
+
+Sample   
+ik 
+
+  Layer   latent features   
+ik 
+
+are sampled as
+
+ Xi       
+
+ 
+
+  
+
+  
+
+ik 
+
+   
+
+ ik 
+
+ cid 
+
+  
+ik 
+where the  marginal  latent counts are de ned as
+summations 
+Xijk     
+            
+
+     Xi       cid 
+ cid 
+ ik         
+ cid   
+
+   Xi       Bern 
+ cid 
+ cid  
+
+and     
+Sample       The latent feature interaction weights
+      are sampled as
+
+Xjik     ik     
+ik 
+
+   
+  
+  ck    
+ ck   
+
+     
+ik 
+
+ cid  
+
+Qk      ck   
+  
+jk 
+
+        Gamma          gk     
+     
+ik 
+
+where Qk       cid  
+     cid 
+
+          
+    Xijk      Xijk      with           if
+
+ cid 
+ip  cid      We consider the update of   sinip as an example  and assume the side information
+ip  
+
+        and           otherwise 
+Sample   cid 
+gle   
+is available    
+ip
+ip     
+       
+
+ip   Bern   
+     
+  
+
+is updated as   
+
+ cid   
+
+with   
+
+     
+
+ cid 
+
+kp  
+
+  
+
+  
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+Deep Generative Models for Relational Data with Side Information
+
+ cid 
+
+    RK  is the pth
+
+  
+ik   mT
+
+  si  
+
+  
+ik   
+
+ 
+
+ik  
+
+kp      
+kp  
+  
+column in    and  
+ik is de ned as  
+wT
+
+  where   
+
+ 
+
+    
+
+  cid  and    
+
+ip   
+kp  
+    mk           
+      cid 
+
+      
+Sample   cid 
+  For
+brevity  the detailed equations are provided in the Supplementary Material 
+  Related Work
+  number of extensions have been proposed to enhance
+the modeling capabilities of stochastic blockmodels and its
+variants such as the latent feature relational model  LFRM 
+when applied to complex graphstructured data  In particular  in the context of LFRM  recent work on in nite latent
+attributes  ILA   Palla et al    is designed to learn binary latent features for the nodes in the network  and each
+latent feature is further assumed to be partitioned into disjoint groups  ILA however cannot incorporate side information  and while ILA assumes   speci   twolevel representation of the nodes  via latent features in level one and
+clusters in level two  our model is capable of learning  
+more general hierarchical latent feature representation 
+Stochastic blockmodels have also been extended for inferring nested communities using nested Chinese Restraurant
+Process  Ho et al    Such methods can learn clusters
+of varying granularities at multiple levels in   hierarchy 
+However  the focus of these class of methods is different
+as these methods do not learn   binary latent feature based
+representation unlike our model and can only learn disjoint
+clusterings  organized at multiple scales  of nodes 
+Among methods that can incorporate side information in
+stochastic blockmodels  the nonparametric metadata dependent relational  NMDR  model  Kim et al    is
+somewhat similar in spirit to our model in the way the
+side information is incorporated into the model  The
+NMDR model builds on the nonparametric Bayesian
+mixedmembership stochastic blockmodel  Airoldi et al 
+  and the side information is incorporated by conditioning the cluster membership probabilities  the weights
+of the sticks in the stickbreaking process  on the side information via   regression model  However  it is   single
+layer model  requires retrospective MCMC sampling for
+inference  and is dif cult to scale to large networks  We
+use NMDR as one of the baselines in our experiments 
+Among other methods that can incorporate side information in link prediction models beyond stochastic blockmodels   Menon   Elkan    presented   number of nonprobabilistic approaches based on latent space models that
+directly use the side information in the link prediction objective function  note that LFRM also proposes doing the
+same  Miller et al    to incorporate side information 
+
+However  the embeddings are not conditioned on the side
+information and these models cannot predict the embedding of   new node from its side information 
+Our model is also similar in spirit to the recently proposed in nite edge partition model  Zhou     we also
+use it as one of our baselines in the experiments  which
+also uses the BernoulliPoisson link to model each edge 
+However  EPM assumes positivevalued node embeddings
+ given gamma priors  is limited to   single layer representation  and cannot incorporate side information 
+To the best of our knowledge  none of the existing methods for network modeling can learn hierarchical latent representations of the nodes  Recently  DeepWalk  Perozzi
+et al    was introduced as   way to learn embeddings
+of nodes in   network using   skipgram model by considering short random walks along the network and using these walks as  sentences  and nodes being  words 
+and learns the node embedding in   manner like learning word vec embeddings  However  these embeddings
+are single layer realvalued embeddings 
+In addition to
+this  some other simultaneous development on deep learning for graphstructured  relational data include graph convolutional networks  Schlichtkrull et al    and graph
+variational autoencoders  Kipf   Welling   
+In contrast to the aforementioned methods  our framework
+provides   uni ed model which not only learns   hierarchical  interpretable latent feature representation of the nodes 
+but also incorporates node side information via   regression
+model  Notably  both these enrichments are naturally formulated under   multilayer sigmoid beliefnet type model
+architecture  Moreover  the model is simple to do inference
+on  and can easily scale to massive  sparse networks  with
+binary as well as countvalued edges 
+
+  Experiments
+We consider three instances of our hierarchical latent feature model  HLFM  onelayer HLFM  twolayer HLFM 
+and twolayer HLFM with side information  While our
+framework straightforwardly extends to more than two layers  we speci cally focus our experimental analysis to consider the single and two layer cases  with without side
+information  to carefully explicate the advantage of our
+model in    going from  at to hierarchical latent features 
+and   the advantage of incorporate the side information 
+especially when the network is highly sparse 
+We apply our model on several benchmark relational data
+sets  and compare with three stateof theart methods for
+stochastic blockmodeling and link prediction as baseline 
+including stochastic blockmodels based methods that can
+also incorporate side information  Our baselines include 
+  Hierarchical Gamma Process Edge Partition Model
+
+Deep Generative Models for Relational Data with Side Information
+
+ HGPEPM   Zhou    This is   stateof theart 
+highly scalable Bayesian model for learning overlapping communities  The model is based on learning
+nonnegative embeddings for each node 
+
+  CommunityAf liation Graph Model  AGM 
+
+ Yang
+  Leskovec    This model is an overlapping
+community detection model based on learning   binary latent feature vector  akin to our approach and
+latent feature relational models  Miller et al   
+  Nonparametric Metadata Dependent Relational
+Model  NMDR   Kim et al    This model
+is based on the nonparametric Bayesian mixedmembership blockmodel and 
+in the same spirit
+as our model  allows conditioning   node   cluster
+memberships on metadata associated with that node 
+
+  Data Sets
+
+We consider seven realworld data sets  with  ve data sets
+associated with side information  and the remaining two
+having no side information  The description of each data
+set  and the associated side information  is given below 
+Protein  This data set contains information about
+proteinprotein interactions of   proteins  with  
+edges  This network has no side information 
+NIPS  Coauthor network consists of the top   authors in NIPS   conferences in terms of the number of
+publications  as studied in  Miller et al    There are
+  edges  This network has no side information 
+Con icts  Network of military disputes between countries
+in year    Ghosn et al    The graph is symmetric       two countries have   link if either initiated con 
+ ict with the other  There are   countries and   edges 
+Each country has   features  GDP  population  and polity 
+Facebook  Useruser interactions extracted from Facebook
+social network  McAuley   Leskovec    There are
+  users from   egonetwork communities  Each user is
+associated with   pro le information features       age 
+gender  education 
+Metabolic  Metabolic pathway interaction data for Saccharomyces cerevisiae provided in the KEGG PATHWAY
+database  Yamanishi et al    There are   nodes in
+total  Each node is associated with three sets of features 
+phylogenetic information   features  gene expression
+information  features  and gene location   features 
+NIPS   NIPS coauthorship network containing  
+authors  and   edges  For this dataset  we also know
+what words each author used in their publications  We decompose the authorword matrix using SVD  and introduce
+ rst   SVDbased author features as side information 
+CiteSeer    citation network consisting of   scienti  
+
+publications from six categories  agents  AI  databases  human computer interaction  machine learning  and information retrieval  The side information for the dataset is the
+category label for each paper which is converted into   onehot representation 
+We evaluate our model on both quantitative tasks  in its
+ability to predict missing links in the network  as well as
+qualitative tasks  interpreting the inferred clusters 
+  Predicting Heldout Links
+
+We use Area Under the ROC Curve  AUC  to evaluate our
+model and the other baselines on the task of link prediction  For the two data sets without side information  Protein  and NIPS  we hold out   data as our test
+data  For the remaining  ve data sets  we hold out  
+data as our test data as we were interested in highly missing
+data regimes to investigate how much the side information
+is bene tting in such dif cult cases 
+The shrinkage priors used in our model and the other baselines can automatically prune out the unnecessary latent
+features  We set   to   large enough number       
+so that all models are evaluated with suf cient number of
+latent features  Our models and the other baselines  except
+HGPEPM  are run with   burnin iterations  and another   iterations for sample collection  For the HGPEPM baseline  we use the default setting from  Zhou   
+and run their model for   burnin and   collection
+iterations  The samplers are initialized randomly  Each experiment is repeated   times with different training and test
+splits and averaged results are reported 
+Table   reports the results on the two data sets that do not
+have side information and Table   reports the results on
+the other four data sets with side information  On the data
+sets with side information  Figure   separately compares
+the three variants of our model  the model with one layer 
+two layers  and two layers with side information 
+As shown in Table   our two layer model outperforms all
+the other methods  Also note that  on NIPS  the one
+layer model is outperformed by HGPEPM and performs
+comparably to AGM  which like our model learns binary
+latent feature for each model  However  there is   marked
+improvement in the performance when using the two layer
+model and the model ourperforms all the baselines by  
+signi cant margin  This shows the bene   of the better and
+more expressive latent features learned by the hierarchy in
+our model  even when no side information is available 
+Table   shows the results in the presence of side information  Except for Con icts data  where our model gets
+outperformed by HGPEPN  our two layer model with
+side information signi cantly outperforms the baselines on
+most of the data sets  In particular  our model yields better AUC scores than the other best performing baseline
+
+Deep Generative Models for Relational Data with Side Information
+
+NMDR  Kim et al    which can  like our model  incorporate side information  The better performance of our
+model can be attributed to   combination of several factors         unlike NMDR  our model allows overlapping
+membership to multiple clusters  and multiple layers of latent features  leading to more expressive latent features 
+and   inference is simpler in our model  which leads to
+better mixing of the sampler 
+It is interesting to note that neither NMDR nor the twolayer HLFM with side information outperform HGPEPM
+on Con icts data in terms of the link prediction performance  This is probably because the sideinformation is
+too simple and not very informative for link prediction 
+In Figure   we also separately compare the three variants
+of our model  the model with one layer  two layers  and
+two layers with side information  As the  gure shows  the
+two layer model usually performs better than the one layer
+model  and incorporating the side information leads to further improvements in the AUC scores  with the strength of
+improvement depending on how informative the side information is in predicting the latent features of the nodes 
+
+Table   AUC scores on Protein  and NIPS 
+
+HGPEPM
+Protein   
+ 
+NIPS 
+
+AGM NMDR HLFM
+ cid     
+ 
+ 
+
+ 
+ 
+
+ 
+ 
+
+HLFM
+ cid     
+ 
+ 
+
+Table   AUC scores on data sets with side information  Note 
+NMDR was infeasible to run on the NIPS   and CiteSeer data
+in   reasonable amount of time 
+
+HGPEPM
+ 
+ 
+ 
+ 
+ 
+
+AGM
+
+ 
+ 
+ 
+ 
+ 
+
+NMDR
+
+ 
+ 
+ 
+NA
+NA
+
+Con icts
+Facebook
+Metabolic
+NIPS  
+CiteSeer
+
+HLFM
+ cid     
+sideinfo
+
+ 
+ 
+ 
+ 
+ 
+
+represents   cluster of nodes in the network  Essentially  the
+nonzero entries in each column of the matrix correspond to
+the nodes that belong to   cluster in layer  cid 
+We use   cid  to present clustering results for the NIPS 
+and Con icts datasets in Table   and   In Table   showing
+results on the NIPS  data  note that some authors      
+Michael Jordan  are inferred as belonging to more than one
+cluster  since the model allows overlapping clusters 
+
+Table   NIPS    Clusters of representative authors in layer  
+
+Cluster
+Probabilistic
+Modeling
+Kernels   Learning Theory
+Cognitive Neuroscience
+
+Author
+Sejnowski    Jordan    Hinton    Williams   
+Smyth    Frey      Ghahramani    Zemel  
+Jordan    Scholkopf    Vapnik    ShaweTaylor
+   Smola    Platt    Bousquet    Smola    
+Touretzky    Koch    Mozer    Baldi    Moore
+   Bower    Mead    DeWeerth    Personnaz  
+
+Likewise  Table   shows the results on Con icts data 
+with the inferred clusters of countries  To further show
+the discovered clusters at multiple layers and the interrelationships between clusters    In Table   we show the
+learned clusters of countries in layer   and layer     In
+Figure   we show the inferred correlationbased pairwise
+similarities between the layer   clusters  To compute these
+correlations  we use the betweenlayer weights   cid 
+  as the
+feature vector for the kth cluster  of layer  cid      and use
+cosine similarity between the feature vectors of each pair
+of clusters 
+
+Table   Con icts Data   Country clusters in layer      
+
+Cluster
+   layer  
+   layer  
+   layer  
+
+   layer  
+
+   layer  
+
+Country
+Angola  South Africa  Swaziland  Zambia
+Dem  Rep  Congo  Lesotho  Mozambique
+Egypt  Ghana  Guinea  Iraq  Jordan  Liberia  Libya  Niger 
+Nigeria  Syria
+Cameroon  Ivory Coast  Chad  Iraq  Israel  Jordan  Liberia 
+Namibia  Sierra Leone  Sudan
+Hungary  Italy  Netherlands  Iraq  Sudan  Yemen  North Korea  Malaysia
+
+Table   Computational
+time  seconds iteration  comparision
+ Note  Twolayer HLFM with side inforamtion was infeasible to
+run on NIPS  and Protein  for lack of side information 
+
+HGPEPM
+NIPS 
+ 
+Protein   
+ 
+Con icts
+Metabolic
+ 
+
+AGM NMDR HLFM
+ cid     
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+HLFM
+ cid     
+ 
+ 
+ 
+ 
+
+HLFM
+ cid     
+sideinfo
+
+NA
+NA
+ 
+ 
+
+Figure   Comparing the three variants of our model on the data
+sets with side information 
+  Qualitative Analyses via Inferred Latent Features
+
+The node embedding learned by our model  with or without
+side information  can be used for qualitative analyses  Note
+that each column of the binary latent feature matrix   cid 
+
+From the left plot of Figure   it can be observed  for example  that layer   clusters   and   have   high similarity  and
+clusters   and   have   high similarity  Looking at these
+four clusters  which are also shown in Table   we  nd that
+the countries in each of these layer   clusters are usually
+bordering countries  as shown in the right plot of Figure  
+having military disputes or other types of bilateral relations
+
+ConflictsFacebookMetabolicNIPS CiteSeer AUCHLFM HLFM HLFM SideInfoDeep Generative Models for Relational Data with Side Information
+
+      military aid  Interestingly  unlike layer   clusters  the
+countries grouped together in layer   clusters are not necessarily related by the virtue of being geographically close 
+As seen in Table   the clusters in layer         cluster  
+are more coarsegrained  and can be regarded as    super
+group  of clusters   Such clusters consist of countries from
+multiple geographic regions  such as Europe  Middle East
+and Asia  some of which are known to be related via some
+military disputes  despite not being geographically close 
+For example  during the Gulf war   recorded in Con 
+ icts data between   Iraq  Middle East  was involved disputes with the coalition members which included
+countries like Hungary  Italy  Netherlands  Europe  Interestingly all these countries are grouped together in cluster   of layer   This analysis demonstrates that the multilayer architecture of our model not only yields signi cantly
+improved linkprediction accuracies but also enables us in
+gaining better insights into the data by means of more interpretable latent features and clusterings  which may be
+useful in their own right in many applications 
+
+Figure   Comparison of the AUC convergence of HLFM  cid 
+HGPEPM  and AGM on Metabolic data 
+
+Figure    Best seen in color  Left  inferred pairwise similarities
+between layer   clusters  Right  clusters   and   in layer  
+Countries in pink and purple colors are assigned to cluster   and
+  respectively  and countries in yellow assigned to both clusters 
+
+  Computational Ef ciency And Convergence
+
+We also perform an experiment to assess the computational ef ciency of our framework  We compare  on four
+data sets  the run time of the three variants of our model
+ one layer  two layers  and two layers with side information  with the run times of the NMDR  Kim et al   
+AGM Yang   Leskovec    and HGPEPM  Zhou 
+  all of which are stateof theart community detection link prediction methods  All the models are imple 
+
+mented in MATLAB and were run on   standard machine
+with  GHz processor and  GB RAM  Our inference
+routines are based on batch Gibbs sampling  The periteration computation times are shown in Table  
+As shown in Table   our models have very small periteration run times which are comparable with the other
+baselines  Among all the methods compared  note that
+AGM has smallest computational cost  This is due to the
+simplicity of the model  however it also gives the lowest
+AUC scores on all the data sets  Besides AGM  our models have run times that are comparable to the baseline HGPEPM  which is   single layer model and cannot incorporate
+side information  and are considerably faster than the other
+baseline NMDR which  although capable of incorporating
+side information  is computationally much more expensive
+as compared with our models 
+We also compare  Figure   the empirical convergence of
+the various models on the Metabolic data   training testing split  As the  gure shows  the convergence
+time for our twolayer HLFM is comparable with HGPEPM model  while AGM takes the longest to converge 
+  Conclusion
+We presented   deep generative model for relational data
+for which side information may also be available for each
+node  Our model enriches the latent feature relational models for networks using   hierarchical structure  and allows
+incorporating side information seamlessly via   regression
+model  To the best of our knowledge  ours is the  rst framework that extends overlapping stochastic blockmodels to  
+deep architecture    key bene   of the deep architecture
+ even with   hidden layers  is that the layer   latent features allow modeling leveraging correlations among layer
+  latent features clusters which directly touch the data   
+ at model will not be able to leverage such correlations 
+The modeling  exibility is also accompanied by simplicity of inference  In particular  leveraging data augmentation schemes  the model enjoys full local conjugacy and
+admits ef cient inference via   simple Gibbs sampler  Networks graphs with binary as well as countweighted edges
+can be analyzed using our model  by replacing the truncated Poisson likelihood by   Poisson likelihood  The
+model can be easily scaled up even further using online
+Bayesian inference  and by leveraging recognition models  Kingma   Welling    for fast inference of the latent features  Another possible extension of the model will
+be in modeling multirelational data  such as knowledgegraphs  Schlichtkrull et al    Hu et al   
+Acknowledgements  This research was supported in part by
+ARO  DARPA  DOE  NGA  ONR and NSF  Piyush Rai also acknowledges support from IBM Faculty Award  DSTSERB Early
+Career Research Award  Dr  Deep Singh and Daljeet Kaur Faculty
+Fellowship  and the ResearchI Foundation  IIT Kanpur 
+
+ Time   AUCHLFM   HGPEPMAGM Deep Generative Models for Relational Data with Side Information
+
+References
+Aicher  Christopher  Jacobs  Abigail    and Clauset  Aaron 
+Adapting the stochastic block model to edgeweighted networks  arXiv preprint arXiv   
+
+Neal  Radford    Connectionist learning of belief networks  Ar 
+
+ti cial intelligence     
+
+Nowicki  Krzysztof and Snijders  Tom      Estimation and pre 
+
+diction for stochastic blockstructures  JASA   
+
+Airoldi  Edoardo    Blei  David    Fienberg  Stephen    and
+Xing  Eric    Mixed membership stochastic blockmodels 
+JMLR   
+
+Palla  Konstantina  Knowles  David  and Ghahramani  Zoubin 
+An in nite latent attribute model for network data  In ICML 
+ 
+
+Perozzi  Bryan  AlRfou  Rami  and Skiena  Steven  Deepwalk 
+
+Online learning of social representations  In KDD   
+
+Polson  Nicholas    Scott  James  and Windle  Jesse  Bayesian
+inference for logistic models using   olya gamma latent variables  Journal of the American Statistical Association   
+   
+
+Schlichtkrull  Michael  Kipf  Thomas    Bloem  Peter  Berg  Rianne van den  Titov  Ivan  and Welling  Max  Modeling relational data with graph convolutional networks  arXiv preprint
+arXiv   
+
+Schmidt  Mikkel   and Morup  Morten  Nonparametric bayesian
+modeling of complex networks  An introduction  Signal Processing Magazine  IEEE     
+
+Yamanishi  Yoshihiro  Vert  JeanPhilippe  and Kanehisa  Minoru  Supervised enzyme network inference from the integration of genomic data and chemical information  Bioinformatics   
+
+Yang  Jaewon and Leskovec  Jure  Communityaf liation graph
+In
+
+model for overlapping network community detection 
+ICDM   
+
+Zhou     Hannah        Dunson     and Carin     Betanegative
+In AISTATS 
+
+binomial process and poisson factor analysis 
+ 
+
+Zhou  Mingyuan  In nite edge partition models for overlapping
+
+community detection and link prediction  In AISTATS   
+
+Zhu  Jun  Maxmargin nonparametric latent feature models for
+
+link prediction  In ICML   
+
+Dunson  David   and Herring  Amy    Bayesian latent variable
+models for mixed discrete outcomes  Biostatistics   
+ 
+
+Fortunato  Santo  Community detection in graphs  Physics re 
+
+ports     
+
+Gan  Zhe  Henao  Ricardo  Carlson  David    and Carin 
+Lawrence  Learning deep sigmoid belief networks with data
+augmentation  In AISTATS   
+
+Ghosn  Faten  Palmer  Glenn  and Bremer  Stuart  The mid 
+data set    Procedures  coding rules  and description 
+Con ict Management and Peace Science   
+
+Goldenberg  Anna  Zheng  Alice    Fienberg  Stephen    and
+Airoldi  Edoardo      survey of statistical network models 
+Foundations and Trends   cid  in Machine Learning 
+
+Gopalan  Prem  Ruiz  Francisco    Ranganath  Rajesh  and Blei 
+David    Bayesian nonparametric poisson factorization for
+recommendation systems  In AISTATS  pp     
+
+Ho  Qirong  Parikh  Ankur    and Xing  Eric      multiscale
+community blockmodel for network exploration  Journal of the
+American Statistical Association     
+
+Hoff  Peter    Raftery  Adrian    and Handcock  Mark    Latent
+
+space approaches to social network analysis  JASA   
+
+Hu  Changwei  Rai  Piyush  and Carin  Lawrence  Topicbased
+embeddings for learning from large knowledge graphs  In Proceedings of the  th International Conference on Arti cial Intelligence and Statistics  pp     
+
+Kim  Dae Il  Hughes  Michael  and Sudderth  Erik  The nonparametric metadata dependent relational model  In ICML   
+
+Kingma  Diederik   and Welling  Max  Autoencoding variational
+
+bayes  arXiv preprint arXiv   
+
+Kipf  Thomas   and Welling  Max  Variational graph auto 
+
+encoders  arXiv preprint arXiv   
+
+Latouche  Pierre  Birmel    Etienne  and Ambroise  Christophe 
+Overlapping stochastic block models with application to the
+french political blogosphere  The Annals of Applied Statistics 
+ 
+
+McAuley  Julian and Leskovec  Jure  Learning to discover social
+
+circles in ego networks  In NIPS   
+
+Menon  Aditya Krishna and Elkan  Charles  Link prediction via
+matrix factorization  In Machine Learning and Knowledge Discovery in Databases   
+
+Miller  Kurt  Grif ths  Thomas  and Jordan  Michael  Nonpara 
+
+metric latent feature models for link prediction  NIPS   
+
+

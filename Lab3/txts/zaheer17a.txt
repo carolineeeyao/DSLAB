@@ -1,0 +1,1166 @@
+Joint Clustering and NonLinear Dynamic Modeling of Sequential Data
+
+Latent LSTM Allocation
+
+Manzil Zaheer   Amr Ahmed   Alexander   Smola  
+
+Abstract
+
+Recurrent neural networks  such as longshort
+term memory  LSTM  networks  are powerful tools for modeling sequential data like user
+browsing history  Tan et al    Korpusik
+et al    or natural language text  Mikolov
+et al    However  to generalize across different user types  LSTMs require   large number of parameters  notwithstanding the simplicity of the underlying dynamics  rendering it uninterpretable  which is highly undesirable in user
+modeling  The increase in complexity and parameters arises due to   large action space in
+which many of the actions have similar intent or
+topic  In this paper  we introduce Latent LSTM
+Allocation  LLA  for user modeling combining
+hierarchical Bayesian models with LSTMs  In
+LLA  each user is modeled as   sequence of actions  and the model jointly groups actions into
+topics and learns the temporal dynamics over the
+topic sequence  instead of action space directly 
+This leads to   model that is highly interpretable 
+concise  and can capture intricate dynamics  We
+present an ef cient Stochastic EM inference algorithm for our model that scales to millions of
+users documents  Our experimental evaluations
+show that the proposed model compares favorably with several stateof theart baselines 
+
+  Introduction
+Sequential data prediction is an important problem in machine learning spanning over   diverse set of applications
+ranging from text  Mikolov et al    to user behavior
+   ock   Paramythis    For example  when applied to
+statistical language modeling  the goal is to predict the next
+word in textual data given context  very similar to that in
+user activity modeling where the aim is to predict the next
+
+ Carnegie Mellon University  Pittsburgh PA   work done
+while at Google  Google Inc  Mountain View CA  Correspondence to  Manzil Zaheer  manzil cmu edu 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright   by
+the author   
+
+Figure   LLA has better perplexity  lower is better  than LDA
+but much fewer parameters than LSTMs  as shown in   language
+modeling task on Wikipedia 
+
+activity of the user given the history  Accurate user activity
+modeling is very important for serving relevant  personalized  and useful contents to the user    good model of sequential data should be accurate  sparse  and interpretable 
+Unfortunately  none of the existing techniques for user or
+language modeling satisfy all of these requirements 
+The stateof theart for modeling sequential data is to employ recurrent neural networks  RNN   Lipton et al   
+such as LSTMs  LongShort Term Memory   Hochreiter
+  Schmidhuber    Such RNNs have been shown to
+be effective at capturing long and short patterns in data 
+     tokenlevel semantic as well as syntactic regularities
+in language  Jozefowicz et al    However  the neural
+network representations are generally uninterpretable and
+inaccessible to humans  Strobelt et al    Moreover 
+the number of parameters of the model is proportional to
+the number of observed word types or action types  which
+can grow to tens or hundreds of millions  Note that for user
+modeling task  character level RNN is not feasible because
+user actions are often not words but hash indices or URLs 
+On the other hand of the spectrum  latent variable models
+with multitask learning  such as LDA  Blei et al   
+and other topic model variants  which are strictly not sequence models  proved to be powerful tools for uncovering
+latent structure in both text and user data  Aly et al   
+with good commercial success  Hu et al    Topic
+models are popular for their ability to organize the data into
+  smaller set of prominent themes or topics through statistical strength sharing across users or documents  These topic
+representations are generally accessible to humans and easily lend themselves to being interpreted 
+In this paper  we propose Latent LSTM Allocation  LLA 
+  model
+that bridges the gap between the sequential
+RNN   and the nonsequential LDA  LLA borrows graph 
+
+Latent LSTM Allocation
+
+ical model techniques to infer topics  groups of related
+word or user activities  by sharing statistical strength across
+users documents and recurrent deep networks to model the
+dynamics of topic evolution inside each sequence  document or user activities  rather than at user action word
+level  Sec    LLA inherits sparsity and interpretability from LDA  while borrowing accuracy from LSTM  We
+provide various variants of LLA that trade model size vs 
+accuracy without sacri cing interpretability  Sec    As
+shown in Figure   for the task of language modeling on
+the Wikipedia dataset  LLA achieves comparable accuracy
+to LSTM while being as sparse as LDA in terms of models
+size  We give an ef cient inference algorithm for parameter inference in LLA  Sec    and show is ef cacy and
+interpretability over several datasets  Sec   
+
+  Background
+In this section  we provide   brief review of user language
+modeling and LSTMs 
+
+  User Language Modeling
+User activity modeling and language modeling amounts
+to learning   function that computes the log probability  log     model  of   user activity or sentence    
+            wn  Subsequently  this function can be used
+to predict the next set of actions or words  This function can be decomposed and learned in different ways
+under various assumptions  Imposing   bag of words
+assumption   as used in LDA   leads to ignoring the
+   log   wi model 
+Alternatively  one could decompose according to the
+chain rule into sum of the conditional log probabilities
+             wi  model  thereby preserving temporal information and use some RNN to model
+             wi  model   Mikolov et al   
+log   wi
+Sundermeyer et al   
+
+sequence information and yields  cid  
+ cid  
+
+   log   wi
+
+  Long ShortTerm Memories
+Temporal aspect is very important for user activity modeling  LSTM    type of RNN  is well suited for the task as
+it can learn from experience to classify  process  and predict time series when there are very long time lags of unknown size between important events  LSTM is designed to
+cope with the vanishing gradient problem inherent in simple RNNs  Hochreiter   Schmidhuber    This is one
+of the main reasons why LSTMs outperform simple RNNs 
+hidden Markov models  and other sequence learning methods in numerous application 
+In general    RNN is   triplet       
+
+      RD is the input alphabet
+      RH is the set of states
+                is the state transition function made
+up of   neural network 
+
+RNN maintains an internal state and at each time step take
+
+an input xt and updates its state st by applying the transition function made up of neural network   the previous
+time step   state st  and the input 
+Often the input is not available directly as elements of  
+and the output desired is not the state of the RNN  In such
+cases  input is appropriately transformed and desired output
+is produced at each time step from the state st 
+
+yt     st 
+
+recurrent
+
+in   regular
+
+where   is an arbitrary differentiable function 
+For example 
+language model
+ RRLM   Mikolov et al      document is treated as
+  sequence and an LSTM is trained to predict directly the
+next word conditioned on the sequence of words before
+it       maximize   wt wt  wt       model  In this
+case  the input transformation is done by using   word
+lookup table from word to   vector in   This word representation is used to update the state of the LSTM  The
+output transformation is the projection of st into   vector of
+size of the vocabulary   followed by   softmax  However 
+this method will require two large matrices of dimension
+      and cannot handle out of vocabulary words 
+To overcome above mentioned shortcomings  another input
+transformation has been proposed  which looks at characters directly instead of words  Ling et al    On the
+spelling of the words another LSTM is run having characters as the input and the  nal state is used as the word representation  In this case  the memory requirement is reduced
+to half and the model can handle outof vocabulary words
+like typographical errors or new words made from composing existing ones  To use character level embedding  we
+can simply replace the word lookup table with the representation obtained from characterlevel LSTM  In case of
+natural languages    similar trick of using   characterlevel
+LSTM to emit words can be applied as the output transformation as well  However  user modeling outputs  hash indices and URLs  lack morphological structure  and hence
+cannot leverage the technique 
+
+  Latent LSTM Allocation
+In this section  we provide   detailed description of the proposed LLA model and its variant for performing joint clustering and modeling nonlinear dynamics  An ideal model
+for such   task should have three characteristics  First  it
+should have   low number of parameters  Second  it should
+be interpretable  allowing human analysis of the components  Lastly and most importantly  the model should be
+accurate in terms of predicting future events  We show how
+LLA satis es all of these requirements 
+
+  Generative model
+In this model  we try to marry LDA with its strong interpretability capabilities with LSTM having excellent track
+record in capturing temporal information  In this regard 
+
+Latent LSTM Allocation
+
+LSTM
+
+LSTM
+
+LSTM
+
+ 
+
+zd  
+
+wd  
+
+nd
+ 
+
+ 
+
+  
+
+ 
+
+zd  
+
+LSTM
+
+zd  
+
+ 
+
+ 
+
+wd  
+
+nd
+ 
+
+ 
+
+  
+
+ 
+
+wd  
+
+nd
+ 
+
+ 
+
+  
+
+ 
+
+    Topic LLA
+
+    Word LLA
+
+    Char LLA
+
+Figure   Graphical models for LDA and variants of proposed latent LSTM Allocation  LLA  In   slight abuse of plate notation 
+we do not imply exchangibility by the dashed plate diagram and
+  on an edge means the dependence is from one time step back 
+we propose   factored model 
+     we use the LSTM
+to model sequence of topics   zt zt  zt       and
+multinomialDirichlet to model word emissions   wi zi 
+similar to LDA  Suppose we have   topics  vocabulary
+size     and   document collection   where each document
+      is composed of Nd words  With these notations  the
+complete generative process can be illustrated as in Figure    and can be described as 
+
+  for       to  
+    Choose topic      Dir 
+  for each document   in corpus  
+    Initialize LSTM with       
+    for each word index   from   to Nd
+
+topic proportions at
+
+   Update st   LSTM zd    st 
+ii  Get
+iii  Choose   topic zd     Categorical 
+iv  Choose word wd     Categorical zd  
+
+LSTM state      softmaxK Wpst   bp 
+
+time   from the
+
+ 
+
+Under this model  the marginal probability of observing  
+given document   can be written as 
+
+  wd LSTM     
+
+  wd  zd LSTM   
+
+ cid 
+
+zd
+
+  wd   zd       zd   zd    LSTM 
+
+zd
+
+ 
+
+Here   zd   zd    LSTM  is the probability of generating topic for the next word in the document given topics of previous words and   wd   zd      is the probability
+of generating word given the topic  illustrating the simple
+modi cation of LSTM and LDA based language models 
+The advantage of this modi cation is two fold  Firstly  we
+obtain   factored model as shown in Figure   thereby the
+number of parameters is reduced signi cantly compared to
+RRLM  This is because  unlike RRLM we operate at topic
+level instead of words directly and the number of topics
+is much smaller than the vocabulary size              
+
+ cid 
+
+ cid 
+
+ 
+
+This allows us to get rid of large       word embedding
+lookup table and       matrix used in softmax over the
+entire vocabulary  Instead we map from hidden to state to
+topics  rst using         matrix  which will be dense and
+then from topics to words using         matrix under the
+Dirichletmultinomial model similar to LDA which will be
+very sparse  Secondly  this model is highly interpretable 
+We recover global themes present in the documents as  
+The LSTM output represents topic proportions for document user at time    The LSTM input over topics can capture semantic notion of topics 
+
+  Inference
+As the computation of the true posterior of LLA as described above is intractable  we have to resort to an approximate inference technique like mean  eld variational
+inference  Wainwright   Jordan    or stochastic EM
+ SEM   Zaheer et al    Below we describe the generic
+aspects of the inference algorithm for LLA  Model speci  
+aspects are relegated to the appendix   
+Given   document collection  the inference task is to  nd
+the LSTM weights and word topic probability matrix  
+This can be carried out using SEM  We begin by writing
+out the likelihood and lower bounding it as 
+
+log   wd LSTM   
+
+  zd  LSTM cid 
+
+  zd  log
+
+    wd   zd     
+
+ 
+
+  zd 
+
+ cid 
+ cid 
+
+ 
+
+ cid 
+
+ 
+
+zd
+
+ 
+for any distribution    Then the goal is to ensure an increase
+in this evidence lower bound  ELBO  with each iteration in
+expectation  Following the suit of most EM based inference
+methods  each iteration involves two phases  each of which
+is described below 
+SEstep  For  xed LSTM parameters and   we sample the
+topic assignments    This acts as an unbiased sample estimate of the expectation with respect to the conditional distribution of   required in traditional EM  This sampled estimate not only enjoys similar statistical convergence guarantees  Nielsen    but also provides many computational bene ts like speedup and reduced memory bandwidth requirements  Zaheer et al   
+Under LLA  the conditional probability for topic at time
+step   given word at time   and past history of topics is 
+  zd       wd    zd    LSTM   
+
+    zd       zd    LSTM   wd   zd         
+ 
+The  rst term represents probability of various topics predicted by LSTM dynamics after  nal softmax and second term comes from multinomialDirichlet word emission
+model given the topic  Na vely sampling from this distribution would cost   KH       per word 
+
+ Available at http manzil ml lla html
+
+Latent LSTM Allocation
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+Sparse
+
+Interpretable
+
+Low predictive power
+
+    LDA
+
+Dense
+
+Uninterpretable
+
+High predictive power
+
+    LSTM
+
+ 
+
+Sparse
+
+Dense
+
+Interpretable
+
+High predictive power
+
+    LLA
+
+Figure   Different parameters employed by LDA  LSTM and LLA    is number of topics     is vocabulary size  and   is the dimension
+of LSTM state      Topics of LDA      word embedding of LSTM     factored topic embedding of LLA 
+Optionally  one could speed up this sampling  Note that the
+second term in   has   sparse structure  For sampling from
+  the computation of the normalizer is not essential  To
+elaborate  let us de ne nwk as the number of times word  
+currently assigned to topic   and nk as the number of tokens assigned to topic    Explicitly writing down  rst term 
+
+the dependence of likelihood on LSTM parameters and
+  are independent given    we can update them independently and in parallel  For the former  we use the closed
+form expression for the maximizer 
+
+ wd       and zd           
+
+ wk  
+
+ 
+
+ nwk           
+
+nwk    
+nk      
+
+ 
+
+and for the latter we resort to stochastic gradient ascent
+which will increase the likelihood in expectation 
+The execution of the whole inference and learning process
+includes several iterations involving the above mentioned
+two phases as outlined in Algorithm   This inference procedure is not an adhoc method  but an instantiation of the
+well studied SEM method  We ensure that in each iteration
+we increase the ELBO in expectation  Also  it is just   coincidence that for all such latent variable models the equations for SEstep looks like Gibbs sampling   Exploiting
+this coincidence  in fact  one can prove that parallel Gibbs
+update will work for such models  cf  Tassarotti   Steele Jr 
+  Zaheer et al    whereas in general parallel Gibbs
+sampling fails miserably      for Ising models  Moreover 
+we found empirically that augmenting the SEM inference
+with   beam search improved the performance 
+Automatic differentiation software packages such as TensorFlow  Abadi et al    signi cantly speed up development time  but have limited control structures and indexing  Whereas random sampling requires varied control
+statements  thus was implemented separately on the CPU 
+Furthermore  the SEM saved us precious GPUCPU bandwidth by transmitting only an integer per token instead of  
+Kdimensional variational parameter 
+
+  Adding Context
+Utilizing the word or user action  wd    directly would be
+more informative to model the dynamics and predict the
+next topic  For example  rather than only knowing the
+previous action belonged to  electronics purchase  topic 
+knowing exactly that   camera was bought  makes it easier
+to predict user   next interest       camera lenses 
+
+  wd       zd             wk  
+nwk
+
+nwk    
+nk      
+ 
+
+ 
+
+ cid 
+
+nk      
+
+nk      
+
+ cid cid 
+
+sparse
+
+ cid 
+
+ 
+
+ cid 
+
+ cid cid 
+
+dense
+
+ cid 
+
+ 
+
+There is an inherent sparsity present in nwk  as   given
+word would be typically about only   handful of topics 
+Kw  cid     The second term represents the global count
+of tokens in the topic and will be dense  regardless of the
+number of documents  words or topics 
+Following  Li et al    we devise an optional fast sampling strategy for exploiting this sparsity and construct  
+MetropolisHastings sampler  The idea is to replace the low
+weight dense term by   cheap approximation  while keeping the high weight sparse term exact  This leads to   proposal distribution that is close to   while at the same time
+allowing us to draw from it ef ciently 
+  First draw   biased coin to decide whether to draw from
+the sparse nwk term or from the dense term  The bias is
+
+  If we draw from the sparse term  the cost is   KwH  
+
+    else the cost is       using the alias trick 
+
+  Finally  perform   MH accept reject move by comparing
+
+the approximation with the true distribution 
+
+Mstep  For  xed topic assignment    update the   and
+LSTM so as to improve the likelihood in expectation  As
+
+  where
+
+ 
+
+     
+
+ cid 
+ cid 
+
+  nwk cid 
+
+   
+
+   
+
+   
+
+nk      
+
+ 
+
+nwk
+
+nk      
+
+ 
+
+  zd       zd    LSTM 
+
+ precomputed 
+
+Latent LSTM Allocation
+
+Algorithm   Stochastic EM for LLA
+Input  Document corpus   
+  Initialize   and LSTM with   few iterations of LDA
+  repeat
+
+SEStep 
+
+for all document       in parallel do
+
+for       to Nd  possibly with padding  do
+
+                 for every topic index
+obtain by LSTM forward pass 
+      wd tkp zd       zd    LSTM 
+Sample zd     Categorical 
+
+end for
+
+end for
+MStep 
+
+ 
+ 
+ 
+
+ 
+ 
+ 
+
+ 
+
+ 
+ 
+
+ 
+
+Input Tranformation Output Transformation
+Softmax over vocabulary
+Softmax over vocabulary
+Topic based
+Topic based
+Topic based
+
+Model
+word LSTM Word Embedding
+Char LSTM Char Embedding
+Topic LLA
+Topic Embedding
+Word LLA Word Embedding
+Char LLA
+Char Embedding
+Table   Enumerating different input and output representation 
+leading to variants of LLA models  Note we exclude char level
+output transformation due to its inapplicability to user modeling 
+
+the backward LSTM receives as input the reverse sequence 
+  Both LSTMs use   differand yields its own  nal state hb
+ent set of parameters  The representation ec
+  of word   is
+obtained by combining forward and backward  nal states 
+ 
+
+eC
+    Df sf
+
+    Dbsb
+
+    bd 
+
+where Df   Db and bd are parameters that determine how
+the states are combined  This ec
+  is provided to the topic
+level LSTM as the input providing information about the
+word  Thus we are able to incorporate more context information by providing some information about the previous
+word without the need to have great number of parameters 
+We call this model  char LLA 
+The different variants of LLA and LSTM as language
+model can be uni ed and thought of having different input and out transformations over LSTM for capturing the
+dynamics  The possible combinations are listed in Table  
+We will study each of them empirically next 
+
+  Experimental Results
+We perform   comprehensive evaluation of our model
+against several deep models  dynamic models  and topic
+models  For reproducibility we focus on the task of language modeling over the publicly available Wikipedia
+dataset  and for generality  we show additional experiments
+on the lessstructured domain of user modeling 
+
+  Setup
+For all experiments we follow the standard setup for evaluating temporal models       divide each document  user history  into   for training and   for testing  The task is
+to predict the remaining   of the document  user data 
+based on the representation inferred from the  rst   of
+the document  We use perplexity as our metric  lower values are better  and compare our models  topicLLA  wordLLA  and charLLA  against the following baselines 
+  Autoencoder    feed forward neural network that comprises of encoder and decoder  The encoder projects the
+input data into   lowdimensional representation and the
+decoder reconstructs the input from this representation 
+The model is trained to minimize reconstruction error 
+
+  LSTMs  We consider both wordlevel LSTM language
+model  wordLSTM  and characterlevel hierarchical
+LSTM  charLSTM  language model 
+
+Collect suf cient statistics to obtain 
+
+     
+for minibatch of documents       do
+
+nwk    
+nk      
+
+ wk  
+
+ 
+
+ cid 
+
+Nd cid 
+
+Compute the gradient by LSTM backward pass
+
+  
+
+  log   zd   zd    LSTM 
+
+ LSTM  
+Update LSTM parameters by stochastic gradient
+descent methods such as Adam  Kingma   Ba   
+
+ LSTM
+
+   
+
+  
+
+end for
+
+ 
+  until Convergence
+
+In order to incorporate the exact context  we construct  
+variant of LLA  called word LLA  where the LSTM is provided with an embedding of previous word wd    directly
+instead of zd    The corresponding graphical model is
+shown in Figure    and the joint likelihood is 
+
+ cid 
+ cid 
+
+ 
+
+ cid 
+
+log   wd LSTM   
+
+ cid 
+
+ 
+
+log
+
+  wd   zd       zd   wd    LSTM 
+
+ 
+
+ 
+
+zd  
+
+  SEM inference strategy can be devised similar to that of
+topic LLA as presented in section  
+However  this modi cation brings back the model to the
+dense and high number of parameter regime as   large trainable      lookup table for the word embeddings is needed
+for the input transformation  This problem can be mitigated
+by using charlevel LSTM  char LSTM for short  to construct the input transformation  Such characterlevel LSTM
+have recently shown promising results in generating structured text  Karpathy et al    as well as in producing
+semantically valid word embeddings with   model we will
+refer to as charLSTM   Ling et al    The characterlevel models do not need the huge lookup table for words 
+as they operate directly on the characters and the number of
+distinct characters is extremely small  We chose the latter
+as our input transformation and brie   describe it below 
+The input word   is decomposed into   sequence of characters            cm  where   is the length of    Each character ci is transformed using   lookup table and fed into
+  bidirectional LSTM The forward LSTM evolves on the
+character sequence and produces    nal state hf
+   While
+
+Latent LSTM Allocation
+
+    Wikipedia
+
+    User search click history
+
+Wikipedia
+
+Figure   Test perplexity and number of parameters of various models  Bars represent
+model sizes and the solid curve represents perplexity over testset  lower is better 
+
+Figure   The effect of the number of topics
+over the performance of LDA and LLA 
+
+  LDA  The vanilla version trained using collapsed Gibbs
+
+sampling over the bag of word representation 
+
+  ddLDA  Distancedependent LDA is   variant of LDA
+incorporating the word sequence  It is based on    xeddimensional approximaiton of the distancedependent
+Dirichlet process  Blei   Frazier    In this model
+  word is assigned to   topic based on the popularity of
+the topics assigned to nearby words  Note that this model
+subsumes other LDAbased temporal models such as hidden Markov topic Model  Andrews   Vigliocco   
+and RCRP based models  Ahmed   Xing   
+
+We trained all deep models using stochastic gradient decent
+with Adam  Kingma   Ba    All LSTM and LLA
+based models used the sampled softmax method for ef 
+ciency  Cho et al    Finally  all hyperparameters of
+the models were tuned over   development set 
+
+  Language modeling
+We used the publicly available Wikipedia dataset to evaluate the models on the task of sequence prediction  Extremely short documents       documents having length less
+than   words were excluded  The dataset contains  
+billion tokens and   million documents  The most frequent    wordtypes were retained as our vocabulary  Unless otherwise stated  we used   topics for LLA and
+LDA variants  For LSTM and LLA variants  we selected
+the dimensions of the input embedding  word or topic  and
+evolving latent state  over words or topics  in the range
+of       In case of characterbased models  we
+tuned the dimensions of the character embedding and latent state  over characters  in the range of      
+Accuracy vs model size Figure     compares model
+size in terms of number of parameters with model accuracy in terms of test perplexity  As shown in the  gure 
+LDA yields the smallest model size due to the sparsity
+bias implicit in the Dirichlet prior over the topic word distributions  On the other hand  wordLSTM gives the best
+accuracy due to its ability to utilize word level statistics 
+however  the model size is order of magnitudes larger than
+LDA  CharLSTM achieves almost   reduction in model
+size over wordLSTM at the expense of   slightly worse
+perplexity  The  gure also shows that LLA variants  topicLLA  wordLLA  and charLLA  can trade accuracy vs
+model size while still maintaining interpretability since the
+output of the LSTM component is always at the topic level 
+
+Note that the  gure depicts the smallest wordLSTM at this
+perplexity level  as our goal is not to beat LSTM in terms
+of accuracy  but rather to provide   tuning mechanism that
+can tradeoff perplexity vs model size while still maintaining interpretability  Finally  compared to LDA  which is  
+widely used tool  LLA variants achieve   signi cant perplexity reduction at   modest increase in model size while
+still maintaining topic sparsity  As shown in Figure   the
+autoencoder model performs poorly in terms of model size
+and perplexity thus we eliminated it from Figure     and
+the following  gures to avoid cluttering the display 
+
+Convergence over time At  rst glance  LLA seems to be
+more involved than both LDA and LSTM  So  we raise the
+question whether the added complexity leads to   slower
+training  Figure   shows that compared to LSTM based
+models  LLA variants achieve comparable convergence
+speed  Moreover  compared to fast LDA samplers  Zaheer
+et al    our LLA variants introduce only   modest increase in training time  The  gure also shows that character based models  charLSTM and charLLA  are slightly
+slower to train compared to word level variants due to their
+nested nature and the need to propagate gradients over both
+word and character level LSTMs 
+
+Ablation study Since both LDA and LLA result in interpretable models  we want to explore if LDA can achieve  
+perplexity similar to   given LLA model by just increasing
+the number of topics in LDA  Figure   shows the performance of LDA and variants of LLA for different number of
+topics  As can be seen from the  gure  even with   topics  all LLA based models achieve much lower perplexity
+than LDA with   topics  In other words  LLA improves
+over LDA not because it uses   slightly larger model  but
+rather because it models the sequential order in the data 
+
+Interpretability Last but not least  we demonstrate the
+interpretability of our models  Similar to LDA  the proposed LLA also uncovers global themes        topics prevalent in the dataset  We found qualitatively the topics produced by LLA to be cleaner  For example  in Table   we
+show   topic about funding  charity  and campaigns recovered by both  LDA includes spurious words like Iowa in
+the topic just because it cooccurs in the same documents 
+Whereas modeling the temporal aspect allows LLA to correctly switch topics at different parts of the sentence producing cleaner topic regarding the same subject 
+
+Latent LSTM Allocation
+
+LDA
+
+LLA
+
+foundation  iowa  charity  fund  money  campaign 
+raised  donated  funds  donations  raise  support 
+charitable  million  donation
+fund  foundation  money  funds  support  charity  funding  donations  campaign  raised  donated 
+trust  raising  contributions  awareness
+
+Table   Cleaner topics produced by LLA vs LDA
+
+Modeling based on only cooccurrences in LDA leads to
+further issues  For example  strikes among mine workers
+are common  so the two words will cooccur heavily but
+it does not imply that strikes and mining should be in the
+same topic  LDA assign both the words in the same topic
+as shown in Table   Modeling sentences as an ordered sequence allows distinction between the subjects and objects
+in the sentence  In the previous example  this leads to factoring into two separate topics of strikes and mine workers 
+The topic LLA provides embedding of the topics in   Euclidean metric space  This embedding allows us to understand the temporal structure learned by the model  topics
+close in this space are expected to appear in close sequential proximity in documents  To understand this  we built
+  topic hierarchy using the embeddings which uncovers
+interesting facts about the data  For example in Figure  
+we show   portion of the topic hierarchy discovered by
+topicLLA with   topics  For each topic we list the top
+few words  The theme of the  gure is countries in Asia  It
+groups topics relating to one country together and puts topics related to neighboring countries close by  Three prominent clusters are shown form top to bottom which corresponds to moving from west to east on the map of Asia 
+Top cluster is about Arab world  second one represent the
+Indian subcontinent  and the third one starts with southeast Asia like Philippines   The topic abs gma cbn represents TV station in southeast Asia  The complete hierarchy of topic is very meaningful and can be viewed at
+http manzil ml lla html 
+
+  User modeling
+We use an anonymized sample of user search click history
+to measure the accuracy of different models on predicting
+users  future clicks  An accurate model would enable better
+user experience by presenting the user with relevant content  The dataset is anonymized by removing all items appearing less than   given threshold  this results in   dataset
+of   million tokens  and    vocabulary size  This domain is less structured than the language modeling task
+since users  click patterns are less predictable than the sequence of words which follow de nite syntactic rules  We
+used   setup similar to the one used in the experiments over
+the Wikipedia dataset for parameters ranges and selections 
+Figure     gives the same conclusion as Figure     LLA
+variants achieve signi cantly lower perplexity compared to
+LDA and at the same time they are considerably smaller
+models compared to LSTM  Furthermore  even compared
+
+LDA
+
+LLA
+
+strike  strikes  striking  miners  strikers  workers
+workers  day  began  general  called  pinkerton 
+action  hour  hunger  keefe
+union  unions  strike  workers  labor  federation 
+trade     bargaining  cio  organization  relations 
+strikes  national  industrial
+mining  coal  mine  mines  gold  ore  miners  copper  iron  rush  silver  mineral  deposits  minerals 
+mined
+
+Table   Factored topics produced by LLA vs LDA
+
+zola com
+
+to ddLDA  an improved variant of LDA  our proposed LLA
+achieves better perplexity  ddLDA models time by introducing smoothness constraints that bias future actions to
+be generated from recent topics  however  it does not possess   predictive action model  As   result  it can neither
+model the fact that  booking    ight  topic should not be
+repeated over   short course of time nor that  booking  
+hotel  topic would likely follow shortly  but not necessarily immediately  after  booking    ight  topic  LLA  on the
+other hand  is capable of capturing this intricate dynamics
+by modeling the evolution of user topics via an LSTM   an
+extremely powerful dynamic model  This point is more evident if we consider the following handcrafted  user click
+trace in context of the topics depicted in Figure  
+theknot com
+weddingwire com
+www bridalguide com pinterest com food com doityourself com  
+There are four topics represented and colorcoded  best
+viewed in color  wedding  sixth topic from top  social media  fourth from top  food  third form bottom  and home
+improvement  second form top    all in Figure   We asked
+each model to predict what would be the three most likely
+topics that would appear next in current user   session 
+LDA predicted wedding as the top topic followed by   tie
+for the remaining topics  ddLDA  whose output is based
+on exponential decay  yields wedding as most likely  followed by doityourself topic  and then the food topic as expected  In contrast  LLA ranks the most likely three topics
+as  doityourself topic  houzz topic  top topic in Figure  
+and the wedding topic  This is indicative of LLA learning
+that once   user starts in the doitourself topic  the user will
+stay longer in this part of the tree for the task and wander in
+the nearby topics for   while  Moreover  LLA still remembers the wedding topic  and unlike other models  LLA did
+not erroneously pick neighbors of the wedding topic among
+the three most likely topics to follow 
+Finally  to demonstrate the interpretability of our model 
+in Figure   we show   portion of the topic hierarchy discovered by topicLLA with   topics  For each topic we
+list the top few clicked items  The theme of the  gure is
+wedding and various house chores  Three prominent clusters are shown from top to bottom  The top cluster is about
+house renovations and wedding  Second cluster captures
+
+ For privacy concerns  we construct an arti cial example
+
+manually for illustration purposes 
+
+Latent LSTM Allocation
+
+Figure   Topic embedding discovered form the
+Wikipedia dataset
+
+Figure   Topic embedding discovered form the
+user search click history
+
+Figure   Convergence
+speed for various models 
+
+makeup  designer shoes  and fashion  The bottom cluster
+capture kitchen  cooking and gardening  It is clear form the
+hierarchy that LLA groups topics into the embedding space
+based on sequential proximity in the search click history 
+
+  Effect of Joint Training
+One might wonder what would happen if we  rst train
+LDA and then simply train LSTM over the topic assignments from the LDA  We refer to this baseline as  independent learner  since LDA and LSTM are trained independently  In Table   we compare its performance against
+LLA  which jointly learns the topics and the evolution dynamics  As we can see  joint training is signi cantly better 
+since the LSTM will    the random errors introduced by the
+topic assignments inferred form the LDA model  and in fact
+LSTM will learn to be as good as the sequence produced by
+an LDA model  which is timeoblivious to start with  The
+effect is more pronounced in the user history data due to
+the unstructured nature of this domain 
+
+Dataset
+Wikipedia
+User Click
+
+Independent learner
+
+Joint learner
+
+ 
+ 
+
+ 
+ 
+
+Table   Advantage in terms of perplexity for joint learning 
+
+  Related Works   Discussions
+In this paper we present LLA  Latent LSTM allocation 
+LLA leverages the powerful dynamic modeling capability
+of LSTM without blowing up the number of parameters
+while adding interpretability to the model  We achieve this
+by shifting from modeling the temporal dynamics at the
+observed word level to modeling the dynamics at   higher
+level of abstraction  topics  As the number of topics   is
+much smaller than the number of words     it can act as  
+knob that can tradeoff accuracy vs model size  In the extreme case  if we allow       in LLA then we recover
+LSTM  Furthermore  the topics provide an informative embedding that can reveal interesting temporal relationship as
+shown in Figure   and     which is   novel contribution to
+the best of our knowledge 
+
+Our work is related to various dynamic topic models  however  previous works like ddLDA  ddCRP in general  or
+hidden Markov topic models provide only limited modeling capabilities of the temporal dynamics  Speci cally  they
+impose smoothness constraints       topic of   word is biased toward nearby topics  This constraint cannot learn  
+predictive action model       after  booking    ight  topic 
+the  booking   hotel  topic is likely to follow  Moreover 
+Internet users often wander between related activities     
+ booking   hotel  topic will happen shortly after  booking
+   ight  but not necessarily immediately as the user might
+have been interrupted by something else  Thus we need  
+much richer temporal model such as an LSTM  Our quantitative results against ddLDA con rm this claim 
+Another similar work would be lda vec  Moody   
+where LDA is combined with local context in    xed window size  This provides   sparse  interpretable model but
+lacks modeling the temporal aspect  The model cannot be
+used in   predictiveaction setting  Also the sparsity is only
+in terms of per document parameters  whereas it suffers
+from huge dense of size vocabulary times embedding size 
+Another relevant recent work is Sentence Level Recurrent
+Topic Model  SLRTM   Tian et al    However  this
+model cannot capture longrange temporal dependencies 
+as the topic for each sentence is still decided using an exchangeable  nonsequential  Dirichletmultinomial scheme
+similar to the LDA  It might be able to preserve local sentence structure or grammar  but that is particularly not very
+useful for the task of user modeling  Furthermore  as it contains RNN that operates on the entire vocabulary  not topic
+as in our case  the SLTRM has lots of parameters 
+Finally our work is related to recent work in recurrent latent
+variable models  Chung et al    Gemici et al   
+where   recurrent model is endowed with latent variables to
+model variability in the input data  However  they mainly
+focused on continuous input space such as images and
+speech data which enables the use of variational autoencoder techniques to learn the model parameters  Whereas in
+this paper  we focus on discrete data that are not amenable
+to the standard variational autoencoder techniques and as
+such we developed an ef cient SEM algorithm instead 
+
+Latent LSTM Allocation
+
+References
+Abadi  Mart    Agarwal  Ashish  Barham  Paul  Brevdo 
+Eugene  Chen  Zhifeng  Citro  Craig  Corrado  Greg   
+Davis  Andy  Dean  Jeffrey  Devin  Matthieu  Ghemawat 
+Sanjay  Goodfellow  Ian  Harp  Andrew  Irving  Geoffrey  Isard  Michael  Jia  Yangqing  Jozefowicz  Rafal 
+Kaiser  Lukasz  Kudlur  Manjunath  Levenberg  Josh 
+Man    Dan  Monga  Rajat  Moore  Sherry  Murray 
+Derek  Olah  Chris  Schuster  Mike  Shlens  Jonathon 
+Steiner  Benoit  Sutskever  Ilya  Talwar  Kunal  Tucker 
+Paul  Vanhoucke  Vincent  Vasudevan  Vijay  Vi egas 
+Fernanda  Vinyals  Oriol  Warden  Pete  Wattenberg 
+Martin  Wicke  Martin  Yu  Yuan  and Zheng  Xiaoqiang 
+TensorFlow  Largescale machine learning on heterogeneous systems    URL http tensorflow 
+org  Software available from tensor ow org 
+
+Ahmed  Amr and Xing  Eric  Dynamic nonparametric
+mixture models and the recurrent chinese restaurant process  with applications to evolutionary clustering 
+In
+Proceedings of the   SIAM International Conference
+on Data Mining  pp    SIAM   
+
+Aly     Hatch     Josifovski     and Narayanan      
+In Conference
+
+Webscale user modeling for targeting 
+on World Wide Web  pp    ACM   
+
+Andrews  Mark and Vigliocco  Gabriella  The hidden
+markov topic model    probabilistic model of semantic
+representation  Topics in Cognitive Science   
+   
+
+Blei     Ng     and Jordan     Latent dirichlet allocation  In Dietterich        Becker     and Ghahramani    
+ eds  Advances in Neural Information Processing Systems   Cambridge  MA    MIT Press 
+
+Blei  David and Frazier  Peter    Distance Dependent Chi 
+
+nese Restaurant Processes  JMLR   
+
+Cho    ebastien Jean Kyunghyun  Memisevic  Roland  and
+Bengio  Yoshua  On using very large target vocabulary
+for neural machine translation   
+
+Chung  Junyoung  Kastner  Kyle  Dinh  Laurent  Goel 
+Kratarth  Courville  Aaron    and Bengio  Yoshua   
+recurrent latent variable model for sequential data 
+In
+Advances in Neural Information Processing Systems  pp 
+   
+
+Gemici  Mevlana  Hung  ChiaChun  Santoro  Adam 
+Wayne  Greg  Mohamed  Shakir  Rezende  Danilo   
+Amos  David  and Lillicrap  Timothy 
+GeneraarXiv preprint
+tive temporal models with memory 
+arXiv   
+
+Hu  Diane    Hall  Rob  and Attenberg  Josh  Style in the
+long tail  Discovering unique interests with latent variable models in large scale social ecommerce  In Proceedings of the  th ACM SIGKDD international conference on Knowledge discovery and data mining  pp 
+  ACM   
+
+Jozefowicz  Rafal  Vinyals  Oriol  Schuster  Mike  Shazeer 
+Noam  and Wu  Yonghui 
+Exploring the limits of
+language modeling  arXiv preprint arXiv 
+ 
+
+Karpathy  Andrej  Johnson  Justin  and FeiFei  Li  Visualizing and understanding recurrent networks  arXiv
+preprint arXiv   
+
+Kingma  Diederik and Ba 
+
+Jimmy 
+method for stochastic optimization 
+arXiv   
+
+Adam   
+arXiv preprint
+
+  ock  Mirjam and Paramythis  Alexandros  Activity sequence modelling and dynamic clustering for personalized elearning  User Modeling and UserAdapted Interaction     
+
+Korpusik  Mandy  Sakaki  Shigeyuki  and Chen  Francine
+Chen YanYing  Recurrent neural networks for customer
+purchase prediction on twitter  CBRecSys   pp   
+ 
+
+Li  Aaron    Ahmed  Amr  Ravi  Sujith  and Smola 
+Alexander    Reducing the sampling complexity of topic
+models  In Proceedings of the  th ACM SIGKDD International Conference on Knowledge Discovery and Data
+mining  pp    ACM   
+
+Ling  Wang  Lu    Tiago  Marujo  Lu    Astudillo 
+Ram on Fernandez  Amir  Silvio  Dyer  Chris  Black 
+Alan    and Trancoso  Isabel  Finding function in form 
+Compositional character models for open vocabulary
+word representation  arXiv preprint arXiv 
+ 
+
+Lipton  Zachary    Berkowitz  John  and Elkan  Charles   
+critical review of recurrent neural networks for sequence
+learning  arXiv preprint arXiv   
+
+Mikolov  Tomas  Kara at  Martin  Burget  Lukas  Cernock    Jan  and Khudanpur  Sanjeev  Recurrent neural network based language model  In Interspeech  volume   pp     
+
+Moody  Christopher    Mixing dirichlet topic models
+and word embeddings to make lda vec  arXiv preprint
+arXiv   
+
+Hochreiter  Sepp and Schmidhuber    urgen  Long shortterm memory  Neural computation   
+ 
+
+Nielsen    ren Feodor  The stochastic em algorithm  estimation and asymptotic results  Bernoulli  pp   
+ 
+
+Latent LSTM Allocation
+
+Strobelt  Hendrik  Gehrmann  Sebastian  Huber  Bernd 
+  ster  Hanspeter  and Rush  Alexander    Visual analysis of hidden state dynamics in recurrent neural networks  arXiv preprint arXiv   
+
+Sundermeyer  Martin  Schl uter  Ralf  and Ney  Hermann 
+Lstm neural networks for language modeling  In Interspeech  pp     
+
+Tan  Yong Kiam  Xu  Xinxing  and Liu  Yong  Improved
+recurrent neural networks for sessionbased recommenIn Proceedings of the  st Workshop on Deep
+dations 
+Learning for Recommender Systems  pp    ACM 
+ 
+
+Tassarotti  Joseph and Steele Jr  Guy    Ef cient training
+of lda on   gpu by meanfor mode estimation  In  nd
+International Conference on Machine Learning ICML 
+ 
+
+Tian  Fei  Gao  Bin  and Liu  TieYan  Sentence level recurrent topic model  Letting topics speak for themselves 
+arXiv preprint arXiv   
+
+Wainwright  Martin   and Jordan  Michael    Graphical
+models  exponential families  and variational inference 
+Foundations and Trends  in Machine Learning   
+   
+
+Zaheer  Manzil  Wick  Michael  Tristan  JeanBaptiste 
+Smola  Alex  and Steele Jr  Guy    Exponential stochastic cellular automata for massively parallel inference 
+In AISTATS   th Intl  Conf  Arti cial Intelligence and
+Statistics   
+
+Zaheer  Manzil  Ahmed  Amr  Ravi  Sujith  and Smola 
+Alex  Fast sampling algorithms for sparse latent variable
+models  arXiv preprint   
+
+

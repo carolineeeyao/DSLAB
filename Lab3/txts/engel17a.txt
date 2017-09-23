@@ -1,0 +1,798 @@
+Neural Audio Synthesis of Musical Notes
+
+with WaveNet Autoencoders
+
+Jesse Engel     Cinjon Resnick     Adam Roberts   Sander Dieleman   Mohammad Norouzi   Douglas Eck  
+
+Karen Simonyan  
+
+Abstract
+
+Generative models in vision have seen rapid
+progress due to algorithmic improvements and
+the availability of highquality image datasets  In
+this paper  we offer contributions in both these areas to enable similar progress in audio modeling 
+First  we detail   powerful new WaveNetstyle
+autoencoder model that conditions an autoregressive decoder on temporal codes learned from
+the raw audio waveform  Second  we introduce
+NSynth    largescale and highquality dataset of
+musical notes that is an order of magnitude larger
+than comparable public datasets  Using NSynth 
+we demonstrate improved qualitative and quantitative performance of the WaveNet autoencoder
+over   welltuned spectral autoencoder baseline 
+Finally  we show that the model learns   manifold of embeddings that allows for morphing between instruments  meaningfully interpolating in
+timbre to create new types of sounds that are realistic and expressive 
+
+  Introduction
+Audio synthesis is important for   large range of applications including textto speech  TTS  systems and music generation  Audio generation algorithms  know as
+vocoders in TTS and synthesizers in music  respond to
+higherlevel control signals to create  negrained audio
+waveforms  Synthesizers have   long history of being
+handdesigned instruments  accepting control signals such
+as  pitch   velocity  and  lter parameters to shape the
+tone  timbre  and dynamics of   sound  Pinch et al   
+In spite of their limitations  or perhaps because of them 
+synthesizers have had   profound effect on the course of
+music and culture in the past half century  Punk   
+
+ Equal contribution  Google Brain  DeepMind  Correspon 
+
+dence to  Jesse Engel  jesseengel google com 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+In this paper  we outline   datadriven approach to audio
+synthesis  Rather than specifying   speci   arrangement
+of oscillators or an algorithm for sample playback  such as
+in FM Synthesis or Granular Synthesis  Chowning   
+Xenakis    we show that it is possible to generate new
+types of expressive and realistic instrument sounds with  
+neural network model  Further  we show that this model
+can learn   semantically meaningful hidden representation
+that can be used as   highlevel control signal for manipulating tone  timbre  and dynamics during playback 
+Explicitly  our two contributions to advance the state of
+generative audio modeling are 
+
+    WaveNetstyle autoencoder that learns temporal
+hidden codes to effectively capture longer term structure without external conditioning 
+
+  NSynth    largescale dataset for exploring neural au 
+
+dio synthesis of musical notes 
+
+The primary motivation for our novel autoencoder structure
+follows from the recent advances in autoregressive models
+like WaveNet  van den Oord et al      and SampleRNN
+ Mehri et al    They have proven to be effective at
+modeling short and medium scale  ms  signals  but
+rely on external conditioning for longerterm dependencies 
+Our autoencoder removes the need for that external conditioning  It consists of   WaveNetlike encoder that infers
+hidden embeddings distributed in time and   WaveNet decoder that uses those embeddings to effectively reconstruct
+the original audio  This structure allows the size of an embedding to scale with the size of the input and encode over
+much longer time scales 
+Recent breakthroughs in generative modeling of images
+ Kingma   Welling    Goodfellow et al   
+van den Oord et al      have been predicated on the
+availability of highquality and largescale datasets such as
+MNIST  LeCun et al    SVHN  Netzer et al   
+CIFAR  Krizhevsky   Hinton    and ImageNet  Deng
+et al    While generative models are notoriously hard
+to evaluate  Theis et al    these datasets provide  
+common test bed for consistent qualitative and quantitative
+
+Neural Audio Synthesis of Musical Notes with WaveNet Autoencoders
+
+Figure   Models considered in this paper  For both models  we optionally condition on pitch by concatenating the hidden embedding
+with   onehot pitch representation      Baseline spectral autoencoder  Each block represents   nonlinear    convolution with stride
+    kernel size     and channels       The WaveNet autoencoder  Downsampling in the encoder occurs only in the average pooling
+layer  The embeddings are distributed in time and upsampled with nearest neighbor interpolation to the original resolution before biasing
+each layer of the decoder   NC  indicates noncausal convolution      indicates      convolution with kernel size   See Section  
+for further details 
+
+evaluation  such as with the use of the Inception score  Salimans et al   
+We recognized the need for an audio dataset that was as approachable as those in the image domain  Audio signals
+found in the wild contain multiscale dependencies that
+prove particularly dif cult to model  Raffel    BertinMahieux et al    King et al    Thickstun et al 
+  leading many previous efforts at datadriven audio
+synthesis to focus on more constrained domains such as
+texture synthesis or training small parametric models  Sarroff   Casey    McDermott et al   
+Inspired by the large  highquality image datasets  NSynth
+is an order of magnitude larger than comparable public
+It consists of    fourdatasets  Humphrey   
+second annotated notes sampled at  kHz from    harmonic musical instruments 
+After introducing the models and describing the dataset 
+we evaluate the performance of the WaveNet autoencoder
+over   baseline convolutional autoencoder model trained
+on spectrograms  We examine the tasks of reconstruction
+and interpolation  and analyze the learned space of embeddings  For qualitative evaluation  we include supplemental
+audio  les for all examples mentioned in this paper  Despite our best efforts to convey analysis in plots  listening
+to the samples is essential to understanding this paper and
+we strongly encourage the reader to listen along as they
+read 
+
+  Models
+  WaveNet Autoencoder
+
+WaveNet  van den Oord et al      is   powerful generative approach to probabilistic modeling of raw audio  In
+this section we describe our novel WaveNet autoencoder
+structure  The primary motivation for this approach is to
+attain consistent longterm structure without external conditioning    secondary motivation is to use the learned encodings for applications such as meaningful audio interpolation 
+Recalling the original WaveNet architecture described in
+ van den Oord et al      at each step   stack of dilated convolutions predicts the next sample of audio from  
+ xedsize input of prior sample values  The joint probability of the audio   is factorized as   product of conditional
+probabilities 
+
+  cid 
+
+  
+
+      
+
+  xi      xN 
+
+Unconditional generation from this model manifests as
+ babbling  due to the lack of longer term structure  see
+Supplemental for an audio example  However   van den
+Oord et al      showed in the context of speech that
+longrange structure can be enforced by conditioning on
+temporally aligned linguistic features 
+Our autoencoder removes the need for that external con 
+
+Neural Audio Synthesis of Musical Notes with WaveNet Autoencoders
+
+ditioning  It works by taking raw audio waveform as input
+from which the encoder produces an embedding          
+Next  we causally shift the same input and feed it into the
+decoder  which reproduces the input waveform  The joint
+probablity is now 
+
+  cid 
+
+  
+
+      
+
+  xi      xN       
+
+We could parameterize   as   latent variable        that
+we would have to marginalize over  Gulrajani et al   
+but in practice we have found this to be less effective  As
+discussed in  Chen et al    this may be due to the
+decoder being so powerful that it can ignore the latent variables unless they encode   much larger context that   otherwise inaccessible 
+Note that the decoder could completely ignore the deterministic encoding and degenerate to   standard unconditioned WaveNet  However  because the encoding is  
+strong signal for the supervised output  the model learns
+to utilize it 
+During inference  the decoder autoregressively generates  
+single output sample at   time conditioned on an embedding and   starting palette of zeros  The embedding can be
+inferred deterministically from audio or drawn from other
+points in the embedding space       through interpolation
+or analogy  White   
+Figure    depicts the model architecture in more detail 
+The temporal encoder model is    layer nonlinear residual network of dilated convolutions followed by     convolutions  Each convolution has   channels and precedes
+  ReLU nonlinearity  The output feed into another    
+convolution before downsampling with average pooling to
+get the encoding    We call it    temporal encoding  because the result is   sequence of hidden codes with separate dimensions for time and channel  The time resolution
+depends on the stride of the pooling  We tune the stride 
+keeping total size of the embedding constant    compression  In the tradeoff between temporal resolution and
+embedding expressivity  we  nd   sweet spot at   stride
+of    ms  with   dimensions per timestep  yielding
+      embedding for each NSynth note  We additionally explore models that condition on global attributes by
+utilizing   onehot pitch embedding 
+The WaveNet decoder model is similar to that presented in
+ van den Oord et al      We condition it by biasing every layer with   different linear projection of the temporal
+embeddings  Since the decoder does not downsample anywhere in the network  we upsample the temporal encodings
+
+to the original audio rate with nearest neighbor interpolation  As in the original design  we quantize our input audio
+using  bit mulaw encoding and predict each output step
+with   softmax over the resulting   values 
+This WaveNet autoencoder is   deep and expressive network  but has the tradeoff of being limited in temporal
+context to the chunksize of the training audio  While
+this is suf cient for consistently encoding the identity of
+  sound and interpolating among many sounds  achieving
+larger context would be better and is an area of ongoing
+research 
+
+  Baseline  Spectral Autoencoder
+
+As   point of comparison  we set out to create   straightforward yet strong baseline for the our neural audio synthesis experiments 
+Inspired by image models  Vincent
+et al    we explore convolutional autoencoder structures with   bottleneck that forces the model to  nd   compressed representation for an entire note  Figure    shows
+  block diagram of our baseline architecture  The convolutional encoder and decoder are each   layers deep with
+    strides and     kernels  Every layer is followed by
+  leakyReLU   nonlinearity and batch normalization
+ Ioffe   Szegedy    The number of channels grows
+from   to   before   linear fullyconnected layer creates   single   dimensional hidden vector     to match
+that of the WaveNet autoencoder 
+Given the simplicity of the architecture  we examined  
+range of input representations  Using the raw waveform as
+input with   meansquared error  MSE  cost proved dif 
+cult to train and highlighted the inadequacy of the independent Gaussian assumption  Spectral representations such
+as the real and imaginary components of the Fast Fourier
+Transform  FFT  fared better  but suffered from low perceptual quality despite achieving low MSE cost  We found
+that training on the log magnitude of the power spectra 
+peak normalized to be between   and   correlated better
+with perceptual distortion 
+We also explored several representations of phase  including instantaneous frequency and circular normal cost functions  see Supplemental  but in each case independently
+estimating phase and magnitude led to poor sample quality
+due to phase errors  We  nd   large improvement by estimating only the magnitude and using   well established
+iterative technique to reconstruct the phase  Grif     Lim 
+  To get the best results  we used   large FFT size
+  relative to the hop size   and ran the algorithm
+for   iterations  As    nal heuristic  we weighted the
+MSE loss  starting at   for  Hz and decreasing linearly to
+
+ This size was aligned with   WaveNet autoencoder that had
+
+  pooling stride of   and       embedding 
+
+Neural Audio Synthesis of Musical Notes with WaveNet Autoencoders
+
+  at  Hz and above  At the expense of some precision
+in timbre  this created more phase coherence for the fundamentals of notes  where errors in the linear spectrum lead
+to   larger relative error in frequency 
+
+  Training
+
+We train all models with stochastic gradient descent with
+an Adam optimizer  Kingma   Ba    The baseline
+models commonly use   learning rate of     while the
+WaveNet models use   schedule  starting at     and descending to         and     at iterations        
+and    respectively  The baseline models train asynchronously for    iterations with   batch size of   The
+WaveNet models train synchronously for    iterations
+with   batch size of  
+
+  The NSynth Dataset
+To evaluate our WaveNet autoencoder model  we wanted
+an audio dataset that let us explore the learned embeddings  Musical notes are an ideal setting for this study as
+we hypothesize that the embeddings will capture structure
+such as pitch  dynamics  and timbre  While several smaller
+datasets currently exist  Goto et al    Romani Picas
+et al    deep networks train better on abundant  highquality data  motivating the development of   new dataset 
+
+    Dataset of Musical Notes
+
+NSynth consists of     musical notes  each with  
+unique pitch  timbre  and envelope  For   instruments
+from commercial sample libraries  we generated four second  monophonic  kHz audio snippets  referred to as
+notes  by ranging over every pitch of   standard MIDI piano   as well as  ve different velocities       
+    The note was held for the  rst three seconds and
+allowed to decay for the  nal second  Some instruments
+are not capable of producing all   pitches in this range 
+resulting in an average of   pitches per instrument  Furthermore  the commercial sample packs occasionally contain duplicate sounds across multiple velocities  leaving an
+average of   unique velocities per pitch 
+
+  Annotations
+
+We also annotated each of the notes with three additional
+pieces of information based on   combination of human
+evaluation and heuristic algorithms 
+
+  Source  The method of sound production for the
+note   instrument  This can be one of  acoustic  or
+
+ MIDI velocity is similar to volume control and they have  
+direct relationship  For physical intuition  higher velocity corresponds to pressing   piano key harder 
+
+ electronic  for instruments that were recorded from
+acoustic or electronic instruments  respectively  or
+ synthetic  for synthesized instruments 
+
+  Family  The highlevel family of which the note   instrument is   member  Each instrument is   member
+of exactly one family  See Supplemental for the complete list 
+
+  Qualities  Sonic qualities of the note  See Supplemental for the complete list of classes and their cooccurrences  Each note is annotated with zero or more
+qualities 
+
+  Availability
+
+in
+is
+
+ 
+available
+
+serialized
+for
+
+pubafter
+at
+
+dataset will
+
+full NSynth
+available
+
+be made
+format
+download
+
+The
+licly
+publication 
+http download magenta tensorflow org hans
+as TFRecord  les split into training and holdout sets  Each
+note is represented by   serialized TensorFlow Example
+protocol buffer containing the note and annotations 
+Details of the format can be found in the README 
+
+  Evaluation
+We evaluate and analyze our models on the tasks of note
+reconstruction  instrument interpolation  and pitch interpolation 
+Audio is notoriously hard to represent visually  Magnitude
+spectrograms capture many aspects of   signal for analytics  but two spectrograms that appear very similar to the
+eye can correspond to audio that sound drastically different
+due to phase differences  We have included supplemental
+audio examples of every plot and encourage the reader to
+listen along as they read 
+in our analysis we present examples as
+That said 
+plots of the constantq transform  CQT   Brown   
+Sch orkhuber   Klapuri    which is useful because it is
+shift invariant to changes in the fundamental frequency  In
+this way  the structure and envelope of the overtone series
+ higher harmonics  determines the dynamics and timbre of
+  note  regardless of its base frequency  However  due to
+the logarithmic binning of frequencies  transient noiselike
+impulses appear as rainbow  pyramidal spikes  rather than
+straight broadband lines  We display CQTs with   pitch
+range of         hop size of     bins per octave  and    lter scale of  
+As phase plays such an essential part in sample quality 
+we have attempted to show both magnitude and phase on
+the same plot  The intensity of lines is proportional to
+the log magnitude of the power spectrum while the color
+
+Neural Audio Synthesis of Musical Notes with WaveNet Autoencoders
+
+Figure   Reconstructions of notes from three different instruments  Each note is displayed as   CQT spectrum with time on the horizontal axis and pitch on the vertical axis  Intensity of lines is proportional to the log magnitude of the power spectrum and the color is
+given by the instantaneous frequency  See Section   for details 
+
+is given by the derivative of the unrolled phase  instantaneous frequency   Boashash    We display the
+derivative of the phase because it creates   solid continuous line for   harmonic of   consistent frequency  We can
+understand this because if the instantaneous frequency of
+  harmonic  fharm  and an FFT bin  fbin  are not exactly
+equal  each timestep will introduce   constant phase shift 
+     fbin   fharm  hopsize
+
+samplerate 
+
+  Reconstruction
+
+Figure   displays CQT spectrograms for notes from   different instruments in the holdout set  where the original
+note spectrograms are on the  rst column and the model
+reconstruction spectrograms are on the second and third
+columns  Each note has   similar structure with some noise
+on onset    fundamental frequency with   series of harmonics  and   decay  For all the WaveNet models  there is  
+slight builtin distortion due to the compression of the mulaw encoding  It is   minor effect for many samples  but
+is more pronounced for lower frequencies  Using different
+representations without this distortion is an ongoing area of
+research 
+While each spectrogram matches the general contour of the
+original note  we can hear   pronounced difference in sample quality that we can ascribe to certain features  For the
+Glockenspiel  we can see that the WaveNet autoencoder
+reproduces the magnitude and phase of the fundamental
+ solid blue stripe      and also the noise on attack  vertical rainbow spike     There is   slight error in the fun 
+
+damental as it starts   little high and quickly descends to
+the correct pitch     In contrast  the baseline has   more
+percussive  multitonal sound  similar to   bell or gong  The
+fundamental is still present  but so are other frequencies 
+and the phases estimated from the Grif nLim procedure
+are noisy as indicated by the blurred horizontal rainbow
+texture    
+The electric piano has   more clearly de ned harmonic series  the horizontal rainbow solid lines      and   noise on
+the beginning and end of the note  vertical rainbow spikes 
+    Listening to the sound  we hear that it is slightly distorted  which promotes these upper harmonics  Both the
+WaveNet autoencoder and the baseline produce spectrograms with similar shapes to the original  but with different
+types of phase artifacts  The WaveNet model has suf cient
+phase structure to model the distortion  but has   slight wavering of the instantaneous frequency of some harmonics 
+as seen in the color change in harmonic stripes     In contrast  the baseline lacks the structure in phase to maintain
+the punchy character of the original note  and produces  
+duller sound that is slightly out of tune  This is represented
+in the less brightly colored harmonics due to phase noise
+   
+The  ugelhorn displays perhaps the starkest difference between the two models  The sound combines rich harmonics  many lines  nontonal wind and lip noise  background
+color  and vibrato   oscillation of pitch that results in  
+corresponding rainbow of color in all of the harmonics 
+While the WaveNet autoencoder does not replicate the ex 
+
+Neural Audio Synthesis of Musical Notes with WaveNet Autoencoders
+
+Figure   CQT spectrograms of linear interpolations between three different notes from instruments in the holdout set  For the original
+spectrograms  the raw audio is linearly mixed  For the models  samples are generated from linear interpolations in embedding space 
+See Section   for details 
+
+act trace of the vibrato     it creates   very similar spectrogram with oscillations in the instantaneous frequency at
+all levels synced across the harmonics     This results in
+  rich and natural sounding reconstruction with all three
+aspects of the original sound  The baseline  by comparison  is unable to model such structure  It creates   more or
+less correct harmonic series  but the phase has lots of random perturbations  Visually this shows up as colors which
+are faded and speckled with rainbow noise     which contrasts with the bright colors of the original and WaveNet
+examples  Acoustically  this manifests as an unappealing
+buzzing sound laid over an inexpressive and consistent series of harmonics  The WaveNet model also produces   few
+inaudible discontinuities visually evidenced by the vertical
+rainbow spikes    
+
+  QUANTITATIVE COMPARISON
+
+Inspired by the use of the Inception Score for images  Salimans et al    we train   multitask classi cation network to perform   quantitative comparison of the model reconstructions by predicting pitch and quality labels on the
+NSynth dataset  details in the Supplemental  The network
+con guration is the same as the baseline encoder and testing is done on reconstructions of   randomly chosen subset
+of   examples from the heldout set 
+The results in Table   con rm our qualititive observation
+that the WaveNet reconstructions are of superior quality 
+The classi er is   more successful at extracting pitch
+from the reconstructed WaveNet samples than the baseline
+
+Table   Classi cation accuracy of   deep nonlinear pitch and
+quality classi er on reconstructions of   test set 
+
+PITCH
+
+QUALITY
+
+ORIGINAL AUDIO
+WAVENET RECON
+BASELINE RECON
+
+ 
+ 
+ 
+
+ 
+ 
+ 
+
+and several points higher for predicting quality information  giving an accuracy roughly equal to the original audio 
+
+  Interpolation in Timbre and Dynamics
+
+Given the limited factors of variation in the dataset  we
+know that   successful embedding space     should span
+the range of timbre and dynamics in its reconstructions 
+In Figure   we show reconstructions from linear interpolations   in the   space among three different instruments and additionally compare these to interpolations
+in the original audio space  The latter are simple superpositions of the individual instruments  spectrograms  This
+is perceptually equivalent to the two instruments being
+played at the same time 
+In contrast  we  nd that the generative models fuse aspects
+of the instruments  As we saw in Section   the WaveNet
+autoencoder models the data much more realistically than
+the baseline  so it is no surprise that it also learns   manifold of codes that yield more perceptually interesting re 
+
+Neural Audio Synthesis of Musical Notes with WaveNet Autoencoders
+
+constructions 
+For example  in the interpolated note between the bass and
+ ute  Figure   column   we can hear and see that both the
+baseline and WaveNet models blend the harmonic structure of the two instruments while imposing the amplitude
+envelope of the bass note onto the upper harmonics of the
+ ute note  However  the WaveNet model goes beyond this
+to create   dynamic mixing of the overtones in time  even
+jumping to   higher harmonic at the end of the note    
+This sound captures expressive aspects of the timbre and
+dynamics of both the bass and  ute  but is distinctly separate from either original note  This contrasts with the interpolation in audio space  where the dynamics and timbre
+of the two notes is independent  The baseline model also
+introduces phase distortion similar to those in the reconstructions of the bass and  ute 
+We see this phenomenon again in the interpolation between
+ ute and organ  Figure   column   Both models also
+seem to create new harmonic structure  rather than just
+overlay the original harmonics  The WaveNet model adds
+additional harmonics as well as   subharmonic to the original  ute note  all while preserving phase relationships    
+The resulting sound has the breathiness of    ute  with the
+upper frequency modulation of an organ  By contrast  the
+lack of phase structure in the baseline leads to   new harmonic yet dull sound lacking   unique character 
+The WaveNet model additionally has   tendency to exaggerate amplitude modulation behavior  while the baseline
+suppresses it  If we examine the original organ sound  Figure   column   we can see   subtle modulation signi 
+ ed by the blue harmonics periodically fading to black    
+The baseline model misses this behavior completely as it is
+washed out  Conversely  the WaveNet model ampli es the
+behavior  adding in new harmonics not present in the original note and modulating all the harmonics  This is seen in
+the  gure by four vertical black stripes that align with the
+four modulations of the original signal    
+
+  Entanglement of Pitch and Timbre
+
+By conditioning on pitch during training  we hypothesize
+that we should be able to generate multiple pitches from  
+single   vector that preserve the identity of timbre and dynamics  Our initial attempts were unsuccessful  as it seems
+our models had learned to ignore the conditioning variable 
+We investigate this further with classi cation and correlation studies 
+
+  PITCH CLASSIFICATION FROM  
+
+One way to study the entanglement of pitch and   is to consider the pitch classi cation accuracy from embeddings  If
+training with pitch conditioning disentangles the represen 
+
+Table   Classi cation accuracy  in percentage  of   linear pitch
+classi er trained on learned embeddings  The decoupling of pitch
+and embedding becomes more pronounced at smaller embedding
+sizes as shown by the larger relative decrease in classi cation accuracy 
+
+ 
+SIZE
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+NO PITCH
+
+COND 
+
+PITCH
+COND 
+
+RELATIVE
+CHANGE
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+WAVENET
+BASELINE
+BASELINE
+BASELINE
+BASELINE
+BASELINE
+BASELINE
+
+tation of pitch and timbre  then we would expect   linear
+pitch classi er trained on the embeddings to drop in accuracy  To test this  we train   series of baseline autoencoder
+models with different embedding sizes  both with and without pitch conditioning  For each model  we then train   logistic regression pitch classi er on its embeddings and test
+on   random sample of   heldout embeddings 
+The  rst two rows of Table   demonstrate that the baseline
+and WaveNet models decrease in classi cation accuracy by
+  when adding pitch conditioning during training 
+This is indicative   reduced presence of pitch information
+in the latent code and thus   decoupling of pitch and timbre
+information  Further  as the total embedding size decreases
+below   the accuracy drop becomes much more pronounced  reaching     relative decrease  This is likely
+due to the greater expressivity of larger embeddings  where
+there is less to be gained from utilizing the pitch conditioning  However  as the embedding size decreases  so too
+does reconstruction quality  This is more pronounced for
+the WaveNet models  which have farther to fall in terms of
+sample quality 
+As   proof of principle  we  nd that for   baseline model
+with an embedding size of   we are able to successfully balance reconstruction quality and response to conditioning  Figure   demonstrates two octaves of     major
+chord created from   single embedding of an electric piano note  but conditioned on different pitches  The resulting harmonic structure of the original note is only partially
+preserved across the range  As we shift the pitch upwards 
+  subharmonic emerges     such that the pitch   note
+is similar to the original except that the harmonics of the
+octave are accentuated in amplitude  This aligns with our
+pitch classi cation results  where we  nd that pitches are
+most commonly confused with those one octave away  see
+Supplemental  These errors can account for as much as
+  absolute classi cation error 
+
+Neural Audio Synthesis of Musical Notes with WaveNet Autoencoders
+
+Figure   Conditioning on pitch  CQT spectrograms of   baseline   hidden dimensions  reconstruction of   single note of electric
+piano from the holdout set  By holding   constant and conditioning on different pitches  we can play two octaves of     major chord
+from   single embedding  The original pitch  MIDI    is dashed in white for comparison  See Section   for details 
+
+  Conclusion and Future Directions
+In this paper  we have introduced   WaveNet autoencoder
+model that captures long term structure without the need for
+external conditioning and demonstrated its effectiveness on
+the new NSynth dataset for generative modeling of audio 
+The WaveNet autoencoder that we describe is   powerful
+representation for which there remain multiple avenues of
+exploration 
+It builds upon the  negrained local understanding of the original WaveNet work and provides access
+to   useful hidden space  However  due to memory constraints  it is unable to fully capture global context  Overcoming this limitation is an important open problem 
+NSynth was inspired by image recognition datasets that
+have been core to recent progress in deep learning  We encourage the broader community to use NSynth as   benchmark and entry point into audio machine learning  We
+also view NSynth as   building block for future datasets
+and envision   highquality multinote dataset for tasks like
+generation and transcription that involve learning complex
+languagelike dependencies 
+
+Acknowledgments
+  huge thanks to Hans Bernhard with the dataset  Colin
+Raffel for crucial conversations  and Sageev Oore for
+thoughtful analysis 
+
+References
+BertinMahieux  Thierry  Ellis  Daniel PW  Whitman 
+Brian  and Lamere  Paul  The million song dataset  In
+ISMIR  volume   pp     
+
+Boashash  Boualem  Estimating and interpreting the instantaneous frequency of   signal     fundamentals  Proceedings of the IEEE     
+
+Brown  Judith    Calculation of   constant   spectral transform  The Journal of the Acoustical Society of America 
+   
+
+Chen  Xi  Kingma  Diederik    Salimans  Tim  Duan  Yan 
+
+Figure   Correlation of embeddings across pitch for three different instruments and the average across all instruments  These embeddings were taken from   WaveNet model trained without pitch
+conditioning 
+
+    CORRELATION ACROSS PITCH
+
+We can gain further insight into the relationship between
+timbre and pitch by examining the correlation of WaveNet
+embeddings among pitches for   given instrument  Figure  
+shows correlations for several instruments across their entire   note range at velocity   We see that each instrument has   unique partitioning into two or more registers
+over which notes of different pitches have similar embeddings  Even the average over all instruments shows   broad
+distinction between high and low registers  On re ection 
+this is unsurprising as the timbre and dynamics of an instrument can vary dramatically across its range 
+
+Neural Audio Synthesis of Musical Notes with WaveNet Autoencoders
+
+Dhariwal  Prafulla  Schulman  John  Sutskever  Ilya  and
+Abbeel  Pieter  Variational lossy autoencoder  CoRR 
+abs    URL http arxiv org 
+abs 
+
+Chowning  John    The synthesis of complex audio spectra by means of frequency modulation  Journal of the
+audio engineering society     
+
+Deng     Dong     Socher     Li       Li     and FeiImageNet    LargeScale Hierarchical Image
+
+Fei    
+Database  In CVPR   
+
+Goodfellow  Ian  PougetAbadie  Jean  Mirza  Mehdi  Xu 
+Bing  WardeFarley  David  Ozair  Sherjil  Courville 
+Aaron  and Bengio  Yoshua  Generative adversarial nets 
+In Advances in neural information processing systems 
+pp     
+
+McDermott  Josh    Oxenham  Andrew    and Simoncelli 
+Eero    Sound texture synthesis via  lter statistics  In
+Applications of Signal Processing to Audio and Acoustics    WASPAA  IEEE Workshop on  pp   
+  IEEE   
+
+Mehri  Soroush  Kumar  Kundan  Gulrajani  Ishaan  Kumar  Rithesh  Jain  Shubham  Sotelo  Jose  Courville 
+Aaron    and Bengio  Yoshua  Samplernn  An unconditional endto end neural audio generation model  CoRR 
+abs    URL http arxiv org 
+abs 
+
+Netzer  Yuval  Wang  Tao  Coates  Adam  Bissacco 
+Alessandro  Wu  Bo  and Ng  Andrew    Reading digits in natural images with unsupervised feature learning 
+In NIPS workshop on deep learning and unsupervised
+feature learning  volume   pp     
+
+Goto  Masataka  Hashiguchi  Hiroki  Nishimura  Takuichi 
+and Oka  Ryuichi  Rwc music database  Music genre
+database and musical instrument sound database   
+
+Pinch  Trevor    Trocco  Frank  and Pinch  TJ  Analog
+days  The invention and impact of the Moog synthesizer 
+Harvard University Press   
+
+Grif    Daniel and Lim  Jae  Signal estimation from modIEEE Transactions
+  ed shorttime fourier transform 
+on Acoustics  Speech  and Signal Processing   
+   
+
+Gulrajani  Ishaan  Kumar  Kundan  Ahmed  Faruk  Taiga 
+Adrien Ali  Visin  Francesco    azquez  David  and
+Courville  Aaron    Pixelvae    latent variable model
+for natural images  CoRR  abs    URL
+http arxiv org abs 
+
+Humphrey  Eric    Minst    collection of musical
+sound datasets    URL https github com 
+ejhumphrey minstdataset 
+
+Ioffe  Sergey and Szegedy  Christian  Batch normalization 
+Accelerating deep network training by reducing internal covariate shift  CoRR  abs    URL
+http arxiv org abs 
+
+King  Simon  Clark  Robert AJ  Mayo  Catherine  and
+Karaiskos  Vasilis  The blizzard challenge    
+
+Kingma  Diederik    and Ba  Jimmy  Adam    method
+for stochastic optimization  CoRR  abs   
+URL http arxiv org abs 
+
+Kingma  Diederik   and Welling  Max  Autoencoding
+arXiv preprint arXiv 
+
+variational bayes 
+ 
+
+Krizhevsky  Alex and Hinton  Geoffrey  Learning multiple
+
+layers of features from tiny images   
+
+LeCun  Yann  Cortes  Corinna  and Burges  Christopher JC  The mnist database of handwritten digits   
+
+Punk  Daft  Giorgio by morodor    URL https 
+
+www youtube com watch   zhlCs sG 
+
+Raffel  Colin  LearningBased Methods for Comparing Sequences  with Applications to Audioto MIDI Alignment
+and Matching  PhD thesis  COLUMBIA UNIVERSITY 
+ 
+
+Romani Picas  Oriol  Parra Rodriguez  Hector  Dabiri 
+Dara  Tokuda  Hiroshi  Hariya  Wataru  Oishi  Koji  and
+Serra  Xavier    realtime system for measuring sound
+In Audio Engineergoodness in instrumental sounds 
+ing Society Convention   Audio Engineering Society 
+ 
+
+Salimans  Tim  Goodfellow  Ian    Zaremba  Wojciech 
+Cheung  Vicki  Radford  Alec  and Chen  Xi  Improved
+techniques for training gans  CoRR  abs 
+ 
+URL http arxiv org abs 
+ 
+
+Sarroff  Andy   and Casey  Michael    Musical audio synthesis using autoencoding neural nets  In ICMC   
+
+Sch orkhuber  Christian and Klapuri  Anssi  Constantq
+In  th Sound
+transform toolbox for music processing 
+and Music Computing Conference  Barcelona  Spain 
+pp     
+
+Theis  Lucas  Oord    aron van den  and Bethge  Matthias 
+  note on the evaluation of generative models  arXiv
+preprint arXiv   
+
+Thickstun  John  Harchaoui  Zaid  and Kakade  Sham 
+In preprint 
+Learning features of music from scratch 
+https arxiv org abs   
+
+Neural Audio Synthesis of Musical Notes with WaveNet Autoencoders
+
+van den Oord    aron  Dieleman  Sander  Zen  Heiga  Simonyan  Karen  Vinyals  Oriol  Graves  Alex  Kalchbrenner  Nal  Senior  Andrew    and Kavukcuoglu  Koray  Wavenet    generative model for raw audio  CoRR 
+abs      URL http arxiv org 
+abs 
+
+van
+
+den Oord    aron  Kalchbrenner  Nal 
+
+Kavukcuoglu  Koray 
+CoRR  abs     
+works 
+http arxiv org abs 
+
+Pixel
+
+and
+recurrent neural netURL
+
+Vincent  Pascal  Larochelle  Hugo  Lajoie  Isabelle  Bengio  Yoshua  and Manzagol  PierreAntoine  Stacked
+denoising autoencoders  Learning useful representations
+in   deep network with   local denoising criterion  Journal of Machine Learning Research   Dec 
+ 
+
+White  Tom  Sampling generative networks  Notes on  
+few effective techniques  CoRR  abs   
+URL http arxiv org abs 
+
+Xenakis  Iannis  Formalized music   
+
+

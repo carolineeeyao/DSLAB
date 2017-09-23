@@ -1,0 +1,979 @@
+Multi delity Bayesian Optimisation with Continuous Approximations
+
+Kirthevasan Kandasamy   Gautam Dasarathy   Jeff Schneider   Barnab as   oczos  
+
+Abstract
+
+Bandit methods for blackbox optimisation  such
+as Bayesian optimisation  are used in   variety
+of applications including hyperparameter tuning and experiment design  Recently  multi 
+ delity methods have garnered considerable attention since function evaluations have become increasingly expensive in such applications  Multi 
+ delity methods use cheap approximations to the
+function of interest to speed up the overall optimisation process  However  most multi delity
+methods assume only    nite number of approximations  On the other hand  in many practical
+applications    continuous spectrum of approximations might be available  For instance  when
+tuning an expensive neural network  one might
+choose to approximate the cross validation performance using less data   and or few training
+iterations     Here  the approximations are best
+viewed as arising out of   continuous two dimensional space         In this work  we develop  
+Bayesian optimisation method  BOCA  for this
+setting  We characterise its theoretical properties and show that it achieves better regret than
+than strategies which ignore the approximations 
+BOCA outperforms several other baselines in synthetic and real experiments 
+
+  Introduction
+Many tasks in scienti   and engineering applications can be
+framed as bandit optimisation problems  where we need to
+sequentially evaluate   noisy blackbox function          
+with the goal of  nding its optimum  Some applications
+include hyperparameter tuning in machine learning  Hutter
+et al    Snoek et al    optimal policy search  Lizotte et al    MartinezCantin et al    and scienti  
+experiments  Gonzalez et al    Parkinson et al   
+
+ Equal contribution  Carnegie Mellon University  Pittsburgh
+PA  USA  Rice University  Houston TX  USA  Correspondence to 
+Kirthevasan Kandasamy  kandasamy cmu edu 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright   by
+the author   
+
+Typically  in such applications  each function evaluation is
+expensive  and conventionally  the bandit literature has focused on developing methods for  nding the optimum while
+keeping the number of evaluations to   at   minimum 
+However  with increasingly expensive function evaluations 
+conventional methods have become infeasible as   signi 
+cant cost needs to be expended before we can learn anything
+about    As   result  multi delity optimisation methods
+have recently gained attention  Cutler et al    Kandasamy et al      Li et al    As the name suggests 
+these methods assume that we have access to lower  delity
+approximations to   which can be evaluated instead of   
+The lower the  delity  the cheaper the evaluation  but it provides less accurate information about    For example  when
+optimising the con guration of an expensive real world
+robot  its performance can be approximated using cheaper
+computer simulations  The goal is to use the cheap approximations to guide search for the optimum of    and reduce the
+overall cost of optimisation  However  most multi delity
+work assume only    nite number of approximations  In
+this paper  we study multi delity optimisation when there
+is access to   continuous spectrum of approximations 
+To motivate this set up  consider tuning   classi cation algorithm over   space of hyperparameters   by maximising
+  validation set accuracy  The algorithm is to be trained
+using    data points via an iterative algorithm for    iterations  However  we wish to use fewer training points
+       and or fewer iterations        to approximate
+the validation accuracy  We can view validation accuracy
+as   function                         where evaluating            requires training the algorithm with  
+points for   iterations with the hyperparameters    If the
+training complexity of the algorithm is quadratic in data
+size and linear in the number of iterations  then the cost of
+this evaluation is                    Our goal is to  nd
+the optimum when        and             we wish to
+maximise                   
+In this setting  while      are technically discrete choices 
+they are more naturally viewed as coming from   continuous   dimensional  delity space              One
+might hope that cheaper queries to         with     
+less than       can be used to learn about         and
+consequently optimise it using less overall cost  Indeed  this
+
+Bayesian Optimisation with Continuous Approximations
+
+is the case with many machine learning algorithms where
+cross validation performance tends to vary smoothly with
+data set size and number of iterations  Therefore  one may
+use cheap low  delity experiments with small         to
+discard bad hyperparameters and deploy expensive high
+ delity experiments with large         only in   small but
+promising region  The main theoretical result of this paper
+ Theorem   shows that our proposed algorithm  BOCA 
+exhibits precisely this behaviour 
+Continuous approximations also arise in simulation studies 
+where simulations can be carried out at varying levels of
+granularity  online advertising  where an ad can be controlled by continuous parameters such as display time or target audience  and several other experiment design tasks  In
+fact  in many multi delity papers  the  nite approximations
+were obtained by discretising   continuous space  Huang
+et al    Kandasamy et al      Here  we study  
+Bayesian optimisation technique that is directly designed
+for continuous  delity spaces and is potentially applicable
+to more general spaces  Our main contributions are 
+
+    novel setting and model for multi delity optimisation with continuous approximations using Gaussian
+process  GP  assumptions  We develop   novel algorithm  BOCA  for this setting 
+
+    theoretical analysis characterising the behaviour and
+
+regret bound for BOCA 
+
+  An empirical study which demonstrates that BOCA
+outperforms alternatives  both multi delity and otherwise  on   series of synthetic problems and real examples in hyperparameter tuning and astrophysics 
+
+Related Work
+Bayesian optimisation  BO  refers to   suite of techniques
+for bandit optimisation which use   prior belief distribution
+for    While there are several techniques for BO  de Freitas
+et al    Hern andezLobato et al    Jones et al 
+  Mockus    Thompson    our work will build
+on the Gaussian process upper con dence bound  GPUCB 
+algorithm of Srinivas et al    GPUCB models   as  
+GP and uses upper con dence bound  UCB   Auer   
+techniques to determine the next point for evaluation 
+BO techniques have been used in developing multi delity
+optimisation methods in various applications such as hyperparameter tuning and industrial design  Forrester et al 
+  Huang et al    Klein et al    Lam et al 
+  Poloczek et al    Swersky et al    However 
+these methods are either problem speci   and or only use
+   nite number of  delities  Further  none of them come
+with theoretical underpinnings  Recent work has studied
+multi delity methods for speci   problems such as hyperparameter tuning  active learning and reinforcement learning  Agarwal et al    Cutler et al    Li et al   
+Sabharwal et al    Zhang   Chaudhuri    While
+
+some of the above tasks can be framed as optimisation problems  the methods themselves are speci   to the problem
+considered  Our method is more general as it applies to any
+bandit optimisation task 
+Perhaps the closest work to us is that of Kandasamy et al 
+        who developed MFGP UCB assuming    nite
+number of approximations to    While this line of work
+was the  rst to provide theoretical guarantees for multi 
+ delity optimisation  it has two important shortcomings 
+First  they make strong assumptions  particularly   uniform
+bound on the difference between the expensive function and
+an approximation  This does not allow for instances where
+an approximation might be good at certain regions but not
+at the other  In contrast  our probabilistic treatment between
+ delities is is robust to such cases  Second  their model
+does not allow sharing information between  delities  each
+approximation is treated independently  Not only is this
+wasteful as lower  delities can provide useful information
+about higher  delities  it also means that the algorithm might
+perform poorly if the  delities are not designed properly 
+We demonstrate this with an experiment in Section   On
+the other hand  our model allows sharing information across
+the  delity space in   natural way  In addition  we can also
+handle continuous approximations whereas their method is
+strictly for    nite number of approximations  That said 
+BOCA inherits   key intuition from MFGP UCB  which
+is to choose    delity only if we have suf ciently reduced
+the uncertainty at all lower  delities  Besides this  there are
+considerable differences in the mechanics of the algorithm
+and proof techniques  As we proceed  we will draw further
+comparisons to Kandasamy et al     
+
+  Preliminaries
+  Some Background Material
+Gaussian processes    GP over   space   is   random
+process from   to    GPs are typically used as   prior for
+functions in Bayesian nonparametrics  It is characterised
+by   mean function           and   covariance function
+ or kernel               If     GP    then       is
+distributed normally              for all         Suppose that we are given   observations Dn    xi  yi  
+from this GP  where xi       yi      xi           and
+           Then the posterior process   Dn is also  
+GP with mean    and covariance    given by
+
+  
+
+          cid          
+
+        cid          cid      cid          cid 
+
+ 
+
+Here     Rn is   vector with Yi   yi  and      cid    Rn
+are such that ki       xi    cid 
+       cid  xi  The matrix
+    Rn   is given by Ki      xi  xj  We refer the
+reader to chapter   of Rasmussen   Williams   for
+more on the basics of GPs and their use in regression 
+
+Bayesian Optimisation with Continuous Approximations
+
+Figure   Samples drawn from   GP with   mean and SE kernel
+with bandwidths               Samples tend to be
+smoother across the domain for large bandwidths 
+
+Radial kernels  The prior covariance functions of GPs are
+typically taken to be radial kernels  some examples are the
+squared exponential  SE  and Mat ern kernels  Using   radial
+kernel means that the prior covariance can be written as
+      cid     cid      cid cid  and depends only on the distance
+between   and   cid  Here  the scale parameter   captures the
+magnitude   could deviate from   The function         
+   is   decreasing function with  cid cid          In
+this paper  we will use the SE kernel in   running example
+to convey the intuitions in our methods  For the SE kernel 
+              exp      where        called
+the bandwidth of the kernel  controls the smoothness of the
+GP  When   is large  the samples drawn from the GP tend
+to be smoother as illustrated in Fig    We will reference
+this observation frequently in the text 
+GPUCB  The Gaussian Process Upper Con dence Bound
+ GPUCB  algorithm of Srinivas et al    is   method
+for bandit optimisation  which  like many other BO methods 
+models   as   sample from   Gaussian process  At time   
+the next point xt for evaluating   is chosen via the following
+procedure  First  we construct an upper con dence bound
+                 
+        for the GP      is the
+posterior mean of the GP conditioned on the previous      
+evaluations and     is the posterior standard deviation  Following other UCB algorithms  Auer    the next point
+is chosen by maximising          xt   argmaxx        
+The     term encourages an exploitative strategy   in that
+we want to query regions where we already believe   is high
+  and     encourages an exploratory strategy   in that we
+want to query where we are uncertain about   so that we
+do not miss regions which have not been queried yet     
+which is typically increasing with    controls the tradeoff
+between exploration and exploitation  We have provided  
+brief review of GPUCB in Appendix   
+
+  Problem Set Up
+
+Our goal in bandit optimisation is to maximise   function
+           over   domain     When we evaluate   at
+      we observe               where        Let   cid   
+argmaxx         be   maximiser of   and   cid         cid  be
+the maximum value  An algorithm for bandit optimisation is
+  sequence of points  xt    where  at time    the algorithm
+chooses to evaluate   at xt based on previous queries and
+
+Figure                 is   function de ned on the product space of the  delity space   and domain     The purple line is                 We wish to  nd the maximiser
+  cid    argmaxx         The multi delity framework is attractive when   is smooth across   as illustrated in the  gure 
+observations  xi  yi   
+to achieve small simple regret Sn  as de ned below 
+
+   After   queries to    its goal is
+
+Sn   min
+
+   
+
+  cid       xt 
+
+ 
+
+Continuous Approximations  In this work  we will let  
+be   slice of   function   that lies in   larger space  Precisely 
+we will assume the existence of    delity space   and  
+function             de ned on the product space of the
+ delity space and domain  The function   which we wish
+to maximise is related to   via            where     
+   For instance  in the hyperparameter tuning example
+from Section                   and            
+Our goal is to  nd   maximiser   cid    argmaxx        
+argmaxx         We have illustrated this setup in Fig   
+In the rest of the manuscript  the term  delities  will refer
+to points   in the  delity space   
+The multi delity framework is attractive when the following two conditions are true about the problem 
+  There exist  delities       where evaluating   is
+cheaper than evaluating at    To this end  we will associate   known cost function            In the
+hyperparameter tuning example                 
+         It is helpful to think of    as being the most
+expensive  delity       maximiser of   and that     decreases as we move away from    However  this notion
+is strictly not necessary for our algorithm or results 
+
+  The cheap      evaluation gives us information about
+     This is true if   is smooth across the  delity
+space as illustrated in Fig    As we will describe shortly 
+this smoothness can be achieved by modelling   as   GP
+with an appropriate kernel for the  delity space   
+
+In the above setup    multi delity algorithm is   sequence
+of query delity pairs  zt  xt    where  at time    the
+algorithm chooses zt     and xt       and observes yt  
+
+         Xg            Bayesian Optimisation with Continuous Approximations
+
+  zt  xt      where        The choice of  zt  xt  can of
+course depend on the previous  delityquery observation
+triples  zi  xi  yi   
+  
+Multi delity Simple Regret  We provide bounds on the
+simple regret    of   multi delity optimisation method
+after it has spent capital   of   resource  Following Kandasamy et al      Srinivas et al    we will
+aim to provide any capital bounds  meaning that an algorithm would be expected to do well for all values of
+ suf ciently large    Say we have made   queries to  
+within capital          is the random quantity such that
+    zt      While the cheap
+evaluations at    cid     are useful in guiding search for the
+optimum of      there is no reward for optimising  
+cheaper      Accordingly  we de ne the simple regret
+after capital   as 
+
+    max          cid  
+  min
+
+if we have queried at   
+
+otherwise 
+
+    
+    zt   
+ 
+
+  cid       xt 
+
+    
+
+This de nition reduces to the single  delity de nition  
+when we only query   at    It is also similar to the de nition
+in Kandasamy et al      but unlike them  we do not
+impose additional boundedness constraints on   or   
+Before we proceed  we note that it is customary in the
+bandit literature to analyse cumulative regret  However  the
+de nition of cumulative regret depends on the application at
+hand  Kandasamy et al      and the results in this paper
+can be extended to to many sensible notions of cumulative
+regret  However  both to simplify exposition and since our
+focus in this paper is optimisation  we stick to simple regret 
+Assumptions  As we will be primarily focusing on continuous and compact domains and  delity spaces  going
+forward we will assume  without any loss of generality  that
+         and           We discuss noncontinuous
+settings brie   at the end of Section   In keeping with similar work in the Bayesian optimisation literature  we will assume     GP    and upon querying at        we observe
+                where                           
+is the prior covariance de ned on the product space  In this
+work  we will study exclusively   of the following form 
+          cid    cid          cid       cid cid      cid       cid cid 
+ 
+Here         is the scale parameter and         are radial
+kernels de ned on     respectively  The  delity space kernel    is an important component in this work  It controls
+the smoothness of   across the  delity space and hence determines how much information the lower  delities provide
+about      For example  suppose that    was   SE kernel    favourable setting for   multi delity method would
+be for    to have   large bandwidth hZ as that would imply
+
+that   is very smooth across    We will see that hZ determines the behaviour and theoretical guarantees of BOCA in
+  natural way when    is the SE kernel  To formalise this
+notion  we will de ne the following function            
+
+     cid        cid       cid 
+
+ 
+
+hZ
+
+One interpretation of     is that it measures the gap in
+information about      when we query at    cid     That
+is  it is the price we have to pay  in information  for querying
+at   cheap  delity  Observe that   increases when we move
+away from    in the  delity space  For the SE kernel  it
+can be shown         cid     cid 
+  For large hZ    is smoother
+across   and we can expect the lower  delities to be more
+informative about    as expected the information gap   is
+small for large hZ  If hZ is small and   is not smooth  the
+gap   is large and lower  delities are not as informative 
+Before we present our algorithm for the above setup  we
+will introduce notation for the posterior GPs for   and    Let
+Dn    zi  xi  yi  
+   be    delity  query  observation values from the GP    where yi was observed when evaluating
+  zi  xi  We will denote the posterior mean and standard
+deviation of   conditioned on Dn by    and    respectively        can be computed from   by replacing    
+       Therefore        Dn                 
+        for
+all                  We will further denote
+ 
+           
+to be the posterior mean and standard deviation of       
+   
+It follows that   Dn is also   GP and satis es
+     Dn            
+
+           
+
+     for all        
+
+  BOCA  Bayesian Optimisation with
+
+Continuous Approximations
+
+BOCA is   sequential strategy to select   domain point
+xt     and  delity zt     at time   based on previous
+observations  At time    we will  rst construct an upper
+con dence bound    for the function   we wish to optimise 
+It takes the form 
+
+                 
+
+       
+
+ 
+
+Recall from   that     and     are the posterior mean
+and standard deviation of   using the observations from the
+previous    time steps at all  delities       the entire    
+space  We will specify    in Theorems     Following other
+UCB algorithms  our next point xt in the domain   for evaluating   is   maximiser of          xt   argmaxx        
+Next  we need to determine the  delity zt     to query   
+ Strictly         cid       cid hZ  but the inequality is tighter for
+
+larger hZ  In any case    is strictly decreasing with hZ 
+
+Bayesian Optimisation with Continuous Approximations
+
+For this we will  rst select   subset Zt xt  of   as follows 
+Zt xt   
+
+      xt       
+
+ cid 
+
+                 
+ 
+       
+ 
+
+ cid cid 
+
+ cid     
+
+ cid  
+
+ cid 
+
+ 
+
+ 
+
+where
+
+     
+
+ 
+
+     
+
+ 
+
+   
+
+Here    is the information gap function in   and    
+is the posterior standard deviation of    and      are the
+dimensionalities of       The exponent   depends on the
+kernel used for     For      for the SE kernel          
+      We  lter out the  delities we consider at time  
+using three conditions as speci ed above  We elaborate
+on these conditions in more detail in Section   If Zt is
+not empty  we choose the cheapest  delity in this set      
+zt   argminz Zt     If Zt is empty  we choose zt     
+We have summarised the resulting procedure below in Algorithm   An important advantage of BOCA is that it only
+requires specifying the GP hyperparameters for   such as
+the kernel   In practice  this can be achieved by various
+effective heuristics such as maximising the GP marginal
+likelihood or cross validation which are standard in most
+BO methods  In contrast  MFGP UCB of Kandasamy et al 
+    requires tuning several other hyperparameters 
+
+Algorithm   BOCA
+Input  kernel  
+  Set                   
+  for              
+
+  xt   argmaxx        
+  zt   argminz  Zt xt       
+  yt   Query   at  zt  xt 
+  Dt   Dt     zt  xt  yt  Update posterior mean
+    and standard deviation    for   conditioned on Dt 
+
+See  
+See  
+
+  Fidelity Selection Criterion
+
+We will now provide an intuitive justi cation for the three
+conditions in the selection criterion for zt       equation  
+The  rst condition            is fairly obvious  since
+we wish to optimise      and since we are not rewarded
+for queries at other  delities  there is no reason to consider
+ delities that are more expensive than   
+The second condition        xt        says that we will
+only consider  delities where the posterior variance is larger
+than   threshold      
+          which depends critically on two quantities  the cost function   and
+the information gap   As    rst step towards parsing this
+condition  observe that   reasonable multi delity strategy
+should be inclined to query cheap  delities and learn about
+
+ 
+
+  before querying expensive  delities  As     is monotonically increasing in     it becomes easier for   cheap   to
+satisfy       xt        and be included in Zt at time   
+Moreover  since we choose zt to be the minimiser of   in
+Zt    cheaper  delity will always be chosen over expensive
+ones if included in Zt  Second  if   particular  delity   is far
+away from    it probably contains less information about
+     Again    reasonable multi delity strategy should
+be discouraged from making such queries  This is precisely
+the role of the information gap   which is increasing with
+ cid       cid  As   moves away from        increases and it
+becomes harder to satisfy       xt        Therefore 
+such     is less likely to be included in Zt xt  and be considered for evaluation  Our analysis reveals that setting   as
+in   is   reasonable trade off between cost and information
+in the approximations available to us  cheaper  delities cost
+less  but provide less accurate information about the function   we wish to optimise  It is worth noting that the second
+condition is similar in spirit to Kandasamy et al     
+who proceed from   lower to higher  delity only when the
+lower  delity variance is smaller than   threshold  However 
+while they treat the threshold as   hyperparameter  we are
+able to explicitly specify theoretically motivated values 
+The third condition in   is        cid cid 
+  Since   is
+increasing as we move away from    it says we should exclude  delities inside    small  neighbourhood of    Recall
+that if Zt is empty  BOCA will choose    by default  But
+when it is not empty  we want to prevent situations where
+we get arbitrarily close to    but not actually query at   
+Such pathologies can occur when we are dealing with  
+continuum of  delities and this condition forces BOCA to
+pick    instead of querying very close to it  Observe that
+since    is increasing with    this neighborhood is shrinking
+with time and therefore the algorithm will eventually have
+the opportunity to evaluate  delities close to   
+
+ 
+
+  Theoretical Results
+
+We now present our main theoretical contributions  In order
+to simplify the exposition and convey the gist of our results 
+we will only present   simpli ed version of our theorems 
+We will suppress constants  polylog terms  and other technical details that arise due to   covering argument in our
+proofs    rigorous treatment is available in Appendix   
+Maximum Information Gain  Up until this point  we have
+not discussed much about the kernel    of the domain    
+Since we are optimising   over     it is natural to expect that
+this will appear in the bounds  Srinivas et al    showed
+that the statistical dif culty of GP bandits is determined
+by the Maximum Information Gain  MIG  which measures
+the maximum information   subset of observations have
+about    We denote it by       where   is   subset of  
+and   is the number of queries to    We refer the reader
+
+to Appendix   for   formal de nition of MIG  For the
+current exposition however  it suf ces to know that for radial
+kernels        increases with   and the volume vol    of
+   For instance  when we use an SE kernel for      we have
+        vol    log     and for   Mat ern kernel with
+smoothness parameter           vol      
+       
+ Srinivas et al    Let       cid   cid  denote the
+number of queries by   single  delity algorithm within
+capital   Srinivas et al    showed that the simple
+regret    for GPUCB after capital   can be bounded by 
+
+ 
+
+Simple Regret for GPUCB      cid 
+
+In our analysis of BOCA we show that most queries to  
+at  delity    will be con ned to   small subset of   which
+contains the optimum   cid  Precisely  after capital   for any
+        we show there exists       such that the number
+of queries outside the following set    is less than   
+ 
+
+    cid           cid             
+
+   cid cid cid 
+
+ 
+
+ 
+
+ 
+
+Here    is from   While it is true that any optimisation
+algorithm would eventually query extensively in   neighbourhood around the optimum    strong result of the above
+form is not always possible  For instance  for GPUCB  the
+best achievable bound on the number of queries in any set
+    The fact that    exists rethat does not contain   cid  is   
+lies crucially on the multi delity assumptions and that our
+algorithm leverages information from lower  delities when
+querying at    As   is small when   is smooth across   
+the set    will be small when the approximations are highly
+informative about      For      when    is   SE kernel 
+we have                 cid          
+   hZ  When
+hZ is large and   is smooth across       is small as the
+right side of the inequality is smaller  As BOCA con nes
+most of its evaluations to this small set containing   cid  we
+will be able to achieve much better regret than GPUCB 
+When hZ is small and   is not smooth across    the set   
+becomes large and the advantage of multi delity optimisation diminishes  One can similarly argue that for the Mat ern
+kernel  as the parameter   increases    will be smoother
+across    and    becomes smaller yielding better bounds
+on the regret  Below  we provide an informal statement of
+our main theoretical result   cid cid  will denote inequality and
+equality ignoring constant and polylog terms 
+Theorem    Informal  Regret of BOCA  Let     GP   
+where   satis es   Choose     cid    log    Then  for
+suf ciently large   and for all         there exists  
+depending on   such that the following bound holds with
+probability at least      
+
+ cid 
+
+    cid 
+
+ cid 
+
+       
+
+  
+
+ 
+
+    
+   
+  
+
+ 
+
+ 
+
+Bayesian Optimisation with Continuous Approximations
+
+ cid 
+
+        
+
+  
+
+ 
+
+ 
+
+ 
+ 
+
+of cid                cid cid vol   vol     asymptoti 
+
+In the above bound  the latter term vanishes fast due
+to the  
+dependence  When comparing this
+with   we see that we outperform GPUCB by   factor
+cally  If   is smooth across the  delity space     is small
+and the gains over GPUCB are signi cant  If   becomes
+less smooth across    the bound decays gracefully  but we
+are never worse than GPUCB up to constant factors 
+Theorem   also has similarities to the bounds of Kandasamy
+et al      who also demonstrate better regret than GPUCB by showing that it is dominated by queries inside   set
+   cid  which contains the optimum  However  their bounds depend critically on certain threshold hyperparameters which
+determine the volume of    cid  among other terms in their regret  The authors of that paper note that their bounds will
+suffer if these hyperparameters are not chosen appropriately  but do not provide theoretically justi ed methods to
+make this choice  In contrast  many of the design choices
+for BOCA fall out naturally of our modeling assumptions 
+Beyond this analogue  our results are not comparable to Kandasamy et al      as the assumptions are different 
+Extensions  While we have focused on continuous    many
+of the ideas here can be extended to other settings  If  
+is   discrete subset of      our work extends straightforwardly  We reiterate that this will not be the same as the
+ nite  delity MFGP UCB algorithm as the assumptions
+are different  In particular  Kandasamy et al      are
+not able to effectively share information across  delities as
+we do  We also believe that Algorithm   can be extended
+to arbitrary  delity spaces   provided that   kernel can be
+de ned on    Our results can also be extended to discrete
+domains   and various other kernels for    by adopting
+techniques from Srinivas et al   
+  Experiments
+We compare BOCA to the following four baselines      GPUCB   ii  the GPEI criterion in BO  Jones et al     iii 
+MFGP UCB  Kandasamy et al      and  iv  MFSKO 
+the multi delity sequential kriging optimisation method
+from Huang et al    All methods are based on GPs
+and we use the SE kernel for both the  delity space and domain  The  rst two are not multi delity methods  while the
+last two are  nite multi delity methods  Kandasamy et al 
+    also study some naive multi delity algorithms and
+demonstrate that they do not perform well  as such we will
+not consider such alternatives here  In all our experiments 
+the  delity space was designed to be          with
+                        Rp being the most expensive  
+ To our knowledge  the only other work that applies to continuous approximations is Klein et al    which was developed
+speci cally for hyperparameter tuning  Further  their implementation is not made available and is not straightforward to implement 
+
+Bayesian Optimisation with Continuous Approximations
+
+Figure   Results on   synthetic problems where we plot the simple regret     lower is better  against the capital   The title states
+the function used  and the  delity and domain dimesions  For the  rst two  gures we used capital     therefore   method which
+only queries at      can make at most   evaluations  For the third  gure we used     for the fourth     and for the last
+    to re ect the dimensionality   of     The curves for the multi delity methods start midway since they have not queried at   
+up until that point  All curves were produced by averaging over   experiments and the error bars indicate one standard error 
+delity  For MFGP UCB and MFSKO  we used    delities
+  approximations  where the approximations were obtained
+at        and        in    Empirically  we
+found that both algorithms did reasonably well with   approximations  but did not perform well with   large number
+of approximations     even the original papers restrict
+experiments to   approximations  Implementation details
+for all methods are given in Appendix   
+
+  Synthetic Experiments
+The results for the  rst set of synthetic experiments are
+given in Fig    The title of each  gure states the function
+used  and the dimensionalities      of the  delity space and
+domain  To re ect the setting in our theory  we add Gaussian
+noise to the function value when observing   at any       
+This makes the problem more challenging than standard
+global optimisation problems where function evaluations
+are not noisy  The functions    the cost functions   and the
+noise variances   are given in Appendix   
+The  rst two panels in Fig    are simple sanity checks  In
+both cases                  and the functions were
+sampled from GPs  The GP was made known to all methods 
+     all methods used the true GP in picking the next point 
+In the  rst panel  we used an SE kernel with bandwidth  
+for    and   for       is smooth across   in this setting 
+and BOCA outperforms other baselines  The curve starts
+midway as BOCA is yet to query at    up until that point 
+The second panel uses the same set up as the  rst except
+
+we used bandwidth   for     Even though   is highly
+unsmooth across    BOCA does not perform poorly  This
+corroborates   claim that we made earlier that BOCA can
+naturally adapt to the smoothness of the approximations 
+The other multi delity methods suffer in this setting 
+In the remaining experiments  we use some standard benchmarks for global optimisation  We modify them to obtain
+  and add noise to the observations  As the kernel and
+other GP hyperparameters are unknown  we learn them by
+maximising the marginal likelihood every   iterations  We
+outperform all methods on all problems except in the case
+of the Borehole function where MFGP UCB does better 
+The last synthetic experiment is the Branin function given
+in Fig      We used the same set up as above  but use    
+delities for MFGP UCB and MFSKO where the kth  delity
+is obtained at      
+     in the  delity space  Notice that the
+performance of  nite  delity methods deteriorate  In particular  as MFGP UCB does not share information across
+ delities  the approximations need to be designed carefully
+for the algorithm to work well  Our more natural modelling
+assumptions prevent such pitfalls  We next present two real
+examples in astrophysics and hyperparameter tuning  We
+do not add noise to the observations  but treat it as optimisation tasks  where the goal is to maximise the function 
+
+  Astrophysical Maximum Likelihood Inference
+We use data on TypeIa supernova for maximum likelihood
+inference on   cosmological parameters  the Hubble con 
+
+   GP     GPUCBGP EIMFGP UCBMFSKOBOCA   GPBad Approx       CurrinExp       Hartmann       Hartmann       Borehole     Bayesian Optimisation with Continuous Approximations
+
+   
+
+   
+
+   
+
+the training validation complexity is linear in both parameters  Our goal is to maximise the cross validation accuracy at          For the  nite  delity methods
+we use three  delities with the approximations available
+at         and         The results are
+given in Fig      where we plot the average cross validation
+accuracy against wall clock time 
+
+Figure       The synthetic benchmark with the Branin function where we used   capital of     See caption under Fig    for more
+details          Results on the supernova and news group experiments from sections   and   respectively  We have plotted the
+maximum value  higher is better  against wall clock time      was averaged over   experiments while     and     were averaged over  
+xperiments each  The error bars indicate one standard error 
+stant          the dark matter fraction         
+and dark energy fraction         hence       The
+likelihood is given by the RobertsonWalker metric  the
+computation of which requires   one dimensional numerical integration for each point in the dataset  Unlike typical maximum likelihood problems  here the likelihood is
+only accessible via point evaluations  We use the dataset
+from Davis et al   which has data on   supernovae 
+We construct         dimensional multi delity problem
+where we can choose between data set size        
+and perform the integration on grids of size        
+via the trapezoidal rule  As the cost function for  delity selection  we used              as the computation time is
+linear in both parameters  Our goal is to maximise the average log likelihood at          For the  nite  delity
+methods we use three  delities with the approximations
+available at             and            
+ which correspond to    and    after rescaling
+as in Section   The results are given in Fig      where
+we plot the maximum average log likelihood against wall
+clock time as that is the cost in this experiment  The plot
+includes the time taken by each method to tune the GPs and
+determine the next points delities for evaluation 
+
+  Conclusion
+We studied Bayesian optimisation with continuous approximations  by treating the approximations as arising out of
+  continuous  delity space  While previous multi delity
+literature has predominantly focused on    nite number
+of approximations  BOCA applies to continuous  delity
+spaces and can potentially be extended to arbitrary spaces 
+We bound the simple regret for BOCA and demonstrate
+that it is better than methods such as GPUCB which ignore the approximations and that the gains are determined
+by the smoothness of the  delity space  When compared
+to existing multi delity methods  BOCA is able to share
+information across  delities effectively  has more natural
+modelling assumptions and has fewer hyperparameters to
+tune  Empirically  we demonstrate that BOCA is competitive with other baselines in synthetic and real problems 
+Another nice feature of using continuous approximations
+is that it relieves the practitioner from having to design the
+approximations  she he can specify the available approximations and let the algorithm decide how to choose them 
+Going forward  we wish to extend our theoretical results to
+more general settings  For instance  we believe   stronger
+bound on the regret might be possible if    is    nite dimensional kernel  Since  nite dimensional kernels are typically
+not radial  Sriperumbudur et al    our analysis techniques will not carry over straightforwardly  Another line
+of work that we have alluded to is to study more general
+ delity spaces with an appropriately de ned kernel    
+
+  Support Vector Classi cation with   news groups
+We use the   news groups dataset  Joachims    in  
+text classi cation task  We obtain the bag of words representation for each document  convert them to tfidf features
+and feed them to   support vector classi er  The goal is to
+tune the regularisation penalty and the temperature of the
+rbf kernel both in the range     hence       The
+support vector implementation was taken from scikitlearn 
+We set this up as     dimensional multi delity problem
+where we can choose   dataset size        
+and the number of training iterations         Each
+evaluation takes the given dataset of size   and splits it
+up into   to perform  fold cross validation  As the cost
+function for  delity selection  we used               as
+
+   Branin     GPUCBGP EIMFGP UCBMFSKOBOCATime   Avg LogLikelihood Supernova     Time   CrossValidationAccuracy NewsGroupSVM     Bayesian Optimisation with Continuous Approximations
+
+Acknowledgements
+
+We would like to thank Renato Negrinho for reviewing an
+initial draft of this paper  This research is supported in part
+by DOE grant DESC  and NSF grant IIS 
+KK is supported by   Facebook Ph    fellowship 
+
+References
+Agarwal  Alekh  Duchi  John    Bartlett  Peter    and Levrard  Clement  Oracle inequalities for computationally
+budgeted model selection  In COLT   
+
+Auer  Peter  Using Con dence Bounds for Exploitation 
+
+exploration Tradeoffs     Mach  Learn  Res   
+
+Brochu     Cora        and de Freitas       Tutorial on
+Bayesian Optimization of Expensive Cost Functions  with
+Application to Active User Modeling and Hierarchical
+RL  CoRR   
+
+Cutler  Mark  Walsh  Thomas    and How  Jonathan    Reinforcement Learning with MultiFidelity Simulators  In
+ICRA   
+
+Davis et al        Scrutinizing Exotic Cosmological Models
+Using ESSENCE Supernova Data Combined with Other
+Cosmological Probes  Astrophysical Journal   
+
+de Freitas  Nando  Smola  Alex    and Zoghi  Masrour 
+Exponential Regret Bounds for Gaussian Process Bandits
+with Deterministic Observations  In ICML   
+
+Forrester  Alexander         obester  Andr as  and Keane 
+Andy    Multi delity optimization via surrogate modelling  Proceedings of the Royal Society    Mathematical 
+Physical and Engineering Science   
+
+Ghosal  Subhashis and Roy  Anindya  Posterior consistency of Gaussian process prior for nonparametric binary
+regression  Annals of Statistics   
+
+Gonzalez     Longworth     James     and Lawrence    
+Bayesian Optimization for Synthetic Gene Design  In
+BayesOpt   
+
+Hern andezLobato  Jos   Miguel  Hoffman  Matthew    and
+Ghahramani  Zoubin  Predictive Entropy Search for Ef 
+ cient Global Optimization of Blackbox Functions  In
+NIPS   
+
+Joachims  Thorsten    probabilistic analysis of the rocchio
+algorithm with   df for text categorization  Technical
+report  DTIC Document   
+
+Jones        Perttunen        and Stuckman        Lipschitzian Optimization Without the Lipschitz Constant    
+Optim  Theory Appl   
+
+Jones  Donald    Schonlau  Matthias  and Welch  William   
+Ef cient global optimization of expensive blackbox functions     of Global Optimization   
+
+Kandasamy  Kirthevasan  Schenider  Jeff  and   oczos 
+Barnab as  High Dimensional Bayesian Optimisation and
+Bandits via Additive Models  In International Conference
+on Machine Learning   
+
+Kandasamy  Kirthevasan  Dasarathy  Gautam  Oliva  Junier 
+Schenider  Jeff  and   oczos  Barnab as  Gaussian Process Bandit Optimisation with Multi delity Evaluations 
+In Advances in Neural Information Processing Systems 
+   
+
+Kandasamy  Kirthevasan  Dasarathy  Gautam  Oliva  Junier    Schneider  Jeff  and Poczos  Barnabas  MultiarXiv
+ delity gaussian process bandit optimisation 
+preprint arXiv     
+
+Kandasamy  Kirthevasan  Dasarathy  Gautam  Schneider 
+Jeff  and Poczos  Barnabas  The Multi delity Multiarmed Bandit  In NIPS     
+
+Klein     Bartels     Falkner     Hennig     and Hutter    
+Towards ef cient Bayesian Optimization for Big Data  In
+BayesOpt   
+
+Lam    emi  Allaire  Douglas    and Willcox  Karen    Multi delity optimization using statistical surrogate modelIn  th
+ing for nonhierarchical information sources 
+AIAA ASCE AHS ASC Structures  Structural Dynamics 
+and Materials Conference  pp     
+
+Li  Lisha  Jamieson  Kevin  DeSalvo  Giulia  Rostamizadeh 
+Afshin  and Talwalkar  Ameet  Hyperband    novel
+banditbased approach to hyperparameter optimization 
+arXiv preprint arXiv   
+
+Lizotte  Daniel  Wang  Tao  Bowling  Michael  and Schuurmans  Dale  Automatic gait optimization with gaussian
+process regression  In IJCAI   
+
+Huang     Allen       Notz       and Miller       Sequential kriging optimization using multiple delity evaluations  Structural and Multidisciplinary Optimization 
+ 
+
+MartinezCantin     de Freitas     Doucet     and Castellanos     Active Policy Learning for Robot Planning
+and Exploration under Uncertainty  In Proceedings of
+Robotics  Science and Systems   
+
+Hutter  Frank  Hoos  Holger    and LeytonBrown  Kevin 
+Sequential Modelbased Optimization for General Algorithm Con guration  In LION   
+
+Mockus  Jonas  Application of Bayesian approach to numerical methods of global and stochastic optimization 
+Journal of Global Optimization   
+
+Bayesian Optimisation with Continuous Approximations
+
+Parkinson     Mukherjee     and Liddle          Bayesian
+model selection analysis of WMAP  Physical Review 
+ 
+
+Poloczek  Matthias  Wang  Jialei  and Frazier  Peter   
+Multiinformation source optimization  arXiv preprint
+arXiv   
+
+Rasmussen       and Williams         Gaussian Processes
+
+for Machine Learning  UPG Ltd   
+
+Sabharwal     Samulowitz     and Tesauro     Selecting
+nearoptimal learners via incremental data allocation  In
+AAAI   
+
+Seeger  MW  Kakade  SM  and Foster  DP  Information
+Consistency of Nonparametric Gaussian Process Methods  IEEE Transactions on Information Theory   
+
+Snoek     Larochelle     and Adams        Practical
+Bayesian Optimization of Machine Learning Algorithms 
+In NIPS   
+
+Srinivas  Niranjan  Krause  Andreas  Kakade  Sham  and
+Seeger  Matthias  Gaussian Process Optimization in the
+Bandit Setting  No Regret and Experimental Design  In
+ICML   
+
+Sriperumbudur  Bharath et al  On the optimal estimation
+of probability measures in weak and strong topologies 
+Bernoulli     
+
+Swersky  Kevin  Snoek  Jasper  and Adams  Ryan    Multi 
+
+task bayesian optimization  In NIPS   
+
+Thompson        On the Likelihood that one Unknown
+Probability Exceeds Another in View of the Evidence of
+Two Samples  Biometrika   
+
+Xiong  Shifeng  Qian  Peter       and Wu        Jeff  Sequential design and analysis of highaccuracy and lowaccuracy computer codes  Technometrics   
+
+Zhang     and Chaudhuri     Active Learning from Weak
+
+and Strong Labelers  In NIPS   
+
+

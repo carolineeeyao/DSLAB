@@ -1,0 +1,1085 @@
+Iterative Machine Teaching
+
+Weiyang Liu   Bo Dai   Ahmad Humayun   Charlene Tay   Chen Yu  
+
+Linda    Smith   James    Rehg   Le Song  
+
+Abstract
+
+In this paper  we consider the problem of machine teaching  the inverse problem of machine
+learning  Different from traditional machine
+teaching which views the learners as batch algorithms  we study   new paradigm where the
+learner uses an iterative algorithm and   teacher
+can feed examples sequentially and intelligently
+based on the current performance of the learner 
+We show that the teaching complexity in the iterative case is very different from that in the batch
+case 
+Instead of constructing   minimal training set for learners  our iterative machine teaching focuses on achieving fast convergence in the
+learner model  Depending on the level of information the teacher has from the learner model 
+we design teaching algorithms which can provably reduce the number of teaching examples and
+achieve faster convergence than learning without
+teachers  We also validate our theoretical  ndings with extensive experiments on different data
+distribution and real image datasets 
+
+  Introduction
+Machine teaching is the problem of constructing an optimal  usually minimal  dataset according to   target concept such that   student model can learn the target concept
+based on this dataset  Recently  there is   surge of interests
+in machine teaching which has found diverse applications in model compression  Bucila et al    Han et al 
+  Ba   Caruana    Romero et al    transfer
+learning  Pan   Yang    and cybersecurity problems  Alfeld et al      Mei   Zhu    Furthermore  machine teaching is also closely related to other subjects of interests  such as curriculum learning  Bengio et al 
+  and knowledge distilation  Hinton et al   
+
+ Georgia Institute of Technology  Indiana University  Correspondence to  Weiyang Liu  wyliu gatech edu  Le Song  lsong cc gatech edu 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+Figure   Comparison between iterative machine teaching and the
+other learning paradigms 
+
+In the traditional machine learning paradigm    teacher will
+typically construct   batch set of examples  and provide
+them to   learning algorithm in one shot  then the learning
+algorithm will work on this batch dataset trying to learn the
+target concept  Thus  many research work under this topic try to construct the smallest such dataset  or characterize
+the size of of such dataset  called the teaching dimension of
+the student model  Zhu      There are also many
+seminal theory work on analyzing the teaching dimension
+of different models  Shinohara   Miyano    Goldman
+  Kearns    Doliwa et al    Liu et al   
+However  in many real world applications  the student model is typically updated via an iterative algorithm  and we get
+the opportunity to observe the performance of the student
+model as we feed examples to it  For instance 
+  In model compression where we want to transfer   target  teacher model  to   destination  student model 
+we can constantly observe student model   prediction
+on current training points  Intuitively  such observations
+will allow us to get   better estimate where the student
+model is and pick examples more intelligently to better
+guide the student model to convergence 
+  In cybersecurity setting where an attack wants to mislead   recommendation system that learns online  the attacker can constantly generate fake clicks and observe
+the system   response  Intuitively  such feedback will allow the attacker to  gure out the state of the learning
+system  and design better strategy to mislead the system 
+From the aspects of both faster model compression and bet 
+
+Sample querySample labeled by oracleOracleDatasetProvide training setTeacherProvide informationConstruct minimal training setInteract only onceLearnerTeacherIterativeLearnerProvide informationProvide samplesfor this iterationInteract iteratively IterativeMachineTeachingActiveLearningPassiveLearningMachineTeachingIterative Machine Teaching
+
+ter avoiding hacker attack  we seek to understand some fundamental questions  such as  what is the sequence of examples that teacher should feed to the student in each iteration
+in order to achieve fast convergence  And how many such
+examples or such sequential steps are needed 
+
+In this paper  we will focus on this new paradigm  called
+iterative machine teaching  which extends traditional machine teaching from batch setting to iterative setting  In this
+new setting  the teacher model can communicate with and
+in uence the student model in multiple rounds  but the student model remains passive  More speci cally  in each
+round  the teacher model can observe  potentially different levels of  information about the students to intelligently
+choose one example  and the student model runs    xed
+iterative algorithm using this chosen example 
+Furthermore  the smallest number of examples  or rounds  the teacher needs to construct in order for the student to
+ef ciently learn   target model is called the iterative teaching dimension of the student algorithm  Notice that in this
+new paradigm  we shift from describing the complexity of
+  model to the complexity of an algorithm  Therefore  for
+the same student model  such as logistic regression  the iterative teaching dimension for   teacher model can be different depending on the student   learning algorithms  such
+as gradient descent versus conjugate gradient descent  In
+some sense  the teacher in this new setting is becoming
+active  but not the student 
+In Fig    we summarize the
+differences of iterative machine teaching from traditional
+machine teaching  active learning and passive learning 
+Besides introducing the new paradigm  we also propose three iterative teaching algorithms  called omniscient
+teacher  surrogate teacher and imitation teacher  based on
+the level of information about the student that the teacher has access to  Furthermore we provide partial theoretical analysis for these algorithms under different example
+construction schemes  Our analysis shows that under suitable conditions  iterative teachers can always perform better than passive teacher  and achieve exponential improvements  Our analysis also identi es two crucial properties  namely teaching monotonicity and teacher capability 
+which play critical roles in achieving fast iterative teaching 
+To corroborate our theoretical  ndings  we also conduct extensive experiments on both synthetic data and real image
+data  In both cases  the experimental results verify our theoretical  ndings and the effectiveness of our proposed iterative teaching algorithms 
+  Related Work
+Machine teaching  Machine teaching problem is to  nd
+an optimal training set given   student model and   target 
+ Zhu    proposes   general teaching framework   Zhu 
+  considers Bayesian learner in exponential family and
+
+expresses the machine teaching as an optimization problem over teaching examples that balance the future loss of
+the learner and the effort of the teacher   Liu et al   
+provides the teaching dimension of several linear learners 
+The framework has been applied to security  Mei   Zhu 
+  human computer interaction  Meek et al    and
+education  Khan et al     Johns et al    further
+extends machine teaching to interactive settings  However 
+these work ignores the fact that   student model is typically
+learned by an iterative algorithm  and we usually care more
+about how fast the student can learn from the teacher 
+Interactive Machine Learning 
+ Cakmak   Thomaz 
+  consider the scenario of   human training an agent to
+perform   classi cation task by showing examples  They
+study how to improve human teacher by giving teaching
+guidance   Singla et al    consider the crowdsourcing
+problem and propose   sequential teaching algorithm that
+can teach crowd worker to better classify the query  Both
+work consider   very different setting where the learner      
+human learner  is not iterative and does not have   particular optimization algorithm 
+Active learning  Active learning enables   learner to interactively query the oracle to obtain the desired outputs
+at new samples  Machine teaching is different from active
+learning in the sense that active learners explore the optimal parameters by itself rather than being guided by the
+teacher  Therefore they have different sample complexity
+ Balcan et al    Zhu   
+Curriculum learning  Curriculum learning  Bengio et al 
+  is   general training strategy that encourages to input
+training examples from easy ones to dif cult ones  Very
+interestingly  our iterative teacher model suggests similar
+training strategy in our experiments 
+  Iterative Machine Teaching
+The proposed iterative machine teaching is   general concept  and the paper considers the following settings 
+Student   Asset  In general  the asset of   student  learner  includes the initial parameter    loss function  optimization algorithm  representation  feature  model  learning rate    over time  and initial   and the trackability of
+the parameter wt  The ideal case is that   teacher has access
+to all of them and can track the parameters and learning
+rate  while the worst case is that   teacher knows nothing 
+How practical the teaching is depends on how much the
+prior knowledge and trackability that   teacher has 
+Representation  The teacher represents an example as
+       while the student represents the same example as
+
+ cid   cid     typically    cid    The representation     and cid   
+ cid   can be different but deterministically related  We assume
+there exists cid         for an unknown invertible mapping   
+
+Model  The teacher uses   linear model    cid      cid  with pa 
+
+Iterative Machine Teaching
+
+rameter        for student   space  that is taught to the   
+
+tudent  The student also uses   linear model cid   cid   cid   cid  with
+parameter        cid   cid       cid       in general    and  
+
+do not necessarily lie in the same space  but for omniscient
+teacher  they are equivalent and interchangeably used 
+Teaching protocol  In general  the teacher can only communicate with the student via examples  In this paper  the
+teacher provides one example xt in one iteration  where
+  denotes the tth iteration  The goal of the teacher is to
+provide examples in each iteration such that the student parameter   converge to its optimum    as fast as possible 
+Loss function  The teacher and student share the same
+loss function  We assume this is   convex loss function
+ cid          and the best model is usually found by minimizing the expected loss below 
+
+        cid cid      cid        
+
+ 
+
+ 
+
+  arg min
+
+ 
+where the sampling distribution               Without
+loss of generality  we only consider typical loss function 
+   cid      cid     logistic loss log   
+   such as square loss  
+exp    cid      cid  and hinge loss max     cid      cid     
+Algorithm  The student uses the stochastic gradient descent to optimize the model  The iterative update is
+
+ 
+
+wt    wt     
+
+ cid cid      cid      
+
+  
+
+ 
+
+ 
+
+Without teacher   guiding  the student can be viewed as being guided by   random teacher who randomly feed an example to the student in each iteration 
+  Teaching by an Omniscient Teacher
+An omniscient teacher has access to the student   feature
+space  model  loss function and optimization algorithm  In
+speci    omniscient teacher          and student          
+share the same representation space  and teacher   optimal
+model    is also the same as student   optimal model   
+  Intuition and teaching algorithm
+In order to gain intuition on how to make the student model
+converge faster  we will start with looking into the difference between the current student parameter and the teacher
+parameter    during each iteration 
+
+ cid cid cid cid 
+
+ 
+
+   
+
+ 
+
+   
+ 
+
+ 
+
+ cid cid wt     
+ cid cid 
+ cid cid 
+ cid cid wt    
+ cid 
+ cid 
+
+    
+
+ 
+
+wt    
+
+ 
+
+  
+
+ cid cid      cid      
+
+ cid cid cid cid wt     
+ cid cid cid cid cid   cid cid wt    cid      
+ cid 
+ cid cid 
+ cid 
+ cid cid wt    cid      
+ cid 
+ cid cid 
+
+ wt
+
+ wt
+
+ 
+
+ cid cid cid cid cid 
+ cid 
+
+ 
+
+      wt Usefulness of an example       
+
+      wt Dif culty of an example       
+
+ 
+
+Based on the decomposition of the parameter error  the
+teacher aims to choose   particular example        such that
+
+ cid wt    cid 
+  is most reduced compared to  cid wt    cid 
+ 
+from the last iteration  Thus the general strategy for the
+    
+teacher is to choose an example        such that  
+ tT  is minimized in the tth iteration 
+
+         wt     tT      wt 
+ 
+
+ 
+
+argmin
+        
+
+The teaching algorithm of omniscient teacher is summat     tT  is
+rized in Alg  The smallest value of  
+ cid wt    cid 
+  If the teacher achieves this  it means that we
+have reached the teaching goal after this iteration  However  it usually cannot be done in just one iteration  because of
+the limitation of teacher   capability to provide examples 
+   and    have some nice intuitive interpretations 
+Dif culty of an example     quanti es the dif culty level
+of an example  This interpretation for different loss functions becomes especially clear when the data lives on the
+surface of   sphere        cid   cid      For instance 
+  For linear regression        cid      cid     The larger the
+norm of gradient is  the more dif cult the example is 
+ exp   cid     cid cid 
+  For logistic regression  we have     cid 
+ 
+We know that
+ exp   cid     cid  is the probability of predicting the wrong label  The larger the number is  the more
+dif cult the example is 
+   sign 
+   cid      cid      Different from above losses  the hinge
+loss has   threshold to identify the dif culty of examples 
+While the example is dif cult enough  it will produce  
+Otherwise it is  
+
+  For support vector machines  we have       
+
+ 
+
+ 
+
+Interestingly  the dif culty level is not related to the teacher
+   but is based on the current parameters of the learner
+wt  From another perspective  the dif culty level can also
+be interpreted as the information that an example carries 
+Essentially    dif cult example is usually more informative 
+In such sense  our dif culty level has similar interpretation
+to curriculum learning  but with different expression 
+Usefulness of an example     quanti es the usefulness
+of an example  Concretely     is the correlation between
+discrepancy wt      and the information  dif culty  of an
+example  If the information of the example has large correlation with the discrepancy  it means that this example is
+very useful in this teaching iteration 
+Tradeoff  Eq  aims to minimize the dif culty level   
+and maximize the usefulness    In other word  the teacher
+always prefers easy but useful examples  When the learning rate is large     term plays   more important role  When
+learning rate is small     term plays   more important role 
+This suggests that initially the teacher should choose easier
+examples to feed into the student model  and later on the
+teacher should choose examples to focus more on reducing the discrepancy between wt      Such examples are
+very likely the dif cult ones  Even if the learning rate is
+ xed  the gradient    cid  is usually large for   convex loss
+
+Iterative Machine Teaching
+
+function at the beginning  so reducing the dif culty level
+ choosing easy examples  is more important  While near
+the optimum  the gradient    cid  is usually small  so    becomes more important  It is also likely to choose dif cult
+examples  It has nice connection with curriculum learning
+ easy example  rst and dif cult later  and boosting  gradually focus on dif cult examples 
+  Teaching monotonicity and universal speedup
+Can the omniscient teacher always do better than   teacher
+who feed random examples to the student  in terms of convergence  In this section  we identify generic conditions
+under which we can guarantee that the iterative teaching
+algorithm always perform better than random teacher 
+De nition    Teaching Volume  For   speci   loss function  cid  we  rst de ne   teaching volume function        
+with model parameter   as
+         
+
+               tT        
+
+          max
+
+ 
+
+Theorem    Teaching Monotonicity  Given   training
+set   and   loss function  cid  if the inequality
+
+ cid       
+
+ cid           
+
+ cid               cid       
+
+ 
+holds for any       that satisfy  cid      cid cid   
+  cid 
+then with the same parameter initialization and
+learning rate  the omniscient teacher can always converge
+not slower than random teacher 
+The teaching volume represents the teacher   teaching effort in this iteration  so  cid wt   cid      wt  characterizes
+the remaining teaching effort needed to achieve the teaching goal after iteration    Theorem   says that for   loss
+function and   training set  if the remaining teaching effort is monotonically decreasing while the model parameter
+gets closer to the optimum  we can guarantee that the omniscient teacher can always converge not slower than random teacher  It is   suf cient condition for loss functions
+to achieve faster convergence than SGD  For example  the
+square loss satis es the condition with certain training set 
+Proposition   The square loss satis es the teaching monotonicity condition given the training set    cid   cid      
+  Teaching capability and exponential speedup
+The theorem in previous subsection insures that under certain conditions the omniscient teacher can always lead to
+faster convergence for the student model  but can there
+be exponential speedup  To this end  we introduce further assumptions of the  richness  of teaching examples 
+which we call teaching capability  We start from the ideal
+case       the synthesisbased omniscient teacher with hyperspherical feature space  and then  extend to real cases
+with the restrictions on teacher   knowledge domain  sampling scheme  and student information  We present speci  
+teaching strategies in terms of teaching capability  strong
+to weak  synthesis  combination and  rescalable  pool 
+
+Synthesisbased teaching 
+the teacher can provide any samples from
+
+In synthesisbased teaching 
+
+         Rd cid   cid      
+       Regression  or      Classi cation 
+
+Theorem    Exponential Synthesisbased Teaching 
+For   synthesisbased omniscient teacher and   student
+with  xed learning rate  cid    if the loss function  cid  satis es that for any     Rd  there exists  cid        cid     cid 
+such that while               and       we have
+
+     cid     cid cid   cid       cid           
+ 
+
+ 
+
+then the student can learn an  approximation of    with
+     
+    samples  We call such loss function  cid 
+exponentially teachable in synthesisbased teaching 
+
+log  
+
+ 
+
+ 
+
+ 
+
+     log
+
+  cid     cid    can be set to  
+
+    in which    
+The constant is    
+minw    cid     cid cid   cid       cid             is related to the
+convergence speed  Note that the sample complexity serves
+as the iterative teaching dimension corresponding to this
+particular teacher  student  algorithm and training data 
+The sample complexity in iterative teaching is deterministic  different from the high probability bounds of traditional sample complexity with random       samples or actively
+required samples  This is because the teacher provides the
+samples deterministically without noise in every iteration 
+The radius   for     which can be interpreted as the knowledge domain of the teacher  will affect the sample complexity by constraining the valid values of   and thus    
+ 
+For example  for absolute loss  if   is large  such that
+   
+  and the   will be  
+ 
+ 
+in this case  Therefore  we have    
+      which means the
+student can learn with only one example  one iteration 
+However  if  
+      and the student can converge exponentially  The similar phenomenon
+appears in the square loss  hinge loss  and logistic loss  Refer to Appendix   for details 
+The exponential synthesisbased teaching is closely related
+to Lipschitz smoothness and strong convexity of loss functions in the sense that the two regularities provide positive
+lower and upper bound for  cid     cid cid   cid      cid      
+Proposition   The Lipschitz smooth and strongly convex
+loss functions are exponentially teachable in synthesisbased teaching 
+The exponential synthesisbased teachability is   weaker
+condition compared to the strong convexity and Lipschitz
+smoothness  We can show that besides the Lipschitz smooth and strongly convex loss  there are some other loss
+functions  which are not strongly convex  but still are exponentially teachable in synthesisbased scenario       the
+hinge loss and logistic loss  Proofs are in Appendix   
+Combinationbased teaching  In this scenario  the teacher
+
+  cid     cid  we have    
+
+   
+
+Iterative Machine Teaching
+      cid     cid 
+
+ cid   cid 
+
+Algorithm   The omniscient teacher
+  Randomly initialize the student and teacher parameter   
+  Set       and the maximal iteration number    
+  while wt has not converged or       do
+ 
+
+Solve the optimization       poolbased teaching 
+
+           we have
+     cid     cid cid   cid       cid         
+
+      
+
+ 
+
+ 
+
+then the student can learn an  approximation of    with
+          
+    samples  We say such loss function is
+exponentially teachable in rescalable poolbased teaching 
+
+log  
+
+ 
+
+ 
+
+ 
+
+ 
+
+approaches to    
+
+es to   the candidate pool becomes  cid   Rd cid   cid    cid 
+
+The pool volume plays   vital role in poolbased teachIt not only affects the existence of   and        
+ing 
+to satisfy the conditions  but also changes the convergence rate  While       increases          
+will decrease  yielding smaller sample complexity  With        
+  the rescalable poolbased teaching requires more samples than the synthesisbased teaching  As       increasand         
+  Then the convergence
+speed of rescalable poolbased teaching approaches to the
+synthesis combinationbased teaching 
+  Teaching by   less informative teacher
+To make the teacher model useful in practice  we further
+design two less informative teacher model that requires less
+and less information from the student 
+  The surrogate teacher
+Suppose we can only query the function output from the
+learned  cid wt    cid  but we can not directly access wt  How
+can we choose the example  In this case we propose to
+ cid 
+make use of the the convexity of the loss function  That is
+
+ cid cid wt    cid      
+
+wt    
+
+    cid      
+ 
+Taking the poolbased teaching as an example  we can instead optimize the following surrogate loss function 
+
+ cid 
+
+ cid   cid cid wt    cid          cid cid  
+ cid cid cid cid cid   cid cid wt    cid      
+ cid cid cid cid cid 
+ cid cid cid wt    cid          cid cid  
+    cid      cid 
+ cid 
+
+ cid cid wt   cid   
+
+ xt  yt    argmin
+      
+    
+wt     
+
+ cid 
+
+ wt
+
+by replacing
+with its lower
+bound  The advantage of this approach is that the teacher only need to query the learner for the function output
+ cid wt    cid  to choose the example  without the need to access the learner parameter wt directly  Furthermore  after noticing that in this formulation  the teacher makes
+prediction via inner products  we  nd that
+the surrogate teacher can also be applied to the scenario where
+the teacher and the student use different feature spaces
+by further replacing  cid cid wt    cid        cid cid      cid       with
+can provide examples without using information about   
+The performance of the surrogate teacher largely depends
+on the tightness of such convexity lower bound 
+
+ cid cid wt    cid        cid cid   cid   cid       With this modi cation  we
+
+ wt
+
+ wt
+
+ 
+
+ 
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ xt  yt    argmin
+
+          
+
+ 
+
+ cid 
+
+    
+
+ cid cid cid cid cid cid   cid 
+
+ cid cid 
+
+ cid 
+wt   
+ cid cid 
+ wt 
+
+   
+
+ cid 
+
+ cid cid cid cid cid cid 
+ cid 
+
+ cid 
+
+ cid 
+
+   
+
+ cid 
+
+ 
+
+ 
+
+wt     
+wt  xt cid 
+ cid cid 
+
+ cid 
+
+ wt 
+
+wt   
+ wt 
+
+  yt cid 
+
+ 
+
+ 
+
+Use the selected example  xt  yt  to perform the update 
+
+wt   wt      
+
+         
+
+ 
+  end while
+can provide examples from        
+
+   cid   cid   cid          
+
+  cid 
+
+ ixi  xi     cid                 xm 
+
+       Regression  or      Classi cation 
+
+  
+
+Corollary   For   combinationbased omniscient teacher
+and   student with  xed learning rate    cid    and initialization    if the loss function is exponentially synthesisbased
+teachable and      span     the student can learn
+
+an  approximation of    with   cid    
+
+ cid  samples 
+
+log  
+ 
+
+ 
+
+Although the knowledge pool of teacher is more restricted
+compared to the synthesisbased scenario  with teacher  
+extra work to combine samples  the teacher can behave the
+same as the most knowledgable synthesisbased teacher 
+Rescalable poolbased teaching  This scenario is further
+restricted in both knowledge pool and the effort to prepare
+samples  The teacher can provide examples from      
+       cid   cid            xi  xi                         
+       Regression  or      Classi cation 
+
+In such scenario  we cannot get arbitrary direction rather
+than the samples from the candidate pool  Therefore  to
+achieve the exponential improvement  the candidate pool
+should contain rich enough directions  To characterize the
+richness in  nite case  we de ne the pool volume as
+
+De nition    Pool Volume  Given the training example
+pool     Rd  the volume of   is de ned as
+ cid      cid 
+ cid   cid   
+
+        min
+
+  span   
+
+max
+   
+
+Obviously  for the candidate pool of the synthesisbased
+teacher  we have           In general  for  nite candidate
+pool  the pool volume is             
+Theorem   For   rescalable poolbased omniscient teacher and   student with  xed learning rate  cid    and initialization    if for any   Rd    cid     and      
+span     there exists            and   such that while
+
+Iterative Machine Teaching
+
+Algorithm   The imitation teacher
+  Randomly initialize the student parameter    and the teacher
+
+parameter    Randomly select   training sample       
+
+  Set       and the maximal iteration number    
+  while wt has not converged or       do
+ 
+
+Perform the update 
+vt   vt      
+
+ cid cid 
+
+Solve the optimization       poolbased teaching 
+
+xt 
+
+vt  xt cid   cid 
+ cid cid 
+ cid cid cid cid cid cid   cid 
+ cid cid 
+
+wt  xt cid cid 
+ cid 
+ cid 
+ cid cid cid cid cid cid 
+ cid 
+ cid 
+
+wt   
+
+ cid 
+
+ cid 
+
+ vt
+
+   
+
+vt   
+
+   
+
+    
+
+vt    
+
+ 
+
+ cid 
+
+ 
+
+ vt
+
+ xt  yt    argmin
+
+          
+
+ 
+
+Theoretical aspects of the teacher model  The theoretical
+study of the teacher model includes  nding the conditions
+for the loss function and training data such that the teacher
+model is optimal  or achieves provable faster convergence
+rate  or provably converges faster than the random teacher 
+We desire these conditions to be suf cient and necessary 
+but sometimes suf cient conditions suf ce in practice  For
+different student models  the theoretical analysis may be different and we merely consider stochastic gradient learner
+here  There are still lots of optimization algorithms that can
+be considered  Besides  our teacher models are not necessarily the best  so it is also important to come up with better
+teacher models with provable guarantees  Although our paper mainly focuses on the  xed learning rate  our results are
+still applicable for the dynamic learning rate  However  the
+teacher should be more powerful in synthesizing or choosing examples    should be larger than  xed learning rate
+case  In human teaching  it actually makes sense because
+while teaching   student who learns knowledge with dynamic speed  the teacher should be more powerful so that
+the student consistently learn fast 
+Practical aspects of the teacher model  In practice  we
+usually want the teacher model to be less and less informative to the student model  scalable to large datasets  ef 
+cient to compute  How to make the teacher model scalable 
+ef cient and less informative remains open challenges 
+  Experiments
+  Experimental details
+Performance metric  We use three metric to evaluate the
+convergence performance  objective value        the training set  difference between wt and     cid wt     cid  and
+the classi cation accuracy on testing set 
+Parameters and setup  Detailed experimental setup is given in Appendix    We mostly evaluate the practical poolbased teaching  without rescaling  We evaluate the different teaching strategies in Appendix    and give more experiments on spherical data  Appendix    and infant egocentric visual data  Appendix    For fairness  learning
+rates for all methods are the same 
+  Teaching linear models on Gaussian data
+This experiment explores the convergence of three typical
+linear models  ridge regression  RR  logistic regression
+ LR  and support vector machine  SVM  on Gaussian data 
+Note that SGD on selected set is to run SGD on the union
+of all samples selected by the omniscient teacher  For the
+scenario of different feature spaces  we use   random orthogonal projection matrix to generate the teacher   feature
+space from student    All teachers use poolbased teaching
+strategy  For fair comparisons  we use the same random
+initialization and the same learning rate 
+Teaching in the same feature space  The results in Fig 
+
+ 
+
+ 
+
+Provide the selected example  xt  yt  for the student to perform the update  
+
+ cid cid 
+
+wt    wt     
+
+ cid 
+
+ cid 
+
+ cid 
+
+ 
+
+wt   
+
+   
+
+  
+
+         
+
+ 
+  end while
+  The imitation teacher
+When the teacher and the student have different feature spaces  this teaching setting will be much closer to practice
+than all the previous settings and also more challenging  To
+this end  we present an imitation teacher who learns to imitate the inner product output  cid wt    cid  of the student model
+and simultaneously choose examples in teacher   own feature space  The teacher can possibly use active learning to
+imitate the student    cid wt    cid  In this imitation  the student
+model stays unchanged and the teacher model could update
+itself via multiple queries to the student  input an example
+and see the inner product output of the student  We present
+  more simple and straightforward imitation teacher  Alg 
+  which works in   way similar to stochastic mirror descent  Nemirovski et al    Hall   Willett    In
+speci    the teacher  rst learns to approximate the student    cid wt    cid  with the following iterative update 
+
+vt    vt    
+
+ 
+where    is the learning rate for the update  Then we use
+vt  to perform the example synthesis or selection in teacher   own feature space  We summarize this simple yet effective imitation teacher model in Alg   
+  Discussion
+Optimality of the teacher model  For arbitary loss function  the optimal teacher model for   student model should
+ nd the training example sequence to achieve the fastest
+possible convergence  Exhaustively  nding such example
+sequence is computational impossible  For example  there
+are nT possible training sequences    is the iteration number  for nsize poolbased teaching  As   results  we need
+to make use of the properties of loss function to design the
+teacher model  The proposed teacher models are not necessarily optimal  but they are good enough under some conditions for loss function  student model and training data 
+
+ cid cid vt    cid cid wt    cid cid   
+
+Iterative Machine Teaching
+
+Figure   Convergence results on Gaussian distributed data 
+
+rogate teacher and the imitation teacher  While the feature spaces are totally different  it can be expected that
+there will be   mismatch gap between the teacher model
+parameter and the student model parameter  Even in such
+  challenging scenario  the experimental results show that
+our teacher model still outperforms the conventional SGD
+and batch GD in most cases  One can observe that the surrogate teacher performs poorly in the SVM  which may be
+caused by the tightness of the approximated lower bound
+of the    term  Compared to the surrogate teacher  the imitation teacher is more stable and consistently improves the
+convergence in all three linear models 
+
+  Teaching Linear Classi ers on MNIST Dataset
+We further evaluate our teacher models on MNIST dataset 
+We use    random features to classify the digits    
+as examples  We generate the teacher   features using  
+random projection matrix from the original    student   features  Note that  omniscient teacher and surrogate
+teacher  same space  assume the teacher uses the student  
+feature space  while surrogate teacher  different space  and
+imitation teacher assume the teacher uses its own space 
+From Fig    one can observe that all these teacher model
+produces signi cant convergence speedup  We can see that
+the omniscient teacher converges fastest as expected  Interestingly  our imitation teacher achieves very similar con 
+
+Figure   The examples selected by omniscient teacher for logistic regression on    binaryclass Gaussian data 
+
+  show that the learner can converge much faster using the
+example provided by the teacher  showing the effectiveness
+of our teaching models  As expected  we  nd that the omniscient teacher consistently achieves faster convergence than
+the surrogate teacher who has no access to    It is because
+the omniscient teacher always has more information about
+the learner  More interestingly  our guiding algorithms also
+consistently outperform SGD on the selected set  showing
+that the order of inputting training samples matters 
+Teaching in different feature spaces  It is   more practical scenario that teacher and student use different feature
+spaces  While the omniscient teacher model is no longer
+applicable here  we teach the student model using the sur 
+
+Objective ValueDifference between    and   tIteration NumberIteration Number Batch gradient descentStochastic gradient descentSGD on selected setOmniscient teacherSurrogate teacher Objective ValueDifference between    and   tIteration NumberIteration Number Batch gradient descentStochastic gradient descentSGD on selected setOmniscient teacherSurrogate teacherObjective ValueDifference between    and   tIteration NumberIteration Number Batch gradient descentStochastic gradient descentSGD on selected setOmniscient teacherSurrogate teacher Objective ValueDifference between    and   tIteration NumberIteration Number Batch gradient descentStochastic gradient descentSurrogate teacherImitation teacher Objective ValueDifference between    and   tIteration NumberIteration Number Batch gradient descentStochastic gradient descentSurrogate teacherImitation teacher Objective ValueDifference between    and   tIteration NumberIteration Number Batch gradient descentStochastic gradient descentSurrogate teacherImitation teacher    Teaching ridge regression in the same feature space    Teaching ridge regression in different feature spaces    Teaching logistic regression in the same feature space    Teaching logistic regression in different feature spaces    Teaching support vector machine in the same feature space    Teaching support vector machine in different feature spaces Data points of the first classData points of the second classSelected examples  iter   Selected examples  iter   Selected examples  iter   Selected examples  iter   Optimal ClassifierThe first dimensionThe second dimensionIterative Machine Teaching
+
+Figure   Some selected training examples on MNIST 
+
+Figure   Selected training examples by the omniscient teacher on
+egocentric data of infants   The examples are visualized every
+  iteration  with leftto right and topto bottom ordering 
+
+toone mapping  but we could still observe convergence
+speedup using our teacher models  From Fig    we can see
+that all the teacher models produces very fast convergence
+in terms of testing accuracy  Our teacher models can even
+produces better testing accuracy than the backproplearned
+FC layer  For objective value  the omniscient teacher shows
+the largest convergence speedup  and the imitation teacher
+performs slightly worse but still much better than the SGD 
+
+  Teaching on egocentric visual data of infants
+Using our teaching model  we analyze cropped object instances obtained from egocentric video of an infant playing with toys  Yurovsky et al    Full detailed settings
+and results are in Appendix    The results in Fig    demonstrate   strong qualitative agreement between the training
+examples selected by the omniscient teacher and the order
+of examples received by   child in   naturalistic play environment  In both cases  the learner experiences extended
+bouts of viewing the same object  In contrast  the standard
+SGD learner receives random inputs  Our convergence results demonstrate that the learner converges signi cantly
+faster when receiving similar inputs to the child  Previous works have documented the unique temporal structure
+of the image examples that   child receives during object
+play  Bambach et al    Pereira et al    We believe these are the  rst results demonstrating that similar
+orderings can be obtained via   machine teaching approach 
+  Concluding Remarks
+The paper proposes an iterative machine teaching framework  We elaborate the settings of the framework  and then
+study two important properties  teaching monotonicity and
+teaching capability  Based on the framework  we propose
+three teacher models for gradient learners  and give theoretical analysis for the learner to provably achieve fast convergence  Our theoretical  ndings are veri ed by experiments 
+
+Figure   Teaching logistic regression on MNIST dataset  Left
+column    classi cation  Right column    classi cation
+
+Figure   Teaching fully connected layers of CNNs on CIFAR 
+Left  testing accuracy  Right  training objective value 
+
+vergence speedup to the omniscient teacher under the condition that the teacher does not know the student   feature
+space  In Fig  we also show some examples of teacher  
+selected digit images   as examples  and  nd that the
+teacher tends to select easy example at the beginning and
+gradually shift the focus to dif cult examples  This also
+has the intrinsic connections with the curriculum learning 
+
+  Teaching Fully Connected Layers in CNNs
+We extend our teacher models from binary classi cation
+to multiclass classi cation  The teacher models are used
+to teach the  nal fully connected  FC  layers in convolutional neural network on CIFAR  We  rst train three
+baseline CNNs   convolution layers  detailed con guration is in Appendix    on CIFAR  without data augmentation and obtain the       accuracy 
+First  we applied the omniscient teacher and the surrogate
+teacher to the CNN  student using the optimal FC layer
+from the joint backprop training  It is essentially to teach
+the FC layer in the same feature space  Second  we applied the surrogate teacher and the imitation teacher to the
+CNN  student using the parameters of optimal FC layers
+from CNN  and CNN  It is to teach the FC layer in
+different feature spaces  More interestingly  this different
+feature space may not necessarily have an invertible one 
+
+ Batch gradient descentStochastic gradient descentOmniscient TeachterSurrogate Teacher  same space Surrogate Teacher  different space Imitation Teacher Batch gradient descentStochastic gradient descentOmniscient TeachterSurrogate Teacher  same space Surrogate Teacher  different space Imitation TeacherObjective ValueIteration NumberObjective ValueIteration NumberTesting accuracyIteration NumberTesting accuracyIteration Number    Classification accuracy    Objective ValueTesting AccuracyIteration NumberIteration NumberObjective Value Joint learned FC  Backprop SGD learned FCOmniscient teacherSurrogate teacher  same Surrogate teacher  CNN Imitation teacher  CNN Imitation teacher  CNN SGDOmniscient teacherSurrogate teacher  same Surrogate teacher  CNN Imitation teacher  CNN Imitation teacher  CNN Iteration  Iteration  Iteration  Iteration  Iteration  Iteration     Omniscient Teacher    Imitation TeacherIterative Machine Teaching
+
+Acknowledgement
+We would like to sincerely thank all the reviewers and
+Prof  Xiaojin Zhu for the valuable suggestions to improve the paper  Dan Yurovsky and Charlotte Wozniak for
+their help in collecting the dataset of children   visual inputs during object learning  and Qian Shao for help with
+the annotations  This project was supported in part by
+NSF IIS  NIH BIGDATA    GM  NSF CAREER IIS  NSF IIS  EAGER  ONR    NSF Awards  BCS  BCS 
+  and IIS  Nvidia and Intel  In addition 
+this work was partially supported by the Indiana University
+Areas of Emergent Research initiative in Learning  Brains 
+Machines  Children 
+
+References
+Alfeld  Scott  Zhu  Xiaojin  and Barford  Paul  Data poisoning attacks against autoregressive models  In AAAI 
+pp     
+
+Alfeld  Scott  Zhu  Xiaojin  and Barford  Paul  Explicit
+defense actions against testset attacks  In AAAI   
+
+Ba  Jimmy and Caruana  Rich  Do deep nets really need to
+be deep  In Advances in neural information processing
+systems  pp     
+
+Balcan  MariaFlorina  Hanneke  Steve  and Vaughan  Jennifer Wortman  The true sample complexity of active
+learning  Machine learning     
+
+Bambach  Sven  Crandall  David    Smith  Linda    and
+Yu  Chen  Active Viewing in Toddlers Facilitates Visual Object Learning  An Egocentric Vision Approach 
+Proceedings of the  th Annual Meeting of the Cognitive
+Science Society   
+
+Bengio  Yoshua  Louradour  Jerome  Collobert  Ronan  and
+
+Weston  Jason  Curriculum learning  In ICML   
+
+Bucila  Cristian  Caruana  Rich  and NiculescuMizil 
+Alexandru  Model compression  In Proceedings of the
+ th ACM SIGKDD international conference on Knowledge discovery and data mining  pp    ACM 
+ 
+
+Cakmak  Maya and Thomaz  Andrea    Eliciting good
+teaching from humans for machine learners  Arti cial
+Intelligence     
+
+Doliwa  Thorsten  Fan  Gaojian  Simon  Hans Ulrich 
+and Zilles  Sandra  Recursive teaching dimension  vcdimension and sample compression  Journal of Machine
+Learning Research     
+
+Goldman  Sally   and Kearns  Michael    On the complexity of teaching  Journal of Computer and System
+Sciences     
+
+Hall  Eric   and Willett  Rebecca    Online optimizaarXiv preprint arX 
+
+tion in dynamic environments 
+iv   
+
+Han  Song  Mao  Huizi  and Dally  William    Deep compression  Compressing deep neural networks with pruning  trained quantization and huffman coding  arXiv
+preprint arXiv   
+
+Hinton  Geoffrey  Vinyals  Oriol  and Dean  Jeff  Distilling the knowledge in   neural network  arXiv preprint
+arXiv   
+
+Johns  Edward  Mac Aodha  Oisin  and Brostow  Gabriel   
+Becoming the expert   interactive multiclass machine
+teaching  In CVPR   
+
+Khan  Faisal  Mutlu  Bilge  and Zhu  Xiaojin  How do humans teach  On curriculum learning and teaching dimension  In NIPS   
+
+Liu  Ji  Zhu  Xiaojin  and Ohannessian    Gorune  The
+
+teaching dimension of linear learners  In ICML   
+
+Meek  Christopher  Simard  Patrice  and Zhu  Xiaojin 
+Analysis of   design pattern for teaching with features
+and labels  arXiv preprint arXiv   
+
+Mei  Shike and Zhu  Xiaojin  Using machine teaching to
+identify optimal trainingset attacks on machine learners 
+In AAAI   
+
+Nemirovski  Arkadi  Juditsky  Anatoli  Lan  Guanghui  and
+Shapiro  Alexander  Robust stochastic approximation
+approach to stochastic programming  SIAM Journal on
+optimization     
+
+Pan  Sinno Jialin and Yang  Qiang    survey on transfer
+learning  IEEE Transactions on knowledge and data engineering     
+
+Pereira  Alfredo    Smith  Linda    and Yu  Chen   
+Bottomup View of Toddler Word Learning  Psychonomic bulletin   review     
+
+Romero  Adriana  Ballas  Nicolas  Kahou  Samira Ebrahimi  Chassang  Antoine  Gatta  Carlo  and Bengio 
+Yoshua  Fitnets  Hints for thin deep nets  arXiv preprint
+arXiv   
+
+Shinohara  Ayumi and Miyano  Satoru  Teachability in
+computational learning  New Generation Computing   
+   
+
+Iterative Machine Teaching
+
+Singla  Adish  Bogunovic  Ilija  Bartok  Gabor  Karbasi 
+Amin  and Krause  Andreas  Nearoptimally teaching
+the crowd to classify  In ICML  pp     
+
+Yurovsky  Daniel  Smith  Linda    and Yu  Chen  Statistical Word Learning at Scale  The Baby   View is Better
+Developmental Science  Developmental Science   
+   
+
+Zhu  Xiaojin  Machine teaching for bayesian learners in
+
+the exponential family  In NIPS   
+
+Zhu  Xiaojin  Machine teaching  An inverse problem to
+machine learning and an approach toward optimal education  In AAAI  pp     
+
+

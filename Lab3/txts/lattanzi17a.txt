@@ -1,0 +1,1069 @@
+Consistent kClustering
+
+Silvio Lattanzi   Sergei Vassilvitskii  
+
+Abstract
+
+The study of online algorithms and competitive
+analysis provides   solid foundation for studying
+the quality of irrevocable decision making when
+the data arrives in an online manner  While in
+some scenarios the decisions are indeed irrevocable  there are many practical situations when
+changing   previous decision is not impossible 
+but simply expensive 
+In this work we formalize this notion and introduce the consistent
+kclustering problem  With points arriving online  the goal is to maintain   constant approximate solution  while minimizing the number of
+reclusterings necessary  We prove   lower bound 
+showing that    log    changes are necessary in
+the worst case for   wide range of objective functions  On the positive side  we give an algorithm
+that needs only      log     changes to maintain
+  constant competitive solution  an exponential
+improvement on the naive solution of reclustering at every time step  Finally  we show experimentally that our approach performs much better
+than the theoretical bound  with the number of
+changes growing approximately as   log   
+
+  Introduction
+Competitive analysis of online algorithms has been an area
+of spirited research with beautiful results over the past two
+decades  At its heart  this area is about decision making
+under uncertainty about the future the input is revealed in
+an online manner  and at every point in time the algorithm
+must make an irrevocable choice    standard example is
+that of caching algorithms at every time step the algorithm must make   choice about which elements to keep in
+the cache  and which elements to evict  Fiat et al   
+The generalization of caching to metric spaces is encapsu 
+
+ Equal contribution  Google  Zurich  Switzerland  Google 
+SilSergei Vassilvitskii
+
+New York  New York  USA  Correspondence to 
+vio Lattanzi  silviol google com 
+ sergeiv google com 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+lated in the kserver problem  which has been the subject
+of intense study  Bansal et al    Manasse et al   
+The key metric in online algorithms is the competitive ratio  It measures the quality of the solution obtained by an
+online algorithm versus an of ine optimum  which has the
+luxury of seeing the whole input before making any decisions  In situations where the competitive ratio is relatively small  for example  the list update problem  Sleator
+  Tarjan    this is   great measure by which we can
+compare different algorithms  However  in some scenarios
+strong lower bounds on the competitive ratio imply that any
+algorithm that makes irrevocable choices will necessarily
+perform poorly when compared to an of ine optimum 
+Online clustering is one such example  In this setting points
+            arrive one at   time  and must be instantly given
+one of   cluster labels  As is typical  the goal is to have the
+highest quality clustering  under some prespeci ed objective function  like kCENTER or kMEDIAN  at every point
+in time  As Liberty et al    showed  not only do online clustering algorithms have an unbounded competitive
+ratio  but one must use bicriteria approximations to have
+any hope of   constant approximate solution 
+Another approach to evade strong lower bounds is to make
+additional assumptions about the input to the problem  For
+example  one may assume that the input comes in   random  or partially random  order  This assumption has been
+  fruitful avenue when studying online problems in different contexts  as the classic secretary problem  Ferguson 
+  Kesselheim et al    Kleinberg    or matching  Karp et al    Mahdian   Yan    Another
+alternative is to assume some additional structure on the
+distribution that points are coming from  Feldman et al 
+    big downside of both of these assumptions is that
+they are hard to test and validate in practice  which is why
+we take   different approach in this work 
+
+  Consistency
+
+While the irrevocability of past choices makes sense from
+  theoretical standpoint  for some practical problems this
+requirement is unrealistically draconian  For example  consider   load balancer  which  when faced with requests arriving online  assigns them to different machines  Better
+cache performance dictates that similar requests should be
+
+Consistent   clustering
+
+assigned to the same machine  thus the load balancer is
+essentially performing online clustering  However  fundamentally  nothing is preventing the load balancer from reassigning some of the past jobs to other machines  In this situation    reclustering   reassignment of jobs to machines
+to increase performance is not an impossible operation 
+Another common example of   costly  but not prohibitive
+recomputation comes from standard applications of unsupervised clustering  feature engineering for large scale machine learned systems  In this setting   feature vector    is
+augmented with the id of   cluster it falls in    cid  and the
+full vector       cid  is given as input to the learner  This is
+mainly done to introduce expressiveness and nonlinearity
+to simple systems  In this situation  changing the clustering would entail changing the set of features passed to the
+learner  and retraining the whole system  thus one certainly
+does not want to do it at every time step  but it can be done
+if the gains are worthwhile 
+From   theoretical perspective  the ability to correct for past
+mistakes offers the ability for much better solutions  In particular for clustering problems  it avoids the lower bounds
+introduced by Liberty et al    As we will show 
+the option to recluster dramatically improves the quality of
+the solution  even if it is taken rarely  More formally  we
+will introduce   parameter   which controls the number of
+times the solution changes  Setting       is equivalent to
+online algorithms  whereas   large value of   is equivalent
+to recomputing the answer from scratch at every time step 
+
+  Our Contributions
+
+In this paper we focus on exploring the tradeoff between
+the approximation ratio of clustering algorithms  and the
+number of times we must recompute the results 
+We begin by formally de ning the notion of    
+consistent clustering in Section   Then we prove   lower
+bound  showing that any constant competitive algorithm
+must change its cluster centers at least    log    times
+ Section   Then we show that   known algorithm
+by Charikar et al    achieves this bound for the kCENTER problem  and we develop   new algorithm for
+other clustering objectives  and show that it requires at
+most      log     reclusterings  an exponential improvement over the naive solution  Section   Finally  we show
+that the proposed algorithms perform well on real world
+datasets  Section  
+
+  Related Work
+
+There are two avenues for related work that we build on
+in this paper  The  rst is clustering algorithms  particularly the online clustering variants  In their seminal work
+Charikar et al    gave algorithms for the kCENTER
+
+problem  The case of kMEDIAN and kMEANS proved
+more complex  For the former  Meyerson   gave an
+  log    competitive ration for closely related online facility location problem  This result was further improved by
+Fotakis   and Anagnostopoulos et al    The latter was recently studied by Liberty et al    who gave
+bicriteria approximations and showed that these are necessary in an online setting  For the soft partition version of
+the kclustering problem  an Expectation Maximization algorithm was suggested by Liang   Klein  
+The second  closely related area  is that of streaming algorithms  The literature of clustering in the streaming
+model is very rich  we highlight the most relevant results 
+The  rst paper to study clustering problem is by Charikar
+et al    studying the kCENTER problem  Guha et al 
+  give the  rst single pass constant approximation algorithm to the kMEDIAN variant  Subsequently their result
+has been is improved by Charikar et al    Finally  the
+best algorithm for the closely related variant of facility location is due to Czumaj et al    who gave        
+approximation for the problem 
+
+  Preliminaries
+Let   be   set of   points  and                 distance function  We assume that   is symmetric and that
+       form   metric space  that is             for any
+                             for any           and 
+for any                                          Finally 
+by scaling    let minx               and denote by   the
+maximum pairwise distance  maxx           We will assume that   is bounded by   polynomial in    therefore
+log       log   
+Consider   set of   points                    ck       which
+we will refer to as centers  For each ci  let Ci     be the
+set of points in   closer to ci than to any other center    
+     Formally  Ci                 ci    minc          
+Given         in the rest of the paper we refer to the
+cost of   point   with to respect to   set of centers as 
+costp         minci      ci    And cost of   cluster Ci as 
+
+costp    Ci   cid 
+the centers       as  costp        cid 
+ cid  
+
+Now we are ready to de ne our problem  For any       we
+can de ne the cost of clustering of points   with respect to
+    costp        
+
+ cid 
+
+  Ci
+
+     ci   
+
+  
+
+  Ci
+
+     ci   
+
+The kclustering family of problems asks to  nd the set
+of centers   that minimize costp for   speci      When
+      cost       is precisely the kMEDIAN clustering
+
+  For clarity of the exposition we will assume that all of the
+pairwise distances are unique  The results still hold when ties are
+broken lexicographically 
+
+Consistent   clustering
+
+objective  Setting       is equivalent to the kMEDOIDS
+problem  Finally  with       we recover the kCENTER
+problem  which asks to minimize the maximum distance of
+any point to its nearest cluster center 
+Observe that although    satis es the triangle inequality  when raised to pth power we need to relax the conIn particular we have that for any             
+dition 
+                                  
+When   is clear from the context  we will refer to
+costp       as the cost of the clustering and denote it
+cost       We will us optp    to denote the optimum
+cost for the metric space        We will use     
+   
+The   clustering problem is NPhard to solve exactly  thus
+we consider approximate solutions  We say that   clustering generated from   set of centers   is  approximate if
+costp          optp    The best known approximation
+factors are   for the kCENTER problem  Gonzalez   
+      for the kMEDIAN problem  Li   Svensson 
+   
+  and       for the kMEDOIDS problem  Kanungo
+et al   
+
+   to denote the optimal solution 
+
+ 
+
+    
+
+            
+
+  Consistency
+As noted in the introduction  in many online clustering applications the choices made by the online algorithm are not
+irrevocable  but simply expensive to change  Moreover  by
+allowing   small number of full recomputations  we can
+circumvent the stringent lower bounds on competitive ratio
+for online clustering 
+To this end  our goal in this work is to better understand the
+tradeoff between the approximation ratio of online clustering algorithms  and the number of times the representative
+centers change 
+We focus on   dynamic setting where the points arrive sequentially  Let xt denote the point that arrives at time   
+and denote by Xt the set of points that has arrived from the
+beginning  Thus        and Xi    Xi    xi   
+               xi 
+For any two sets of centers      cid  let      cid  denote the number
+of elements present in    but not in   cid         cid             
+  cid  Observe that when   and   cid  have the same cardinality 
+       cid       cid      
+De nition   Given   sequence of sets of centers       
+        ct and   positive monotone nondecreasing function
+           we say that the sequence is  consistent if for
+
+all    cid  
+
+    ct   ct        
+
+In other words    sequence is  consistent  if at time   at
+
+ In the Euclidean space if the centers do not need to be part of
+
+the input  setting       recovers the kMEANS problem 
+
+most      centers have changed between successive sets 
+De nition   Given   sequence of points               xT  
+and   parameter      sequence of centers               cT is
+   consistent if 
+    Approximation  At every time    the centers ct form
+an   approximate solution to the optimum solution at that
+time  costp Xt  ct        optp Xt  for all        
+ ii  Consistency  The sets of centers form    consistent
+sequence 
+
+    lower bound
+
+Before we look for     consistent algorithms it is useful to understand what values are possible  We show that it
+is impossible to get   constant approximation and achieve
+consistency of   log    for any of the   clustering problems  Later  in Section   we will give   nonconstructive
+result that shows that there is always   sequence of clusterings that is simultaneously constantapproximate and
+    log     consistent 
+Lemma   There exists   sequence of points such that
+for any constant       any algorithm that returns an
+ approximate solution while processing   points must be
+   log   consistent 
+
+Proof  For ease of exposition  assume that       and consider points lying in       dimensional Euclidean space 
+Rk  We begin by adding   point    at the origin  and
+points            xk  in positions               ek  where ej
+is the standard basis vector that is   in the jth dimension 
+and   everywhere else 
+We then proceed in phases  where in phase         log  
+we add points at position      ej for each            
+for some       that we will set later  In phase log   we
+add the remaining            log       points at arbitrary
+positions within the convex hull of already added points 
+Let Pi be the set of points at the end of phase    Consider
+any algorithm that returns an  approximate solution on Pi 
+Let               pk  be the points added to the input during
+phase    pj        ej  Then Pi   Pi                pk 
+One feasible solution choses as centers the points added in
+phase   as well as the origin                     pk   
+For every point in Pi  the origin is closer than any of
+the other centers  therefore the total cost is  opt Pi   
+    On
+the other hand  consider   set of centers   cid  that does not
+include some pj    iej  The closest point to pj is at
+   ej  which is at distance         away  There 
+ Note that we assume throughout the paper that the maximum
+distance between any two points    is polynomial in    Alternatively we can restate the lower bound in this section as  
+   log   upper bound in section   as       log   
+
+cost Pi             cid   
+
+                  
+
+Consistent   clustering
+
+     
+
+        
+
+opt Pi       
+       
+ 
+
+fore  cost Pi    cid    cost pj    cid            If
+           then we can bound the approximation ratio as  cost Pi   cid 
+      
+so   cid  cannot be an  approximate solution  Therefore at
+the end of phase         log    any  approximate set of
+centers  must include all points added in phase    Thus any
+sequence of sets of centers must be    log   consistent 
+Note that considering any       only makes any omission
+of point pj even more costly  as compared to the optimum
+solution 
+
+  Warm up  kCENTER Clustering
+To gain some intuition about consistent clustering  we begin with the kCENTER objective  Given   dataset    the
+goal is to identify   centers                 ck  that minimize  maxx   minc           This problem is known to
+be NPhard  but   simple  approximation algorithm exists in the batch setting  Gonzalez    In the streaming setting  when points arrive one at   time  the DOUBLING algorithm by Charikar et al    was the  rst
+algorithm discovered for this problem  The algorithm
+maintains an  approximation  Furthermore  it works in
+  log       log    phases and the total consistency cost
+of each phase is    thus we get the following lemma 
+
+Lemma   The DOUBLING algorithm for the kCENTER
+problem is       log   consistent 
+
+  Main Algorithm
+In this section we present our main result  an algorithm that
+achieves   polylogarithmic consistency factor  More precisely  we show that for every constant       it is possible to design an algorithm for the Consistent kclustering
+problem under costp that is constant approximate  and
+     log    consistent 
+In the remainder of the section we  rst present the main
+ideas behind our algorithm  then prove some useful technical lemmas  and  nally present the full algorithm 
+
+  Main ideas
+
+Before delving into the details  we highlight the three main
+building blocks of our algorithm 
+The  rst is the Meyerson sketch for online facility location  Meyerson    This sketch has already been used
+by Charikar et al    to solve the kmedian problem
+on data streams  We show that the main ingredients of the
+sketch continue to work under costp objectives  and use it
+to generally reduce the number of points under considerations from   to     poly log   
+
+One caveat of this sketch is that to use it we need to have
+access to   good lower bound on the cost of the optimal
+solution at any point in time  We obtain it by running the
+    approximation algorithm described by Gupta   Tangwongsan   on all available points  In this way  at any
+point in time we have   good approximation of the optimum
+solution  Then we divide the progress of our algorithm into
+log   phases based on this lower bound and in each phase
+we use   different sketch 
+Finally  while the Meyerson sketch maintains     log    
+possible centers  to computer the kclustering  we have to
+reduce these points into exactly    nal centers  We  rst
+show that this is possible and then we prove that we do
+not need to recluster frequently  In fact we will do it only
+when either   new point is added to the Meyerson sketch 
+    log     times or when the number of points assigned
+to one of these elements of the Meyerson sketch doubles 
+    log    events per sketch 
+By putting all of these ingredients together  we show that
+the number of times we need to fully recluster is at most
+    log     per phase  or that we have      log     cluster
+changes in total 
+
+  The Meyerson sketch
+
+We present the Meyerson sketch and prove some useful
+properties  We assume to have access to   lower bound to
+the cost of the optimal solution    such that Lp    optp 
+for some constant            We will remove the assumption later  Then the algorithm works in phases  such
+that at any time in phase                So in each
+        and
+phase   we can use the same lower bound Lp
+have Lp
+In each phase   we create   log   Meyerson sketches as described in Algorithm   Then we combine them in   single
+sketch as described in Algorithm  
+
+     optp
+
+ 
+
+ 
+
+solution for the kclustering problem 
+
+ optp    for some constant      
+
+Algorithm   Single Meyerson sketch
+  Input    sequence of points                  xn     nite   
+  Output    set   that is   constant bicriteria approximate
+       
+  Let   be   set of points and let   be such that    
+  for       do
+ 
+ 
+ 
+ 
+ 
+  Return  
+
+Let             
+With probability min
+
+ cid     log   
+
+add   to  
+
+if       then
+
+       
+
+else
+
+ cid 
+
+Lp
+
+   
+
+For simplicity we  rst analyze the property of   single Meyerson sketch 
+In particular we give   bound on both the
+
+Consistent   clustering
+
+Algorithm   ComputeM eyerson Xt   
+  Input    sequence of points Xt    lower bound to the opti 
+
+  log   independent Meyerson
+
+sketches
+
+mum  
+  Output 
+
+              log  
+
+  Lp    
+   
+  for       log    do 
+Mi     
+ 
+  for     Xt do 
+for       log    do 
+ 
+ 
+ 
+ 
+ 
+  Return               log  
+
+ cid  Initialize all Meyerson sketches
+
+ cid  If Mi is not too large  analyze  
+
+ cid 
+
+then 
+
+ cid     
+ cid 
+
+if  Mi          log   
+Let          Mi  
+     min
+Add   to Mi with probability   
+
+ cid     log   
+
+   
+
+Lp
+
+      
+
+number of points selected by   single sketch  as well as the
+quality of the approximation  The Lemma generalizes the
+results in  Charikar et al    Meyerson    to all  
+nite   and follows the general structure their proof so it is
+deferred to the extended version of the paper 
+Lemma   For   constant         with probabil 
+  the set   computed by Algorithm   has     
+ity at least  
+   ii  costp     
+size at most       log   
+ optp   
+
+ cid     
+
+      
+
+ cid 
+
+From Lemma   we know that with constant probability  
+single Meyerson sketch is of size     log    and contains
+  set of points that give   good solution to our problem 
+Thus  if we construct   log   single Meyerson sketches in
+parallel  at least one of them gives   constant approximation
+to the optimum at every point in time with probability at
+least          The observation inspired the design of
+Algorithm   whose properties are formalized next 
+Lemma   For   constant         with probability
+         the set       log  
+   Mi computed by Algorithm   has  size at most     log     and costp      
+ optp   
+
+Proof  As mentioned above  Lemma   implies that if
+we construct   log   single Meyerson sketches in parallel  with probability          at least one of them
+gives   constant approximation to the optimum at every point in time  Furthermore in total it contains only
+      log   
+
+ cid     
+
+points 
+
+ cid 
+
+      
+
+ cid 
+
+      
+
+ cid     
+
+Now in Algorithm   we are almost building   log   Meyerson sketches  the only difference is that we stop adding
+points to   single sketch when it becomes too large  This
+modi cation does not change the probability that there exist at least one single sketch that gives   constant approximation to the optimum at every point in time and has at
+most       log   
+Thus with probability          at least one of the
+sketches constructed in Lemma   gives   constant approximation to the optimum at every point in time  Merging other sketches to this sketch does not affect this property  Furthermore the number of points in each sketch is
+so the
+explicitly bounded by       log   
+total number of points in   is bounded by    log     
+log   
+
+ cid     
+
+ cid     
+
+      
+
+points 
+
+ cid 
+
+ cid 
+
+      
+
+Note that in some cases we do not need to recompute all
+the sketches from scratch but we need only to update them 
+so we can de ne   faster update function described in Algorithm  
+
+Algorithm     pdateM eyerson            Ms  xt   
+  Input    point xt    lower bound to the optimum   and  
+
+independent Meyerson sketches            Ms 
+
+  Output    independent Meyerson sketches            Ms
+   
+  Lp    
+  for         do 
+ 
+ 
+ 
+ 
+  Return            Ms
+
+if  Mi          log   
+Let       xt  Mi  
+     min
+Add xt to Mi with probability   
+
+ cid     
+ cid 
+
+ cid     log   
+
+      
+
+then 
+
+ cid 
+
+   
+
+Lp
+
+ cid  If Mi is not too large  analyze xt
+
+In the rest of the paper we refer to   single Meyerson sketch
+as Mi and to their union as   
+
+  From Meyerson to   clusters
+
+Our next step is to show that in the Meyerson sketch there
+exists   subset of   centers that gives an approximately
+optimal solution  We follow the approach in Guha et al 
+  and show that by weighing the points in the Meyerson sketch with the number of original data points assigned
+to them  and then running   weighted kclustering algorithm to recluster them into   clusters  we can achieve  
+constant approximate solution 
+Before formalizing this observation we give some additional notation  In the remainder of the section we denote
+the weight of   point   in the Meyerson sketch with     
+the cost of the centers used in Meyerson sketch with costM 
+and the cost of the aforementioned weighted clustering instance with costL  Finally we refer to the optimal set of
+centers for the weighted kclustering instance as   cid 
+We begin with two technical Lemmas 
+Lemma   For any constant       costp      cid   
+     costM   costL 
+Lemma   For any constant       costL  
+
+   cid costM   optp
+   cid costM   optp
+
+ cid 
+
+ cid 
+
+Note that combining Lemmas   and   the following
+Corollary follows 
+Corollary   For any constant       costp   cid   
+
+We defer the proofs of lemma   and lemma   to the
+extended version of the paper  Those proofs are similar in
+spirit to those in  Bateni et al    Guha et al    but
+are generalized here for all   
+Thanks to Corollary   we know that by using   Meyerson
+sketch    contains   good approximation for our problem 
+In the next subsection we show how to use this to obtain  
+solution for the consistency problem 
+Before doing this we de ne two algorithms that allow us
+to construct   weighted clustering instance starting from  
+Meyerson sketch  Algorithm   and to update the weights
+for   weighted instance  Algorithm  
+
+Algorithm   CreateW eightedInstance            Ms    Xt 
+  Input    sequence of points Xt    lower bound to the optimum   and   independent Meyerson sketches            Ms 
+
+  Output    weighted kclustering instance       
+  Let      iMi
+  Assign points in Xt to the closest point in  
+  Let      to be equal to the number of points assigned to    
+
+ 
+
+  Return       
+
+Algorithm     pdateW eights         
+  Input    point    the current weights   and the Meyerson
+
+sketch   
+
+  Output    weighted kclustering instance       
+  Assign   to the closest point in  
+  Let mx be the closest point to   in  
+    mx      mx     
+  Return       
+
+  The algorithm
+
+We are now ready to formally state and prove the correctness of our main algorithm  which we present in Algorithm   The input of our algorithm is   sequence of
+points                  xn  Recall  that we denote the pre  
+up to   as Xt  and the cost of the solution using centers  
+as costp Xt     Finally we assume to have access to    
+approximation algorithm   for the weighted kclustering
+problem for any constant pnorm  we can use for example the local search algorithm described by Gupta   Tangwongsan  
+We can now state our main theorem 
+Theorem   For any constant       with probability          Algorithm   returns   sequence of
+
+Consistent   clustering
+
+ cid  New      for  
+
+        log     ComputeM eyerson     
+
+ cid  Initialize lower bound to the optimum
+
+ct      Output ct           
+
+Run   on Xt to get approximated solution   cid 
+if costp Xt    cid      then 
+
+Algorithm   Consistent kclustering algorithm
+  Input    sequence of points                  xn 
+  Output    sequence of centers                  cn
+  Select the  rst   points as centers                        xk 
+       
+  while costp    Xt      do 
+ 
+       
+              log  
+  while       do 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+    costp Xt    cid 
+     Ms   ComputeM eyerson Xt   
+         GetW eightedP rob      Ms    Xt 
+Solve        using algorithm  
+Let ct be the set of centers computed by  
+ cid  Update Meyerson and recluster if needed
+            pdateM eyerson      Ms  xt   
+Let      iMi 
+if xt     then 
+
+ cid  xt is in Meyerson sketch
+
+         GetW eightedP rob      Ms    Xt 
+Solve        using algorithm  
+Let ct be the set of centers computed by  
+           pdateW eights         
+Let mt be the closest point to xt in  
+if   mt  is   power of   then 
+
+Solve        using algorithm  
+Let ct be the set of computed centers
+
+else 
+
+ct   ct 
+Output ct           
+
+ cid  Weight of   point  doubled 
+
+else 
+
+else 
+
+centers                  cn such that at any point in time  
+costp ct  Xt     poptp Xt  for   constant   and the total
+inconsistency factor of the solution is      log    
+ cid   
+    ci    ci 
+
+Proof  We start by bounding the inconsistency factor 
+
+During the execution of Algorithm   the set of centers
+changes if and only if one of the three following conditions is met      the cost of the clustering on Xt computed
+by   increases by   factor of    ii  we add   new point to  
+Meyerson sketch   iii    new point is assigned to   point of
+the Meyerson sketch  mt  and the weight of mt is   power
+of   after this addition  Note that every time we change the
+centers  we fully recluster  and so increase the consistency
+factor by   in the worst case  Therefore to prove the theorem we need to show that one of these conditions is met at
+most     log     times 
+From our assumptions we know that the spread of the point
+set is polynomial in    which implies the same bound on
+the cost of the optimum solution  Therefore  the cost of the
+solution computed by   doubles at most   log    times 
+
+Consistent   clustering
+
+For the same reason we update the lower bounds    at most
+  log    times during the execution of our algorithm  This
+in turn implies that we rebuild the Meyerson sketches from
+scratch at most   log    times  Given that we run   log   
+Meyerson sketches in parallel  during the execution of the
+algorithm we use at most   log     Meyerson sketches 
+Furthermore each Meyerson sketch has at most     log   
+centers  thus in total we can add at most     log     points
+under condition  ii 
+Finally note that while   Meyerson sketch is  xed  the
+weight of every point in the sketch can only grow  In addition  the weight is always is bounded by    and therefore can double at most log   times per sketch point  resulting in     log     changes under    xed Meyerson
+sketch  Therefore condition  iii  holds at most     log    
+times  So overall at least one of the conditions is satis ed at most     log     times  thus the algorithm is
+     log    consistent 
+To  nish our proof we need to show that at any point in time
+our algorithm returns with probability         constant
+approximation to the optimum  Note that by corollary  
+we know that for any constant       the cost of   solution computed on the Meyerson sketch can be bounded by
+
+costp   cid       cid costM   optp
+
+ cid  From Lemma   we
+
+know that the Meyerson sketch guarantees with probability
+         that costM    optp    So we have the cost
+of the optimal set of centers in the Meyerson sketch at any
+point in time is at most   poptp         for   constant  
+While we cannot compute the optimal set of centers in the
+Meyerson sketch  we can  nd an      approximation for
+every constant   by relying on the local search algorithm of
+Gupta   Tangwongsan   Therefore  every time we
+recompute the centers using   we are sure that we obtain  
+constant approximation 
+Finally it remains to show that when none of the three conditions are met  and we simply add   point to the solution without recomputing the centers we retain an approximately optimal solution  By Lemma   we know that for
+any constant       costp   cid         costM   costL   
+Moreover  we can always bound the cost of Meyerson
+sketch with  optp   
+It remains to get   bound on costL  Note that the number of
+points assigned to any point in   did not double since the
+previous reclustering  Therefore  in the weighted reclustering formulation the weight of all points increased by  
+factor less than   Therefore  costL at this point is bounded
+by at most twice costL computed when we last reclustered 
+
+Therefore  costp   cid       cid costM   optp
+
+ cid and the cur 
+
+ We do not make an attempt to optimize the constant factors 
+As we show in the experimental section  in practice the algorithm
+gives   very good approximation 
+
+rent solution remains approximately optimal 
+
+  Optimizing Consistency
+How many times do we need to change the centers to obtain   good kclustering at any point in time  In Section  
+we presented an algorithm that is      log    consistent 
+while in Subsection   we showed that at least    log   
+changes are needed  assuming that   is polynomial in   
+We give an existential result  we show that for any input
+sequence there exist   solution that is constant approximate and     log    consistent  In interest of space we
+deferred the proof of the lemma to the extended version of
+the paper 
+Theorem   For any sequence               xn there exists
+  sequence of solutions               cn such that    
+ cid 
+costp Xi  ci     optp Xi  for some constant   and the
+   ci    ci cid        log    
+
+  Experiments
+We demonstrate the ef cacy of our algorithm by tracking
+both the quality of the solution and the number of reclusterings needed to maintain it on   number of diverse datasets 
+As we will show  the theoretical guarantees that we prove
+in the previous section provide   loose bound on the number of reclusterings  in practice the number of times we
+recompute the solution grows logarithmically with time 
+
+Data We evaluate our algorithm on three datasets from
+the UCI Repository  Lichman    that vary in data size
+and dimensionality      SKINTYPE has     points lying in  dimensions   ii  SHUTTLE has     points in
+  dimensions   iii  COVERTYPE has     points in  
+dimensions  For each of the datasets we try values of   in
+      and observe that the qualitative results are
+consistent across datasets and values of   
+
+Algorithm Modi cations
+In the development of the algorithm we made   number of decisions to obtain high
+probability results  The key among them was to run
+  log    copies of the Meyerson sketch  since each sketch
+succeeds only with constant probability  We eschew this
+change in the implementation  and maintain just   single
+sketch  at the cost of incurring   worse solution quality 
+
+Metrics and results The goal of this work is to give algorithms that maintain   good clustering  but only recluster
+judiciously  when necessary  To that end  we focus on two
+main metrics  number of reclusterings and solution quality 
+Reclustering We plot the number of reclusterings as  
+function of time for the three different datasets in Figure  
+Note that the xaxis is on logscale  and thus   straight line
+
+Consistent   clustering
+
+Figure   The number of reclusterings as   function of   for three different datasets  and various values of    plotted on   log scale 
+Observe that the     xaxis is on Log scale  showing that after an initial warm up phase  the algorithm does   logarithmic number of
+reclusterings  and  ii  the rate of reclustering is slightly higher for higher values of   
+
+Figure   The approximation ratio as   function of   for three different datasets  and various values of    Note the stair step pattern  
+when the algorithm choses not to recluster the approximation ratio slowly degrades    reclustering step brings it down close to  
+
+represents number of reclusterings that grows logarithmically with time  Qualitatively we make two observations 
+across all datasets  and values of   
+First  the rate of reclustering  de ned as the fraction of time
+the algorithm recomputes the solution  is approximately
+log      which tends to   as the dataset size grows  Further  the rate is higher for higher values of      fact also
+suggested by our theoretical analysis 
+Unlike the SHUTTLE and COVERTYPE datasets  the SKINTYPE dataset exhibits   change in behavior  where initially
+the reclustering rate is relatively high  but then it sharplly
+drops after about      steps  This is explained by the
+fact that the order of the points in this data set is not random  Therefore initially the algorithm reclusters at   high
+rate  once all of the parts of the input space are explored 
+the rate of reclustering slows  When we run the algorithm
+on   randomly permuted instance of SKINTYPE  this phase
+transition in behavior disappears 
+Approximation Ratio We plot the approximation ratio of
+the solution  as compared to the best obtained by ten runs
+of kmeans   Arthur   Vassilvitskii    in Figure  
+For the SKIN and COVERTYPE datasets  the approximation ratio stays relatively low  largely bounded by   after
+an initial period    more careful examination of the plots
+shows exactly the times when the consistent algorithm allows the solution to degrade  and when it decides to recompute the solution from scratch  The latter are indicated by
+sharp drops in the approximation ratio  whereas the former
+are the relatively  at patterns 
+
+It is interesting to note that the additional points sometimes
+worsen the approximation  as indicated by the lines sloping
+upwards  but sometimes actually improve the approximation  This is due to the fact that decisions made by the
+online algorithm balance optimality at that point in time 
+with the potential location of points arriving in the future 
+The latter is most apparent in the       experiment of
+the SHUTTLE dataset 
+All of the datasets sometimes exhibit large  uctuations in
+the approximation ratio  This is an artifact of using   single
+Myerson sketch  which does not capture the structure of the
+points with small  but constant probability 
+
+  Conclusions and Future Work
+We introduced the notion of consistent clustering    variant of online clustering which balances the need for maintaining an approximately optimal solution with the cost of
+reclustering  We proved  klog    lower bounds  and gave
+algorithms for all kclustering variants that come close to
+achieving this bound 
+The notion of quantifying the worst case number of
+changes necessary to maintain   constant approximate solution in an online setting is interesting to study in contexts
+other than kclustering  For example  one can consider online graph problems  such as online matching and online
+densest subgraph  or other types of clustering problems 
+such as hierarchical or correlation clustering 
+
+Consistent   clustering
+
+References
+Anagnostopoulos  Aris  Bent  Russell  Upfal  Eli  and Hentenryck  Pascal Van    simple and deterministic competitive algorithm for online facility location  Inf  Comput 
+   
+
+Arthur  David and Vassilvitskii  Sergei  Kmeans  The
+In Proceedings of the
+advantages of careful seeding 
+Eighteenth Annual ACMSIAM Symposium on Discrete
+Algorithms  SODA   pp     
+ISBN
+ 
+
+Bansal  Nikhil  Buchbinder  Niv  Madry  Aleksander  and
+Naor  Joseph  Sef    polylogarithmiccompetitive algorithm for the kserver problem     ACM   
+  November   ISSN  
+
+Bateni  MohammadHossein  Bhaskara  Aditya  Lattanzi 
+Silvio  and Mirrokni  Vahab    Distributed balanced
+In Advances in Neuclustering via mapping coresets 
+ral Information Processing Systems   Annual Conference on Neural Information Processing Systems  
+December     Montreal  Quebec  Canada  pp 
+   
+
+Charikar  Moses    Callaghan  Liadan  and Panigrahy 
+Rina  Better streaming algorithms for clustering probIn Proceedings of the  th Annual ACM Symlems 
+posium on Theory of Computing  June     San
+Diego  CA  USA  pp     
+
+Charikar  Moses  Chekuri  Chandra  Feder  Tom as  and
+Motwani  Rajeev 
+Incremental clustering and dynamic
+information retrieval  SIAM    Comput   
+   
+
+Czumaj  Artur  Lammersen  Christiane  Monemizadeh 
+Morteza  and Sohler  Christian     approximation for
+facility location in data streams  In Proceedings of the
+TwentyFourth Annual ACMSIAM Symposium on Discrete Algorithms  SODA   New Orleans  Louisiana 
+USA  January     pp     
+
+Feldman  Jon  Mehta  Aranyak  Mirrokni  Vahab    and
+Muthukrishnan     Online stochastic matching  Beating
+    In  th Annual IEEE Symposium on Foundations
+of Computer Science  FOCS   October    
+Atlanta  Georgia  USA  pp     
+
+Ferguson  Thomas    Who solved the secretary problem 
+
+Statist  Sci     
+
+Fiat  Amos  Karp  Richard  Luby  Micheal  McGeoch 
+Lyle  Sleator  Daniel  and Young  Neal    Competitive
+paging algorithms  Journal of Algorithms   
+    doi     
+
+Fotakis  Dimitris  On the competitive ratio for online facil 
+
+ity location  Algorithmica     
+
+Gonzalez  Teo lo    Clustering to minimize the maximum
+intercluster distance  Theor  Comput  Sci   
+ 
+
+Guha  Sudipto  Mishra  Nina  Motwani  Rajeev  and
+  Callaghan  Liadan  Clustering data streams 
+In
+ st Annual Symposium on Foundations of Computer
+Science  FOCS     November   Redondo
+Beach  California  USA  pp     
+
+Gupta  Anupam and Tangwongsan  Kanat  Simpler analyses of local search algorithms for facility location 
+CoRR  abs   
+
+Kanungo  Tapas  Mount  David    Netanyahu  Nathan   
+Piatko  Christine    Silverman  Ruth  and Wu  Angela      local search approximation algorithm for
+kmeans clustering  Comput  Geom   
+ 
+
+Karp  Richard    Vazirani  Umesh    and Vazirani  Vijay    An optimal algorithm for online bipartite matching  In Proceedings of the  nd Annual ACM Symposium
+on Theory of Computing  May     Baltimore 
+Maryland  USA  pp     
+
+Kesselheim  Thomas  Kleinberg  Robert    and Niazadeh 
+Rad  Secretary problems with nonuniform arrival order  In Proceedings of the FortySeventh Annual ACM on
+Symposium on Theory of Computing  STOC   Portland  OR  USA  June     pp     
+
+Kleinberg  Robert      multiplechoice secretary algorithm with applications to online auctions  In Proceedings of the Sixteenth Annual ACMSIAM Symposium on
+Discrete Algorithms  SODA   Vancouver  British
+Columbia  Canada  January     pp   
+ 
+
+Li  Shi and Svensson  Ola  Approximating kmedian via
+pseudoapproximation  SIAM    Comput   
+   
+
+Liang  Percy and Klein  Dan  Online em for unsupervised
+models  In Proceedings of Human Language Technologies  The   Annual Conference of the North American Chapter of the Association for Computational Linguistics  NAACL   pp      ISBN  
+ 
+
+Liberty  Edo  Sriharsha  Ram  and Sviridenko  Maxim  An
+algorithm for online kmeans clustering  In Proceedings
+of the Eighteenth Workshop on Algorithm Engineering
+and Experiments  ALENEX   Arlington  Virginia 
+USA  January     pp     
+
+Consistent   clustering
+
+Lichman     UCI machine learning repository    URL
+
+http archive ics uci edu ml 
+
+Daniel Dominic  Competitive algorithms for server
+problems     Algorithms     
+
+Mahdian  Mohammad and Yan  Qiqi  Online bipartite
+matching with random arrivals  an approach based on
+strongly factorrevealing lps  In Proceedings of the  rd
+ACM Symposium on Theory of Computing  STOC  
+San Jose  CA  USA    June   pp     
+
+Manasse  Mark    McGeoch  Lyle    and Sleator 
+
+Meyerson  Adam  Online facility location  In  nd Annual
+Symposium on Foundations of Computer Science  FOCS
+    October   Las Vegas  Nevada  USA  pp 
+   
+
+Sleator  Daniel Dominic and Tarjan  Robert Endre  Amortized ef ciency of list update and paging rules  Commun 
+ACM     
+
+

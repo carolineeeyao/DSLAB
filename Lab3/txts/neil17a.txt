@@ -1,0 +1,848 @@
+Delta Networks for Optimized Recurrent Network Computation
+
+Daniel Neil   Jun Haeng Lee   Tobi Delbruck   ShihChii Liu  
+
+Abstract
+
+Many neural networks exhibit stability in their
+activation patterns over time in response to inputs from sensors operating under realworld
+conditions  By capitalizing on this property of
+natural signals  we propose   Recurrent Neural
+Network  RNN  architecture called   delta network in which each neuron transmits its value
+only when the change in its activation exceeds
+  threshold  The execution of RNNs as delta networks is attractive because their states must be
+stored and fetched at every timestep  unlike in
+convolutional neural networks  CNNs  We show
+that   naive runtime delta network implementation offers modest improvements on the number of memory accesses and computes  but optimized training techniques confer higher accuracy
+at higher speedup  With these optimizations  we
+demonstrate      reduction in cost with negligible loss of accuracy for the TIDIGITS audio
+digit recognition benchmark  Similarly  on the
+large Wall Street Journal  WSJ  speech recognition benchmark  pretrained networks can also be
+greatly accelerated as delta networks and trained
+delta networks show      improvement with
+negligible loss of accuracy  Finally  on an endto end CNNRNN network trained for steering
+angle prediction in   driving dataset  the RNN
+cost can be reduced by   substantial    
+
+  Introduction
+Recurrent Neural Networks  RNNs  have achieved tremendous progress in recent years  with the increased availability of large datasets  more powerful computer resources
+such as GPUs  and improvements in their training algorithms  These combined factors have enabled break 
+
+ Institute of Neuroinformatics  UZH and ETH Zurich  Zurich 
+Switzerland  Samsung Advanced Institute of Technology  Samsung Electronics  SuwonSi  Republic of Korea  Correspondence
+to  Daniel Neil  ShihChii Liu  dneil shih ini ethz ch 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+throughs in the use of RNNs for processing of temporal sequences  Applications such as natural language processing
+ Mikolov et al    speech recognition  Amodei et al 
+  Graves et al    and attentionbased models for
+structured prediction  Yao et al    Xu et al   
+have showcased the advantages of RNNs  The introduction
+of gating units such as long shortterm memory  LSTM 
+units  Hochreiter   Schmidhuber    and gated recurrent units  GRU   Cho et al    has greatly improved
+the training process with these networks  However  RNNs
+require many matrixvector multiplications per layer to calculate the updates of neuron activations over time 
+RNNs also require   large weight memory storage that is
+expensive to allocate to onchip static random access memory  SRAM  In    nm technology  the energy cost of an
+offchip  bit dynamic DRAM access is about  nJ and the
+energy for    bit integer multiply is about  pJ  so memory access is about   times more expensive than arithmetic  Horowitz    Architectures can bene   from
+minimizing the use of this external memory  Previous work
+focused on   variety of algorithmic optimizations for reducing compute and memory access requirements for deep
+neural networks  These methods include reduced precision
+for hardware optimization  Courbariaux et al    Stromatias et al    Courbariaux   Bengio    Esser
+et al    Rastegari et al    weight encoding  pruning  and compression  Han et al      and architectural optimizations  Iandola et al    Szegedy et al 
+  Huang et al    However these studies did not
+consider the temporal properties of the data 
+Natural inputs to   neural network tend to have   high
+degree of temporal autocorrelation  resulting in slowlychanging network states  This slowchanging activation
+feature is also seen within the computation of RNNs processing audio inputs  for example  speech  Fig   
+Delta networks  as introduced here  exploit the temporal
+stability of both the input stream and the associated neural representation to reduce memory access and computation without loss of accuracy  By caching neuron activations  computations can be skipped where inputs change
+by   small amount from the previous update  Because
+each neuron that is not updated will save fetches of entire columns of several weight matrices  determining which
+
+Delta Networks for Optimized Recurrent Network Computation
+
+Figure   Stability in RNN activations over time  The top  gure
+shows the continuallychanging MFCC features for   spoken digit
+from the TIDIGITS dataset  Leonard   Doddington    the
+bottom  gure shows the corresponding neural network output activations in response to these features  Note the slow evolution of
+the network states over timesteps 
+
+neurons need to be updated offers signi cant speedups 
+The rest of the paper is organized as follows  Sec    introduces the delta network concept in terms of the basic
+matrixvector operations  Sec    formulates it concretely
+for   GRU RNN  Sec    proposes   method using    nite
+threshold for the deltas that suppresses the accumulation of
+the transient approximation error  Sec    describes methods
+for optimally training   delta RNN  Sec    shows network
+accuracy versus speedup for three examples  Finally  Sec   
+summarizes the results 
+
+  Delta Network Formulation
+The purpose of   delta network is to transform   dense
+matrixvector multiplication  for example    weight matrix and   state vector  into   sparse matrixvector multiplication followed by   full addition  This transformation
+leads to savings on both operations  actual multiplications 
+and more importantly memory accesses  weight fetches 
+Fig    illustrates the savings due to   sparse multiplicative
+vector  Zeros are shown with white  while nonzero matrix
+and vector values are shown in black  Note the multiplicative effect of sparsity in the weight matrix and sparsity in
+the delta vector  In this example    occupancy of the
+weight matrix and   occupancy of the   vector requires
+fetching and computing only   of the original operations 
+To illustrate the delta network methodology  consider  
+general matrixvector multiplication of the form
+
+       
+
+ 
+
+that uses    compute operations      reads and   writes
+for     matrix of size       and   vector   of size   
+ In this paper     compute  operation is either   multiply  an
+add  or   multiplyaccumulate  The costs of these operations are
+
+Figure   Illustration of saved matrixvector computation using
+delta networks with sparse delta vectors and weight matrices 
+
+Now consider multiple matrixvector multiplications for  
+long input vector sequence xt indexed by                 The
+result rt can be calculated recursively as 
+
+rt         rt 
+
+ 
+
+where     xt   xt  and rt  is the result obtained from
+the previous calculation  if stored  the compute cost of rt 
+is zero as it can be fetched from the previous timestep  Trivially         and        It is clear that
+rt      xt   xt    rt 
+
+     xt   xt       xt    xt              
+    xt
+
+ 
+ 
+ 
+
+Thus this formulation  which uses the difference between
+two subsequent timesteps and referred to as the delta network formulation  can be seen to produce exactly the same
+result as the original matrixvector multiplication 
+
+  Theoretical Cost Calculation
+
+To illustrate the savings if   from   is sparse  we begin
+by de ning oc to be the occupancy of   vector   that is  the
+percentage of nonzero elements in the vector 
+Consider the compute cost for rt  it consists of the total
+cost for calculating      operations for   vector of size
+   adding in the stored previous result rt     operations 
+and performing the sparse matrix multiply      oc     operations for     of size       and   sparse   vector of
+occupancy ratio oc  Similarly  the memory cost for calculating rt requires fetching oc      weights for        values
+for     values for rt  and writing out the   values for rt 
+Overall  the compute cost for the standard formulation
+ Ccomp dense  and the new delta formulation  Ccomp sparse 
+
+similar  particularly when compared to the cost of an offchip
+memory operation  See  Horowitz    for   simple comparison of energy costs of compute and memory operations 
+
+ MFCC Time Neuron Weight MatrixDeltaVectorNonzero OperationsDelta Networks for Optimized Recurrent Network Computation
+
+will be 
+
+Ccomp dense     
+Ccomp sparse   oc          
+
+ 
+ 
+
+while the memory access costs for both the standard
+ Cmem dense  and delta networks  Cmem sparse  can be seen
+from inspection as 
+
+Cmem dense         
+Cmem sparse   oc          
+
+ 
+ 
+
+Thus  the arithmetic intensity  ratio of arithmetic to memory access costs  as       is   for both the standard and
+delta network methods  This means that every arithmetic
+operation requires   memory access  unfortunately placing
+computational accelerators at   disadvantage  However  if  
+sparse occupancy oc of   is assumed  then the decrease in
+computes and memory accesses due to storing the previous
+state will result in   speedup of 
+
+Cdense Csparse     oc         oc 
+
+ 
+
+For example  if oc     then the theoretical speedup will
+be     Note that this speedup is determined by the occupancy in each computed     xt   xt  implying that this
+sparsity is determined by the data stream  Speci cally  the
+regularity with which values stay exactly the same between
+xt and xt  or as demonstrated later  within   certain absolute value called the threshold  determines the speedup 
+In   neural network    can represent inputs  intermediate
+activation values  or outputs of the network  If   changes
+slowly between subsequent timesteps then the input values
+xt and xt  will be highly redundant  leading to   low occupancy oc and   correspondingly increased speedup 
+
+  Delta Network GRUs
+In GRUs  the matrixvector multiplication operation that
+can be replaced with   delta network operation appears several times  shown in bold below  This GRU formulation is
+from  Chung et al   
+
+rt      Wxrxt   Whrht    br 
+ut      Wxuxt   Whuht    bu 
+ct      Wxcxt   rt  cid   Whcht    bc 
+ht       ut   cid  ht    ut  cid  ct
+
+ 
+ 
+ 
+ 
+
+Here         and   are reset and update gates  candidate
+activation  and activation vectors  respectively  typically  
+few hundred elements long  The   functions are nonlinear
+logistic sigmoids that saturate at   and   The  cid  signi es
+elementwise multiplication  Each term in bold can be re 
+
+placed with the delta update de ned in   forming 
+
+    xt   xt 
+    ht    ht 
+rt    Wxr     zxr   Whr     zhr   br 
+ut    Wxu     zxu   Whu     zhu   bu 
+ct    Wxc     zxc   bc
+rt  cid   Whc     zhc 
+
+ht     ut   cid  ht    ut  cid  ct
+
+ 
+ 
+ 
+ 
+
+ 
+ 
+
+where the values zxr  zxu  zxc  zhr  zhu  zhc are recursively
+de ned as the the stored result of the previous computation
+for the input or hidden state      
+zxr   zxr      Wxr xt    xt    zxr     
+The above operation can be applied for the other  ve values
+zxu  zxc  zhr  zhu  zhc  The initial condition at time    is
+       Also  many of the additive terms in the equations
+above  including the stored fullrank preactivation states
+as well as the biases  can be merged into single values resulting into four stored memory values  Mr  Mu  Mxc  and
+Mhr  for the three gates 
+
+Mt    zx      zh       
+
+ 
+
+Finally  in accordance with the above de nitions of the initial state  the memories   are initialized at their corresponding biases       Mr    br  Mu    bu  Mxc    bc 
+and Mhr      resulting in the following full formulation
+of the delta network GRU 
+     xt   xt 
+     ht    ht 
+Mr     Wxr     Whr     Mr   
+Mu     Wxu     Whu     Mu   
+Mxc     Wxc     Mxc   
+Mhc     Whc     Mhc   
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+rt      Mr   
+ut      Mu   
+ct      Mxc     rt  cid  Mhc   
+ht       ut   cid  ht    ut  cid  ct
+
+  Delta Network Approximations
+The formulations described in Secs    and   are designed to
+give precisely the same answer as the original computation
+in the network  However    more aggressive approach can
+be taken in the update  inspired by recent studies that have
+shown the possibility of greatly reducing weight precision
+in neural networks without giving up accuracy  Stromatias
+et al    Courbariaux et al    Instead of skipping
+
+Delta Networks for Optimized Recurrent Network Computation
+
+  vectormultiplication computation if   change in the activation         vectormultiplication can be skipped if
+  value of   is smaller than the threshold               
+where   is   chosen threshold value for   state   at time
+   That is  if   neuron   hiddenstate   activation has
+changed by less than   since it was last memorized  the
+neuron output will not be propagated       its   value is set
+to zero for that update  Using this threshold  the network
+will not produce precisely the same result at each update 
+but will produce   result which is approximately correct 
+Moreover  the use of   threshold substantially increases activation sparsity 
+Importantly  if   nonzero threshold is used with   naive
+delta change propagation  errors can accumulate over multiple time steps through state drift  For example  if the input value xt increases by nearly   on every time step  no
+change will ever be triggered despite an accumulated signi cant change in activation  causing   large drift in error 
+Therefore  in our implementation  the memory records the
+last value causing an abovethreshold change  not the difference since the last time step 
+More formally  we introduce the states  xi    and  hj   
+These states store the   th input and the hidden state of the
+  th neurons  respectively  at their last change  The current input xi   and state hj   will be compared against these
+values to determine the   Then the  xi    and  hj    values will only be updated if the threshold   is crossed  The
+equations are shown below for  xi    with similar equations for  hj   
+
+ cid 
+ cid 
+
+ xi     
+
+ xi    
+
+xi   
+ xi   
+xi      xi   
+ 
+
+if  xi      xi       
+otherwise
+
+if  xi      xi       
+otherwise
+
+ 
+
+ 
+
+That is  when calculating the input delta vector  xi   comprised of each element   at time    the difference between
+two values are used  the current value of the input xi    and
+the value the last time the delta vector was nonzero  xi   
+Furthermore  if the delta change is less than   then the
+delta change is set to zero  producing   small approximation error that will be corrected when   suf ciently large
+change produces   nonzero update  The same formulation
+is used for the hidden state delta vector  hj   
+This input approximation does not guarantee that the output
+error is bounded by the same threshold   As supported by
+previous studies demonstrating that GRUs can be arbitrarily sensitive to input perturbations  Laurent   von Brecht 
+  the pertimestep error can grow with the input error  While thresholding should offer greater sparsity  the
+accumulation of these approximations could result in   diverging output error  therefore motivating the experiments
+
+in Sec    that examine the effect of approximation on trajectory evolution 
+
+  Methods to Increase Accuracy   Speedup
+This section presents training methods and optimization
+schemes for faster and more accurate delta networks 
+
+  Training Directly on Delta Networks
+
+The most principled method of training to minimize accuracy loss when running as   delta network would be to train
+directly on the delta network model  This should yield the
+best results as the network will receive errors that arise directly from the truncations of the delta network computation  and through training  learn to become robust to the
+types of errors that delta networks make 
+More accurately  instead of training on the original GRU
+equations Eq    the state is updated using the delta
+network model described in Eq    Importantly  this
+change should incur no accuracy loss between train accuracy and test accuracy  though gradient descent may yet
+have more dif culty optimizing the model during training 
+
+  Rounding Network Activations
+
+As the truncation of network activation due to the delta network is inherently nondifferentiable  this training method
+should be compared against more widely used methods to
+verify its effectiveness  The delta network   computation
+can be viewed as analogous to the reducedprecision rounding training methods  small changes are rounded to zero
+while larger changes are propagated  Since many previous investigations have demonstrated methods to train networks to be robust against small rounding errors by rounding during training  Courbariaux et al    Stromatias
+et al    these methods can be leveraged here to train
+  network that does not rely on small  uctuations in inputs 
+Lowprecision computation and parameters can further reduce power consumption and improve the ef ciency of the
+network for dedicated hardware implementations 
+As in other studies    lowresolution activation    in signed
+ xedpoint format Qm   with   integer bits and   fractional bits can be produced from   highresolution activation   by using   deterministic and gradientpreserving
+rounding       round            with        clipped to
+  bounding range             to produce   quantized  xedpoint activation  The output error cost forces
+the network to avoid quantization errors during training 
+
+  Adding Gaussian Noise to Network Activations
+
+Random noise injection provides another useful comparison point  By injecting noise  the network will be un 
+
+Delta Networks for Optimized Recurrent Network Computation
+
+able to rely on small changes  and occasionally even larger
+changes will be incorrect  as may be the case of threshold rounding  This robustness can be provided by adding
+Gaussian noise   to terms that will have   thresholded delta
+activation 
+
+rt    xt      Wxr    ht       Whr   br 
+ut    xt      Wxu    ht       Whu   bu 
+ct      xt      Wxc 
+
+ 
+ 
+
+rt  cid   ht       Whc    bc 
+
+ 
+ht       ut   cid  ht    ut  cid  ct
+ 
+where           That is    is   vector of samples drawn
+from the Gaussian distribution with mean   and variance  
+and             Each element of these vectors is drawn
+independently  Typically  the value   is set to   so that the
+expectation is unbiased         xt           xt 
+As   result  the Gaussian noise should prevent the network
+from being sensitive to minor  uctuations  and increase its
+robustness to truncation errors 
+
+  Considering Weight Sparsity
+
+In all training methods  considering the additional speedup
+from weight sparsity 
+in addition to skipping activation computation  should improve the theoretical speedup 
+Studies such as in  Ott et al    show that in trained
+lowprecision networks  the weight matrices can be quite
+sparse  For example  in   ternary or  bit weight network
+the weight matrix sparsity can exceed   for small RNNs 
+Since every nonzero input vector element is multiplied by
+  column of the weight matrix  this computation can be
+skipped if the weight value is zero  That is  the zeros in
+the weight matrix act multiplicatively with the delta vector
+to produce even fewer necessary multiplyaccumulates  as
+illustrated above in Fig    The compute cost of the matrixvector product will be Ccomp sparse   om   oc           and
+the memory cost will be Cmem sparse   om   oc          
+for   weight matrix with occupancy om  By comparison
+to Eq    the system can achieve   theoretical speedup of
+ om   oc  That is  by compressing the weight matrix and
+only fetching nonzero weight elements that combine with
+the nonzero state vector    higher speedup can be obtained
+without degrading the accuracy 
+
+  Incurring Sparsity Cost on Changes in Activation
+
+Finally    computationspeci   cost can be associated with
+the delta terms and added to the overall cost  In an input
+batch  the    norm for    can be calculated as the mean
+absolute delta changes  and this norm can be scaled by  
+weighting factor   This Lsparse cost  Lsparse      
+can then be additively incorporated into the standard loss
+function  Here the    norm is used to encourage sparse
+
+values in     so that fewer delta updates are required 
+
+  Results
+This section presents results demonstrating the tradeoff
+between compute savings and accuracy loss  using Delta
+Network RNNs trained on the TIDIGITS digit recognition
+benchmark  Furthermore  it also demonstrates that the results found on small datasets also translate to the much
+larger Wall Street Journal speech recognition benchmark 
+The  nal example is for   CNNRNN stack trained on endto end steering prediction using   recent driving dataset 
+The  xedpoint                and       format
+was used for network activation values in all speech experiments except the  Original  RNN line for TIDIGITS
+in Fig    which was trained in  oatingpoint representation  The driving dataset in Sec    used    activation 
+The networks were trained with Lasagne  Dieleman et al 
+  powered by Theano  Bergstra et al    Reported
+training time is for   single Nvidia GTX   Ti GPU 
+
+  TIDIGITS Dataset Trajectory Evolution
+
+Figure   Comparison of trajectories over time by increasing  
+from   to   in steps of   At left  an increase of error angle between the  nal training state and the  nal thresholded state
+manifests as   decrease in accuracy  with the Gaussiantrained net
+as squares and DNtrained net as circles  At right  the mean angle
+between the unapproximated state and the thresholded state over
+time  In red  the angle over time of an untrained network that has
+the same weight statistics as   trained network  in solid lines   
+network that was trained as   delta network  in dashed lines   
+network that was only trained with Gaussian noise  Curves for
+      are highlighted in blue  Note that   DNtrained network has lower angle error  especially at higher thresholds  and
+an untrained net always quickly converges to an orthogonal state 
+
+The TIDIGITS dataset was used as an initial evaluation task
+to study the trajectory evolution of delta networks  Single digits  oh  and zero through nine  totalling   dig 
+
+ Angle  Degrees Error  Relative to Best Training Error  Thr   Thr   Thr   Thr   Thr   Thr   Thr   Thr   Thr   Thr   Thr   Thr   Thr   Thr   Thr   Thr   Thr   Thr   Time  Timesteps Angle  Degrees Delta Networks for Optimized Recurrent Network Computation
+
+its in the training set and   digits in the test set  were
+transformed in the standard way  Neil   Liu    to produce    dimensional MelFrequency Cepstral Coef cient
+ MFCC  feature vector using     ms window    ms frame
+shift  and    lter bank channels  The labels for  oh  and
+ zero  were collapsed to   single label  Training time is
+approximately   minutes for     epoch experiment 
+The network architecture consists of   layer of   GRU
+units connected to   layer of   fullyconnected units
+and  nally to   classi cation layer for the   digit classes 
+First    network was trained with Gaussian noise injection
+ Sec    and subsequently tested using the delta network
+GRU formulation given in Sec      second network was
+trained directly on the delta network GRU formulation in
+accordance with Sec    with the same architecture and
+      Finally    third network was constructed from the
+DNtrained network by permuting its weights to produce
+an  untrained  network with identical weight statistics 
+To determine the robustness of the network to thresholded
+input  the trajectory evolution of these three networks were
+examined in comparison to their training conditions  Since
+the hidden states are bounded by     from the tanh nonlinearity  each  dimensional hidden state vector is normalized to construct   unit vector  Then  the error angle between the hidden state at training time and the hidden state
+with   threshold is measured  This error angle is correlated
+with the  nal accuracy  as seen in Fig    left  The threshold is swept from   to   producing the results found in
+Fig    right  in which each line represents the mean difference angle over all states across time  The  gure begins at
+the median start point of   digit presentation     as the
+digits are prepadded with zeros to match lengths 
+  Gaussiantrained network   trajectory initially matches
+its training trajectory to produce   low error angle at low
+thresholds  which gradually increases as the threshold is
+raised  However  across   wide range of     DNtrained
+net   trajectory matches its training trajectory much more
+closely to produce   tighterspaced arrangement and substantially lower angle error at higher threshold  Finally  an
+untrained network is indeed very sensitive to input approximations and quickly reaches an orthogonal representation 
+thus emphasizing the role of training to provide robustness 
+
+  TIDIGITS Dataset Speedup and Accuracy
+
+The results of applying the methods introduced in Sec   
+can be found in Fig    There are two quantities measured 
+the change in the number of memory fetches  and the accuracy as   function of the threshold   Fig    shows the same
+results  but removes the threshold axis to directly compare
+the accuracyspeedup tradeoff among the different training
+methods  First    standard GRU RNN achieving  
+accuracy on TIDIGITS was trained without data augmen 
+
+Figure   Test accuracy results from standard GRUs run as delta
+networks after training  curves       and  ab  and those trained
+as delta networks  curves       and  ab  under different constraints on the TIDIGITS dataset  The delta networks are trained
+for       and the average of  ve runs is shown  Note that
+the methods are combined  hence the naming scheme  Additionally  the accuracy curve for   is hidden by the curve     since both
+achieve the same accuracy and only differ in speedup metric 
+
+Figure   Accuracyspeedup tradeoff by adjusting   for TIDIGITS  By increasing    indicated by sample point size  larger
+speedups can be obtained at greater losses of accuracy  For networks trained as delta networks  the training threshold is the  rst
+ leftmost  point in the line point sequence 
+
+tation and regularization  This network has the architecture
+described in Sec    It was then subsequently tested using
+the delta network GRU formulation given in Sec   
+The standard RNN run as   delta network  Original 
+achieves   accuracy    drop from zero delta threshold
+accuracy of   with   speedup factor of about     That
+is  only approximately   of the computes or fetches are
+needed in achieving this accuracy  By adding the round 
+
+ Threshold at Test Accuracy   Solid   ab            ab  Original      Rounding during Train ab    Noise  Train on DN      Account for Sparse Weights ab       Cost Speedup Factor  Dashed Speedup Factor    Accuracy    ab   ab  Original      Rounding during Train ab    Noise  Train on DN      Account for Sparse Weights ab       CostDelta Networks for Optimized Recurrent Network Computation
+
+ing constraint during training   Rounding during Training  the accuracy is nearly   with an increase to  
+   speedup  By incorporating Gaussian noise   Noise 
+  accuracy can be maintained with      speedup  Essentially  these methods added generalization robustness to
+the original GRU  while preventing small changes from in 
+ uencing the network output  These techniques allow  
+higher threshold to be used while maintaining the same accuracy  therefore resulting in   decrease of memory fetches
+and   corresponding speedup 
+The best model for training is the delta network itself
+ Train on DN  This network achieved   accuracy
+with      speedup  Accounting for the preexisting sparsity in the weight matrix   Account for Sparse Weights 
+the speedup increases to     without affecting the accuracy  since it is the same network  Finally  incorporating
+an    cost on network changes in addition to training on
+the delta network model      cost  achieves   accuracy while boosting speedup to     Adding in the  nal
+sparseness cost on network changes decreases the accuracy
+slightly since the loss minimization must  nd   tradeoff between both error and delta activation instead of considering
+error alone  However  using the    loss can offer   signi cant additional speedup while retaining an accuracy increase over the original GRU network 
+Finally  Fig    also demonstrates the primary advantage
+given by each algorithm  an increase in generalization robustness manifests as an overall upward shift in accuracy 
+while an increase in sparsity manifests as   rightward shift
+in speedup  As proposed  methods    and    increase generalization robustness while only modestly in uencing the
+sparsity  Method   greatly increases both  while method
+   only increases sparsity  and  nally method  ab slightly
+decreases accuracy but offers the highest speedup 
+
+  Wall Street Journal Dataset
+
+The delta network methodology was applied to an RNN
+trained on the larger WSJ dataset to determine whether it
+could produce the same gains as seen with the TIDIGITS
+dataset  This dataset comprised   hours of transcribed
+speech  as described in  Braun et al    Similar to that
+study  the  rst   layers of the network consisted of bidirectional GRU units with   units in each direction  Training
+time for each experiment was about    
+Fig    presents results on the achieved word error rate
+ WER  and speedup on this dataset for two cases  First 
+running an existing speech transcription RNN as   delta
+network  results shown as solid curves labeled  RNN used
+as   DN  and second    network trained as   delta network
+with results shown as the dashed curves  Trained Delta
+Network  The speedup here accounts for weight matrix
+sparsity as described in Sec     
+
+Figure   Accuracy and speedup tradeoffs on the WSJ dataset 
+The solid lines show results from an existing deep RNN run as
+  delta network  The dashed lines show results from   network
+trained as   delta network with       The horizontal lines
+indicate the nondelta network accuracy level  similarly  the solid
+and dashed horizontal lines indicate the accuracy of the normal
+network and the DN network prior to rounding  respectively 
+
+Surprisingly  the existing highly trained network already
+shows signi cant speedup without loss of accuracy as the
+threshold    is increased  At       the speedup is
+about    with   WER of   compared with the WER
+of   at       However  training the RNN to run
+as   delta network yields   network that achieves   slightly
+higher    speedup with the same WER  Thus  even the
+conventionallytrained RNN run as   delta network can
+provide greater than    speedup with only      increase in the WER 
+
+  Comma ai Driving DataSet
+
+Driving scenarios are rapidly emerging as another area of
+RNN focused research  Here  the delta network model
+was applied to determine the gains of exploiting the redundancy of realtime video input  The open driving dataset
+from comma ai  Santana   Hotz    with   hours of
+driving data was used  with video data recorded at   FPS
+from   camera mounted on the windshield  The network is
+trained to predict the steering angle from the visual scene
+similar to  Hempel    Bojarski et al    We followed the approach in  Hempel    by using an RNN on
+top of the CNN feature detector  The CNN feature detector
+has three convolution layers without pooling layers and  
+fullyconnected layer with   units  During training  the
+CNN feature detector was pretrained with an analog output unit to learn the recorded steering angle from randomly
+selected single frame images  Afterwards  the delta network RNN was added  and trained by feeding sequences of
+the visual features from the CNN feature detector to learn
+
+ Threshold Reduction in Ops  Multiples                     Word Error Rate Trained Delta NetworkGRU Network used as   DNDelta Networks for Optimized Recurrent Network Computation
+
+Figure   Reduction of RNN compute cost in the steering angle
+prediction task  Top  gure shows the required   of ops per frame
+for the delta network GRU layer  trained with       in comparison with the conventional GRU case  Bottom  gure compares
+the prediction errors of CNN predictor and CNN RNN predictor 
+The RNN slightly improves the steering angle prediction 
+
+sequences of the steering angle  Since the    format was
+used for the GRU layer activations  the GRU input vectors
+were scaled to match the CNN output and the target output
+was scaled to match the RNN output 
+However  this raw dataset results in   few practical dif 
+culties and requires data preprocessing  By excluding the
+frames recorded during periods of low speed driving  we
+remove the segments where the steering angle is not correlated to the direction of the car movement  Training time
+of the CNN feature detector was about    for    updates
+with the batch size of   Training of the RNN part took
+about    for    updates with the batch size of   samples
+consisting of   frames sample 
+  very large speedup exceeding    in the delta network
+GRU can be seen in Fig    computed for the steering angle
+prediction task on   consecutive frames     from the
+validation set  While the number of operations per frame
+remains constant for the conventional GRU layer  those for
+the delta network GRU layer varies dynamically depending
+on the change of visual features 
+In this steering network  the computational cost of the CNN
+ about   MOp frame  dominates the RNN cost  about
+  MOp frame  therefore the overall systemlevel computational savings is only about   However  future applications will likely have ef cient dedicated vision hardware or require   greater role for RNNs in processing numerous and complex data streams  which result in RNN
+models that consume   greater percentage of the overall energy compute cost  Even now  the steering angle prediction
+network already bene ts from   delta network approach 
+
+  Discussion and Conclusion
+Although the delta network methodology can be applied to
+other network architectures  as was shown in similar con 
+
+Figure   Tradeoffs between prediction error and speedup of the
+GRU layer on the steering angle prediction  The result was obtained from   samples with   consecutive frames sampled
+from the validation set  Speedup here does not include weight matrix sparsity  The network was trained with         speedup
+of approximately    can be obtained without increasing the
+prediction error  using   between   and  
+
+current work for CNNs    Connor   Welling    in
+practice   larger bene   is seen in RNNs because all the
+intermediate activation values for the delta networks are already stored between subsequent inputs  For example  the
+widelyused VGG  CNN has    neuron states  Chat 
+ eld et al    Employing the delta network approach
+for CNNs requires doubled memory access and signi cant
+additional memory space to store the entirety of the network state  Because the cost of external memory access is
+hundreds of times larger than that of arithmetic operations 
+delta network CNNs seem impractical without novel memory technologies to address this issue 
+In contrast  RNNs have   much larger number of weight
+parameters than activations  The sparsity of the delta activations can therefore enable large savings in power consumption by reducing the number of memory accesses required to fetch weight parameters  CNNs  however  do not
+have this advantage since the weight parameters are few
+and shared by many units  Finally  the delta network approach is extremely  exible as preexisting networks can
+be used without retraining  or trained speci cally for increased optimization 
+Recurrent neural networks can be highly optimized due to
+the redundancy of their activations over time  When the
+use of this temporal redundancy is combined with robust
+training algorithms  this work demonstrates that speedups
+of    to    can be obtained with negligible accuracy loss
+in speech RNNs  and speedups of over    are possible
+in steering angle prediction RNNs  suggesting signi cant
+speedups are achievable on practical  realworld problems 
+
+CNN onlySpeedup                 Delta Threshold RMS Prediction Error  deg Delta Networks for Optimized Recurrent Network Computation
+
+Acknowledgements
+We thank    Braun for helping with the WSJ speech transcription pipeline  This work was funded by Samsung Institute of Advanced Technology  the University of Zurich
+and ETH Zurich 
+
+References
+Amodei  Dario  Anubhai  Rishita  Battenberg  Eric  Case 
+Carl  Casper  Jared  Catanzaro  Bryan  Chen  Jingdong 
+Chrzanowski  Mike  Coates  Adam  Diamos  Greg  et al 
+Deep speech   Endto end speech recognition in english
+and mandarin  arXiv preprint arXiv   
+
+Bergstra  James  Breuleux  Olivier  Bastien  Fr ed eric 
+Lamblin  Pascal  Pascanu  Razvan  Desjardins  Guillaume  Turian  Joseph  WardeFarley  David  and Bengio  Yoshua  Theano    CPU and GPU math expression compiler  In Proceedings of the Python for scienti  
+computing conference  SciPy  volume   pp     
+
+Bojarski  Mariusz  Testa  Davide Del  Dworakowski 
+Daniel  Firner  Bernhard  Flepp  Beat  Goyal  Prasoon 
+Jackel  Lawrence    Monfort  Mathew  Muller  Urs 
+Zhang  Jiakai  Zhang  Xin  Zhao  Jake  and Ziebam 
+Karol  End to end learning for selfdriving cars  arXiv
+preprint arXiv   
+
+Braun  Stefan  Neil  Daniel  and Liu  ShihChii    curriculum learning method for improved noise robustness in automatic speech recognition  arXiv preprint
+arXiv   
+
+Chat eld  Ken  Simonyan  Karen  Vedaldi  Andrea  and
+Zisserman  Andrew  Return of the devil in the details 
+Delving deep into convolutional nets  arXiv preprint
+arXiv   
+
+Cho  Kyunghyun  van Merrienboer  Bart  Gulcehre  Caglar 
+Bougares  Fethi  Schwenk  Holger  and Bengio  Yoshua 
+Learning phrase representations using RNN encoderarXiv
+decoder for statistical machine translation 
+preprint arXiv   
+
+Chung  Junyoung  Gulcehre  Caglar  Cho  KyungHyun 
+and Bengio  Yoshua  Empirical evaluation of gated recurrent neural networks on sequence modeling  arXiv
+preprint arXiv   
+
+Courbariaux  Matthieu and Bengio  Yoshua 
+
+Binarynet  Training deep neural networks with weights
+and activations constrained to    or  arXiv preprint
+arXiv   
+
+Courbariaux  Matthieu  Bengio  Yoshua  and David  JeanPierre  Low precision arithmetic for deep learning  arXiv
+preprint arXiv   
+
+Courbariaux  Matthieu  Bengio  Yoshua  and David  JeanPierre  Binaryconnect  Training deep neural networks
+with binary weights during propagations  In Advances in
+Neural Information Processing Systems  pp   
+ 
+
+Dieleman  Sander et al  Lasagne  First release  August   URL http dx doi org 
+zenodo 
+
+Esser  Steven    Merolla  Paul    Arthur  John    Cassidy 
+Andrew    Appuswamy  Rathinakumar  Andreopoulos 
+Alexander  Berg  David    McKinstry  Jeffrey    Melano 
+Timothy  Barch  Davis    et al  Convolutional networks for fast  energyef cient neuromorphic computing  arXiv preprint arXiv   
+
+Graves  Alan  Mohamed  Abdelrahman  and Hinton  Geoffrey  Speech recognition with deep recurrent neural
+networks  In Acoustics  Speech and Signal Processing
+ ICASSP    IEEE International Conference on  pp 
+  IEEE   
+
+Han  Song  Mao  Huizi  and Dally  William    Deep compression  Compressing deep neural network with pruning  trained quantization and huffman coding  CoRR 
+abs     
+
+Han  Song  Kang  Junlong  Mao  Huizi  Hu  Yiming  Li 
+Xin  Li  Yubin  Xie  Dongliang  Luo  Hong  Yao  Song 
+Wang  Yu  et al  Ese  Ef cient speech recognition engine
+In FPGA   NIPS
+with compressed lstm on fpga 
+  EMDNN workshop   
+
+Hempel  Martin  Deep learning for piloted driving 
+
+NVIDIA GPU Tech Conference   
+
+In
+
+Hochreiter  Sepp and Schmidhuber    urgen  Long shortterm memory  Neural computation   
+ 
+
+Horowitz       Computing   energy problem  and what
+we can do about it  In   IEEE International SolidState Circuits Conference Digest of Technical Papers
+ ISSCC  pp    February  
+doi   
+ISSCC 
+
+Huang  Gao  Sun  Yu  Liu  Zhuang  Sedra  Daniel  and
+Weinberger  Kilian  Deep networks with stochastic
+depth  arXiv preprint arXiv   
+
+Iandola  Forrest    Moskewicz  Matthew    Ashraf 
+Khalid  Han  Song  Dally  William    and Keutzer 
+Kurt 
+Squeezenet  Alexnetlevel accuracy with   
+fewer parameters and   mb model size  arXiv preprint
+arXiv   
+
+Delta Networks for Optimized Recurrent Network Computation
+
+Laurent  Thomas and von Brecht  James 
+
+rent neural network without chaos 
+arXiv   
+
+  recurarXiv preprint
+
+Leonard    Gary and Doddington  George  Tidigits speech
+
+corpus  Texas Instruments  Inc   
+
+Mikolov  Tomas  Kara at  Martin  Burget  Lukas  Cernock    Jan  and Khudanpur  Sanjeev  Recurrent neural network based language model  In Interspeech  volume   pp     
+
+Neil  Daniel and Liu  ShihChii  Effective sensor fusion
+with eventbased sensors and deep network architectures  In IEEE Int  Symposium on Circuits and Systems
+ ISCAS   
+
+  Connor  Peter and Welling  Max  Sigma delta quantized
+
+networks  arXiv preprint arXiv   
+
+Ott  Joachim  Lin  Zhouhan  Zhang  Ying  Liu  ShihChii  and Bengio  Yoshua 
+Recurrent neural networks with limited numerical precision  arXiv preprint
+arXiv   
+
+Rastegari  Mohammad  Ordonez  Vicente  Redmon 
+Joseph  and Farhadi  Ali  Xnornet  Imagenet classi cation using binary convolutional neural networks  arXiv
+preprint arXiv   
+
+Santana  Eder and Hotz  George  Learning   driving simu 
+
+lator  arXiv preprint arXiv   
+
+Stromatias  Evangelos  Neil  Daniel  Pfeiffer  Michael 
+Galluppi  Francesco  Furber  Steve    and Liu  ShihChii  Robustness of spiking Deep Belief Networks to
+noise and reduced bit precision of neuroinspired hardware platforms  Frontiers in Neuroscience     
+
+Szegedy  Christian  Liu  Wei  Jia  Yangqing  Sermanet 
+Pierre  Reed  Scott  Anguelov  Dragomir  Erhan  Dumitru  Vanhoucke  Vincent  and Rabinovich  Andrew 
+In Proceedings of
+Going deeper with convolutions 
+the IEEE Conference on Computer Vision and Pattern
+Recognition  pp     
+
+Xu  Kelvin  Ba  Jimmy  Kiros  Ryan  Courville  Aaron 
+Salakhutdinov  Ruslan  Zemel  Richard  and Bengio 
+Show  attend and tell  Neural image capYoshua 
+arXiv preprint
+tion generation with visual attention 
+arXiv   
+
+Yao  Li  Torabi  Atousa  Cho  Kyunghyun  Ballas  Nicolas  Pal  Christopher  Larochelle  Hugo  and Courville 
+Aaron  Describing videos by exploiting temporal structure  In Proceedings of the IEEE International Conference on Computer Vision  pp     
+
+

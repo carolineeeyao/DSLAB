@@ -1,0 +1,1131 @@
+Deep Value Networks Learn to
+
+Evaluate and Iteratively Re ne Structured Outputs
+
+Michael Gygli     Mohammad Norouzi   Anelia Angelova  
+
+Abstract
+
+We approach structured output prediction by optimizing   deep value network  DVN  to precisely estimate the task loss on different output con gurations for   given input  Once the
+model is trained  we perform inference by gradient descent on the continuous relaxations of
+the output variables to  nd outputs with promising scores from the value network  When applied to image segmentation  the value network
+takes an image and   segmentation mask as inputs and predicts   scalar estimating the intersection over union between the input and ground
+truth masks  For multilabel classi cation  the
+DVN   objective is to correctly predict the   
+score for any potential label con guration  The
+DVN framework achieves the stateof theart results on multilabel prediction and image segmentation benchmarks 
+
+  Introduction
+Structured output prediction is   fundamental problem in
+machine learning that entails learning   mapping from input objects to complex multivariate output structures  Because structured outputs live in   highdimensional combinatorial space  one needs to design factored prediction
+models that are not only expressive  but also computationally tractable for both learning and inference  Due to computational considerations    large body of previous work
+      Lafferty et al    Tsochantaridis et al   
+has focused on relatively weak graphical models with pairwise or small clique potentials  Such models are not capable of learning complex correlations among the random
+variables  making them not suitable for tasks requiring
+
+ Work done during an internship at Google Brain   ETH   urich
+  gifs com  Google Brain  Mountain View  USA  Correspondence to  Michael Gygli  gygli vision ee ethz ch  Mohammad Norouzi  mnorouzi google com 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+complicated high level reasoning to resolve ambiguity 
+An expressive family of energybased models studied by
+LeCun et al    and Belanger   McCallum   exploits   neural network to score different joint con gurations of inputs and outputs  Once the network is trained 
+one simply resorts to gradientbased inference as   mechanism to  nd low energy outputs  Despite recent developments  optimizing parameters of deep energybased models
+remains challenging  limiting their applicability  Moving
+beyond large margin training used by previous work  Belanger   McCallum    this paper presents   simpler
+and more effective objective inspired by value based reinforcement learning for training energybased models 
+Our key intuition is that learning to critique different output con gurations is easier than learning to directly come
+up with optimal predictions  Accordingly  we build   deep
+value network  DVN  that takes an input   and   corresponding output structure    both as inputs  and predicts  
+scalar score         evaluating the quality of the con guration   and its correspondence with the input    We exploit
+  loss function  cid       that compares an output   against
+  ground truth label    to teach   DVN to evaluate different
+output con gurations  The goal is to distill the knowledge
+of the loss function into the weights of   value network so
+that during inference  in the absence of the labeled output
+   one can still rely on the value judgments of the neural
+net to compare outputs 
+To enable effective iterative re nement of structured outputs via gradient ascent on the score of   DVN  similar to
+Belanger   McCallum   we relax the discrete output variables to live in   continuous space  Moreover  we
+extend the domain of loss functions so the loss applies to
+continuous variable outputs  For example  for multilabel
+classi cation  instead of enforcing each output dimension
+yi to be binary  we let yi       and we generalize the
+notion of    score to apply to continuous predictions  For
+image segmentation  we use   similar generalization of intersection over union  Then  we train   DVN on many output examples encouraging the network to predict precise
+ negative  loss scores for almost any output con guration 
+Figure   illustrates the gradient based inference process on
+  DVN optimized for image segmentation 
+
+Deep Value Networks
+
+Gradient based inference
+
+Input  
+
+Step  
+
+Step  
+
+Step  
+
+GT label   
+
+Figure   Segmentation results of DVN on Weizmann horses test
+samples  Our gradient based inference method iteratively re nes
+segmentation masks to maximize the predicted scores of   deep
+value network  Starting from   black mask at step   the predictions converge within   steps yielding the output segmentation 
+See https goo gl OLufh for more   animated results 
+
+This paper presents   novel training objective for deep
+structured output prediction  inspired by valuebased reinforcement learning algorithms  to precisely evaluate the
+quality of any inputoutput pair  We assess the effectiveness of the proposed algorithm on multilabel classi cation based on text data and on image segmentation  We
+obtain stateof theart results in both cases  despite the differences of the domains and loss functions  Even given
+  small number of inputoutput pairs  we  nd that we are
+able to build powerful structure prediction models  For example  on the Weizmann horses dataset  Borenstein   Ullman    without any form of pretraining  we are able
+to optimize   million network parameters on only  
+training images with multiple crops  Our deep value network setup outperforms methods that are pretrained on
+large datasets such as ImageNet  Deng et al    and
+methods that operate on   larger inputs  Our source code
+based on TensorFlow  Abadi et al    is available at
+https github com gyglim dvn 
+
+  Background
+Structured output prediction entails learning   mapping
+from input objects                 RM   to multivariate
+discrete outputs                        Given   training dataset of inputoutput pairs                 
+  
+
+we aim to learn   mapping  cid              from inputs
+
+to ground truth outputs  Because  nding the exact ground
+
+truth output structures in   highdimensional space is often
+infeasible  one measures the quality of   mapping via   loss
+function  cid      cid              that evaluates the distance
+between different output structures  Given such   loss function  the quality of   mapping is measured by empirical loss
+
+over   validation dataset   cid cid 
+
+       cid 
+
+ cid cid        
+
+ 
+
+This loss can take an arbitrary form and is often nondifferentiable  For multilabel classi cation    common
+loss is negative    score and for image segmentation    typical loss is negative intersection over union  IOU 
+Some structured output prediction methods  Taskar et al 
+  Tsochantaridis et al    learn   mapping from inputs to outputs via   score function           which evaluates different inputoutput con gurations based on   linear
+function of some joint inputoutput features       
+
+                      
+
+ 
+
+The goal of learning is to optimize   score function such
+
+that the model   predictions denoted cid   
+
+           
+
+ 
+
+ cid     argmax
+
+ 
+
+are closely aligned with groundtruth labels    as measured
+by empirical loss in   on the training set 
+Empirical loss is not amenable to numerical optimization
+because the argmax in   is discontinuous  Structural
+SVM formulations  Taskar et al    Tsochantaridis
+et al    introduce   margin violation  slack  variable
+for each training pair  and de ne   continuous upper bound
+on the empirical loss  The upper bound on the loss for
+
+an example        and the model   prediction cid   takes the
+ cid cid      
+
+   cid                        cid     
+
+form 
+
+   
+
+   cid                                  
+
+   
+
+  max
+  max
+
+ 
+
+ 
+
+Previous work  Taskar et al    Tsochantaridis et al 
+  de nes   surrogate objective on the empirical loss 
+by summing over the bound in     for different training
+examples  plus   regularizer  This surrogate objective is
+convex in   which makes optimization convenient 
+This paper is inspired by the structural SVM formulation
+above  but we give up the convexity of the objective to
+obtain more expressive models using   multilayer neural networks  Speci cally  we generalize the formulation
+above in three ways    use   nonlinear score function denoted           that fuses   and   together and jointly
+
+Deep Value Networks
+
+learns the features    use gradient descend in   for iterative re nement of outputs to approximately  nd the best
+
+ cid        optimize the score function with   regression ob 
+
+jective so that the predicted scores closely approximate the
+negative loss values 
+
+                     cid        
+
+ 
+
+Our deep value network  DVN  is   nonlinear function trying to evaluate the value of any output con guration      
+accurately  In the structural SVM   objective  the score surface can vary as long as it does not violate margin constraints in     By contrast  we restrict the score surface
+much more by penalizing it whenever it overor underestimates the loss values  This seems to be bene cial as   neural network           has   lot of  exibility  and adding
+more suitable constraints can help regularization 
+We call our model   deep value network  DVN  to emphasize the importance of the notion of value in shaping our
+ideas  but the DVN architecture can be thought as an example of structured prediction energy network  SPEN   Belanger   McCallum    with similar inference strategy 
+Belanger   McCallum rely on the structural SVM surrogate objective to train their SPENs  whereas inspired by
+value based reinforcement learning  we learn an accurate
+estimate of the values as in   Empirically  we  nd that
+the DVN outperforms large margin SPENs on multilabel
+classi cation using   similar neural network architecture 
+
+  Learning   Deep Value Network
+We propose   deep value network architecture  denoted
+          to evaluate   joint con guration of an input and
+  corresponding output via   neural network  More specifically  the deep value network takes as input both   and  
+jointly  and after several layers followed by nonlinearities 
+predicts   scalar           which evaluates the quality of
+an output   and its compatibility with    We assume that
+during training  one has access to an oracle value function
+           cid       which quanti es the quality of any
+   Such an oracle value function assigns optimal values to
+any inputoutput pairs given ground truth labels    During
+training  the goal is to optimize the parameters of   value
+network  denoted   to mimic the behavior of the oracle
+value function         as much as possible 
+Example oracle value functions for image segmentation
+and multilabel classi cation include IOU and    metrics 
+which are both de ned on                       
+
+  
+IOU        
+
+      
+        
+         
+
+  
+
+  
+
+        
+
+                 
+
+ 
+
+ 
+
+ 
+
+ 
+
+Here        denotes the number of dimension   where
+  are active and        denotes the number
+both yi and   
+of dimensions where at least one of yi and   
+is active 
+Assuming that one has learned   suitable value network
+that attains                     at every inputoutput
+pairs  in order to infer   prediction for an input    which
+is valued highly by the value network  one needs to  nd
+
+ cid     argmaxy           as described below 
+tion of        induced by   neural network   nding  cid   is
+
+Since           represents   complex nonlinear func 
+
+  Gradient based inference
+
+not straightforward  and approximate inference algorithms
+based on graphcut  Boykov et al    or loopy belief
+propagation  Murphy et al    are not easily applicable 
+Instead  we advocate using   simple gradient descent optimizer for inference  To facilitate that  we relax the structured output variables to live in   realvalued space  For example  instead of using            we use           
+The key to make this inference algorithm work is that during training we make sure that our value estimates are optimized along the inference trajectory  Alternatively  one
+can make use of input convex neural networks  Amos et al 
+
+  to guarantee convergence to optimal cid   
+
+Given   continuous variable    to  nd   local optimum of
+                    we start from an initial prediction   
+              in all of our experiments  followed by
+gradient ascent for several steps 
+
+ 
+dy
+
+       PY
+
+ 
+
+        
+
+           
+
+ 
+where PY denotes an operator that projects the predicted
+outputs back to the feasible set of solutions so that     
+remains in    In the simplest case  where            the
+PY operator projects dimensions smaller than zero back to
+zero  and dimensions larger than one to one  After the  nal
+gradient step     we simply round       to become discrete 
+Empirically  we  nd that for   trained DVN  the generated
+       tend to become nearly binary themselves 
+
+ cid 
+
+ cid 
+
+  Optimization
+
+To train   DVN using an oracle value function   rst  one
+needs to extend the domain of         so it applies to
+continuous output      For our IOU and    scores  we simply extend the notions of intersection and union by using
+elementwise min and max operators 
+
+ cid  
+ cid  
+
+  
+
+  
+
+        
+        
+
+     
+
+min  yi    
+max  yi    
+
+     
+
+ 
+
+ 
+
+Substituting   and   into   and   provides   generalization of IOU and    score to              
+
+Deep Value Networks
+
+Algorithm   Deep Value Network training
+  function TRAINEPOCH training buffer    initial weights  
+
+learning rate  
+
+while not converged do
+
+ 
+ 
+ 
+ 
+ 
+ 
+
+ cid  Get   training example
+ cid  cf  Sec   
+ cid  Get oracle value for  
+
+          
+    GENERATEOUPUT     
+            
+ cid  Compute loss based on estimation error cf   
+        log          
+           
+
+       log             
+
+ cid  Update DVN weights
+
+   
+
+ 
+end while
+ 
+  end function
+
+Our training objective aims at minimizing the discrepancy
+between             and      on   training set of triplets
+ input  output  value  denoted                     
+  
+Very much like Qlearning  Watkins   Dayan    this
+training set evolves over time  and one can make use of an
+experience replay buffer  In Section   we discuss several
+strategies to generate training tuples and in our experiments
+we evaluate such strategies in terms of their empirical loss 
+
+once   gradient based optimizer is used to  nd cid   
+
+Given   dataset of training tuples  one can use an appropriate loss to regress         to    values  More speci 
+cally  since both IOU and    scores lie between   and  
+we used   crossentropy loss between oracle values vs  our
+DVN values  As such  our neural network         has   sigmoid nonlinearity at the top to predict   number between
+  and   and the loss takes the form 
+LCE   
+
+     log          
+
+ cid 
+
+        
+
+         log             
+
+ 
+
+The exact form of the loss does not have   signi cant impact on the performance and other loss functions can be
+used            high level overview for training   DVN
+is shown in Algorithm   For simplicity  we show the case
+when not using   queue and batch size    
+
+  Generating training tuples
+
+Each training tuple comprises an input  an output  and  
+corresponding oracle value                 The way training tuples are generated signi cantly impacts the performance of our structured prediction algorithm  In particular 
+it is important that the tuples are chosen such that they provide   good coverage of the space of possible outputs and
+result in   large learning signal  There exist several ways to
+generate training tuples including 
+
+crepancy between           and        
+
+  running gradient based inference during training 
+  generating adversarial tuples that have   large dis 
+  random samples from    maybe biased towards   
+We elaborate on these methods below  and present   comparison of their performance in Section   Our ablation
+experiments suggest that combining examples from gradient based inference with adversarial tuples works best 
+Ground truth 
+In this setup we simply add the ground
+truth outputs    into training with          to provide
+some positive examples 
+Inference  In this scenario  we generate samples by running   gradient based inference algorithm  Section  
+along our training  This procedure is useful because it helps
+learning   good value estimate on the output hypotheses
+that are generated along the inference trajectory at test time 
+
+To speed up training  we run   parallel inference job using
+slightly older neural network weights and accumulate the
+inferred examples in   queue 
+Random samples 
+In this approach  we sample   solution   proportional to its exponentiated oracle value        
+is sampled with probability        exp        
+where       controls the concentration of samples in the
+vicinity of the ground truth  At       we recover the
+ground truth samples above  We follow  Norouzi et al 
+  and sample from the exponentiated value distribution
+using strati ed sampling  where we group     according to
+their values  This approach provides   good coverage of
+the space of possible solutions 
+Adversarial tuples  We maximize the crossentropy loss
+used to train the value network   to generate adversarial tuples again using   gradient based optimizer
+      see  Goodfellow et al    Szegedy et al   
+Such adversarial tuples are the outputs   for which the network overor underestimates the oracle values the most 
+This strategy  nds some dif cult tuples that provide   useful learning signal  while ensuring that the value network
+has   minimum level of accuracy across all outputs   
+
+  Related work
+There has been   surge of recent interest in using neural networks for structured prediction  Zheng et al    Chen
+et al    Song et al    The Structured Prediction Energy Network  SPEN  of  Belanger   McCallum 
+  inspired in part by  LeCun et al    is identical
+to the DVN architecture  Importantly  the motivation and
+the learning objective for SPENs and DVNs are distinct  
+SPENs rely on   maxmargin surrogate objective whereas
+we directly regress the energy of an inputoutput pair to
+its corresponding loss  Unlike SPENs that only consider
+multilabel classi cation problems  we also train   deep
+convolutional network to successfully address complex image segmentation problems 
+Recent work has applied expressive neural networks to
+
+Deep Value Networks
+
+structured prediction to achieve impressive results on machine translation  Sutskever et al    Bahdanau et al 
+  and image and audio synthesis  van den Oord et al 
+      Dahl et al    Such autoregressive models
+impose an order on the output variables and predict outputs one variable at   time by formulating   locally normalized probabilistic model  While training is often ef cient 
+the key limitation of such models is inference complexity 
+which grows linearly in the number of output dimensions 
+this is not acceptable for highdimensional output structures  By contrast  inference under our method is ef cient
+as all of the output dimensions are updated in parallel 
+Our approach is inspired in part by the success of previous work on valuebased reinforcement learning  RL  such
+as Qlearning  Watkins    Watkins   Dayan   
+ see  Sutton   Barto    for an overview  The main
+idea is to learn an estimate of the future reward under the
+optimal behavior policy at any point in time  Recent RL
+algorithms use   neural network function approximator as
+the model to estimate the action values  Van Hasselt et al 
+  We adopt similar ideas for structured output prediction  where we use the task loss as the optimal value
+estimate  Unlike RL  we use   gradient based inference algorithm to  nd optimal solutions at test time 
+Gradient based inference  sometimes called deep dreaming
+has led to impressive artwork and has been in uential in designing DVN  Gatys et al    Mordvintsev et al   
+Nguyen et al    Dumoulin et al    Deep dreaming and style transfer methods iteratively re ne the input
+to   neural net to optimize   prespeci ed objective  Such
+methods often use   pretrained network to de ne   notion
+of   perceptual loss  Johnson et al    By contrast 
+we train   task speci   value network to learn the characteristics of   task speci   loss function and we learn the
+network   weights from scratch 
+Image segmentation  Arbelaez et al    Carreira et al 
+  Girshick et al    Hariharan et al    is  
+key problem in computer vision and   canonical example
+of structured prediction  Many segmentation approaches
+based on Convolutional Neural Networks  CNN  have been
+proposed  Girshick et al    Chen et al    Eigen  
+Fergus    Long et al    Ronneberger et al   
+Noh et al    Most use   deep neural network to make
+  perpixel prediction  thereby modeling pairs of pixels as
+being conditionally independent given the input 
+To diminish the conditional independence problem  recent
+techniques propose to model dependencies among output
+labels to re ne an initial CNNbased coarse segmentation  Different ways to incorporate pairwise dependencies within   segmentation mask to obtain more expressive
+models are proposed in  Chen et al      Ladick  
+et al    Zheng et al    Such methods perform
+
+joint inference of the segmentation mask dimensions via
+graphcut  Li et al    message passing  Kr ahenb uhl  
+Koltun    or loopy belief propagation  Murphy et al 
+  to name   few variants  Some methods incorporate higher order potentials in CRFs  Kohli et al    or
+model global shape priors with Restricted Boltzmann Machines  Li et al    Kae et al    Yang et al   
+Eslami et al    Other methods learn to iteratively re 
+ ne an initial prediction by CNNs  which may just be  
+coarse segmentation mask  Safar   Yang    Pinheiro
+et al    Li et al   
+By contrast  this paper presents   new framework for training   score function by having   gradient based inference
+algorithm in mind during training  Our deep value network
+applies to generic structured prediction tasks  as opposed to
+some of the methods above  which exploit complex combinatorial structures and special constraints such as submodularity to design inference algorithms  Rather  we use
+expressive energy models and the simplest conceivable inference algorithm of all   gradient descent 
+
+  Experimental evaluation
+We evaluate the proposed Deep Value Networks on   tasks 
+multilabel classi cation  binary image segmentation  and  
+ class face segmentation task  Section   investigates the
+sampling mechanisms for DVN training  and Section  
+visualizes the learned models 
+
+  Multilabel classi cation
+
+We start by evaluating the method on the task of predicting tags from text inputs  We use standard benchmarks in
+multilabel classi cation  namely Bibtex and Bookmarks 
+introduced in  Katakis et al    In this task  multiple
+labels are possible per example  and the correct number is
+not known  Given the structure in the label space  methods modeling label correlations often outperform models
+with independent label predictions  We compare DVN to
+standard baselines including perlabel logistic regression
+from  Lin et al    and   twolayer neural network with
+cross entropy loss  Belanger   McCallum    as well
+as SPENs  Belanger   McCallum    and PRLR  Lin
+et al    which is the stateof theart on these datasets 
+To allow direct comparison with SPENs  we adopt the same
+architecture in this paper  Such an architecture combines
+local predictions that are nonlinear in    but linear in   
+with   socalled global network  which scores label con 
+ guration with   nonlinear function of   independent of  
+ see Belanger   McCallum   Eqs        Both local prediction and global networks have one or two hidden
+layers with Softplus nonlinerarities  We follow the same
+experimental protocol and report    scores on the same test
+split as  Belanger   McCallum   
+
+Deep Value Networks
+
+Method
+Bibtex Bookmarks
+Logistic regression  Lin et al   
+ 
+NN baseline  Belanger   McCallum     
+ 
+SPEN  Belanger   McCallum   
+ 
+PRLR  Lin et al   
+DVN  Ours 
+ 
+
+ 
+ 
+ 
+ 
+ 
+
+Table   Tag prediction from text data     performance of Deep
+Value Networks compared to the stateof theart on multilabel
+classi cation  All prior results are taken from  Lin et al   
+Belanger   McCallum   
+
+Figure     deep value network with   feedforward convolutional
+architecture  used for segmentation  The network takes an image
+and   segmentation mask as input and predicts   scalar evaluating
+the compatibility between the input pairs 
+
+The results are summarized in Table   As can be seen from
+the table  our method outperforms the logistic regression
+baselines by   large margin  It also signi cantly improves
+over SPEN  despite not using any pretraining  SPEN  on
+the other hand  relies on pretraining of the feature network
+with   logistic loss to obtain good results  Our results even
+outperform  Lin et al    This is encouraging  as their
+method is speci   to classi cation and encourages sparse
+and lowrank predictions  whereas our technique does not
+have such dataset speci   regularizers 
+
+  Weizmann horses
+
+The Weizmann horses dataset  Borenstein   Ullman 
+  is   dataset commonly used for evaluating image segmentation algorithms  Li et al    Yang et al   
+Safar   Yang    The dataset consists of   images of left oriented horses and their binary segmentation
+masks  We follow  Li et al    Yang et al    Safar   Yang    and evaluate the segmentation results at
+  dimensions  Satisfactory segmentation of horses requires learning strong shape priors and complex high level
+reasoning  especially at   low resolution of   pixels 
+because small parts such as the legs are often barely visible
+in the RGB image  We follow the experimentation protocol
+of  Li et al    and report results on the same test split 
+For the DVN we use   simple CNN architecture consisting
+of   convolutional and   fully connected layers  Figure  
+We use   learning rate of   and apply dropout on the
+ rst fully connected layer with the keeping probability  
+
+Method
+
+  CHOPPS  Li et al   
+Fully conv  FCN  baseline
+DVN  Ours 
+
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+  MMBM   Yang et al   
+
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+
+MMBM    GC  Yang et al   
+Shape NN  Safar   Yang   
+
+Mean Global
+IOU   IOU  
+
+ 
+ 
+ 
+
+ 
+ 
+ 
+
+ 
+
+ 
+ 
+ 
+ 
+ 
+
+Table   Test IOU on Weizmann    dataset  DVN outperforms all previous methods  despite using   much lower input resolution than  Yang et al    and  Safar   Yang   
+
+as determined on the validation set  We empirically found
+      to work best for strati ed sampling  For training
+data augmentation purposes we randomly crop the image 
+similar to  Krizhevsky et al    At test time  various
+strategies are possible to obtain   full resolution segmentation  which we investigate in Section   For comparison we also implemented   Fully Convolutional Network
+ FCN  baseline  Long et al    by using the same convolutional layers as for the value network  cf  Figure   If
+not explicitly stated  masks are averaged over over   crops
+for our model and  Long et al     see below 
+We test and compare our model on the Weizmann horses
+segmentation task in Table   We tune the hyperparameters of the model on   validation set and  once best
+hyperparameters are found   netune on the combination
+of training and validation sets  We report the mean image
+IOU  as well as the IOU over the whole test set  as commonly done in the literature  It is clear that our approach
+outperforms previous methods by   signi cant margin on
+both metrics  Our model shows strong segmentation results  without relying on externally trained CNN features
+as       Safar   Yang   The weights of our value
+network are learned from scratch on crops of just   training images  Even though the number of examples is very
+small for this dataset  we did not observe over tting during training  which we attribute to being able to generate  
+large set of segmentation masks for training 
+In Figure   we show qualitative results for CHOPPS  Li
+et al    our implementation of fully convolutional networks  FCN   Long et al    and our DVN model 
+When comparing our model to FCN  trained on the same
+data and resolution  we  nd that the FCN has challenges
+correctly segmenting legs and ensuring that the segmentation masks have   single connected component       Figure   last two rows  Indeed  the masks produced by the
+DVN correspond to much more reasonable horse shapes as
+opposed to those of other methods   the DVN seem capable of learning complex shape models and effectively
+grounding them to visual evidence  We also note that in
+
+Input size    Deep Value Networks
+
+Input
+
+CHOPPS   FCN  
+
+DVN
+
+GT label
+
+Figure   Qualitative results on the Weizmann       dataset 
+In comparison to previous works  DVN is able to learn   strong
+shape prior and thus correctly detect the horse shapes including
+legs  Previous methods are often misled by other objects or low
+contrast  thus generating inferior masks  References    Li et al 
+    Our implementation of FCN  Long et al   
+
+our comparison in Table   prior methods using larger inputs         are also outperformed by DVNs 
+
+  Labeled Faces in the Wild
+
+The Labeled Faces in the Wild  LFW  dataset  Huang et al 
+  was proposed for face recognition and contains more
+than   images    subset of   faces was later annotated for segmentation by Kae et al    The labels
+are provided on   superpixel basis and consist of   classes 
+face  hair and background  We use this dataset to test the
+application of our approach to multiclass segmentation  We
+use the same train  validation  and test splits as  Kae et al 
+  Tsogkas et al    As our method predicts labels
+for pixels  we follow  Tsogkas et al    and map pixel
+labels to superpixels by using the most frequent label in  
+superpixel as the class  To train the DVN  we use mean
+pixel accuracy as our oracle value function  instead of superpixel accuracy 
+Table   shows quantitative results  DVN performs reasonably well  but is outperformed by state of the art methods
+on this dataset  We attribute this to three reasons      the
+
+Method
+Fully conv  FCN  baseline
+DVN  Ours 
+CRF  as in Kae et al   
+GLOC  Kae et al   
+DNN  Tsogkas et al   
+DNN CRF SBM  Tsogkas et al   
+
+SP Acc   
+
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+Table   Superpixel accuracy  SP Acc  on Labeled Faces in the
+Wild test set 
+
+Con guration
+Inference   Ground Truth
+Inference   Strati ed Sampling
+Inference   Adversarial  DVN 
+DVN   Mask averaging   crops 
+DVN   Joint inference   crops 
+DVN   Mask avg  nonbinary   crops 
+DVN   Joint inf  nonbinary   crops 
+DVN   Mask averaging   crops 
+DVN   Joint inference   crops 
+
+Mean IOU  
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Table   Test performance of different con gurations on the Weizmann     dataset 
+
+pretraining and more direct optimization of the perpixel
+prediction methods of  Tsogkas et al    Long et al 
+   ii  the input resolution and  iii  the properties of
+the dataset  In contrast to horses  faces do not have thin
+parts and exhibit limited deformations  Thus    feed forward method as used in  Long et al    which produces
+coarser and smooth predictions is suf cient to obtain good
+results  Indeed  this has also been observed in the negligible improvement of re ning CNN predictions with Conditional Random Fields and Restricted Boltzmann machines
+ cf  Table   last three rows  Despite this  our model is able
+to learn   prior on the shape and align it with the image
+evidence in most cases  Some failure cases include failing
+to recognize subtle and more rare parts such as mustaches 
+given their small size  and dif culties in correctly labeling
+blond hair  Figure   shows qualitative results of our segmentation method on this dataset 
+
+  Ablation experiments
+
+In this section we analyze different con gurations of our
+method  As already mentioned  generating appropriate
+training data for our method is key to learning good value
+networks  We compare   main approaches    inference  
+ground truth    inference   strati ed sampling  and   inference   adversarial training  These experiments are conducted on the Weizmann dataset  described above  Table  
+top portion  reports IOU results for different approaches for
+training the dataset  As can be seen  including adversarial
+training works best  followed by strati ed sampling  Both
+of these methods help explore the space of segmentation
+
+Input
+
+DVN
+
+GT label
+
+Deep Value Networks
+
+   
+
+   
+
+   
+
+   
+
+Figure   Visualization of the learned horse shapes on the Weizmann dataset  From left to right     The mean mask of the training set     mask generated when providing the mean horse image
+from the training set        Outputs generated by our model given
+mean horse image plus Gaussian noise       as the input 
+
+this procedure are shown in Figure   As one can see  the
+segmentation masks found by the value network on  noisy 
+mean images resemble   sideview of   horse with some
+uncertainty on the leg and head positions  These parts have
+the most amount of variation in the dataset  Even though
+noisy images do not contain horses  the value network hallucinates proper horse silhouettes  which is what our model
+is trained on 
+
+  Conclusion
+This paper presents   framework for structured output prediction by learning   deep value network that predicts the
+quality of different output hypotheses for   given input  As
+the DVN learns to predict   value based on both  input and
+output  it implicitly learns   prior over output variables and
+takes advantage of the joint modelling of the inputs and
+outputs  By visualizing the prior for image segmentation 
+we indeed  nd that our model learns realistic shape priors 
+Furthermore  rather than learning   model by optimizing  
+surrogate loss  using DVNs allows to directly train   network to accurately predict the desired performance metric
+      IOU  even if it is nondifferentiable  We apply our
+method to several standard datasets in multilabel classi 
+cation and image segmentation  Our experiments show that
+DVNs apply to different structured prediction problems 
+achieving stateof theart results with no pretraining 
+As future work  we plan to improve the scalability and
+computational ef ciency of our algorithm by inducing input features computed solely on    which is going to be
+computed only once  The gradient based inference can improve by injecting noise to the gradient estimate  similar to
+Hamiltonian Monte Carlo sampling  Finally  one can explore better ways to initialize the inference process 
+
+  Acknowledgment
+We thank Kevin Murphy  Ryan   George Dahl  Vincent
+Vanhoucke  Zhifeng Chen  and the Google Brain team for
+insightful comments and discussions 
+
+Figure   Qualitative results on  class segmentation on the LFW
+dataset  The last two rows show failure cases  where our model
+does not detect some of hair and moustache correctly 
+
+masks in the vicinity of ground truth masks better  as opposed to just including the ground truth masks  Adding adversarial examples works better than strati ed sampling  as
+the adversarial examples are the masks on which the model
+is least accurate  Thus  these masks provide useful gradient
+information as to help improve the model 
+We also investigate ways to do model averaging  Table  
+bottom portion  Averaging the segmentation masks of
+multiple crops leads to improved performance  When the
+masks are averaged na vely  the result becomes blurry 
+making it dif cult to obtain    nal segmentation  Instead 
+joint inference updates the complete segmentation mask
+in each step  using the gradients of the individual crops 
+This procedure leads to clean  nearbinary segmentation
+masks  This is manifested in the performance when using
+the raw foreground con dence  Table   Mask averaging
+nonbinary vs  Joint inference nonbinary  Joint inference
+leads to somewhat improved segmentation results  even after binarization  in particular when using fewer crops 
+
+  Visualizing the learned correlations
+
+To visualize what the model has learned  we run our inference algorithm on the mean image of the Weizmann dataset
+ training split  Optionally  we perturb the mean image by
+adding some Gaussian noise  The masks obtained through
+
+Deep Value Networks
+
+References
+Abadi  Mart    Agarwal  Ashish  Barham  Paul  Brevdo 
+Eugene  Chen  Zhifeng  Citro  Craig  Corrado  Greg   
+Davis  Andy  Dean  Jeffrey  Devin  Matthieu  Ghemawat  Sanjay  Goodfellow  Ian  Harp  Andrew  Irving  Geoffrey  Isard  Michael  Jia  Yangqing  Jozefowicz 
+Rafal  Kaiser  Lukasz  Kudlur  Manjunath  Levenberg 
+Josh  Man    Dan  Monga  Rajat  Moore  Sherry  Murray 
+Derek  Olah  Chris  Schuster  Mike  Shlens  Jonathon 
+Steiner  Benoit  Sutskever  Ilya  Talwar  Kunal  Tucker 
+Paul  Vanhoucke  Vincent  Vasudevan  Vijay  Vi egas 
+Fernanda  Vinyals  Oriol  Warden  Pete  Wattenberg 
+Martin  Wicke  Martin  Yu  Yuan  and Zheng  Xiaoqiang 
+TensorFlow  Largescale machine learning on heterogeneous systems    URL http tensorflow 
+org  Software available from tensor ow org 
+
+Amos  Brandon  Xu  Lei  and Kolter    Zico  Input convex
+
+neural networks  arXiv   
+
+Arbelaez  Pablo  Hariharan  Bharath  Gu  Chunhui  Gupta 
+Saurabh  Bourdev  Lubomir  and Malik  Jitendra  Semantic segmentation using regions and parts  CVPR 
+ 
+
+Dahl  Ryan  Norouzi  Mohammad  and Shlens  Jonathon 
+arXiv 
+
+Pixel recursive super resolution 
+ 
+
+Deng  Jia  Dong  Wei  Socher  Richard  Li  LiJia  Li  Kai 
+and FeiFei  Li  ImageNet    LargeScale Hierarchical
+Image Database  CVPR   
+
+Dumoulin  Vincent  Shlens  Jonathon  and Kudlur  Manju 
+
+nath    learned representation for artistic style   
+
+Eigen  David and Fergus  Rob  Predicting depth  surface
+normals and semantic labels with   common multiscale
+convolutional architecture  ICCV   
+
+Eslami  SM Ali  Heess  Nicolas  Williams  Christopher KI 
+and Winn  John  The shape boltzmann machine    strong
+model of object shape  IJCV   
+
+Gatys  Leon    Ecker  Alexander    and Bethge  Matthias 
+  neural algorithm of artistic style  arXiv 
+ 
+
+Girshick  Ross  Donahue  Jeff  Darrell  Trevor  and Malik 
+Jitendra  Rich feature hierarchies for accurate object detection and semantic segmentation  CVPR   
+
+Bahdanau  Dzmitry  Cho  Kyunghyun  and Bengio 
+Yoshua  Neural machine translation by jointly learning
+to align and translate  ICLR   
+
+Goodfellow  Ian    Shlens  Jonathon  and Szegedy  Christian  Explaining and harnessing adversarial examples 
+ICLR   
+
+Belanger  David and McCallum  Andrew  Structured pre 
+
+diction energy networks  ICML   
+
+Borenstein     and Ullman     Learning to segment  ECCV 
+
+ 
+
+Boykov  Yuri  Veksler  Olga  and Zabih  Ramin  Fast apIEEE
+
+proximate energy minimization via graph cuts 
+Trans  PAMI   
+
+Carreira  Joao  Caseiro  Rui  Batista  Jorge  and Sminchisescu  Cristian  Semantic segmentation with secondorder
+pooling  ECCV   
+
+Chen  LiangChieh  Papandreou  George  Kokkinos  Iasonas  Murphy  Kevin  and Yuille  Alan    Semantic image segmentation with deep convolutional nets and fully
+connected crfs  arXiv   
+
+Chen  LiangChieh  Schwing  Alexander  Yuille  Alan 
+and Urtasun  Raquel  Learning deep structured models 
+ICML   
+
+Chen  LiangChieh  Papandreou  Iasonas  Murphy  Kevin 
+and Yuille  Alan    Deeplab  Semantic image segmentation with deep convolutional nets  atrous convolution 
+and fully connected crfs  arXiv   
+
+Hariharan  Bharath  Arbelaez  Pablo  and Girshick  Ross 
+Hypercolumns for object segmentation and  negrained
+localization  CVPR   
+
+Huang  Gary    Ramesh  Manu  Berg  Tamara  and
+LearnedMiller  Erik  Labeled faces in the wild   
+database for studying face recognition in unconstrained
+environments  Technical report  Technical Report  University of Massachusetts  Amherst   
+
+Johnson  Justin  Alahi  Alexandre  and FeiFei  Li  Perceptual losses for realtime style transfer and superresolution  ECCV   
+
+Kae  Andrew  Sohn  Kihyuk  Lee  Honglak  and LearnedMiller  Erik  Augmenting crfs with boltzmann machine
+shape priors for image labeling  CVPR   
+
+Katakis  Ioannis  Tsoumakas  Grigorios  and Vlahavas 
+Ioannis  Multilabel text classi cation for automated tag
+suggestion  ECML PKDD discovery challenge   
+
+Kohli  Pushmeet  Torr  Philip HS  et al  Robust higher order
+
+potentials for enforcing label consistency  IJCV   
+
+Kr ahenb uhl  Philipp and Koltun  Vladlen  Ef cient inference in fully connected crfs with gaussian edge potentials  NIPS   
+
+Deep Value Networks
+
+Krizhevsky  Alex  Sutskever  Ilya  and Hinton  Geoffrey   
+Imagenet classi cation with deep convolutional neural
+networks  NIPS   
+
+Ladick      ubor  Russell  Chris  Kohli  Pushmeet  and
+Inference methods for crfs with co 
+
+Torr  Philip HS 
+occurrence statistics  IJCV   
+
+Lafferty  John  McCallum  Andrew  Pereira  Fernando 
+et al  Conditional random  elds  Probabilistic models
+for segmenting and labeling sequence data  ICML   
+
+LeCun  Yann  Chopra  Sumit  Hadsell  Raia  Ranzato    
+and Huang       tutorial on energybased learning  Predicting structured data   
+
+Li  Jianchao  Wang  Dan  Yan  Canxiang  and Shan 
+Shiguang  Object segmentation with deep regression 
+ICIP   
+
+Li  Ke  Hariharan  Bharath  and Malik  Jitendra  Iterative
+
+instance segmentation  CVPR   
+
+Li  Yujia  Tarlow  Daniel  and Zemel  Richard  Exploring compositional high order pattern potentials for structured output learning  CVPR   
+
+Lin  Victoria  Xi  Singh  Sameer  He  Luheng  Taskar 
+Ben  and Zettlemoyer  Luke  Multilabel learning with
+posterior regularization  NIPS Workshop on Modern Machine Learning and Natural Language Processing   
+
+Long  Jonathan  Shelhamer  Evan  and Darrell  Trevor 
+Fully convolutional networks for semantic segmentation 
+CVPR   
+
+Mordvintsev  Alexander  Olah  Christopher  and Tyka 
+Mike  Inceptionism  Going deeper into neural networks 
+Google Research Blog   
+
+Murphy  Kevin    Weiss  Yair  and Jordan  Michael   
+Loopy belief propagation for approximate inference  An
+empirical study  UAI   
+
+Nguyen  Anh  Dosovitskiy  Alexey  Yosinski  Jason  Brox 
+Thomas  and Clune  Jeff  Synthesizing the preferred inputs for neurons in neural networks via deep generator
+networks  arXiv   
+
+Noh  Hyeonwoo  Hong  Seunghoon  and Han  Bohyung 
+Learning deconvolution network for semantic segmentation  ICCV   
+
+Norouzi  Mohammad  Bengio  Samy  Chen  Zhifeng 
+Jaitly  Navdeep  Schuster  Mike  Wu  Yonghui  and
+Schuurmans  Dale  Reward augmented maximum likelihood for neural structured prediction  NIPS   
+
+Pinheiro     Lin       Collobert       and Dollar     Learn 
+
+ing to re ne object segments  ECCV   
+
+Ronneberger  Olaf  Fischer  Philipp  and Brox  Thomas  Unet  Convolutional networks for biomedical image segmentation  MICCAI   
+
+Safar  Simon and Yang  MingHsuan  Learning shape priors for object segmentation via neural networks  ICIP 
+ 
+
+Song  Yang  Schwing  Alexander  Zemel  Richard  and Urtasun  Raquel  Training deep neural networks via direct
+loss minimization  ICML   
+
+Sutskever  Ilya  Vinyals  Oriol  and Le  Quoc    Sequence
+to sequence learning with neural networks  NIPS   
+
+Sutton  Richard and Barto  Andrew  Reinforcement learn 
+
+ing  An introduction  The MIT Press   
+
+Szegedy  Christian  Zaremba  Wojciech  Sutskever  Ilya 
+Bruna  Joan  Erhan  Dumitru  Goodfellow  Ian  and Fergus  Rob 
+Intriguing properties of neural networks 
+ICLR   
+
+Taskar     Guestrin     and Koller     Maxmargin
+
+Markov networks  NIPS   
+
+Tsochantaridis     Hofmann     Joachims     and Altun 
+   Support vector machine learning for interdependent
+and structured output spaces  ICML   
+
+Tsogkas  Stavros  Kokkinos  Iasonas  Papandreou  George 
+and Vedaldi  Andrea 
+semantic part segmentation with highlevel guidance 
+arXiv   
+
+Deep learning for
+
+van den Oord    aron  Dieleman  Sander  Zen  Heiga  Simonyan  Karen  Vinyals  Oriol  Graves  Alex  Kalchbrenner  Nal  Senior  Andrew  and Kavukcuoglu  Koray  Wavenet    generative model for raw audio 
+arXiv     
+
+van den Oord  Aaron  Kalchbrenner  Nal  Espeholt  Lasse 
+Kavukcuoglu  Koray  Vinyals  Oriol  and Graves  Alex 
+Conditional image generation with pixelcnn decoders 
+NIPS     
+
+Van Hasselt  Hado  Guez  Arthur  and Silver  David  Deep
+reinforcement learning with double qlearning  AAAI 
+ 
+
+Watkins  Christopher          and Dayan  Peter  Qlearning 
+
+Machine Learning   
+
+Watkins  Christopher JCH  Learning from delayed rewards  PhD thesis  University of Cambridge England 
+ 
+
+Deep Value Networks
+
+Yang  Jimei  Safar  Simon  and Yang  MingHsuan  Maxmargin boltzmann machines for object segmentation 
+CVPR   
+
+Zheng  Shuai  Jayasumana  Sadeep  RomeraParedes 
+Bernardino  Vineet  Vibhav  Su  Zhizhong  Du  Dalong 
+Huang  Chang  and Torr  Philip HS  Conditional random
+ elds as recurrent neural networks  CVPR   
+
+

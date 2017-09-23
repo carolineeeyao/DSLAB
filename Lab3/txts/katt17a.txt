@@ -1,0 +1,980 @@
+Learning in POMDPs with Monte Carlo Tree Search
+
+Sammie Katt   Frans    Oliehoek   Christopher Amato  
+
+Abstract
+
+The POMDP is   powerful framework for reasoning under outcome and information uncertainty 
+but constructing an accurate POMDP model is
+dif cult  BayesAdaptive Partially Observable
+Markov Decision Processes  BAPOMDPs  extend POMDPs to allow the model to be learned
+during execution  BAPOMDPs are   Bayesian
+RL approach that  in principle  allows for an
+optimal tradeoff between exploitation and exploration  Unfortunately  BAPOMDPs are currently impractical to solve for any nontrivial domain  In this paper  we extend the MonteCarlo
+Tree Search method POMCP to BAPOMDPs
+and show that the resulting method  which we
+call BAPOMCP  is able to tackle problems that
+previous solution methods have been unable to
+solve  Additionally  we introduce several techniques that exploit the BAPOMDP structure to
+improve the ef ciency of BAPOMCP along with
+proof of their convergence 
+
+  Introduction
+The Partially Observable Markov Decision Processes
+ POMDP   Kaelbling et al    is   general model for
+sequential decision making in stochastic and partially observable environments  which are ubiquitous in realworld
+problems    key shortcoming of POMDP methods is
+the assumption that the dynamics of the environment are
+known   priori  In realworld applications  however  it may
+be impossible to obtain   complete and accurate description of the system  Instead  we may have uncertain prior
+knowledge about the model  When lacking   model    prior
+can be incorporated into the POMDP problem in   principled way  as demonstrated by the BayesAdaptive POMDP
+framework  Ross et al   
+The BAPOMDP framework provides   Bayesian approach
+
+ Northeastern University  Boston  Massachusetts USA
+ University of Liverpool  UK  Correspondence to  Sammie Katt
+ katt   husky neu edu 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+to decision making by maintaining   probability distribution over possible models as the agent acts in an online reinforcement learning setting  Duff    Wyatt    This
+method casts the Bayesian reinforcement learning problem into   POMDP planning problem where the hidden
+model of the environment is part of the state space  Unfortunately  this planning problem becomes very large  with
+  continuous state space over all possible models  and as
+such  current solution methods are not scalable or perform
+poorly  Ross et al   
+Online and samplebased planning has shown promising
+performance on nontrivial POMDP problems  Ross et al 
+  Online methods reduce the complexity by considering the relevant       reachable  states only  and samplebased approaches tackle the complexity issues through approximations in the form of simulated interactions with the
+environment  Here we modify one of those methods  Partial Observable MonteCarlo Planning  POMCP   Silver
+  Veness    and extend it to the BayesAdaptive case 
+leading to   novel approach  BAPOMCP 
+In particular  we improve the sampling approach by exploiting the structure of the BAPOMDP resulting in root
+sampling and expected models methods  We also present
+an approach for more ef cient state representation  which
+we call linking states  Lastly  we prove the correctness
+of our improvements  showing that they converge to the
+true BAPOMDP solution  As   result  we present methods that signi cantly improve the scalability of learning in
+BAPOMDPs  making them practical for larger problems 
+
+  Background
+First  we discuss POMDPs and BAPOMDPs in Sections   and  
+
+  POMDPs
+Formally    POMDP is described by   tuple             
+        where   is the set of states of the environment 
+  is the set of actions    is the set of observations    is
+the  dynamics function  that describes the dynamics of the
+system in the form of transition probabilities     cid       
+  This formulation generalizes the typical formulation with
+separate transition   and observation functions         cid      cid 
+In our experiments  we do employ this typical factorization 
+
+Learning in POMDPs with Monte Carlo Tree Search
+
+  cid log                  Here        is the number of
+
+bounds   Auer et al                       
+
+times the history has been visited  At the end of each simulation  the discounted accumulated return is used to update the estimated value of all the nodes in the tree that
+have been visited during that simulation  POMCP terminates after some criteria has been met  typically de ned by
+  maximum number of simulations or allocated time  The
+agent then picks the action with the highest estimated value
+ maxa        POMCP can be shown to converge to an  
+optimal value function  Moreover  the method has demonstrated good performance in large domains with   limited
+number of simulations  The extension of POMCP that is
+used in this work is discussed in Section  
+
+  is the immediate reward function         that describes
+the reward of selecting   in          is the discount
+factor  and   is the horizon of an episode in the system 
+The goal of the agent in   POMDP is to maximize the expected cumulative  discounted  reward  also called the expected return  The agent has no direct access to the system   state  so it can only rely on the actionobservation
+history ht    cid             at zt cid  up to the current step   
+It can use this history to maintain   probability distribution
+over the state  also called   belief         solution to  
+POMDP is then   mapping from   belief   to an action   
+which is called   policy   Solution methods aim to  nd an
+optimal policy    mapping from   belief to an action with
+the highest possible expected return 
+The agent maintains its belief during execution through belief updates    belief update calculates the posterior probability of the state   cid  given the previous belief over   and
+actionobservation pair  cid     cid    cid           cid           
+This operation is infeasible for large spaces because it enumerates over the entire state space    common approximation method is to represent the belief with  unweighted 
+particle  lters  Thrun      particle  lter is   collection
+of   particles  states  Each particle represents   probabilK   if   speci   state   occurs   times in   particle
+ity of  
+ lter  then          
+    The precision of the  lter is determined by the amount of particles    To update such  
+belief after each time step with observation      standard
+approach is to utilize rejection sampling  Given some action    the agent repeatedly samples   state   from particle
+ lter  then simulates the execution of   on   through   
+and receives    simulated  new state   cid 
+sim and observation
+zsim    cid  is added to the new belief only when zsim     
+and rejected otherwise  This process repeats until the new
+belief contains   particles 
+Partially
+Planning
+ POMCP   Silver   Veness    is   scalable method
+which extends Monte Carlo tree search  MCTS  to solve
+POMDPs  POMCP is one of the leading algorithms for
+solving general POMDPs  At each time step  the algorithm
+performs online planning by incrementally building  
+lookahead tree that contains  statistics that represent 
+       where   is the actionobservation history   to
+reach that node  It samples hidden states   at the root node
+ called  root sampling  and uses that state to sample  
+trajectory that  rst traverses the lookahead tree and then
+performs    random  rollout  The return of this trajectory
+is used to update the statistics for all visited nodes  These
+statistics include the number of times an action has been
+taken at   history          and estimated value of being in
+that node         based on an average over the returns 
+Because this lookahead tree can be very large  the search
+is directed to the relevant parts by selecting the actions inside the tree that maximize the  upper con dence
+
+MonteCarlo
+
+Observable
+
+  BAPOMDPs
+Most research concerning POMDPs has considered the
+task of planning  given   full speci cation of the model 
+determine an optimal policy        Kaelbling et al   
+Shani et al    However  in many realworld applications  the model is not  perfectly  known in advance  which
+means that the agent has to learn about its environment during execution  This is the task considered in reinforcement
+learning  RL   Sutton   Barto   
+  fundamental RL problem is the dif culty of deciding
+whether to select actions in order to learn   better model of
+the environment  or to exploit the current knowledge about
+the rewards and effects of actions  In recent years  Bayesian
+RL methods have become popular because they can provide   principled solution to this exploration exploitation
+tradeoff  Wyatt    Duff    Engel et al   
+Poupart   Vlassis    Vlassis et al   
+In particular  we consider
+the framework of BayesAdaptive POMDPs  Ross et al     
+BAPOMDPs use Dirichlet distributions to model uncertainty
+over transitions and observations   typically assuming the
+reward function is chosen by the designer and is known 
+In particular  if the agent could observe both states and observations  it could maintain   vector   with the counts of
+the occurrences for all  cid         cid    cid  tuples  We write    cid  
+sa for
+the number of times that     is followed by   cid   
+While the agent cannot observe the states and has uncertainty about the actual count vector  this uncertainty can
+be represented using regular POMDP formalisms  That is 
+the count vector is included as part of the hidden state of
+  speci   POMDP  called   BAPOMDP  Formally    BAPOMDP is   tuple  cid                        cid  with some modi 
+ ed components in comparison to the POMDP  While the
+observation and action space remain unchanged  the state
+ space  of the BAPOMDP now includes Dirichlet parame 
+
+   Ross et al      follow the standard       POMDP
+
+representations  but we use our combined   formalism 
+
+Learning in POMDPs with Monte Carlo Tree Search
+
+ters        cid     cid  which we will refer to as augmented states 
+The reward model remains the same  since it is assumed to
+be known     cid   cid cid             The dynamics functions      however  is described in terms of the counts in    
+and is de ned as follows
+
+    cid          cid        cid          
+
+sa cid 
+
+   cid  
+  cid      cid  
+
+sa
+
+ 
+
+ 
+
+ 
+
+sa
+
+ cid   cid  
+
+These expectations can now be used to de ne the transitions for the BAPOMDP  If we let    cid  
+sa denote   vector
+of the length of   containing all zeros except for the position corresponding to  cid       cid   cid   where it has   one  and if
+we let Ia   denote the Kronecker delta that indicates  is  
+when         then we can de ne    as      cid cid          
+    cid         
+Remember that these counts are not observed by the agent 
+since that would require observations of the state  The
+agent can only maintain belief over these count vectors 
+Still  when interacting with the environment  the ratio of
+the true but unknown count vectors will converge to coincide with the true transition and observation probabilities in expectation  It is important to realize  however  that
+this convergence of count vector ratios does not directly
+imply learnability by the agent  even though the ratio of
+the count vectors of the true hidden state will converge  the
+agent   belief over count vectors might not 
+BAPOMDPs are in nite state POMDP models and thus
+extremely dif cult to solve  Ross et al    introduced
+  technique to convert such models to  nite models  but
+these are still very large  Therefore  Ross et al  propose
+  simple lookahead planner to solve BAPOMDPs in an
+online manner  This approach approximates the expected
+values associated with each action at the belief by applying
+  lookahead search of depth    This method will function
+as the comparison baseline in our experiments  as no other
+BAPOMDP solution methods have been proposed 
+
+  BAPOMDPs via Samplebased Planning
+Powerful methods  such as POMCP  Silver   Veness 
+  have signi cantly improved the scalability of
+POMDP solution methods  At the same time the most
+practical solution method for BAPOMDPs  the aforementioned lookahead algorithm  is quite limited in dealing with
+larger problems  POMDP methods have rarely been applied to BAPOMDPs  Amato   Oliehoek    and no
+systematic investigation of their performance has been conducted  In this paper  we aim to address this void  by extending POMCP to BAPOMDPs  in an algorithm that we
+refer to as BAPOMCP  Moreover  we propose   number of
+novel adaptations to BAPOMCP that exploit the structure
+of the BAPOMDP  In this section  we  rst lay out the basic
+adaptation of POMCP to BAPOMDPs and then describe
+the proposed modi cations that improve its ef ciency 
+
+   is an augmented belief       particle  lter 
+
+Algorithm   BAPOMCP   num sims 
+ 
+        
+  for             num sims do
+ 
+ 
+ 
+ 
+  end for
+      GREEDYACTIONSELECTION   
+  return  
+
+ First  we root sample an  augmented  state 
+     SAMPLE   
+   cid    COPY   
+SIMULATE   cid      
+
+ cid  The empty history       now 
+
+ cid  reference to   particle
+
+ Action selection uses statistics stored at node   
+
+return  
+
+Algorithm   SIMULATE         
+  if ISTERMINAL          max depth then
+ 
+  end if
+ 
+      UCBACTIONSELECTION   
+            
+      STEP      
+    cid           
+  if   cid      ree then
+ 
+  else
+ 
+ 
+  end if
+ 
+                       
+                  
+  return  
+
+          SIMULATE   cid          cid 
+CONSTRUCTNODE   cid 
+          ROLLOUT   cid          cid 
+
+                  
+
+ Update statistics 
+
+         
+
+ modi es    to sampled next state
+
+ Initializes statistics
+
+BAPOMCP BAPOMCP  just like POMCP  constructs
+  lookahead tree through simulated experiences  Algorithm  
+In BAPOMDPs  however  the dynamics of the
+system are inaccessible during simulations  and the belief
+is   probability distribution over augmented states  BAPOMCP  as   result  must sample augmented states from
+the belief     and use copies of those states       cid   cid  for
+each simulation  Algorithm   We will refer to this as root
+sampling of the state  line   The copy is necessary  as
+otherwise the STEP function in Algorithm   would alter
+the belief     It is also expensive  for   grows with the state 
+action and observation space  to              
+parameters  In practice  this operation becomes   bottleneck to the runtime of BAPOMCP in larger domains 
+To apply POMCP on BAPOMDPs  where the dynamics
+are unknown  we modify the STEP function  proposing several variants  The most straightforward one  NAIVESTEP
+is employed in what we refer to as  BAPOMCP  This
+method  shown in Algorithm   is similar to BAMCP
+ Guez et al    essentially  it samples   dynamic model
+Dsa which speci es probabilities Pr   cid        and subsequently samples an actual next state and observation from
+that distribution  Note that the underlying states and observations are all represented simply as an index  and hence
+the assignment on line   is not problematic  However  the
+
+Learning in POMDPs with Monte Carlo Tree Search
+
+sa    
+
+Algorithm   BAPOMCP STEP      cid     cid    
+  Dsa    sa
+   cid   cid   cid    Dsa
+   In place updating of       cid     cid 
+     cid  
+sa      cid  
+        cid 
+  return  
+Algorithm   RBA POMCPSTEP       cid     cid    
+   Sample root sampled function
+    cid      Ds  
+        cid 
+  return  
+
+cost of the model sampling operation in line   is 
+
+Root Sampling of the Model BAMCP  Guez et al 
+  addresses the fully observable BRL problem by using POMCP on an augmented state       cid      cid  consisting
+of the observable state  as well as the hidden true transition function     Application of POMCP   root sampling of
+state in this case leads to  root sampling of   transition function  Since the true transition model   does not change
+during the simulation  one is sampled at the root and used
+during the entire simulation  In the BAPOMCP case  root
+sampling of   state       cid     cid  does not lead to   same interpretation  no model  but counts are root sampled and they
+do change over time 
+We use this as inspiration to introduce   similar  but clearly
+different   since this is not root sampling of state  technique
+called root sampling of the model  which we will refer to
+as just  root sampling  The idea is simple  every time we
+root sample   state       cid     cid       at the beginning of  
+simulation  line   in Algorithm   we directly sample  
+     Dir  which we will refer to as the rootsampled
+model
+We denote this root sampling in BAPOMCP as  RBA 
+POMCP  The approach is formalized by RBA POMCPSTEP  Algorithm   Note that no count updates take place
+ cf  line   in Algorithm   This highlights an important
+advantage of this technique  since the counts are not used in
+the remainder of the simulation  the copy of counts  as part
+of line   of Algorithm   can be avoided altogether  Since
+this copy operation is costly  especially in larger domains 
+where the number of states  action and observations and
+the number of counts is large  this can lead to signi cant
+savings  Finally  we point out that  similar to what Guez
+   can be constructed lazily  the part
+et al    propose 
+of the model    is only sampled when it becomes necessary 
+The transition probabilities during RBA POMCP differ
+from those in BAPOMCP  and it is not obvious that  
+policy based on RBA POMCP maintains the same guarantees  We prove in Section   that the solution of RBA 
+POMCP in the limit converges to that of BAPOMCP 
+
+   and it is used for the rest of the simulation 
+
+Algorithm   EBA POMCPSTEP      cid     cid    
+ 
+    cid           
+     cid  
+sa    
+        cid 
+  return  
+
+ Sample from Expected model
+sa      cid  
+
+Expected models during simulations The second  complementary  adaptation modi es the way models are sampled from the rootsampled counts in STEP  This version
+samples the transitions from the expected dynamics   
+given in   rather than from   sampled dynamics function     Dir  The latter operation is relatively costly 
+while constructing    is very cheap  In fact  this operation
+is so cheap  that it is more ef cient to  re calculate it on
+the    rather than to actually store    This approach is
+shown in Algorithm  
+
+Linking States Lastly  we propose   specialized data
+structure to encode the augmented BAPOMDP states  The
+structure aims to optimize for the complexity of the countcopy operation in line   of Algorithm   while allowing
+modi cations to    
+The linking state sl is   tuple of   system state    pointer
+ or link  to an unmodi able set of counts   and   set of updated counts  cid        cid    is   pointer to some set of counts  
+which remain unchanged during count updates  such as in
+the STEP function  and instead are stored in the set of updated counts    as shown in Algorithm   The consequence
+is that the linking state copyoperation can safely perform
+  shallow copy of the counts   and must only consider  
+which is assumed to be much smaller 
+Linking states can be used during the  rejectionsample 
+based  belief update at the beginning of each real time step 
+While the rootsampled augmented states  including   in
+linking states  are typically deleted at the end of each simulation during LBA POMCP  each belief update potentially
+increases the size of   of each particle  Theoretically  the
+number of updated counts represented in   increases and
+the size of   may  eventually  grow similar to the size of  
+Therefore  at some point  it is necessary to construct   new
+ cid  that combines   and    after which   can be safely emptied  We de ne   new parameter for the maximum size of
+    and condition to merge only if the size of   exceeds  
+We noticed that  in practice  the number of merges is much
+smaller than the amount of copies in BAPOMCP  We also
+observed in our experiments that it is often the case that  
+speci    small  set of transitions are notably more popular
+than others and that   grows quite slowly 
+
+  Theoretical Analysis
+Here  we analyze the proposed root sampling of the dynamics function and expected transition techniques  and
+
+Learning in POMDPs with Monte Carlo Tree Search
+
+ cid Kd
+
+  
+
+  cid 
+
+Hd      
+
+ cid  where   is the number of simu 
+
+ 
+Kd
+lations that comprise the empirical distribution  Kd is the
+number of simulations that reach depth    not all simulations might be equally long  and      
+is the history specid
+ ed by the ith particle at stage   
+
+ 
+
+Now  our main theoretical result is that these distributions
+are the same in the limit of the number of simulations 
+Theorem   The fullhistory RSBA POMDP rollout distribution  Def    converges in probability to the quantity
+of Def   
+
+ Hd
+
+    
+Kd
+
+ Hd 
+
+      Hd 
+
+ 
+
+Sketch of Proof   Due to length restrictions we omit some
+details  At the start of every simulation  we assume they
+start in some history    RSBA POMCP samples   dy 
+    We consider probability     Hd  that
+namics model
+RSBA POMCP generates   full history Hd at depth   
+       Hd  and this quantity can be
+Clearly     
+Kd
+written out
+
+ Hd 
+
+    Hd   
+
+Hd    
+
+Dir                   
+
+ cid 
+
+ cid 
+
+    cid 
+  cid 
+
+  
+
+Algorithm   LBA POMCPSTEP sl    cid        cid    
+       cid     cid 
+    cid     Ds  
+        cid 
+     cid  
+sa      cid  
+  return  
+
+sa    
+
+demonstrate they converge to the solution of the BAPOMDP  These main steps of this proof are similar to those
+in  Silver   Veness    We point out however  that the
+technicalities of proving the components are far more involved  Due to lack of space we will defer   detailed presentation of all these to an extended version of this paper 
+The convergence guarantees of
+the original POMCP
+method are based on showing that  for an arbitrary rollout policy   the POMDP rollout distribution  the distribution over full histories when performing root sampling of
+state  is equal to the derived MDP rollout distribution  the
+distribution over full histories when sampling in the belief
+MDP  Given that these are identical it is easy to see that
+the statistics maintained in the search tree will converge to
+the same number in expectation  As such  we will show  
+similar result here for expected transitions  expected  for
+short  and root sampling of the dynamics function  root
+sampling  below 
+We de ne    as the full history  also including states  at
+the root of simulation  Hd as the full history of   node at
+depth   in the simulation tree  and  Hd  as the counts
+induced by Hd  We then de ne the rollout distributions 
+De nition   The
+expectedtransition BAPOMDP rollout distribution is the distribution over full histories of   BAPOMDP  when performing
+MonteCarlo simulations according to   policy   while
+sampling expected transitions  It is given by 
+   Hd      Hd sd zd as sd ad hd    Hd 
+ 
+with           cid   cid  the belief  now   at the root
+of the online planning 
+
+fullhistory
+
+expected
+
+Note that there are two expectations in the above de nition   expected transitions  mean that transitions for   history Hd are sampled from   Hd  The other  expected 
+is the expectation of those samples  and it is easy to see
+that this will converge to the expected transition probabilities   Hd sd zd as sd  For root sampling of the
+dynamics model  this is less straightforward  and we give
+the de nition in terms of the empirical distribution 
+De nition   The fullhistory rootsampling  RS  BAPOMDP rollout distribution is the distribution over full
+histories of   BAPOMDP  when performing MonteCarlo
+simulations according to   policy   in combination with
+root sampling of the dynamics model    This distribuK Hd   cid 
+tion  for   particular stage    is given by     
+
+ cid 
+
+ cid     cid 
+
+ 
+
+ at ht 
+
+  sa   
+  sa Hd 
+
+ 
+
+    the normalization term of  
+
+with         
+Dirichlet distribution with parametric vector  
+For ease of notation we continue the proof for stage      
+     we will show  Hd 
+      Hd 
+Note that   history Hd     Hd ad sd zd  only differs from Hd in that it has one extra transition for the
+ sd ad sd zd  quadruple  implying that  Hd  only
+differs from  Hd  in the counts  sdad for sdad  Therefore
+  can be written in recursive form as
+
+    Hd 
+
+   cid       cid  
+
+    Hd        Hd ad hd 
+
+  sdad  Hd 
+  sdad  Hd 
+
+ 
+
+Now  let us write      cid 
+ cid 
+
+ Hd  for the total of the counts for sd ad and      sd zd 
+ Hd  for
+the number of counts for that such   transition was to
+ sd zd  Because Hd  only has   extra transition 
+ Hd          and since that transition
+ Hd         
+
+was to  sd zd  the counts  sd zd 
+Now let us expand the rightmost term from  
+
+   cid       cid  
+
+sdad
+
+sdad
+
+sdad
+
+sdad
+
+    cid 
+      cid 
+ cid 
+
+ sd zd 
+sdad
+   cid       cid  
+
+      
+
+    
+
+sdad
+
+ 
+
+ 
+
+ 
+
+    
+ Hd 
+
+ Hd 
+
+  cid      cid  
+  cid      cid  
+
+sdad
+
+sdad
+
+      
+
+ 
+
+ Hd 
+ Hd 
+    
+      
+
+      
+    
+
+ 
+
+ 
+ 
+
+ cid    Hd sd zd as sd 
+
+Learning in POMDPs with Monte Carlo Tree Search
+
+where we used the fact that                DeGroot 
+  Therefore     Hd 
+
+      Hd ad hd   Hd sd zd as sd 
+
+ 
+
+which is identical to   except for the difference in between     Hd  and    Hd  This can be resolved by forward induction with base step                 and
+the induction step       show     Hd       Hd 
+given     Hd       Hd  directly following from  
+and   Therefore we can conclude that   
+    Hd   
+   Hd  Combining this with   proves the result 
+
+Corollary   Given suitably chosen exploration constant
+          Rmax
+    BAPOMCP with rootsampling of dynamics function converges in probability to the expected
+transition solution 
+
+Proof  Since Theorem   guarantees the distributions over
+histories are the same in the limit  they will converge to the
+same values maintained in the tree 
+
+Finally  we see that these are solutions for the BAPOMDP 
+Corollary   BAPOMCP with expected transitions sampling  as well as with root sampling of dynamics function
+converge to an  optimal value function of   BAPOMDP 
+   cid   cid     
+
+   cid   cid      where     precision
+
+      
+
+ 
+
+ 
+
+Proof    BAPOMDP is   POMDP  so the analysis from
+Silver   Veness   applies to the BAPOMDP  which
+means that the stated guarantees hold for BAPOMCP  The
+BAPOMDP is stated in terms of expected transitions  so
+the theoretical guarantees extend to the expected transition
+BAPOMCP  which in turn   implies that the theoretical
+guarantees extend to RSBA POMCP 
+
+Finally  we note that linking states does not affect they way
+that sampling is performed at all 
+Proposition   Linking states does not affect convergence
+of BAPOMCP 
+
+  Empirical Evaluation
+Experimental setup In this section  we evaluate our
+algorithms on   small toy problem the classical Tiger
+problem  Cassandra et al   and test scalability on
+  larger domain   partially observable extension to the
+Sysadmin problem  Guestrin et al    called Partially
+Observable Sysadmin  POSysadmin  These domains will
+show performance on   very small problem and   more
+complex one 
+In POSysadmin  the agent acts as   system administrator with the task of maintaining   network of   computers  Computers are either  working  or  failing  which
+
+Table   Default experiment parameters
+
+Parameter
+ 
+horizon    
+  particles in belief
+   computer fail  
+exploration const
+  episodes
+      updated counts
+
+Value
+ 
+ 
+ 
+ 
+
+     max      min   
+
+ 
+ 
+
+can be deterministically resolved by  rebooting  the computer  The agent does not know the state of any computer  but can  ping  any individual computer  At each
+step  any of the computers can  fail  with some probability    This leads to   state space of size     an action space
+of        where the agent can  ping  or  reboot  any of
+the computers  or  do nothing  and an observation space
+of        LL    ailing  working  The  ping  action has
+  cost of   associated with it  while rebooting   computer
+costs   and switches the computer to  working  Lastly 
+each  failing  computer has   cost of   at each time step 
+We conducted an empirical evaluation with aimed for  
+goals  The  rst goal attempts to support the claims made
+in Section   and show that the adaptations to BAPOMCP
+do not decrease the quality of the resulting policies  Second  we investigate the runtime of those modi cations to
+demonstrate their contribution to the ef ciency of BAPOMCP  The last part contains experiments that directly
+compare the performance per action selection time with the
+baseline approach of Ross et al    For brevity  Table  
+describes the default parameters for the following experiments  It will be explicitly mentioned whenever different
+values are used 
+
+BAPOMCP variants Section   proves that the solutions of the proposed modi cations  rootsampling    
+expected models     and linking states     in the limit
+converge to the solution of BAPOMCP  Here  we investigate the transient behaviour of these methods in practice 
+These experiments describe   scenario where the agent
+starts of with   noisy prior belief 
+For the Tiger problem  the agent   initial belief over the
+transition model is correct       counts that correspond to
+the true probabilities with high con dence  but it provides
+an uncertain belief that underestimates the reliability of the
+observations  Speci cally  it assigns   counts to hearing the
+correct observation and   counts to incorrect  the agent beliefs it will hear correctly with   probability of   The
+experiment is run for with         simulations
+and all combinations of BAPOMCP adaptations 
+Figure   plots the average return over   runs for  
+learning period of   episodes for Tiger  The key observation here is twofold  First  all methods improve over
+
+Learning in POMDPs with Monte Carlo Tree Search
+
+Figure   The average discounted return of BAPOMCP
+over   episodes on the Tiger problem for      
+
+  simulations
+
+this
+
+time through re ning their knowledge about    Second 
+there are three distinct clusters of lines  each grouped by
+the number of simulations  This shows that all   variants
+     EBA POMCP  produce the same results and performance increases as the number of simulations increases 
+We repeat
+investigation with the  computer 
+POSysadmin problems  where we allow   simulations
+per time step  In this con guration  the network was fully
+connected with   failure probability       The  deterministic  observation function is assumed known   priori  but the prior over the transition function is noisy as
+follows  for each count    we take the true probability of
+that transition  called    and  randomly  either subtract or
+add   Note that we do not allow transitions with nonzero probability to fall below   by setting those counts to
+  Each Dirichlet distribution is then normalized the
+counts to sum to   With   computers  this results in
+                      noisy Dirichlet distributions of
+        parameters 
+Figure   shows how each method is able to increase its performance over time for POSysadmin  Again  the proposed
+modi cations do not seem to negatively impact the solution
+quality 
+
+BAPOMCP scalability While the previous experiments
+indicate that the three adaptations produce equally good
+policies  they do not support any of the ef ciency claims
+made in Section   Here  we compare the scalability of
+BAPOMCP on the POSysadmin problem  The proposed
+BAPOMCP variants are repeatedly run for   episodes
+on instances of POSysadmin of increasing network size  
+to   computers  and we measure the average action selection time required for   simulations  Note that the
+experiments are capped to allow up to   seconds per action
+selection  demonstrating the problem size that   speci  
+
+Figure   The average discounted of   simulations of
+BAPOMCP per time episodes on the Sysadmin problem
+
+Figure   The average amount of seconds required for
+
+BAPOMCP given the the log of the amount of parameters
+
+ size  in the POSysadmin problem
+
+method can perform   simulations in under   seconds 
+Figure   shows that BAPOMCP takes less than   seconds to perform   simulations on an augmented state
+with approximately   parameters   computers  but is
+quickly unable to solve larger problems  as it requires more
+than   seconds to plan for   BAPOMDP with  
+counts  BAPOMCP versions with   single adaptation are
+able to solve the same problems twice as fast  while combinations are able to solve much larger problems with up
+to   million parameters   computers  This implies not
+only that each individual adaptation is able to speed up BAPOMCP  but also that they complement one another 
+
+Performance The previous experiments  rst show that
+the adaptations do not decrease the policy quality of BAPOMCP and second that the modi ed BAPOMCP methods improve scalability  Here we put those thoughts together and directly consider the performance relative to the
+action selection time  In these experiments we take the av 
+
+Learning in POMDPs with Monte Carlo Tree Search
+
+Figure   The average return over   episodes per action
+
+selection time of on the Tiger problem
+
+erage return over multiple repeats of   episodes and plot
+them according to the time required to reach such performance  Here BAPOMCP is also directly compared to the
+baseline lookahead planner by Ross et al   
+First  we apply lookahead with depth   on the Tiger
+problem under the same circumstance as the  rst experiment for increasing number of particles        
+    which determines the runtime  The resulting average episode return is plotted against the action selection
+time in Figure  
+The results show that most methods reach near optimal performance after   seconds action selection time  RBA 
+POMCP and ER BAPOMCP perform worse than their
+counterparts BAPOMCP and EBAPOMCP  which suggests that root sampling of the dynamics actually slows
+down BAPOMCP slightly  This phenomenon is due to the
+fact that the Tiger problem is so small  that the overhead of
+copying the augmented state and resampling of dynamics
+ during STEP function  that root sampling avoids is negligible and does overcome the additional complexity of root
+sampling  Also note that  even though the Tiger problem is
+so trivial that   lookahead of depth   suf ces to solve the
+POMDP problem optimally  BAPOMCP still consistently
+outperforms this baseline 
+The last experiment shows BAPOMCP and lookahead on
+the POSysadmin domain with   computers  which contains
+  counts  with   failure rate of   The agent was
+provided with an accurate belief   The results are shown
+in Figure  
+We were unable to get lookahead search to solve this prob 
+
+ We do not use the same prior as in the  rst BAPOMCP variants experiments since this gives uninformative results due to the
+fact that solution methods convergence to the optimal policy with
+respect to the  noisy  belief  which is different from the one with
+respect to the true model 
+
+Figure   The average return over   episodes per action
+
+selection time of BAPOMCP on the POSysadmin
+
+problem
+
+lem  the single instance which returned results in   reasonable amount of time  the single dot in the lower right corner  was with   lookahead depth of    which is insuf cient
+for this domain  with just   particles  BAPOMCP  however  was able to perform up to   simulations within
+  seconds and reach an average return of approximately
+  utilizing   belief of   particles  The best performing method  LR EBA POMCP requires less than  
+seconds for similar results  and is able to reach approximately   in less than   seconds  Finally  we see that
+each of the individual modi cations outperform the original BAPOMCP  where Expected models seems to be the
+biggest contributor 
+
+  Conclusion
+This paper provides   scalable framework for learning in
+BayesAdaptive POMDPs  BAPOMDPs give   principled way of balancing exploration and exploiting in RL for
+POMDPs  but previous solution methods have not scaled
+to nontrivial domains  We extended the Monte Carlo Tree
+Search method POMCP to BAPOMDPs and described
+three modi cations Root Sampling  Linking States and
+Expected Dynamics models  to take advantage of BAPOMDP structure  We proved convergence of the techniques and demonstrated that our methods can generate
+highquality solutions on signi cantly larger problems than
+previous methods in the literature 
+
+Acknowledgements
+Research supported by NSF grant   and
+NWO Innovational Research Incentives Scheme Veni
+ 
+
+Learning in POMDPs with Monte Carlo Tree Search
+
+Ross  St ephane  Pineau  Joelle  Chaibdraa  Brahim  and
+Kreitmann  Pierre    Bayesian approach for learning and
+planning in partially observable Markov decision processes  The Journal of Machine Learning Research   
+   
+
+Shani  Guy  Pineau  Joelle  and Kaplow  Robert    survey
+of pointbased POMDP solvers  Autonomous Agents and
+MultiAgent Systems  pp     
+
+Silver  David and Veness  Joel  MonteCarlo planning in
+large POMDPs  In Advances in Neural Information Processing Systems  pp     
+
+Sutton  Richard    and Barto  Andrew    Reinforcement
+
+Learning  An Introduction  MIT Press   
+
+Thrun  Sebastian  Monte Carlo POMDPs  In Advances in
+Neural Information Processing Systems  volume   pp 
+   
+
+Vlassis  Nikos  Ghavamzadeh  Mohammad  Mannor  Shie 
+and Poupart  Pascal  Bayesian reinforcement learning  In
+Reinforcement Learning  pp    Springer   
+
+Wyatt  Jeremy    Exploration control in reinforcement
+learning using optimistic model selection  In ICML  pp 
+   
+
+References
+Amato  Christopher and Oliehoek  Frans    Scalable planning and learning for multiagent POMDPs  In Proceedings of the TwentyNinth AAAI Conference on Arti cial
+Intelligence  pp    January  
+
+Auer  Peter  CesaBianchi  Nicolo  and Fischer  Paul 
+Finitetime analysis of the multiarmed bandit problem 
+Machine learning     
+
+Cassandra  Anthony    Kaelbling  Leslie Pack  and
+Littman  Michael    Acting optimally in partially obIn AAAI  volume   pp 
+servable stochastic domains 
+   
+
+DeGroot  Morris    Optimal Statistical Decisions  Wiley 
+
+Interscience   
+
+Duff  Michael   Gordon  Optimal Learning  Computational procedures for Bayesadaptive Markov decision
+processes 
+PhD thesis  University of Massachusetts
+Amherst   
+
+Engel  Yaakov  Mannor  Shie  and Meir  Ron  Reinforcement learning with kernels and Gaussian processes  In
+Proceedings of the ICML  Workshop on Rich Representations for Reinforcement Learning  pp    Citeseer   
+
+Guestrin  Carlos  Koller  Daphne  Parr  Ronald  and
+Venkataraman  Shobha  Ef cient solution algorithms for
+factored MDPs  Journal of Arti cial Intelligence Research  pp     
+
+Guez  Arthur  Silver  David  and Dayan  Peter  Ef cient
+Bayesadaptive reinforcement learning using samplebased search  In Advances in Neural Information Processing Systems  pp     
+
+Kaelbling  Leslie Pack  Littman  Michael    and Cassandra  Anthony    Planning and acting in partially observable stochastic domains  Arti cial intelligence   
+   
+
+Poupart  Pascal and Vlassis  Nikos    Modelbased
+Bayesian reinforcement learning in partially observable
+domains  In ISAIM   
+
+Ross  Stephane  Chaibdraa  Brahim  and Pineau  Joelle 
+BayesAdaptive POMDPs  In Advances in Neural Information Processing Systems  pp     
+
+Ross  St ephane  Pineau  Joelle  Paquet    ebastien  and
+ChaibDraa  Brahim  Online planning algorithms for
+POMDPs  Journal of Arti cial Intelligence Research 
+   
+
+

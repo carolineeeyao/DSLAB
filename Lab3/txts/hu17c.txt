@@ -1,0 +1,1022 @@
+StateFrequency Memory Recurrent Neural Networks
+
+Hao Hu   GuoJun Qi  
+
+Abstract
+
+Modeling temporal sequences plays   fundamental role in various modern applications and has
+drawn more and more attentions in the machine
+learning community  Among those efforts on
+improving the capability to represent temporal
+data  the Long ShortTerm Memory  LSTM  has
+achieved great success in many areas  Although
+the LSTM can capture longrange dependency
+in the time domain  it does not explicitly model
+the pattern occurrences in the frequency domain
+that plays an important role in tracking and predicting data points over various time cycles  We
+propose the StateFrequency Memory  SFM   
+novel recurrent architecture that allows to separate dynamic patterns across different frequency
+components and their impacts on modeling the
+temporal contexts of input sequences  By jointly
+decomposing memorized dynamics into statefrequency components  the SFM is able to offer
+   negrained analysis of temporal sequences by
+capturing the dependency of uncovered patterns
+in both time and frequency domains  Evaluations
+on several temporal modeling tasks demonstrate
+the SFM can yield competitive performances  in
+particular as compared with the stateof theart
+LSTM models 
+
+  Introduction
+Research in modeling dynamics of time series has   long
+history and is still highly active due to its crucial role in
+many real world applications  Lipton et al    In recent years  the advancement of this area has been dramatically pushed forward by the success of recurrent neural
+networks  RNNs  as more training data and computing resources are available  Mikolov et al    Bahdanau et al 
+  Graves et al    Although some sophisticated
+
+ University of Central Florida  Orlando  FL  USA  Correspon 
+
+dence to  GuoJun Qi  Guojun Qi ucf edu 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+RNN models such as Long Shortterm Memory  LSTM 
+ Hochreiter   Schmidhuber    have been proven as
+powerful tools for modeling the sequences  there are some
+cases that are hard to handle by RNNs  For instance   Mittelman    demonstrates that RNN models either perform poorly on predicting the optimal shortterm investment strategy for the high frequency trading or diverge 
+making them less preferred than other simpler algorithms 
+One of the possible reasons for such situations is that RNN
+models like LSTM only consider the pattern dependency
+in the time domain  which is insuf cient if we want to predict and track the temporal sequences over time at various frequencies  For example  in phonemes classi cation 
+some phonemes like         are produced by short  highfrequency signals  while others like  iy   ey  are related
+to longer  lowfrequency signals  Thus modeling such frequency patterns is quite helpful for correctly identifying
+phonemes in   sentence  Similarly  music clips are often
+composed of note sequences across   rich bands of frequencies  Automatically generating music clips often requires
+us to model both short and longlasting notes by properly
+mixing them in   harmonic fashion  These examples show
+the existence of rich frequency components in many natural
+temporal sequences  and discovering them plays an important role in many prediction and generation tasks 
+Thus  we strive to seamlessly combine the capacity of
+multifrequency analysis with the modeling of longrange
+dependency to capture the temporal context of input sequences  For this purpose  we propose the Statefrequency
+Memory  SFM    novel RNN architecture that jointly decomposes the memory states of an input sequence into  
+set of frequency components  In this fashion  the temporal context can be internally represented by   combination
+of different statefrequency basis  Then  for   prediction
+and generation task    suitable set of statefrequency components can be selected by memory gates deciding which
+components should be chosen to predict and generate the
+target outputs  For example  the highfrequency patterns
+will be chosen to make very shortterm prediction of asset
+prices  while the lowfrequency patterns of price  uctuations will be selected to predict returns in deciding lowterm investment  Even more  we also allow the model to
+automatically adapt its frequency bands over time  resulting in an Adaptive SFM that can change its Fourier bases
+
+StateFrequency Memory Recurrent Neural Networks
+
+to more accurately capture the statefrequency components
+as the dynamics of input sequences evolves 
+First we demonstrate the effectiveness of the proposed
+SFM model by predicting different forms of waves that
+contain rich periodic signals  We also conduct experiments
+on several benchmark datasets to model various genres of
+temporal sequences  showing the applicability of the proposed approach in the real world  nonperiodic situations 
+Our results suggest the SFM can obtain competitive performance as compared with the stateof theart models 
+The remainder of this paper is organized as follows  Section   reviews relevant literature on different RNNbased
+architectures and their applications  Then we introduce the
+proposed SFM model in Section   with its formal de nitions and mathematical analysis  Section   demonstrates
+the experiment results for different evaluation tasks  Finally  we conclude the paper in section  
+
+  Related works
+Recurrent Neural Networks  RNNs  which is initially proposed by  Elman    Jordan    extend the standard
+feed forward multilayer perceptron networks by allowing
+them to accept sequences as inputs and outputs rather than
+individual observations  In many sequence modeling tasks 
+data points such as video frames  audio snippets and sentence segments  are usually highly related in time  making
+RNNs as the indispensable tools for modeling such temporal dependencies  Unfortunately  some research works like
+ Bengio et al    has pointed out that training RNNs to
+capture the longterm dependencies is dif cult due to the
+gradients vanishing or exploding during the back propagation  making the gradientbased optimization struggle 
+To overcome the problem  some efforts like  Bengio et al 
+   Pascanu et al    and  Martens   Sutskever 
+  aim to develop better learning algorithms  While
+others manage to design more sophisticated structures  The
+most wellknown attempt in this direction is the Long
+ShortTerm Memory  LSTM  unit  which is initially proposed by  Hochreiter   Schmidhuber    Compared to
+the vanilla RNN structures  LSTM is granted the capacity
+of learning longterm temporal dependencies of the input
+sequences by employing the gate activation mechanisms 
+In the realistic applications  LSTM has also been proved
+to be very effective in speech and handwriting recognition
+ Graves et al    Graves   Schmidhuber    Sak
+et al    Recently   Cho et al    introduce   modi cation of the conventional LSTM called Gated Recurrent
+Unit  which combines the the forget and input gates into  
+single update gate  and also merges the cell state and hidden state to remove the output gate  resulting in   simpler
+architecture without sacri cing too much performance 
+
+Besides LSTM and its variations  there are   lot of other
+efforts to improve RNN   sequence modeling ability  For
+example  Hierarchical RNN  El Hihi   Bengio    employs multiple RNN layers to model the sequence in different time scale  Moreover   Schuster   Paliwal    and
+ Graves   Schmidhuber    connect two hidden layers
+of RNN and LSTM with opposite directions to the same
+output  respectively  Such bidirectional structures allow the
+output layer to access information from both past and future
+states  In addition  Clockwork RNN  Koutnik et al   
+and Phased LSTM  Neil et al    attempt to design new
+schema to allow updating hidden states asynchronously 
+Instead of developing novel structures  many researchers
+focus on applying existing RNN model to push the boundary of the realworld applications  For example   Bahdanau et al    and  Sutskever et al    have reached
+the same level performance as the welldeveloped systems
+in machine translation with RNNencoder decoder framework   Fern andez et al    proposes the hierarchical Connectionist Temporal Classi cation  CTC   Graves
+et al    network and its deep variants has achieved the
+stateof theart performance for phoneme recognition on
+TIMIT database  Graves et al    Lastly   Boulangerlewandowski et al    reports that RNN yields   better
+prior for the polyphonic music modeling and transcription 
+
+  StateFrequency Memory Recurrent
+
+Neural Networks
+
+To introduce the StateFrequency Memory  SFM  recurrent neural networks  we begin with the de nition of several notations  Suppose we are given   sequence      
+         xT   of   observations  where each observation belongs to   Ndimensional space       xt   RN for
+            Then we use   sequence of memory cells
+of the same length   to model the dynamics of the input
+sequence 
+Like the conventional LSTM recurrent networks  each
+memory cell of the SFM contains Ddimensional memory
+states  however  unlike the LSTM  we decompose these
+memory states into   set of frequency components  saying         of   discrete frequencies  This forms
+  joint statefrequency decomposition to model the temporal context of the input sequence across different states and
+frequencies  For example  in modeling the human activities  action patterns can be performed at different rates 
+For this purpose  we de ne   SFM matrix St   CD  
+at each time    the rows and columns of which correspond
+to   dimensional states and   frequencies  This provides
+us with    nergrained multifrequency analysis of memory states by decomposing them into different frequencies 
+modeling the frequency dependency patterns of input se 
+
+StateFrequency Memory Recurrent Neural Networks
+
+The Joint StateFrequency Forget Gate
+
+To control the past information  two types of forget gates
+are de ned to decide which state and frequency information can be allowed to update SFM matrix  They are the
+state forget gate
+
+     Wstezt    Vstext   bste    RD
+  ste
+
+ 
+
+and the frequency forget gate
+
+     Wfrezt    Vfrext   bfre    RK
+  fre
+
+ 
+where   is an elementwise sigmoid function  zt is an
+output vector which will be discussed later     and   
+are weight matrices  and    is   bias vector 
+Then   joint statefrequency gate is de ned as an outer
+product   between   ste
+
+  and   fre
+
+ 
+
+ft     ste
+
+      fre
+
+      ste
+
+ 
+
+    fre cid 
+    RD  
+
+ 
+
+In other words  the joint forget gate is decomposed over
+states and frequencies to control the information entering
+the memory cell 
+
+Input Gates and Modulations
+
+The input gate can be de ned in the similar fashion as
+
+gt    Wgzt    Vgxt   bg    RD
+
+ 
+
+where the parameter matrices are de ned to generate  
+compatible result for the input gate  The input gate decides
+how much new information should be allowed to enter the
+current memory cell to update SFM matrix 
+Meanwhile  we can de ne the following information modulation modeling the incoming observation xt as well as
+the output zt  fed into the current memory cell from the
+last time
+
+it   tanh Wizt    Vixt   bi    RD
+
+ 
+
+quences 
+
+  Updating StateFrequency Memory
+
+Like in the LSTM  the SFM matrix of   memory cell is
+updated by combining the past memory and the new input  On the other hand  it should also take into account the
+decomposition of the memory states into   frequency domains  which can be performed in   Fourier transformation
+fashion  see Section   for   detailed analysis  as 
+
+  ej  
+
+ 
+ej    
+
+  
+
+St   ft   St     gt   it 
+
+  CD    
+  and
+where   is an elementwise multiplication     
+ cos        sin       cos  Kt     sin  Kt  are Fourier
+basis of   frequency components for   sliding time window over the state sequence  ft   RD   and gt   RD are
+forget and input gates respectively  controlling what past
+and current information on states and frequencies are allowed to update the SFM matrix at    Finally  it   RD is
+the input modulation that aggregates the current inputs fed
+into the current memory cell 
+The update of SFM matrix St can be decomposed into the
+real and imaginary parts as follows 
+Re St   ft Re St gt it   cos       cos  Kt   
+
+and
+Im St   ft Im St   gt it   sin       sin  Kt   
+
+Then the amplitude part of St is de ned as
+
+At    St   cid Re St     Im St    RD    
+
+where   denotes elementwise square  each entry  St    
+captures the amplitude of the dth state on the kth frequency 
+and the phase of St is
+
+ St   arctan 
+
+Im St
+Re St
+
+   cid   
+
+ 
+
+ 
+ 
+
+ 
+
+ cid    
+
+ 
+
+which combines xt and zt 
+
+where arctan  is an elementwise inverse tangent function  It is well known that the amplitude and phase encode
+the magnitude and the shift of each frequency component 
+Later  we will feed the amplitude of statefrequency into
+the memory cell gates  and use the distribution of memory
+states across different frequencies to control which information should be allowed to update the SFM matrix  The
+phase  St of statefrequency is ignored as we found it does
+not affect the result in experiments but incurs extra computational and memory overheads 
+
+MultiFrequency Outputs and Modulations
+
+To obtain the outputs from the SFM  we produce an output
+from each frequency component  and an aggregated output is generated by combing these multifrequency outputs
+modulated with their respective gates 
+Speci cally  given the amplitude part At of the SFM matrix
+    RM for
+St at time    we can produce an output vector zk
+each frequency component   as
+
+zk
+    ok
+
+    fo Wk
+
+  Ak
+
+    bk
+
+   for            
+
+StateFrequency Memory Recurrent Neural Networks
+
+    RD is the kth column vector of At corwhere Ak
+responding to frequency component    fo  is an output
+activation function  and ok
+  is the output gate controlling
+whether the information on frequency component   should
+be emitted from the memory cell at time   
+
+where Uk
+puts  zk
+put vector
+
+ok
+     Uk
+
+oAk
+
+oxk
+
+    Wk
+
+ozk
+
+    bk
+
+     Vk
+
+     RM  
+  are weight matrices  These multifrequency outt   can be combined to produce an aggregated outK cid 
+
+  cid 
+
+    fo Wk
+ok
+
+  Ak
+
+    bk
+
+     RM  
+
+zt  
+
+zk
+   
+
+  
+
+  
+
+Then  ok
+              can be explained as the modulators controlling how the multifrequency information is
+combined to yield the output 
+
+  Fourier Analysis of SFM Matrices
+
+Now we can expand the update equation for the SFM matrix to reveal its temporal structure by induction over    By
+iterating the SFM matrix St over the time    Eq    can be
+written into the following  nal formulation
+
+  
+  ej  
+  
+  ej   cid 
+
+ 
+ej    
+
+ 
+
+ej      cid 
+
+St    ft   ft                   gt   it 
+
+  cid 
+
+  cid 
+
+ 
+
+ft       ft cid    gt cid    it cid 
+
+ 
+
+where    is the initial SFM matrix at time  
+By this expansion  it is clear that St is the Fourier transform
+of the following sequence
+
+ ft   ft                   gt   it 
+
+   ft       ft cid    gt cid    it cid   cid          
+
+ 
+
+In this sequence the forget and input gates ft cid  and gt cid  weigh
+the input modulations it cid  that aggregates the input information from the observation and past output sequences 
+In
+other words  the purpose of these gates is to control how
+far the Fourier transform should be applied into the past
+input modulations 
+If some forget or input gate has   relatively small value 
+the farpast input modulations would be less involved in
+constituting the frequency components in the current St 
+This tends to localize the application of Fourier transform
+in   short time window prior to the current moment  Otherwise    longer time window would be de ned to apply
+
+the Fourier transform  Therefore  the forget and input gate
+dynamically de ne time windows to control the range of
+temporal contexts for performing the frequency decomposition of memory states by the Fourier transform 
+
+  Adaptive SFM
+The set of frequencies         can be set to     
+  for                      set of   discrete frequen 
+  
+cies evenly spaced on     By Eq    this results in the
+classical DiscreteTime Fourier Transform  DTFT  yielding   frequency coef cients stored columnwise in SFM
+matrix for each of   memory states 
+Alternatively  we can avoid pre xing the discrete frequencies              by treating them as variables that
+can be dynamically adapted to the context of the underlying
+sequence  In other words    is not   static frequency vector
+with  xed values any more  instead they will change over
+time and across different sequences  re ecting the changing
+frequency of patterns captured by the memory states  For
+example    certain human action  modeled as   memory
+state  can be performed at various execution rates changing over time or across different actors  This inspires us to
+model the frequencies as   function of the memory states 
+as well as the input and output sequences 
+
+      xxt     zzt      
+
+ 
+
+where    and    are the function parameters  and multiplying   with   sigmoid function maps each    onto
+    This makes the SFM more  exible in capturing dynamic patterns of changing frequencies  We call the Adaptive SFM  ASFM  for brevity 
+
+  Experiments
+In this section  we demonstrate the evaluation results of the
+SFM on three different tasks  signal type prediction  polyphonic music modeling and phoneme classi cation  For all
+the tasks  we divide the baselines into two groups  the  rst
+one  BG  contains classic RNN models such as the conventional LSTM  Hochreiter   Schmidhuber    and
+the Gated Recurrent Unit  GRU   Cho et al    while
+the second group  BG  includes latest models like Clockwork RNN  CWRNN   Koutnik et al    Recurrent
+Highway Network  RHN   Zilly et al    Adaptive
+Computation Time RNNs  ACTRNN   Graves    Associative LSTM  ALSTM   Danihelka et al    and
+Phased LSTM  PLSTM   Neil et al    Compared to
+the proposed SFM  baselines in BG  share similarities like
+hierarchical structures and complex representation  However  they either don   contain any modules aiming to learn
+frequency dependencies  RHN  ACTRNN  ALSTM  or
+only have implicit frequency modeling abilities that are not
+enough to capture the underlying frequency patterns in the
+
+StateFrequency Memory Recurrent Neural Networks
+
+Table   Hidden neuron numbers of different networks for each
+task  The total number of parameters  weights  will keep the same
+for all the networks in each task  Task     and   stand for signal
+type prediction  sec   polyphonic music prediction  sec  
+and phone classi cation  sec   respectively  The last column
+indicates the unique hyperparameters of each network 
+
+  of Params
+
+GRU
+LSTM
+
+CWRNN
+ACTRNN
+
+RHN
+
+ALSTM
+PLSTM
+
+SFM
+
+Task  
+    
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+     
+
+Task  
+Task  
+         
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+     
+     
+
+Note
+
+ 
+ 
+ 
+
+ 
+
+Tn      
+
+     
+     
+
+ron    
+
+ 
+
+input sequences  CWRNN  PLSTM 
+In order to make   fair comparison  we use different numbers of hidden neurons for these networks to make sure
+the total numbers of their parameters are approximately the
+same  Per the discussion in Section   the hidden neuron
+number is decided by the size       of the SFM matrix St   CD    where   stands for the dimension of the
+memory states and   is the number of frequency components  The hidden neuron setups for three tasks are summarized in Table   We implement the proposed SFM model
+using Theano Python Math Library  Team et al   
+Unless otherwise speci ed  we train all
+the networks
+through the BPTT algorithm with the AdaDelta optimizer
+ Zeiler    where the decay rate is set to   All the
+weights are randomly initialized in the range    
+and the learning rate is set to   The training objective
+is to minimize the frame level crossentropy loss 
+
+  Signal Type Prediction
+
+First  we generate some toy examples of sequences  and apply the SFM to distinguish between different signal types 
+In particular  all signal waves are periodic but contain different frequency components  Without loss of generality 
+we choose to recognize two types of signals  square waves
+and sawtooth waves  By the Fourier analysis  these two
+types of waves can be represented as the following Fourier
+series  respectively 
+
+ cid 
+
+ysquare     
+
+  
+ 
+
+  
+
+ 
+ 
+
+sin 
+
+   
+ 
+
+                 
+
+ 
+ Tn   clock period                recurrent depth   
+    of copies  ron   open ratio  Please refer to each baseline paper
+for more details 
+
+Figure   Several examples of the generated waves on the interval
+    with different periods  amplitudes  and phases  The red
+dash lines represent the square waves while the blue solid lines
+represent square waves  The   markers indicate the sampled
+data points that are used for training and testing 
+
+ cid 
+
+  
+
+ 
+ 
+
+sin 
+
+ 
+ 
+
+   
+ 
+
+   
+ 
+
+ysawtooth     
+
+                 
+ 
+where               stand for the length  period  amplitude 
+phase and bias  respectively  The square waves contain the
+sine base functions only with the odd      while sawtooth
+waves contain both the odd and even      This makes their
+frequency components quite different from each other  and
+thus they are good examples to test the modeling ability of
+the proposed SFM network 
+We arti cially generate     sequences  with     sequences per signal type  Figure   illustrates the generated
+waves samples  Our goal is to correctly classify each of
+the blue solid and red dash signals  We denote by        
+  uniform distribution on        then the sequence of each
+wave is generated like this  we  rst decide the length of the
+wave          and its period          Then
+we choose amplitude          phase         
+and the bias          At the last step  we randomly sample each signal   times along with their time
+stamps  resulting in   sequence of  dimensional vectors 
+Speci cally    vector in   sequence has the form of       
+where   is the signal value and   is the corresponding time
+stamp  In experiments  we randomly select   sequences
+per type for training and the remaining are for testing 
+We compare the proposed SFM with all BG  and BG 
+baselines and summarize the prediction results in Figure
+  The result shows by explicitly modeling the frequency
+patterns of these two types of sequences  both SFM and
+
+StateFrequency Memory Recurrent Neural Networks
+
+Tn
+
+      xn
+
+ Boulangerlewandowski et al   
+We follow the same protocol  Boulangerlewandowski
+et al    to split the training and test set to make   fair
+comparison on the four datasets  The MIDI format music  les are publicly available  and have been preprocessed
+into pianoroll sequences with   dimensions that span the
+range of piano from    to    Then  given   set of  
+pianoroll sequences and Xn    xn
+  is the nth
+sequence of length Tn  the SFM uses   softmax output layer
+to predict the probability of each key being pressed at time
+  based on the previous ones     
+The loglikelihood of correctly predicting keys to be
+pressed has been used as the evaluation metric in
+ Boulangerlewandowski et al    and we adopt it to
+make   direct comparison across the models  The results
+are reported in the Table   As it indicates  both SFM
+and Adaptive SFM have outperformed the stateof theart
+baselines except on the Nottingham dataset  On the rest of
+three datasets  both SFM and Adaptive SFM consistently
+perform       better than BG  and BG  baselines in
+terms of the loglikelihood  We also note that the Adaptive
+SFM obtains almost the same result as the SFM  suggesting that using static frequencies are already good enough to
+model the polyphony 
+On the Nottingham dataset  however  the two compared
+models  RNNRBM and RNNNADE HF  reach the best
+performance  The dataset consists of over   folk tunes 
+which are often composed of simple rhythms with few
+chords  Figure   compares some example music clips from
+the Nottingham to the MuseData datasets  Clearly  the Nottingham music only contains simple polyphony patterns
+that can be well modeled with the RNNtype models without having to capture complex temporal dependencies  On
+the contrary  the music in the MuseData is often   mixture
+of rich frequency components with longrange temporal dependencies  which the proposed SFM models are better at
+modeling as shown in the experiment results 
+
+  Phoneme Classi cation
+
+Finally  we evaluate the proposed SFM model by conducting the frame level phoneme classi cation task introduced
+by  Graves   Schmidhuber    The goal is to assign
+the correct phoneme to each speech frame of an input sequence  Compared with other speech recognition tasks like
+spoken word recognition  phoneme classi cation focuses
+on identifying shortrange sound units  phonemes  rather
+than longrange units  words  from input audio signals  We
+report the framelevel classi cation accuracy as the evaluation metric for this task 
+We perform the classi cation task on TIMIT speech cor 
+
+ http wwwetud iro umontreal ca boulanni icml 
+
+Figure   Signal type prediction accuracy of each model 
+
+Adaptive SFM achieve best performance  In particular  the
+Adaptive SFM has achieved   in accuracy   almost
+every signal has been classi ed correctly 
+
+  Polyphonic Music Modeling
+
+In this subsection  we evaluate the proposed SFM network
+on modeling polyphonic music clips  The task focuses on
+modeling the symbolic music sequences in the pianoroll
+form like in  Boulangerlewandowski et al    Speci 
+cally  each piano roll can be regarded as   matrix with each
+column being   binary vector that represents which keys
+are pressed simultaneously at   particular moment  This
+task of modeling polyphonic music is to predict the probability of individual keys being pressed at next time      
+given the previous keys pressed in   piano roll by capturing their temporal dependencies  Such   prediction model
+plays   critical role in polyphonic transcription to estimate
+the audible note pitches from acoustic music signals 
+The experimental results are obtained on four polyphonic
+music benchmarks that have been used in  Boulangerlewandowski et al    MuseData  JSB chorales  Allan   Williams    Pianomidi de  Poliner   Ellis 
+  and Nottingham 
+In addition to the baselines in
+BG  and BG  we also compare with the following methods that have achieved the best performance in  Boulangerlewandowski et al   
+
+  RNNRBM  Proposed by  Boulangerlewandowski
+et al    RNNRBM is   modi cation of RTRBM
+ Sutskever et al    by combining   full RNN with
+the Restrict Boltzmann Machine 
+
+  RNNNADE HF  RNNNADE  Larochelle   Murray    model with the RNN layer pretrained by the
+Hessianfree  HF   Martens   Sutskever   
+
+We directly report
+
+the results of these methods from
+
+StateFrequency Memory Recurrent Neural Networks
+
+Table   Loglikelihood on the four music datasets  The last two columns contain the results from the proposed SFM models 
+
+Dataset
+
+MuseData
+JSB chorales
+Pianomidi de
+Nottingham
+
+GRU
+
+RHN
+
+CWRNN
+
+ACTRNN
+
+ALSTM
+SFM
+                     
+                     
+                     
+                     
+
+RNNRBM
+
+  
+
+LSTM
+
+  
+
+LSTM
+
+RNNNADE 
+
+HF
+
+SFM
+
+    MuseData
+
+    Nottingham
+
+Figure   Piano rolls of the exemplar music clips from the MuseData and Nottingham dataset  Classical musics from MuseData are presented by complex  high frequentlychanged sequences  while folk tunes from Nottingham contains simpler  lowerfrequency sequences 
+
+pus  Garofolo et al    We preprocess the dataset in
+the same way as  Graves   Schmidhuber    First
+we perform Shorttime Fourier Transform  STFT  with
+ ms input windows and  ms frame size  Then for each
+frame  we compute the MelFrequency Cepstrum Coef 
+cients  MFCCs  the logenergy and its  rstorder derivatives as the framelevel features  Similarly  in order to
+maintain the consistency with  Graves   Schmidhuber 
+  we use the original phone set of   phonemes instead of mapping them into   smaller set  Robinson   
+We train the proposed and compared models by following
+the standard splitting of training and test sets for the TIMIT
+dataset  Garofolo et al    In addition  we randomly
+select   utterances from the training set as the validation
+set and keep the rest for training 
+Figure   compares the classi cation accuracy by different
+models  In addition  we include the result of the bidirectional LSTM  BiLSTM   Graves   Schmidhuber   
+for comparison  From the  gure  we can see that both
+SFM and Adaptive SFM outperform the BG  and BG 
+baselines with approximately the same number of parameters  Especially when compared with the conventional
+LSTM  CWRNN and ACTRNN  the proposed SFM models have signi cantly improved the performance by more
+
+Figure   Accuracy for framelevel phoneme classi cation on
+TIMIT dataset 
+
+than   This demonstrates the advantages on explicitly
+modeling the frequency patterns in shortrange windows 
+which plays   important role in characterizing the framelevel phoneme  Besides  the Adaptive SFM also perform
+slightly better than the stateof theart BiLSTM model 
+Additionally  we  nd adapting frequencies  which is the
+main difference between the Adaptive SFM and SFM 
+
+StateFrequency Memory Recurrent Neural Networks
+
+    At  
+ 
+
+    At  
+ 
+
+    At   
+ 
+
+    At  
+
+Figure   The amplitudes of SFM matrices for both the pre xed  SFM  and adaptive  ASFM  frequencies  For all sub gures  each row
+represents   frequency component 
+
+     
+
+yields improved performance on this dataset  In order to
+further analyze such difference  we visualize the SFM matrices of both the SFM and Adaptive SFM by forwarding  
+sampled TIMIT sequence  Suppose the length of the sampled sequence is     Figure   illustrates the matrix ampli 
+      
+tudes of both the SFM and Adaptive SFM at time  
+ 
+and     from which the two networks demonstrate distinct
+ways to model the sequence  Based on section   the frequency set of the SFM keeps the same across the time  And
+in all sub gures of Figure   most highlights are around frequency component   and   indicating the two are the primary components for modeling the sequence  while other
+components are rarely involved  On the contrary  the frequency set of Adaptive SFM is constantly updated and different at each time step  Under such conditions  modeling
+the sequence calls for more frequency components  which
+are varied dramatically across the time as shown in Figure
+  Compared with the SFM  the Adaptive SFM is able to
+model richer frequency patterns 
+
+  Conclusion
+In this paper  we propose   novel StateFrequency Memory
+ SFM  Recurrent Neural Network which aims to model the
+frequency patterns of the temporal sequences  The key idea
+of the SFM is to decompose the memory states into different frequency states such that they can explicitly learn the
+dependencies of both the low and high frequency patterns 
+These learned patterns on different frequency scales can be
+separately transferred into the output vectors and then aggregated to represent the sequence point at each time step 
+Compared to the conventional LSTM  the proposed SFM
+is more powerful in discovering different frequency occurrences  which are important to predict or track the temporal
+sequences at various frequencies  We evaluate the proposed
+SFM model with three sequence modeling tasks  Our experimental results show the proposed SFM model can outperform various classic and latest LSTM models as well
+as reaching the competitive performance compared to the
+stateof theart methods on each benchmark 
+
+StateFrequency Memory Recurrent Neural Networks
+
+References
+Allan  Moray and Williams  Christopher KI  Harmonising
+chorales by probabilistic inference  In NIPS  pp   
+ 
+
+Bahdanau  Dzmitry  Cho  Kyunghyun  and Bengio 
+Yoshua  Neural machine translation by jointly learning
+to align and translate  arXiv preprint arXiv 
+ 
+
+Bengio  Yoshua  Simard  Patrice  and Frasconi  Paolo 
+Learning longterm dependencies with gradient descent
+is dif cult  IEEE transactions on neural networks   
+   
+
+Bengio  Yoshua  BoulangerLewandowski  Nicolas  and
+Pascanu  Razvan  Advances in optimizing recurrent
+networks  In Acoustics  Speech and Signal Processing
+ ICASSP    IEEE International Conference on  pp 
+  IEEE   
+
+Boulangerlewandowski  Nicolas  Bengio  Yoshua  and
+Vincent  Pascal  Modeling temporal dependencies in
+highdimensional sequences  Application to polyphonic
+In Proceedings of
+music generation and transcription 
+the  th International Conference on Machine Learning
+ ICML  pp     
+
+Cho  Kyunghyun  Van Merri enboer  Bart  Gulcehre 
+Caglar  Bahdanau  Dzmitry  Bougares  Fethi  Schwenk 
+Holger  and Bengio  Yoshua  Learning phrase representations using rnn encoderdecoder for statistical machine
+translation  arXiv preprint arXiv   
+
+Danihelka  Ivo  Wayne  Greg  Uria  Benigno  Kalchbrenner  Nal  and Graves  Alex  Associative long shortterm
+memory  In Proceedings of The  rd International Conference on Machine Learning  pp     
+
+El Hihi  Salah and Bengio  Yoshua  Hierarchical recurrent
+In Nips 
+
+neural networks for longterm dependencies 
+volume    
+
+Elman  Jeffrey    Finding structure in time  Cognitive sci 
+
+ence     
+
+Fern andez  Santiago  Graves  Alex  and Schmidhuber 
+  urgen  Sequence labelling in structured domains with
+In IJCAI  pp 
+hierarchical recurrent neural networks 
+   
+
+Graves  Alex  Adaptive computation time for recurrent
+arXiv preprint arXiv 
+
+neural networks 
+ 
+
+Graves  Alex and Schmidhuber    urgen 
+
+Framewise
+phoneme classi cation with bidirectional lstm and other
+neural network architectures  Neural Networks   
+   
+
+Graves  Alex and Schmidhuber    urgen  Of ine handwriting recognition with multidimensional recurrent neural
+networks  In Advances in neural information processing
+systems  pp     
+
+Graves  Alex  Beringer  Nicole  and Schmidhuber  Juergen 
+Rapid retraining on speech data with lstm recurrent networks  Technical Report IDSIA  IDSIA   
+
+Graves  Alex  Fern andez  Santiago  Gomez  Faustino  and
+Schmidhuber    urgen  Connectionist temporal classi 
+cation  labelling unsegmented sequence data with recurrent neural networks  In Proceedings of the  rd international conference on Machine learning  pp   
+ACM   
+
+Graves  Alex  Mohamed  Abdelrahman  and Hinton  Geoffrey  Speech recognition with deep recurrent neural networks  In Acoustics  speech and signal processing  icassp    ieee international conference on  pp 
+  IEEE   
+
+Hochreiter  Sepp and Schmidhuber    urgen  Long shortterm memory  Neural computation   
+ 
+
+Jordan  Michael    Serial order    parallel distributed processing approach  Advances in psychology   
+   
+
+Koutnik  Jan  Greff  Klaus  Gomez  Faustino  and Schmidhuber  Juergen    clockwork rnn  In Proceedings of The
+ st International Conference on Machine Learning  pp 
+   
+
+Larochelle  Hugo and Murray  Iain  The neural autoregressive distribution estimator  In AISTATS  volume   pp   
+ 
+
+Lipton  Zachary    Berkowitz  John  and Elkan  Charles   
+critical review of recurrent neural networks for sequence
+learning  arXiv preprint arXiv   
+
+Garofolo  John    Lamel  Lori    Fisher  William   
+Fiscus  Jonathon    and Pallett  David   
+Darpa
+timit acousticphonetic continous speech corpus cdrom 
+NASA STI Recon technical report       
+
+Martens  James and Sutskever  Ilya  Learning recurrent
+neural networks with hessianfree optimization  In Proceedings of the  th International Conference on Machine Learning  ICML  pp     
+
+StateFrequency Memory Recurrent Neural Networks
+
+Mikolov  Tomas  Kara at  Martin  Burget  Lukas  Cernock    Jan  and Khudanpur  Sanjeev  Recurrent neural network based language model  In Interspeech  volume   pp     
+
+Mittelman  Roni  Timeseries modeling with undecimated
+arXiv preprint
+
+fully convolutional neural networks 
+arXiv   
+
+Neil  Daniel  Pfeiffer  Michael  and Liu  ShihChii  Phased
+lstm  Accelerating recurrent network training for long or
+eventbased sequences  In Advances in Neural Information Processing Systems  pp     
+
+Pascanu  Razvan  Mikolov  Tomas  and Bengio  Yoshua 
+On the dif culty of training recurrent neural networks 
+ICML      
+
+Poliner  Graham   and Ellis  Daniel PW    discriminative model for polyphonic piano transcription  EURASIP
+Journal on Applied Signal Processing   
+   
+
+Robinson  Tony  Several improvements to   recurrent error
+
+propagation network phone recognition system   
+
+Sak  Has im  Senior  Andrew  and Beaufays  Franc oise 
+Long shortterm memory based recurrent neural network
+architectures for large vocabulary speech recognition 
+arXiv preprint arXiv   
+
+Schuster  Mike and Paliwal  Kuldip    Bidirectional recurrent neural networks  IEEE Transactions on Signal
+Processing     
+
+Sutskever  Ilya  Hinton  Geoffrey    and Taylor  Graham    The recurrent temporal restricted boltzmann
+In Advances in Neural Information Processmachine 
+ing Systems  pp     
+
+Sutskever  Ilya  Vinyals  Oriol  and Le  Quoc   
+
+SeIn
+quence to sequence learning with neural networks 
+Advances in neural information processing systems  pp 
+   
+
+Team  The Theano Development  AlRfou  Rami  Alain 
+Guillaume  Almahairi  Amjad  Angermueller  Christof 
+Bahdanau  Dzmitry  Ballas  Nicolas  Bastien  Fr ed eric 
+Bayer  Justin  Belikov  Anatoly  et al  Theano    python
+framework for fast computation of mathematical expressions  arXiv preprint arXiv   
+
+Zeiler  Matthew    Adadelta  an adaptive learning rate
+
+method  arXiv preprint arXiv   
+
+Zilly  Julian Georg  Srivastava  Rupesh Kumar  Koutn   
+Jan  and Schmidhuber    urgen  Recurrent highway networks  arXiv preprint arXiv   
+
+

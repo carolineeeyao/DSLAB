@@ -1,0 +1,930 @@
+Logarithmic Time OneAgainst Some
+
+Hal Daum   III     Nikos Karampatziakis     John Langford     Paul Mineiro    
+
+Abstract
+
+We create   new online reduction of multiclass
+classi cation to binary classi cation for which
+training and prediction time scale logarithmically
+with the number of classes  We show that several simple techniques give rise to an algorithm
+which is superior to previous logarithmic time
+classi cation approaches while competing with
+oneagainst all in space  The core construction
+is based on using   tree to select   small subset
+of labels with high recall  which are then scored
+using   oneagainst some structure with high precision 
+
+  Introduction
+Can we ef ciently predict which face is in the picture
+amongst multiple billions of people 
+In   translation 
+can we effectively predict which word should come next
+amongst   possibilities  More generally can we predict
+one of   classes in polylogarithmic time in    This question gives rise to the area of extreme multiclass classi cation  Bengio et al    Beygelzimer et al    Bhatia et al    Choromanska   Langford    Morin  
+Bengio    Prabhu   Varma    Weston et al   
+in which   is very large  If ef ciency is not   concern 
+the most common and generally effective representation for
+multiclass prediction is   oneagainst all  OAA  structure 
+Here  inference consists of computing   score for each class
+and returning the class with the maximum score  If ef 
+ciency is   concern  an attractive strategy for picking one
+of   items is to use   tree  unfortunately  this often comes
+at the cost of increased error 
+  general replacement for the oneagainst all approach
+must satisfy   dif cult set of desiderata 
+
+  High accuracy  The approach should provide accuracy competitive with OAA    remarkably strong base 
+
+ Equal contribution  University of Maryland  Microsoft  Cor 
+
+respondence to  Paul Mineiro  pmineiro microsoft com 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+Figure   An example is routed through the tree to   leaf node
+associated with   set of eligible classes             which
+will then be subsequently scored to pick    nal label  The root
+classi er choses child   and classi er    chooses child    etc 
+
+line  Rifkin   Klautau    which is the standard
+ output layer  of many learning systems such as winners of the ImageNet contest  He et al    Simonyan   Zisserman   
+
+  High speed at training time and test time    multiclass
+classi er must spend at least  log    time  Choromanska   Langford    so this is   natural benchmark to optimize against 
+
+  Online operation  Many learning algorithms use either online updates or minibatch updates  Approaches satisfying this constraint can be easily composed into an endto end learning system for solving
+complex problems like image recognition  For algorithms which operate in batch fashion  online components can be easily used 
+
+  Linear space  In order to have   dropin replacement
+for OAA  an approach must not take much more space
+than OAA  Memory is at   premium when   is very
+large  especially for models trained on GPUs  or deployed to small devices 
+
+We use an OAAlike structure to make    nal prediction 
+but instead of scoring every class  we only score   small
+subset of   log    classes  We call this  oneagainst 
+some   OAS  How can you ef ciently determine what
+classes should be scored  We use   dynamically built tree
+to ef ciently whittle down the set of candidate classes  The
+goal of the tree is to maximize the recall of the candidate
+set so we call this approach  The Recall Tree  In   traditional treebased classi er    traversal of the tree leads to
+  leaf  and   leaf corresponds to   single label  In the Recall Tree  we loosen the latter requirement and allow   leaf
+to corresponds to   set of labels of size   log    At test
+time  when   leaf is reached  scores are computed for this
+small subset  see Figure  
+
+xf                   LRLRLLRRLogarithmic Time OneAgainst Some
+
+structure RecallTree
+
+scorey
+tree
+
+       
+  BinaryTree
+structure BinaryTree
+
+   
+  bool
+       
+  BinaryTree
+  BinaryTree
+  NK
+   
+
+id
+leaf
+ 
+left
+right
+hist
+total
+candidates      
+
+regressors for        
+tree structure
+
+unique node identi er
+is this   leaf 
+router  as binary classi er
+left child  for nonleaves 
+right child  for nonleaves 
+count of labels at this node
+sum of items in hist
+top   freq items in hist
+
+Figure   The Recall Tree data structure 
+
+The Recall Tree achieves good accuracy  improving on previous online approaches  Choromanska   Langford   
+and sometimes surpassing the OAA baseline  The algorithm requires only poly log    time during training and
+testing  In practice  the computational bene ts are substantial when       The Recall Tree constructs   tree
+and learns parameters in   fully online manner as   reduction  allowing composition with systems trained via online
+updates  All of this requires only twice as much space as
+OAA approaches 
+Our contributions are the following 
+
+  We propose   new online tree construction algorithm
+which jointly optimizes the construction of the tree 
+the routers and the underlying OAS regressors  see
+section  
+
+  We analyze elements of the algorithm  including  
+new boosting bound  see section   on multiclass
+classi cation performance and   representational trick
+which allows the algorithm to perform well if either
+  tree representation does well or an OAA representation does well as discussed in section  
+
+  We experiment with the new algorithm  both to analyze its performance relative to baselines and understand the impact of design decisions via ablation experiments 
+
+The net effect is   theoretically motivated algorithm which
+empirically performs well providing   plausible replacement for the standard oneagainst all approach for large   
+
+  The Recall Tree Algorithm
+Here we present   concrete description of the Recall Tree
+and defer all theoretical results that motivate our design de 
+
+ Our implementation of baseline approaches  including OAA 
+involve vectorized computations that increase throughput by  
+factor of   to   making them much more dif cult to outpace
+than na ve implementations 
+
+Algorithm   Predict          evaluates the node   route 
+scorey    evaluates   perclass regressor   cid recall  is an
+empirical bound on the recall of   node    see Eq  
+and        id     indicates the addition of   sparse feature with index   id and value  
+  Input  Example    Root Node  
+  Output  Predicted class   
+  while   leaf is false do
+ 
+ 
+ 
+end if
+ 
+ 
+     
+           id    
+ 
+  end while
+       argmax
+
+                    left     right
+if  cid recall       cid recall    then
+
+    candidates
+
+scorey   
+
+break
+
+cisions to section  
+
+  Recall Tree at Test Time
+
+The Recall Tree data structure  see Figure   consists of
+two components      binary tree  described below  and  
+  scoring function scorey    that will evaluate the quality
+of   small set of candidates   to make    nal prediction 
+Each node   in the binary tree maintains 
+
+    router  denoted    that maps an example to either  
+left or right child  routers are implemented as binary
+classi ers 
+
+    histogram of the labels of all training examples that
+
+have been routed to  or through    
+
+The primary purpose of the histogram is to generate   candidate set of labels to be scored  taken to be the most frequent labels in that histogram  Intuitively  the goal of the
+candidate set is to maintain good recall  while the goal of
+the score function is to achieve good precision  Crucially 
+the leaves of the tree do not partition the set of classes 
+classes can  and do  have support at multiple leaves 
+At test time  an input   is provided and   recursive computation begins at the root of the tree  The tree is descended
+according to the binary classi cation decision made at each
+internal node  When the recursion ends  for instance  when
+  leaf is reached  the top   most frequent labels according to the node   label counter are used as   candidate set 
+When       log    this does not compromise the goal
+of achieving logarithmic time classi cation  Once this candidate set is chosen  each   in that set is scored using the
+score function  and the largest scoring   is returned 
+It turns out that it is advantageous to allow the recursion to
+end before hitting   leaf  which is   consequence of how
+
+Logarithmic Time OneAgainst Some
+
+training happens on treestructured classi ers  In particular  the number of labeled examples that the root classi er
+ sees  is much larger than the number of labeled examples
+that any leaf sees  This potentially leads to    high variance toward the leaves  and   insuf cient representation
+complexity toward the root  Instead of halting at   leaf  we
+can halt at an internal node for which the top   most frequent labels contain the true answer with   suf ciently high
+probability 
+Algorithm   formalizes the testtime behavior of the Recall Tree  The primary routing occurs in the  rst line of
+the main loop  where   is the child selected by the current node   router  On the next line  the recursion considers the possibility of terminating on an internal node if the
+bounded recall   cid recall  of the current node   is greater than
+the estimated recall of the chosen child    If the recursion
+does not end    new  path feature  is added to   at the end
+of the main loop  which records the path taken in the recall tree  the bene   of adding these features is that it increases the representational capacity of the recall tree to
+ensure competitiveness with OAA   Whichever way
+the recursion ends  the  nal node   has    small  set of candidate labels   candidates       Each is scored according
+to   oneagainst some rule and the label with the largest
+score is returned 
+  natural way to estimate recall at   node   is to consider it   empirical recall  rn  This is simply the fraction
+of the mass consumed by the   most frequent labels in    
+counter  For example  if the counter saw label   two times 
+label    fty times and label   ten times  and if       then
+the empirical recall would be   However  because 
+in general    parent node will see more data than   child
+node  the quality of this estimate is likely to be much better
+for the parent than the child due to   missing mass problem  Good    To accomodate this  we instead use an
+empirical Bernstein lower bound  Maurer   Pontil   
+which is summarized by the following proposition 
+Proposition   For all multiclass classi cation problems
+de ned by   distribution   over         and all nodes  
+in    xed tree  there exists   constant       such that with
+probability      
+
+ cid 
+
+ cid recall       rn  
+
+ rn     rn 
+
+mn
+
+ 
+mn   rn
+
+ 
+
+ 
+
+where  rn is the empirical recall of node   computed over
+mn     total items  and rn is the expected value of this
+recall in the population limit 
+
+Here    is   hyperparameter of the recall tree  in fact  it
+is the only additional hyperparameter  which controls how
+aggressively the tree branches  We show in our experiments
+that these various design decisions  path features  Bernstein
+lower bounds  and early termination  are useful in practice 
+
+Algorithm   Train  An input labeled example descends
+the tree as in Algorithm   update candidates updates the
+set of candidate labels at each node and update regressors
+
+updates the oneagainst some regressors  and  cid recall  is
+  an empirical bound on the recall of   node    see section  
+
+Input  Example        Root node  
+Output  Update tree with root at  
+while   leaf is false do
+
+update router         
+                    left     right
+update candidates         
+if  cid recall       cid recall    then
+
+break
+
+end if
+     
+           id    
+end while
+update regressors         candidates 
+
+  Recall Tree at Training Time
+
+The Recall Tree maintains one regressor for each class and
+  tree whose purpose is to eliminate regressor from consideration  We refer to the perclass regressor as oneagainst 
+some  OAS  regressors  The tree creates   high recall set of
+candidate classes and then leverages the OAS regressors to
+achieve precision  Algorithm   outlines the learning procedures  which we now describe in more detail 
+Learning the regressors for each class In Algorithm  
+update regressors updates the candidate set regressors using the standard OAA strategy restricted to the set of eligible classes  If the true label is not in the   most frequent
+classes at this node then no update occurs 
+Learning the set of candidates in each node In Algorithm   update candidates updates the count of the true
+label at this node  At each node  the most frequent   labels
+are the candidate set 
+Learning the routers at each node In Algorithm  
+update router updates the router at   node by optimizing
+the reduction in the entropy of the label distribution  the
+label entropy  due to routing  as detailed in Algorithm  
+This is in accordance with our theory  Section   The
+label entropy for   node is estimated using the empirical
+counts of each class label entering the node  These counts
+are reliable as update router is only called for the root or
+nodes whose true recall bound is better than their children 
+The expected label entropy after routing is estimated by
+averaging the estimated label entropy of each child node 
+weighted by the fraction of examples routing left or right 
+Finally  we compute the advantage of routing left vs  right
+
+Logarithmic Time OneAgainst Some
+
+Algorithm   update router  entropy computes two values 
+the empirical entropy of labels incident on   node without
+and with  respectively  an extra label       left is an estimate of the average entropy if the example is routed left 
+Learnn          is an importanceweighted update to the
+binary classi er       for node   with features    label   
+and weight   
+
+ 
+  entropy   left    
+
+Input  Example        Node  
+Output  Update node  
+   Hleft     cid 
+left 
+   Hright     cid 
+right 
+   left
+   right
+
+ 
+  entropy   right    
+   cid 
+ 
+left     right total
+    left total
+ 
+ Hleft     right total
+    left total
+  total
+
+  total
+
+  total
+
+  total
+
+ cid   post      left      right
+Learnn   cid   post  sign cid   post 
+
+ Hright
+   cid 
+
+right
+
+Algorithm   update regressors updates the OAS scoring
+functions for   single example 
+
+Input  Example        Candidate set candidates
+Output  Update scoring functions score
+if     candidates then
+online update to scorey    with label  
+for      candidates       do
+online update to score      with label  
+end for
+
+end if
+
+by taking the difference of the expected label entropies for
+routing left vs  right  The sign of this difference determines
+the binary label for updating the router 
+Tree depth control We calculate   lower bound  cid recall   
+on the true recall of node    Section   halting descent as
+in Algorithm   As we descend the tree  the bound  rst increases  empirical recall increases  then declines  variance
+increases  We also limit the maximum depth   of the tree 
+This parameter is typically not operative but adds an additional safety check and sees some use on datasets where
+multipasses are employed 
+
+  Theoretical Motivation
+Online construction of an optimal logarithmic time regressors for multiclass classi cation given an arbitrary  xed
+representation at each node appears deeply intractable   
+primary dif culty is that decisions have to be hard since we
+cannot afford to maintain   distribution over all class labels 
+Choosing   classi er so as to minimize error rate has been
+considered for cryptographic primitives  Blum et al   
+so it is plausibly hard on average rather than merely hard
+in the worst case  Furthermore  the joint optimization of
+
+all regressors does not nicely decompose into independent
+problems  Solving the above problems requires an implausible breakthrough in complexity theory which we do not
+achieve here  Instead  we use learning theory to assist the
+design by analyzing various simpli cations of the problem 
+
+  OneAgainst Some Recall
+
+For binary classi cation    simple trick can  in theory  collapse the number of leaves while preserving prediction performance  In particular  branching programs  Mansour  
+McAllester    result in exponentially more succinct
+representations than decision trees  Kearns   Mansour 
+  by joining nodes to create directed acyclic graphs 
+The key observation is that nodes in the same level with  
+similar distribution over class labels can be joined into one
+node  implying that the number of nodes at one level is only
+  where   is the weak learning parameter rather than
+exponential in the depth  This approach generally fails in
+the multiclass setting because covering the simplex of multiclass label distributions requires        nodes 
+One easy special case exists  When the distribution over
+class labels is skewed so one label is the majority class 
+learning an entropy minimizing binary classi er predicts
+whether the class is the majority or not  There are only  
+possible OAS regressors of this sort so maintaining one for
+each class label is computationally tractable 
+Using OAS classi ers creates   limited branching program
+structure over predictions  Aside from the space savings
+generated  this also implies that nodes deep in the tree use
+many more labeled examples than are otherwise available 
+In  nite sample regimes  which are not covered by these
+boosting analyses  more labeled samples induce   better
+predictor as per standard sample complexity analysis 
+As   result  we use the empirical Bernstein lower bound on
+recall described in   Reducing the depth of the tree by
+using this lower bound and joining labeled examples from
+many leaves in   oneagainst some approach both relieves
+data sparsity problems and allows greater error tolerance
+by the root node 
+
+  Path Features
+
+Different multiclass classi cation schemes give rise to different multiclass hypothesis classes  For example  the set
+of multiclass decision boundaries realizable under an OAA
+structure over linear regressors is fundamentally different
+from that realizable under   tree structure over linear regressors  Are OAA types of representations inherently
+more or less powerful than   tree based representation 
+Figure   shows two learning problems illustrating two extremes assuming   linear representation 
+
+Logarithmic Time OneAgainst Some
+
+Let wiy     by default and   when   corresponds to   leaf
+for which the tree predicts    Under this representation  the
+prediction of OAA    pathT     is identical to       and
+hence achieves the same error rate 
+
+  Optimization Objective
+
+Figure   Two different distributions over class labels in the plane
+with each color pattern representing support for   single class label  The left distribution is easily solved with an OAA classi er
+while the right distribution is easily solved with   decision tree 
+
+Linear OAA  If all the class parameter vectors happen to
+have the same  cid  norm  then OAA classi cation is equivalent to  nding the nearest neighbor amongst   set of vectors
+ one per class  which partition the space into   Voronoi diagram as in   on the left  The general case  with unequal
+vectors corresponds to   weighted Voronoi diagram where
+the magnitude of two vectors sharing   border determines
+the edge of the partition  No weighted Voronoi diagram can
+account for the partition on the right 
+Trees  If the partition of   space can be represented by
+  sequence of conditional splits  then   tree can represent the solution accurately as in   on the right  On the
+other hand  extra work is generally required to represent  
+Voronoi diagram as on the left  In general  the number of
+edges in   multidimensional Voronoi diagram may grow at
+least quadratically in the number of points implying that the
+number of nodes required for   tree to faithfully represent
+  Voronoi diagram is at least    
+Based on this  neither treebased nor OAA style prediction
+is inherently more powerful  with the best solution being
+problem dependent 
+Since we are interested in starting with   treebased approach and ending with   OAS classi er  there is   simple representational trick which provides the best of both
+worlds  We can add features which record the path through
+the tree  To be precise  let   be   tree and pathT     be  
+vector with one dimension per node in   which is set to
+  if   traverses the node and   otherwise  The following
+proposition holds for linear representations  which are special because they are tractably analyzed and because they
+are the fundamental building blocks around which many
+more complex representations are built 
+Proposition  For any distribution   over         for
+which   tree   achieves error rate     OAA classi er over
+linear regressors  whose input consists of       and the
+corresponding routing path of   in    as indicator features 
+can also achieve error rate  
+
+Proof    linear OAA classi er is de ned by   matrix wiy
+where   ranges over the input and   ranges over the labels 
+
+The Shannon Entropy of class labels is optimized in the
+router of Algorithm   Why 
+Since the Recall Tree jointly optimizes over many base
+learning algorithms  the systemic properties of the joint optimization are important to consider    theory of decision
+tree learning as boosting  Kearns   Mansour    provides   way to understand these joint properties in   population limit  or equivalently on   training set iterated until
+convergence  In essence  the analysis shows each level of
+the tree boosts the accuracy of the resulting tree with this
+conclusion holding for several common objectives 
+In boosting for multiclass classi cation  Choromanska
+et al    Choromanska   Langford    Takimoto
+  Maruoka    it is important to achieve   weak dependence on the number of class labels  Shannon Entropy
+is particularly wellsuited to this goal  because it has only
+  logarithmic dependence on the number of class labels 
+Let      be the probability that the correct label is    conditioned on the corresponding example reaching node   
+is the Shannon entropy of
+
+Then Hn  cid  
+
+ 
+
+    
+
+        log 
+class labels reaching node   
+For this section  we consider   simpli ed algorithm which
+neglects concerns of  nite sample analysis  how optimization is done  and the leaf predictors  What   left is the value
+of optimizing the router objective  We consider an algorithm which recursively splits the leaf with the largest proportion   of all examples starting at the root and reaching
+the leaf  The leaf is split into two new leaves to the left  
+and right    If pl and pr are the fraction of examples going
+left and right  so pl   pr     the split criterion minimizes
+the expectation over the leaves of the average class entropy 
+plHl   prHr  This might be achieved by update router in
+Algorithm   or by any other means  With this criterion we
+are in   position to directly optimize information boosting 
+De nition    Weak Learning Assumption  For all distributions           learning algorithm using examples
+       IID from    nds   binary classi er               
+satisfying
+
+plHl   prHr   Hn      
+
+This approach is similar to previous  Takimoto   Maruoka 
+  except that we boost in an additive rather than   multiplicative sense    multiplicative approach suppresses  
+necessary dependence on    In particular  for any nontrivial   there exists     such that with   uniform distribution
+   HU           As   consequence  theorems proved
+
+Logarithmic Time OneAgainst Some
+
+Table   Datasets used for experimentation 
+
+Source
+Geusebroek et al   
+
+Dataset
+ALOI
+Imagenet Oquab et al   
+LTCB
+ODP
+
+Mahoney  
+Bennett   Nguyen  
+
+Task
+
+Classes
+
+Examples
+
+Visual Object Recognition
+  
+Visual Object Recognition     
+    
+Document Classi cation
+    
+
+Language Modeling
+
+ 
+   
+   
+   
+
+with   multiplicative   are necessarily vacuous for large  
+while additive approaches do not suffer from this issue 
+As long as Weak Learning occurs  we can prove the following theorem 
+Theorem   If   Weak Learning holds for every node in
+the tree and nodes with the largest fraction of examples are
+split  rst  then after       splits the multiclass error rate  
+of the tree is bounded by 
+
+           ln      
+
+where    is the entropy of the marginal distribution of
+class labels 
+
+The proof in appendix   reuses techniques from  Choromanska   Langford    Kearns   Mansour    but
+has   tighter result 
+The most important observation from the theorem is that
+as    the number of splits  increases  the error rate is increasingly bounded  This rate depends on ln   agreeing
+with the intuition that boosting happens level by level in
+the tree  The dependence on the initial entropy    shows
+that skewed marginal class distributions are inherently easier to learn than uniform marginal class distributions  as
+might be expected  These results are similar to previous results  Choromanska et al    Choromanska  
+Langford    Kearns   Mansour    Takimoto  
+Maruoka    with advantages  We handle multiclass
+rather than binary classi cation  Kearns   Mansour   
+we bound error rates instead of entropy  Choromanska
+et al    Choromanska   Langford    and we use
+additive rather than multiplicative weak learning  Takimoto
+  Maruoka   
+
+  Empirical Results
+We study several questions empirically 
+
+  What is the bene   of using oneagainst some on   re 
+
+stationary problems 
+
+  How does the Recall Tree compare to oneagainst all
+
+statistically and computationally 
+
+call set 
+
+  What is the bene   of path features 
+  Is the online nature of the Recall Tree useful on non 
+
+  How does the Recall Tree compare to LOMTree sta 
+
+tistically and computationally 
+
+Throughout this section we conduct experiments using
+learning with   linear representation 
+
+  Datasets
+
+Table   overviews the data sets used for experimentation 
+These include the largest datasets where published results
+are available for LOMTree  Aloi  Imagenet  ODP  plus
+an additional language modeling data set  LTCB  Implementations of the learning algorithms  and scripts to reproduce the data sets and experimental results  are available
+on github  Mineiro    Additional details about the
+datasets can be found in Appendix   
+
+  Comparison with other Algorithms
+
+In our  rst set of experiments  we compare Recall Tree
+with   strong computational baseline and   strong statistical baseline  The computational baseline is LOMTree  the
+only other online logarithmictime multiclass algorithm of
+which we are aware  The statistical baseline is OAA  whose
+statistical performance we want to match  or even exceed 
+and whose linear computational dependence on the number
+of classes we want to avoid  Details regarding the experimental methodology are in Appendix    Results are summarized in Figure  
+
+Comparison with LOMTree The Recall Tree uses   factor of   less state than the LOMTree which makes   dramatic difference in feasibility for large scale applications 
+Given this state reduction  the default expectation is worse
+prediction performance by the Recall Tree  Instead  we observe superior or onpar statistical performance despite the
+state constraint  This typically comes with an additional
+computational cost since the Recall Tree evaluates   number of perclass regressors 
+
+Comparison with OAA On one dataset  ALOI  prediction performance is superior to OAA while on the others it
+is somewhat worse 
+Computationally OAA has favorable constant factors since
+it is highly amenable to vectorization  Conversely  the
+
+Logarithmic Time OneAgainst Some
+
+Figure   Empirical comparison of statistical  left  and computational  right  performance of Recall Tree against two strong competitors 
+OAA  statistically good  and LOMTree  computationally good  In both graphs  lower is better  Recall Tree has poly log  dependence
+upon number of classes  like LOMTree  but can surpass OAA statistically 
+
+conditional execution pattern of the Recall Tree frustrates
+vectorization even with example minibatching  Thus on
+ALOI although Recall Tree does on average   hyperplane
+evaluations per example while OAA does   OAA is
+actually faster  larger numbers of classes are required to
+experience the asymptotic bene ts  For ODP with    
+classes  with negative gradient subsampling and using  
+cores in parallel  OAA is about the same wall clock time
+to train as Recall Tree on   single core  Negative gradient sampling does not improve inference times  which are
+    times slower for OAA than Recall Tree on ODP 
+  Online Operation
+
+In this experiment we leverage the online nature of the algorithm to exploit nonstationarity in the data to improve
+results  This is not something that is easily done with batch
+oriented algorithms  or with algorithms that postprocess  
+trained predictor to accelerate inference 
+We consider two versions of LTCB  In both versions the
+task is to predict the next word given the previous   tokens 
+The difference is that in one version  the Wikipedia dump
+is processed in the original order  inorder  whereas in
+the other version the training data is permuted prior to input
+to the learning algorithm  permuted  We assess progressive validation loss  Blum et al    on the sequence 
+The result in Figure    con rms the Recall Tree is able to
+take advantage of the sequentially revealed data  in particular  the farright difference in accuracies is signi cant at  
+factor       according to an       Chisquared test 
+  Path Features and Multiple Regressors
+
+Two differences between Recall Tree and LOMTree are the
+use of multiple regressors at each tree node and the aug 
+
+ While not yet implemented  Recall Tree can presumably also
+
+leverage multicore for acceleration 
+
+mentation of the example with path features  In this experiment we explore the impact of these design choices using
+the ALOI dataset 
+Figure    shows the effect of these two aspects on statistical performance  As the candidate set size is increased  test
+error decreases  but with diminishing returns  Disabling
+path features degrades performance  and the effect is more
+pronounced as the candidate set size increases  This is expected  as   larger candidate set size decreases the dif culty
+of obtaining good recall         good tree  but increases the
+dif culty of obtaining good precision       good class regressors  and path features are only applicable to the latter  All differences here are signi cant at        
+according to an       Chisquared test  except for when
+the candidate set size is   where there is no signi cant difference 
+
+  Is the empirical Bernstein bound useful 
+
+To test this we trained on the LTCB dataset with   multiplier on the bound of either        
+just using empirical
+recall directly  or   The results are stark  with   multiplier
+of   the test error was   while with   multiplier of   the
+test error was   Clearly  in the few samples per class
+regime this form of direct regularization is very helpful 
+
+  Related Work
+The LOMTree  Choromanska et al    Choromanska
+  Langford    is the closest prior work  It misses on
+space requirements  up to   factor of   more space than
+OAA was used experimentally  Despite working with radically less space we show the Recall Tree typically provides
+better predictive performance  The key differences here are
+algorithmic    tighter reduction at internal nodes and the
+oneagainst some approach yields generally better performance despite much tighter resource constraints 
+
+         ALOIImagenetODPDelta Test Error  From OAAStatistical PerformanceLOMTreeRecall Tree              ALOIImagenetODPInference TimePer Example  seconds Computational PerformanceOAARecall TreeLOMTreeLogarithmic Time OneAgainst Some
+
+    When the LTCB dataset is presented in the original order  Recall Tree is able to exploit sequential correlations for improved
+performance  After all examples are processed  the average progressive accuracy is   vs   
+
+    Test error on ALOI for various candidate set sizes  with or
+without path features  all other parameters held  xed  Using
+multiple regressors per leaf and including path features improves
+performance 
+
+Figure  
+
+Our use of entropy optimization is closely related to the
+foundational work on decision tree learning  Quinlan 
+  picking single features on which to split based on
+entropy  More recently  it is decision tree learning can be
+thought of as boosting  Kearns   Mansour    for multiclass learning  Takimoto   Maruoka    based on on
+  generalized notion of entropy  which results in low  
+loss  Relative to these works we show how to ef ciently
+achieve weak learning by reduction to binary classi cation
+making this approach empirically practical  We also address   structural issue in the multiclass analysis  see section  
+Other approaches such as hierarchical softmax  HSM  and
+the the Filter Tree  Beygelzimer et al    use    xed
+tree structure  Morin   Bengio   
+In domains in
+which there is no prespeci ed tree hierarchy  using   random tree structure can lead to considerable underperformance as shown previously  Bengio et al    Choromanska   Langford   
+Most other approaches in extreme classi cation either do
+not work online  Mnih   Hinton    Prabhu   Varma 
+  or only focus on speeding up either prediction time
+or training time but not both  Most of the works that enjoy
+sublinear inference time  but  super linear training time 
+are based on tree decomposition approaches  In  Mnih  
+Hinton    the authors try to add tree structure learning
+to HSM via iteratively clustering the classes  While the end
+result is   classi er whose inference time scales logarithmically with the number of classes  the clustering steps are
+batch and scale poorly with the number of classes  Similar
+remarks apply to  Bengio et al    where the authors
+propose to learn   tree by solving an eigenvalue problem
+after  OAA  training  The work of  Weston et al   
+is similar in spirit to ours  as the authors propose to learn
+
+  label  lter to reduce the number of candidate classes in
+an OAA approach  However they learn the tree after training the underlying OAA regressors while here we learn 
+and more crucially use  the tree during training of the OAS
+regressors  Among the approaches that speed up training time we distinguish exact ones  de Br ebisson   Vincent    Vincent et al    that have only been proposed for particular loss functions and approximate ones
+such as negative sampling as used      in  Weston et al 
+  Though these techniques do not address inference
+time  separate procedures for speeding up inference  given
+  trained model  have been proposed  Shrivastava   Li 
+  However  such two step procedures can lead to substantially suboptimal results 
+
+  Conclusion
+In this work we proposed the Recall Tree    reduction of
+multiclass to binary classi cation  which operates online
+and scales logarithmically with the number of classes  Unlike the LOMTree  Choromanska   Langford    we
+share classi ers among the nodes of the tree which alleviates data sparsity at deep levels while greatly reducing
+the required state  We also use   tighter analysis which is
+more closely followed in the implementation  These features allow us to reduce the statistical gap with OAA while
+still operating many orders of magnitude faster for large
+  multiclass datasets  In the future we plan to investigate
+multiway splits in the tree since   log   way splits does
+not affect our   poly log    running time and they might
+reduce contention in the root and nodes high in the tree 
+
+                              Average CumulativeProgressive Accuracy  Examplesinorderpermuted                    Test Error  Candidate Set Sizewith path featureswithout path featuresLogarithmic Time OneAgainst Some
+
+References
+Bengio  Samy  Weston  Jason  and Grangier  David  Label
+embedding trees for large multiclass tasks  In Advances
+in Neural Information Processing Systems  pp   
+ 
+
+Bennett  Paul   and Nguyen  Nam  Re ned experts  improving classi cation in large taxonomies  In Proceedings of the  nd international ACM SIGIR conference on
+Research and development in information retrieval  pp 
+  ACM   
+
+Beygelzimer  Alina  Langford  John  and Ravikumar 
+Pradeep  Errorcorrecting tournaments  In Algorithmic
+Learning Theory   th International Conference  ALT
+  Porto  Portugal  October     Proceedings 
+pp     
+
+Bhatia  Kush  Jain  Himanshu  Kar  Purushottam  Varma 
+Manik  and Jain  Prateek  Sparse local embeddings for
+extreme multilabel classi cation  In Advances in Neural
+Information Processing Systems  pp     
+
+Blum  Avrim  Furst  Merrick  Kearns  Michael  and Lipton 
+Richard    Cryptographic primitives based on hard learning problems  In Advances in cryptologyCRYPTO  pp 
+  Springer   
+
+Blum  Avrim  Kalai  Adam  and Langford  John  Beating the holdout  Bounds for kfold and progressive
+crossvalidation  In Proceedings of the Twelfth Annual
+Conference on Computational Learning Theory  COLT
+  Santa Cruz  CA  USA  July     pp   
+   
+
+Choromanska  Anna  Choromanski  Krzysztof  and Bojarski  Mariusz  On the boosting ability of topdown
+decision tree learning algorithm for multiclass classi 
+cation  CoRR  abs    URL http 
+ arxiv org abs 
+
+Choromanska  Anna   and Langford  John  Logarithmic
+time online multiclass prediction  In Advances in Neural
+Information Processing Systems  pp     
+
+de Br ebisson  Alexandre and Vincent  Pascal  An exploration of softmax alternatives belonging to the spherical
+loss family  arXiv preprint arXiv   
+
+Geusebroek  JanMark  Burghouts  Gertjan    and Smeulders  Arnold WM  The Amsterdam library of object images  International Journal of Computer Vision   
+   
+
+Good        The population frequencies of species and
+the estimation of population parameters  Biometrika   
+   
+
+He  Kaiming  Zhang  Xiangyu  Ren  Shaoqing  and Sun 
+Jian  Deep residual learning for image recognition 
+CoRR  abs   
+
+Kearns  Michael and Mansour  Yishay  On the boosting
+ability of topdown decision tree learning algorithms  In
+Proceedings of STOC  pp    ACM   
+
+Mahoney  Matt 
+
+Large text compression benchmark 
+
+http www mattmahoney net text text html   
+
+Mansour  Yishay and McAllester  David  Boosting using
+branching programs  Journal of Computer and System
+Sciences     
+
+Maurer  Andreas and Pontil  Massimiliano 
+
+Empirical bernstein bounds and sample variance penalization 
+arXiv preprint arXiv   
+
+Mineiro  Paul  Recall tree demo    URL https 
+
+ github com JohnLangford vowpal 
+wabbit tree master demo recall tree 
+
+Mnih  Andriy and Hinton  Geoffrey      scalable hierarchical distributed language model  In Advances in neural
+information processing systems  pp     
+
+Morin  Frederic and Bengio  Yoshua  Hierarchical probabilistic neural network language model  In Proceedings
+of the international workshop on arti cial intelligence
+and statistics  pp     
+
+Oquab     Bottou     Laptev     and Sivic     Learning
+and transferring midlevel image representations using
+convolutional neural networks  In CVPR   
+
+Prabhu  Yashoteja and Varma  Manik  Fastxml    fast 
+accurate and stable treeclassi er for extreme multilabel
+learning  In Proceedings of the  th ACM SIGKDD  pp 
+  ACM   
+
+Quinlan          Programs for Machine Learning  Mor 
+
+gan Kaufmann   
+
+Rifkin  Ryan and Klautau  Aldebaro 
+
+In defense of onevs all classi cation  The Journal of Machine Learning
+Research     
+
+Shrivastava  Anshumali and Li  Ping  Asymmetric lsh
+ alsh  for sublinear time maximum inner product search
+ mips  In Advances in Neural Information Processing
+Systems  pp     
+
+Simonyan  Karen and Zisserman  Andrew  Very deep convolutional networks for largescale image recognition 
+CoRR  abs    URL http arxiv 
+org abs 
+
+Logarithmic Time OneAgainst Some
+
+Takimoto  Eiji and Maruoka  Akira  Topdown decision
+Theor 
+tree learning as information based boosting 
+Comput  Sci     
+doi   
+   URL http dx doi 
+org   
+
+Vincent  Pascal  de Br ebisson  Alexandre  and Bouthillier 
+Xavier  Ef cient exact gradient update for training deep
+networks with very large sparse targets  In NIPS   pp 
+   
+
+Weston  Jason  Bengio  Samy  and Usunier  Nicolas  WSABIE  scaling up to large vocabulary image annotation  In
+IJCAI   Proceedings of the  nd International Joint
+Conference on Arti cial Intelligence  Barcelona  Catalonia  Spain  July     pp     
+
+Weston  Jason  Makadia  Ameesh  and Yee  Hector  Label partitioning for sublinear ranking  In Proceedings of
+the  th International Conference on Machine Learning
+ ICML  pp     
+
+

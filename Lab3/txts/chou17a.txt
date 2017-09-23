@@ -1,0 +1,1256 @@
+Improving Stochastic Policy Gradients in Continuous Control with Deep
+
+Reinforcement Learning using the Beta Distribution
+
+PoWei Chou   Daniel Maturana   Sebastian Scherer  
+
+Abstract
+
+Recently  reinforcement learning with deep neural networks has achieved great success in challenging continuous control problems such as   
+locomotion and robotic manipulation  However 
+in realworld control problems  the actions one
+can take are bounded by physical constraints 
+which introduces   bias when the standard Gaussian distribution is used as the stochastic policy 
+In this work  we propose to use the Beta distribution as an alternative and analyze the bias
+and variance of the policy gradients of both policies  We show that the Beta policy is biasfree
+and provides signi cantly faster convergence and
+higher scores over the Gaussian policy when
+both are used with trust region policy optimization  TRPO  and actor critic with experience replay  ACER  the stateof theart onand offpolicy stochastic methods respectively  on OpenAI Gym   and MuJoCo   continuous control environments 
+
+  Introduction
+Over the past years  reinforcement learning with deep feature representations  Hinton et al    Krizhevsky et al 
+  has achieved unprecedented  or even superhuman
+level  successes in many tasks  including playing Go  Silver et al    and playing Atari games  Mnih et al   
+  Guo et al    Schulman et al     
+In reinforcement learning tasks  the agent   action space
+may be discrete  continuous  or some combination of both 
+Continuous action spaces are generally more challenging
+ Lillicrap et al      naive approach to adapting deep
+reinforcement learning methods  such as deep Qlearning
+ Mnih et al    to continuous domains is simply dis 
+
+ Robotics Institute  Carnegie Mellon University  USA  Correspondence to  Sebastian Scherer  basti andrew cmu edu 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+Figure   An example of continuous control with bounded action
+space  In most realworld continuous control problems  the actions can only take on values within some bounded interval  nite
+support  For example  the steering angle of most Ackermannsteered vehicles can only range from   to  
+
+cretizing the action space  However  this method has several drawbacks  If the discretization is coarse  the resulting output will not be smooth  if it is  ne  the number
+of discretized actions may be intractably high  This issue
+is compounded in scenarios with high degrees of freedom
+      robotic manipulators and humanoid robots  due to
+the curse of dimensionality  Bellman   
+There has been much recent progress in modelfree continuous control with reinforcement learning  Asynchronous
+Advantage ActorCritic        Mnih et al    allows
+neural network policies to be trained and updated asynchronously with multiple CPU cores in parallel  Value
+Iteration Networks  Tamar et al    provide   differentiable module that can learn to plan  Exciting results
+have been shown on highly challenging    locomotion and
+manipulation tasks  Heess et al    Schulman et al 
+      including realworld robotics problems where
+the inputs is raw visual data  Watter et al    Lillicrap et al    Levine et al    Derivativefree black
+box optimization like evolution strategies  Salimans et al 
+  have also been proven to be very successful in wide
+variety of tasks 
+Despite recent successes  most reinforcement learning algorithms still require large amounts of training episodes
+and huge computational resources  This limits their applicability to richer  more complex  and higher dimensional
+
+Improving Stochastic Policy Gradients in Continuous Control with Deep Reinforcement Learning using the Beta Distribution
+
+continuous control realworld problems 
+In stochastic continuous control problems  it is standard
+to represent their distribution with   Normal distribution
+      and predict the mean  and sometimes the variance  of it with   function approximator such as deep neural
+networks  Williams    Duan et al    Mnih et al 
+  This is called   Gaussian Policy 
+By computing the gradients of the policy with respect to  
+and   backpropagation  Rumelhart et al    and minibatch stochastic gradient descent  or ascent  can be used to
+train the network ef ciently 
+However    littlestudied issue in recent approaches is that
+for many applications  the action spaces are bounded  action can only take on values within   bounded  nite  interval due to physical constraints  Examples include the
+joint torque of   robot arm manipulator and the steering angle and acceleration limits of Ackermannsteered vehicles 
+In these scenarios  any probability distribution with in 
+nite support like the Gaussian will unavoidably introduce
+an estimation bias due to boundary effects  as in Figure  
+which may slow down the training progress and make these
+problems even harder to solve 
+In this work  we focus on continuous stateaction deep
+reinforcement learning  We address the shortcomings of
+the Gaussian distribution with    nite support distribution 
+Speci cally  we use the Beta distribution with shape parameters     as in   and call this the Beta policy 
+It
+has several advantages  First  the Beta distrbution is  nitesupport and does not suffer from the same boundary effects as the Gaussian does  Thus it is biasfree and converges faster  which means   faster training process and
+  higher score  Second  since we only change the underlying distribution  it is compatible with all stateof theart
+stochastic continuous control onand offpolicy algorithms
+such as trust region policy optimization  TRPO   Schulman et al      and actorcritic with experience replay
+ ACER   Wang et al   
+We show that the Beta policy provides substantial gains in
+scores and training speed over the Gaussian policy on several continuous control environments  including two simple classical control problems in OpenAI Gym  Brockman
+et al    three multijoint dynamics and control problems in MuJoCo  Todorov et al    and one allterrain 
+vehicle  ATV  driving simulation in an offroad environment 
+
+  Background
+  Preliminaries
+We model our continuous control reinforcement learning
+as   Markov decision process  MDP  An MDP consists
+
+of   state space    an action space    an initial state   
+and the corresponding state distribution        stationary
+transition distribution describing the environment dynamics   st st  at  that satis es the Markov property  and  
+reward function                     for every state  
+and action    An agent selects actions to interact with the
+environment based on   policy  which can be either deterministic or stochastic  In this paper  we focus on the latter    stochastic policy can be described as   probability
+distribution of taking an action   given   state   parameterized by   ndimensional vector     Rn  denoted as
+              
+At each timestep      policy distribution    st  is
+constructed from the distribution parameters       from
+        if it     Normal distribution  An action at
+is then sampled from this distribution to interact with the
+environment       at    st  Starting from an initial state  an agent follows   policy to interact with the
+MDP to generate   trajectory of states  actions  and rewards                   sT   aT   rT  The goal of an agent
+is to maximize the return from   state  de ned as the tot        ir st    at    where
+tal discounted reward   
+        is the discount factor describing how much we
+favor current reward over those in the future 
+To describe how good it is being in state   under the policy     statevalue function             
+         is
+de ned as the expected return starting from state    following the policy   interacting with environment dynamics  and repeating until the maximum number of episodes
+is reached  An actionvalue function         which describes the value of taking   certain action  is de ned similarly  except it is the expected return starting from state  
+after taking an action   under policy  
+The goal in reinforcement learning is to learn   policy maximizing the expected return from the start distribution
+
+     
+
+    
+
+             da ds
+
+ 
+
+ 
+
+  Es              
+
+where            tp st      is the unnormalized
+
+discounted state visitation frequency in the limit  Sutton
+et al   
+
+  Stochastic Policy Gradient
+Policy gradient methods are featured heavily in the stateof theart modelfree reinforcement learning algorithms
+ Mnih et al    Duan et al    Lillicrap et al   
+Wang et al    In these methods  training of the policy is performed by following the gradient of the performance with respect to the parameters      This gradient can be computed from the Policy Gradient Theorem
+ Sutton et al    by simply changing         to        
+
+Improving Stochastic Policy Gradients in Continuous Control with Deep Reinforcement Learning using the Beta Distribution
+
+in   and moving the gradient operator inside the integral 
+
+      
+  
+
+    
+    
+
+            da ds
+     gqda ds
+
+  Es     gq   
+
+ 
+
+where       instead of        is used to represent  
+stochastic policy and gq is the policy gradient estimator using         as the target
+
+gq     log               
+
+ 
+
+However  exact computation of the double integral in   is
+generally intractable  Instead  we can estimate it by sampling  given enough samples of gq  the sample mean  gq 
+will converge to its expectation      by the law of
+large numbers
+
+ gq  
+
+ 
+ 
+
+    
+
+gq
+
+     gq       
+
+as        
+
+ 
+
+Estimating the policy gradient is one of the most important
+issues in reinforcement learning  We want gq in   to be
+biasfree so that it converges to the true policy gradient  As
+we will show in the following section  this is not always
+true  At the same time  we also want to reduce the sample variance  so that the gradient is less noisy and stable  as
+this improves the convergence rate and speeds up the training progress  The actionvalue function         can be
+estimated by   variety of samplebased algorithms such as
+MonteCarlo  MC  or temporaldifference  TD  learning 
+  lookup table is usually used to store         for each
+state   and action   
+
+  Stochastic ActorCritic
+For an MDP with intractably large state space  using  
+lookup table is no longer practical 
+Instead  function
+approximation methods are more common  Deep QNetworks  DQN   Mnih et al    use   deep neural network parameterized by    to approximate the actionvalue
+function  denoted as                      This is appealing since deep learning has been shown to be very powerful
+and successful in computer vision  speech recognition and
+many other domains  LeCun et al   
+Unfortunately  direct application of DQN to continuous action spaces is dif cult  First  as mentioned earlier  if we
+discretize the action space  it is hampered by the curse
+of dimensionality  Second  in the Qlearning algorithm 
+one needs to  nd the  greedy  action that maximizes the
+actionvalue function           arg maxa            This
+means an additional optimization procedure is required at
+
+every step inside the stochastic gradient descent optimization  which makes it impractical 
+The solution to this is the ActorCritic methods  Sutton  
+Barto    Peters   Schaal    Degris et al   
+Munos et al   
+In these methods an actor learns  
+policy to select actions and   critic estimates the value function  and criticizes decisions made by the actor  The actor
+with policy       and the critic with            are trained
+simultaneously 
+Replacing the true actionvalue function         by
+  function approximator            may introduce bias 
+Nonetheless  in practice  with the help of experience replay
+ Lin    and target networks  Mnih et al    actorcritic methods still converge to good policies  even with
+deep neural networks  Lillicrap et al    Silver et al 
+ 
+One of the best known variance reduction technique for
+actorcritic without introducing any bias is to substract  
+baseline function      from         in    Greensmith
+et al      natural choice for      is       since it is
+the expected actionvalue function                     
+Ea           This gives us the de nition of advantage
+function         and the following stochastic policy gradient estimates 
+
+                           
+
+ga     log               
+
+ 
+ 
+
+The advantage function         measures how much better than the average it is to take an action    With this
+method  the policy gradient in   is shifted in   way such
+that it is the relative difference  rather than the absolute
+value         that determines the gradient 
+
+  In nite Finite Support Distribution for
+Stochastic Policy in Continuous Control
+
+Using the Gaussian distribution as   stochastic policy
+in continous control has been wellstudied and commonly used in the reinforcement learning community since
+ Williams    This is most likely because the Gaussian distribution is easy to sample and has gradients that
+are easy to compute  which makes it the  rst choice of the
+probability distribution 
+However  we argue that this is not always   good choice 
+In most continuous control reinforcement learning applications  actions can only take on values within some  nite interval due to physical constraints  which introduces   nonnegligible bias caused by boundary effects  as we show below 
+This motivates us to use   distribution that can solve this
+problem  Among continuous distributions with  nite sup 
+
+Improving Stochastic Policy Gradients in Continuous Control with Deep Reinforcement Learning using the Beta Distribution
+
+ 
+ 
+ 
+ 
+ 
+ 
+
+biased
+toward
+boundary
+
+  
+
+reward
+over estimated reward
+policy distribution
+biased policy distribution
+
+ 
+
+Action
+
+ 
+
+Figure   An example of over estimation of rewards outside the
+boundary 
+
+port  the wellknown Beta distribution emerges as   natural
+candidate  as it is expressive yet simple  with two easily
+interpretable parameters 
+In Bayesian statistics  the Beta distribution is often used
+as the conjugate prior probability distribution for the
+Bernoulli and binomial distributions  describing the initial belief about the probability of the success of each trial
+ Bernardo   Smith    One loose inspiration behind
+our use of the Beta function is spikerate coding  as seen
+in biological neurons  Gerstner et al    or pulse density modulation  as used in arti cial systems  here  the Beta
+could be seen as modeling the probability of   neuron  ring  or   pulse being emitted  over   small time interval 
+In the following  we show that the Beta policy is biasfree
+and   better choice than the Gaussian  We compare the
+variance of the policy gradient of both policies and show
+that as with the Gaussian policy  Natural Policy Gradient is
+also necessary for the Beta policy to achieve   good performance 
+
+  Gaussian Policy
+To employ   Gaussian policy  we can de ne the policy as
+
+       
+
+ 
+
+ 
+
+exp 
+
+      
+
+     
+
+ 
+
+where the mean         and the standard deviation
+        are given by   function approximator parameterized by   To enable the use of backpropagation  we
+can reparameterize  Heess et al    action        
+as               where           The policy gradient with respective to     can be computed explicitly as   log            
+and   log        
+   
+    In general  for problem with higher degrees of
+     
+freedom  all action dimensions are assumed to be mutually
+independent 
+
+ 
+
+  Bias due to Boundary Effect
+Modeling    nite support stochastic policy with an in nite
+support probability distribution may introduce bias  By the
+
+de nition of in nite support  every action   is assigned
+with   probability density       that is greater than  
+Nonetheless  in reality  all actions outside the  nite support
+have probability exactly equal to    see Figure  
+To simplify the analysis  we consider the phased update
+framework  Kearns   Singh    in each phase  we are
+given   samples of           from environments under  
+ xed   In other words  we focus mainly on the inner expectation of   Without loss of generality  let us consider
+an onedimensional action space            where    is
+the width of the closed interval  For any action space that
+is not symmetric around   we can always map it to       
+by scaling and shifting 
+So far we have seen two main approaches to employ the
+Gaussian policy in this bounded action scenario in the existing RL implementations 
+
+  Send the action to the environment without capping
+ truncating  it  rst  let the environment cap it for us 
+and use the uncapped action to compute the policy
+gradient 
+
+  Cap the action to the limit  send it to the environment 
+and use the capped action to compute the policy gradient 
+
+ 
+
+ 
+
+In the  rst approach  by letting the environment capping
+the actions for us  we simply pretend there are no action
+bounds  In other words  all actions outside the bounds just
+happen to have the same effect as the actions at the limits 
+The policy gradient estimator in   now becomes      
+  log              where    is the truncated action 
+The bias of the estimator     is
+            
+  Es   
+  Es    
+   
+
+      log             da       
+      log                         da
+      log                          da   
+We can see that as long as the action space   covers the
+support of the policy distribution       supp         
+or as       the last two integrals immediately evaluate to
+zero  Otherwise  there is   bias due to the boundary effect 
+The boundary effect can be better illustrated by the example in Figure   where the reward function peaks  assuming   single mode  at   good action close to the boundary 
+This effectively extends the domain of reward  or value 
+function to previously unde ned region by extrapolating  or
+more precisely  the  replicated  padding  which results in
+arti cially higher rewards outside the bounds and therefore
+
+ 
+
+Improving Stochastic Policy Gradients in Continuous Control with Deep Reinforcement Learning using the Beta Distribution
+
+bias the estimated policy distribution toward the boundary 
+As for multimodal reward functions  one might need to
+consider the use of   mixture model or other density estimation methods since neither the Gaussian nor the Beta
+suf ces under this scenario  However  this is beyond the
+scope of our discussion 
+To make things worse  as   grows  bias also increases  This
+makes sense intuitively  because as   grows  more probability density falls outside the boundary  Note that this is
+not an unusual case  to encourage the actor to explore the
+state space in the early stage of training  larger   is needed 
+In the second approach 
+the policy gradient estimator is even more biased because the truncated action
+is used both in the statevalue function    and in
+  
+the gradient of log probability   log  
+     
+the commonly
+  log             
+used variance reduction techique is less useful since
+Ea    log            no longer integrates to   as
+it should be if   instead of    was used  Not only does it
+suffer from the same bias problem we saw earlier  another
+bias is also introduced through the substraction of the baseline function 
+
+In this case 
+
+    
+
+  Beta Policy
+Let us now consider the Beta distribution
+
+           
+
+     
+ 
+
+         
+
+ 
+
+where   and   are the shape parameters and   is the
+Gamma function that extends factorial to real numbers      
+          for positive integer    The beta distribution
+has   support          as shown in Figure   and it is
+often used to describe the probability of success  where  
+  and       can be thought of as the counts of successes
+and failures from the prior knowledge respectively 
+         to represent the stochastic
+We use                
+policy and call it the Beta Policy  Since the beta distribution has  nite support and no probability density falls outside the boundary  the Beta policy is biasfree  The shape
+parameters                 are also modeled by
+neural networks with parameter   In this paper  we only
+consider the case where         in which the Beta distribution is concave and unimodal 
+
+  VARIANCE COMPARED TO GAUSSIAN POLICY
+
+One unfortunate property of the Gaussian policy is that the
+variance of policy gradient estimator is inversely proportional to   As the policy improves and becomes more
+deterministic       the variance of   goes to in nity
+ Sehnke et al    Zhao et al    Silver et al   
+This is mainly because the ordinary policy gradient de ned
+
+Figure   Probability density function of Beta distributions with
+different   and  
+
+in   does not always yield the steepest direction  Amari 
+  but the natural policy gradient  Kakade    Peters   Schaal    does  The natural policy gradient is
+given by
+
+      gq  
+gnat
+
+ 
+
+where    is the Fisher information matrix de ned as
+
+ 
+
+     Ea  log       log        
+
+and the variance of the policy gradient is
+
+Va gq    Ea   
+
+        
+
+  gq 
+
+  Ea  log       log                    
+
+  gq   
+
+First note that it is often more useful  and informative  to
+say   standard deviations rather than just   points above
+the average  In other words  one should consider the metric
+de ned on the underlying statistical manifold instead of the
+Euclidean distance  The Fisher information matrix    is
+such metric  Jeffreys      gradient vector consists of
+direction and length  For   univariate Gaussian distribution  the ordinary policy gradient has the correct direction 
+but not the correct length  As one moves in the parameter
+space  the metric de ned on this space also changes  which
+effectively changes the length of the ordinary gradient vector  The natural gradient adjusts the learning rate according
+to the probability distribution  slowing down the learning
+rate when the distance on the parameter space compresses 
+and speeding it up as the distance expands 
+For the Gaussian distribution  the Fisher information matrix has the form of    see Supplementary Section   
+The more deterministic the policy becomes  the smaller the
+size of step  proportional to   is needed to take in order
+to increase the same amount of objective function  As   result    constant step of the ordinary gradient descent update
+will overshoot  which results in higher variance of  
+
+Improving Stochastic Policy Gradients in Continuous Control with Deep Reinforcement Learning using the Beta Distribution
+
+Table   List of Environments
+
+ENVIRONMENTS
+MOUNTAINCARCONTINUOUSV 
+PENDULUMV 
+INVERTEDPENDULUMV 
+INVERTEDDOUBLEPENDULUMV 
+HUMANOIDV 
+OFFROAD DRIVING
+
+   
+ 
+ 
+ 
+ 
+ 
+
+     
+
+   
+ 
+ 
+ 
+ 
+ 
+ 
+
+modeled by softplus  except   constant   is added to the
+output to make sure          see Section  
+For both policy distributions  we add the entropy of policy       with   constant multiplier   encouraging
+exploration in order to prevent premature convergence to
+suboptimal policies  Mnih et al      discount factor
+  is set to   across all tasks 
+
+  Classical Control
+First  as   proof of concept  we compare the Beta distribution with Normal distribution in two classical continuous control  MountainCarContinuousv  and Pendulumv 
+ see Figure     and     using the simplest actorcritic
+method  no asynchronuous updates  Mnih et al    experience replays  or natural policy gradient are used  For
+the actor  we only use lowdimensional physical state like
+joint velocities and vehicle speed  No visual input  such
+as RGB pixel values  is used  We  rst featurize the input state to  dimensional vectors using random Radial
+Basis Functions  Rahimi et al  and then pass it to   simple neural network where the only layer is the  nal output
+layer generating statistics for the policy distribution  This is
+effectively   linear combination of state features        
+where   is the featurizing function and   is the weight vector to be learnt  For the critic  we use  step TDerror  as
+an unbiased estimation of the advantage function in  
+In both tasks  we found that Beta policies consistently provide faster convergence than Gaussian policies  see Figure
+    and    
+
+  MuJoCo
+Next  we evaluate Beta policies on three OpenAI
+Gym   MuJoCo environments 
+InvertedPendulumv 
+InvertedDoublePendulumv  and Humanoidv   see Figure
+        and     using both onpolicy and offpolicy
+methods  Results are shown in Figure         and    
+The goal for the  rst two is to balance the inverted pendulum and stay upright as long as possible  For the humanoid
+robot  the goal is to walk as fast as possible without falling
+
+ kstep TD error    
+
+    irt      kV st        st 
+
+Figure   Loglikelihood of Beta distributions  For each curve 
+we sample   data points xi             and plot the the averaged loglikelihood curve by evaluating  
+   log    xi      at
+      ranging from   to   The maximum loglikehood will
+peak at the same     where the samples were drawn from initially if   is large enough  Unlike the Normal distribution  the
+more deterministic the Beta distribution becomes  the  atter the
+loglikelihood curve  from blue  orange       to cyan 
+
+As for the Beta policy  the Fisher information matrix goes
+to zero as policy becomes deterministic  as does the variance of the policy gradient  see Supplementary Section   
+However  this is not   desirable property  This can be better
+illustrated by the example in Figure   where the curvature
+ attens out at   rate so high that it is impossible for the
+ordinary policy gradient to catch up with  making the estimation of   and   increasingly hard without the use of
+the natural policy gradient  In this case  not just the length
+has to be adjusted  but also the offdiagonal terms in the
+information matrix 
+
+  Experiments
+We evaluate our proposed methods in   variety of environments  including the classical control problems in OpenAI
+Gym  the physical control and locomotion tasks in MultiJoint dynamics with Contact  MuJoCo  physical simulator 
+and   setup intended to simulate an autonomous driving in
+an offroad environment 
+In all experiments  inputs are processed using neural networks with architectures depending on the observation and
+action spaces  For both distributions  we assume the action dimensions are independent and thus have zero covariance  For all architectures  the last two layers output two
+   dimensional real vectors  either     the mean   and
+the variance   for   multivariate normal distribution with
+  spherical covariance  or     the shape vectors     for  
+Beta distribution 
+Speci cally  for the Normal distribution    is modeled by
+  linear layer and   by   softplus elementwise operation 
+log    exp    For the Beta distribution      are also
+
+Improving Stochastic Policy Gradients in Continuous Control with Deep Reinforcement Learning using the Beta Distribution
+
+Beta
+Gaussian
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+ 
+ 
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+Training episodes
+
+ 
+
+ 
+
+    Mountain Car
+
+    Mountain Car
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+ 
+ 
+ 
+
+Beta
+Gaussian
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+Training episodes
+
+ 
+
+ 
+
+    Pendulum
+
+    Pendulum
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+ 
+ 
+ 
+
+ 
+
+ 
+
+TRPO Beta
+TRPO Gaussian
+ACER Beta
+ACER Gaussian
+
+  
+
+  
+
+Training episodes
+
+  
+
+  
+
+    Inverted Pendulum
+
+    Inverted Pendulum
+
+ 
+ 
+ 
+ 
+ 
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+ 
+
+TRPO Beta
+TRPO Gaussian
+ACER Beta
+ACER Gaussian
+
+  
+
+  
+
+  
+
+  
+
+Training episodes
+
+    Double Pendulum
+
+    Double Pendulum
+
+ 
+ 
+ 
+ 
+ 
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+ 
+
+TRPO Beta
+TRPO Gaussian
+ACER Beta
+ACER Gaussian
+
+  
+
+  
+
+  
+
+  
+
+Training episodes
+
+    Humanoid
+
+    Humanoid
+
+Figure   Screenshots of the continuous control tasks on OpenAI
+Gym  rst two  and MuJoCo  last three  and training summary
+for Normal distribution and Beta distribution  The xaxis shows
+the total number of training epochs  The yaxis shows the average
+scores  also   standard deviation  over several trials 
+
+at the same time minimize actions to take and impacts of
+each joint 
+In the onpolicy experiments  we use the original implementation  provided by the authors of TRPO  Schulman
+et al      with the same hyperparameters and con guration that were used to generate their stateof theart training results  TRPO is similar to natural policy gradient
+methods but more ef cient for optimizing large function
+approximators such as neural networks 
+By simply changing the policy distribution  we  nd that
+TRPO Beta provides   signi cant performance improvement  about    faster  over TRPO Gaussian on the most
+dif cult Humanoid environment  However  only   slight
+improvement over the Gaussian policy is observed on the
+less dif cult Inverted Double Pendulum  For the simplest
+task  Inverted Pendulum  Gaussian TRPO has   slight advantage over TRPO Beta  however  since both methods
+completely solve the Inverted Pendulum in   matter of minutes  the absolute difference is small 
+For the offpolicy experiments  we implement ACER in
+TensorFlow according to Algorithm   in  Wang et al 
+  Asynchronous updates with four CPUs and nonprioritized experience replays of ratio   are used  The
+learning rate is sampled loguniformly from      
+  The soft updating parameter for the average policy
+network is set to   across all tasks  For the Gaussian
+distribution    is squashed by   hyperbolic tangent function to prevent   variance that is too large  too unstable to
+be compared  or too small  under ow  Speci cally  we
+only allow   ranging from   to    see Section  
+Substantial improvements over Gaussian policies are also
+observed in the offpolicy experiments among all tasks 
+Though sometimes Gaussian can  nd   good policy faster
+than the Beta  it plummets after tens of training episodes 
+then repeats  which results in   lower average score and
+higher variance  Figure     The improvement over the
+Gaussian policy on the Humanoid is the most prominent
+and that on the Inverted Pendulum is less signi cant  This
+trend suggests that the bias introduced by constrained action spaces is compounded in systems with higher degrees
+of freedom 
+Note that these results are not directly comparable with the
+previous onpolicy TRPO  First    fast and ef cient variant
+of TRPO was proposed in ACER as   tradeoff  Second 
+we do not use the generalized advantage estimator  GAE 
+ Schulman et al      though it can be done by modifying the Retrace  Munos et al    target update rule in
+ACER  Third    smaller batch size is usually used during
+the alternating onpolicy and offpolicy updates in ACER 
+Similar unstable behaviors can also be observed when we
+ See https github com joschu modular rl 
+
+Improving Stochastic Policy Gradients in Continuous Control with Deep Reinforcement Learning using the Beta Distribution
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+ 
+ 
+ 
+
+ 
+
+  
+
+Beta
+Gaussian
+
+  
+
+  
+
+  
+Training episodes
+
+  
+
+  
+
+    OffRoad Driving
+
+    replay ratio  
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+ 
+ 
+ 
+
+ 
+
+  
+
+  
+Training episodes
+
+  
+
+  
+
+Beta
+Gaussian
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+ 
+ 
+ 
+
+  
+
+  
+
+ 
+
+  
+
+  
+Training episodes
+
+  
+
+  
+
+Beta
+Gaussian
+
+  
+
+  
+
+    replay ratio  
+
+    replay ratio  
+
+Figure   Screenshots of offroad driving task and training summary for the Normal distribution and Beta distribution  The xaxis shows the total number of training epochs  The yaxis shows
+the average scores  also   standard deviation  over   different
+experiments with varying parameters  see text for details 
+
+try to reduce the batch size of update in onpolicy TRPO
+experiments  We believe this is because   smaller batch
+size means more frequent updates  which helps the agents
+to explore faster in the early stage of training but starts to
+hamper the performance in the later stage  when   larger
+sample size is needed to reduce the sample variance in such
+unstable robot arm  or locomotion  con gurations 
+Similar to the  ndings in evolution strategies  Salimans
+et al    humanoid robots under different stochastic
+policies also exhibit different gaits  those with Beta policies always walk sideways but those with Gaussian policies
+always walk forwards  We believe this suggests   different
+exploration behavior and could be an interesting research
+direction in the future 
+
+  OffRoad Autonomous Driving in Local Maps
+Last  we consider   simpli ed All Terrain Vehicle  ATV 
+autonomous navigation problem  In this problem  the angent  an ATV vehicle  must navigate an offroad    map
+where each position in the map has   scalar traversability
+value  The vehicle is rewarded for driving on smoother terrain  while maintaining   minimum speed 
+The map is       meters  represented as         grid
+ as shown in Figure     The input of the agent is the vehicle   physical state and topdown view of       grid in
+front of the vehicle  rotated to the vehicle frame  The vehicle   action space consists of two commands updated every
+
+  Hz  steering angle and forward speed  Steering angle
+is constrained to     and speed is constrained to
+    km    The vehicle   state is                    where
+     are velocity in lateral and forward direction    is the
+yaw rate  and           are the time derivatives  The vehicle
+commands are related to    and   by   second order vehicle
+model 
+The vehicle   dynamics  which are unknown to the agent
+ thus modelfree  are derived from   vehicle model obtained by system identi cation  The data for the identi 
+cation was recorded by driving an ATV manually in an offroad environment  In all simulations    constant timestep
+of   seconds is used to integrate           for generation
+of trajectories with   unicycle model 
+We follow the  convolutional  network architectures used
+for    maze navigation in  Mirowski et al    and use
+the same setup of ACER as in Section   except we use  
+replay ratio sampled over the values      
+Results show the Beta policy consistently outperforms the
+Gaussian policy signi cantly under all different replay ratios  We found that higher replay ratio works better for the
+Beta but not for the Gaussian  We suspect that despite offpolicy training being more sample ef cient    sample can
+be learnt several times using experience replay  it is generally noisier due to the use of importance sampling  Even
+with the help of Retrace  offpolicy training with high experience replay ratio still destabilizes the Gaussian policy
+ Figure    
+
+  Conclusions
+We introduce   new stochastic policy based on the Beta
+distribution for continuous control reinforcement learning  This method solves the bias problem due to boundary effects arising from the mismatch of in nite support of the commonly used Gaussian distribution and the
+bounded controls that can be found in most realworld
+problems  Our approach outperforms the Gaussian policy when TRPO and ACER  the stateof theart onand
+offpolicy methods  are used 
+It is also compatible with
+all other continuous control reinforcement algorithms with
+Gaussian policies  For future work  we aim to apply this
+to more challenging realworld robotic learning tasks such
+as autonomous driving and humanoid robots  and extend it
+for more complex problems       by using mixtures of Beta
+distributions for multimodal stochastic policies 
+
+Acknowledgements
+We thank GuanHorng Liu  Ming Hsiao  YenChi Chen 
+Wen Sun and Nick Rhinehart for many helpful discussions 
+suggestions and comments on the paper  This research was
+
+Improving Stochastic Policy Gradients in Continuous Control with Deep Reinforcement Learning using the Beta Distribution
+
+funded under award by Yamaha Motor Corporation and
+ONR under award   
+
+References
+Amari  ShunIchi  Natural gradient works ef ciently in
+
+learning  Neural computation     
+
+Bellman  Richard  Dynamic programming and lagrange
+multipliers  Proceedings of the National Academy of Sciences     
+
+Bernardo        and Smith           Bayesian Theory  John
+
+Wiley   Sons  New York   
+
+Brockman  Greg  Cheung  Vicki  Pettersson  Ludwig 
+Schneider  Jonas  Schulman  John  Tang  Jie  and
+Zaremba  Wojciech  Openai gym   
+
+Degris  Thomas  White  Martha  and Sutton  Richard   
+Offpolicy actorcritic  arXiv preprint arXiv 
+ 
+
+Duan  Yan  Chen  Xi  Houthooft  Rein  Schulman  John 
+and Abbeel  Pieter  Benchmarking deep reinforcement
+learning for continuous control  In Proceedings of The
+ rd International Conference on Machine Learning 
+pp     
+
+Gerstner  Wulfram  Kreiter  Andreas    Markram  Henry 
+and Herz  Andreas       Neural codes  Firing rates andbeyond  Proceedings of the National Academy of Sciences     
+
+Greensmith  Evan  Bartlett  Peter    and Baxter  Jonathan 
+Variance reduction techniques for gradient estimates in
+reinforcement learning  Journal of Machine Learning
+Research   Nov   
+
+Guo  Xiaoxiao  Singh  Satinder  Lee  Honglak  Lewis 
+Richard    and Wang  Xiaoshi  Deep learning for
+realtime atari game play using of ine montecarlo tree
+search planning  In Advances in neural information processing systems  pp     
+
+Heess  Nicolas  Wayne  Gregory  Silver  David  Lillicrap 
+Tim  Erez  Tom  and Tassa  Yuval  Learning continuous control policies by stochastic value gradients  In Advances in Neural Information Processing Systems  pp 
+   
+
+Hinton  Geoffrey  Deng  Li  Yu  Dong  Dahl  George   
+Mohamed  Abdelrahman  Jaitly  Navdeep  Senior  Andrew  Vanhoucke  Vincent  Nguyen  Patrick  Sainath 
+Tara    et al  Deep neural networks for acoustic modeling in speech recognition  The shared views of four
+research groups  IEEE Signal Processing Magazine   
+   
+
+Jeffreys  Harold  An invariant form for the prior probability in estimation problems  In Proceedings of the Royal
+Society of London    mathematical  physical and engineering sciences  volume   pp    The Royal
+Society   
+
+Kakade  Sham      natural policy gradient  In Advances in
+Neural Information Processing Systems  pp   
+ 
+
+Kearns  Michael   and Singh  Satinder    Biasvariance error bounds for temporal difference updates  In Proceedings of the Thirteenth Annual Conference on Computational Learning Theory  pp    Morgan Kaufmann Publishers Inc   
+
+Krizhevsky  Alex  Sutskever  Ilya  and Hinton  Geoffrey   
+Imagenet classi cation with deep convolutional neural
+networks  In Advances in neural information processing
+systems  pp     
+
+LeCun  Yann  Bengio  Yoshua  and Hinton  Geoffrey  Deep
+
+learning  Nature     
+
+Levine  Sergey  Finn  Chelsea  Darrell  Trevor  and Abbeel 
+Pieter  Endto end training of deep visuomotor policies  The Journal of Machine Learning Research   
+   
+
+Lillicrap  Timothy    Hunt  Jonathan    Pritzel  Alexander 
+Heess  Nicolas  Erez  Tom  Tassa  Yuval  Silver  David 
+and Wierstra  Daan  Continuous control with deep reinforcement learning  arXiv preprint arXiv 
+ 
+
+Lin  LongJi  Reinforcement learning for robots using neural networks  PhD thesis  Fujitsu Laboratories Ltd   
+
+Mirowski  Piotr  Pascanu  Razvan  Viola  Fabio  Soyer 
+Hubert  Ballard  Andy  Banino  Andrea  Denil  Misha 
+Goroshin  Ross  Sifre  Laurent  Kavukcuoglu  Koray 
+et al  Learning to navigate in complex environments 
+In The  th International Conference on Learning Representations  ICLR   
+
+Mnih  Volodymyr  Kavukcuoglu  Koray  Silver  David 
+Graves  Alex  Antonoglou  Ioannis  Wierstra  Daan  and
+Riedmiller  Martin  Playing atari with deep reinforcement learning  In NIPS Deep Learning Workshop   
+
+Mnih  Volodymyr  Kavukcuoglu  Koray  Silver  David 
+Rusu  Andrei    Veness  Joel  Bellemare  Marc   
+Graves  Alex  Riedmiller  Martin  Fidjeland  Andreas   
+Ostrovski  Georg  et al  Humanlevel control through
+deep reinforcement learning  Nature   
+   
+
+Improving Stochastic Policy Gradients in Continuous Control with Deep Reinforcement Learning using the Beta Distribution
+
+Sutton  Richard   and Barto  Andrew    Reinforcement
+learning  An introduction  volume   MIT press Cambridge   
+
+Sutton  Richard    McAllester  David    Singh  Satinder   
+Mansour  Yishay  et al  Policy gradient methods for reinforcement learning with function approximation   
+
+Tamar  Aviv  Levine  Sergey  Abbeel  Pieter  WU  YI  and
+Thomas  Garrett  Value iteration networks  In Advances
+in Neural Information Processing Systems  pp   
+   
+
+Todorov  Emanuel  Erez  Tom  and Tassa  Yuval  Mujoco 
+In IntelliA physics engine for modelbased control 
+gent Robots and Systems  IROS    IEEE RSJ International Conference on  pp    IEEE   
+
+Wang  Ziyu  Bapst  Victor  Heess  Nicolas  Mnih 
+Volodymyr  Munos  Remi  Kavukcuoglu  Koray  and
+de Freitas  Nando  Sample ef cient actorcritic with experience replay  In The  th International Conference on
+Learning Representations  ICLR   
+
+Wasserman  Larry  All of statistics    concise course in statistical inference  Springer Science   Business Media 
+ 
+
+Watter  Manuel  Springenberg  Jost  Boedecker  Joschka 
+and Riedmiller  Martin  Embed to control    locally linear latent dynamics model for control from raw images 
+In Advances in Neural Information Processing Systems 
+pp     
+
+Williams  Ronald    Simple statistical gradientfollowing
+learning 
+
+algorithms for connectionist reinforcement
+Machine learning     
+
+Zhao  Tingting  Hachiya  Hirotaka  Niu  Gang  and
+Sugiyama  Masashi  Analysis and improvement of policy gradient estimation  In Advances in Neural Information Processing Systems  pp     
+
+Mnih  Volodymyr  Badia  Adri   Puigdom enech  Mirza 
+Mehdi  Graves  Alex  Lillicrap  Timothy  Harley  Tim 
+Silver  David  and Kavukcuoglu  Koray  Asynchronous
+methods for deep reinforcement learning 
+In International Conference on Machine Learning  pp   
+ 
+
+Munos    emi  Stepleton  Tom  Harutyunyan  Anna  and
+Bellemare  Marc  Safe and ef cient offpolicy reinforcement learning  In Advances in Neural Information Processing Systems  pp     
+
+Peters  Jan and Schaal  Stefan  Policy gradient methods
+for robotics 
+In Intelligent Robots and Systems   
+IEEE RSJ International Conference on  pp   
+IEEE   
+
+Peters  Jan and Schaal  Stefan  Natural actorcritic  Neuro 
+
+computing     
+
+Rahimi  Ali  Recht  Benjamin  et al  Random features for
+
+largescale kernel machines 
+
+Rumelhart  David    Hinton  Geoffrey    and Williams 
+Ronald    Learning representations by backpropagating
+errors  Cognitive modeling     
+
+Salimans  Tim  Ho  Jonathan  Chen  Xi  and Sutskever 
+Ilya  Evolution strategies as   scalable alternative to reinforcement learning  arXiv preprint arXiv 
+ 
+
+Schulman  John  Levine  Sergey  Abbeel  Pieter  Jordan 
+Michael  and Moritz  Philipp  Trust region policy optimization  In Proceedings of The  nd International Conference on Machine Learning  pp       
+
+Schulman  John  Moritz  Philipp  Levine  Sergey  Jordan 
+Michael  and Abbeel  Pieter  Highdimensional continuous control using generalized advantage estimation 
+arXiv preprint arXiv     
+
+Sehnke  Frank  Osendorfer  Christian    uckstie  Thomas 
+Graves  Alex  Peters  Jan  and Schmidhuber    urgen  Policy gradients with parameterbased exploration for control 
+In International Conference on Arti cial Neural
+Networks  pp    Springer   
+
+Silver  David  Lever  Guy  Heess  Nicolas  Degris  Thomas 
+Wierstra  Daan  and Riedmiller  Martin  Deterministic
+policy gradient algorithms  In ICML   
+
+Silver  David  Huang  Aja  Maddison  Chris    Guez 
+Arthur  Sifre  Laurent  Van Den Driessche  George 
+Schrittwieser  Julian  Antonoglou  Ioannis  Panneershelvam  Veda  Lanctot  Marc  et al  Mastering the game of
+go with deep neural networks and tree search  Nature 
+   
+
+

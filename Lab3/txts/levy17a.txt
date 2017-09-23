@@ -1,0 +1,821 @@
+Learning to Align the Source Code to the Compiled Object Code
+
+Dor Levy   Lior Wolf    
+
+Abstract
+
+We propose   new neural network architecture
+and use it for the task of statementby statement
+alignment of source code and its compiled object code  Our architecture learns the alignment
+between the two sequences   one being the translation of the other   by mapping each statement
+to   contextdependent representation vector and
+aligning such vectors using   grid of the two sequence domains  Our experiments include short
+  functions  both arti cial and humanwritten 
+and show that our neural network architecture
+is able to predict the alignment with high accuracy  outperforming known baselines  We also
+demonstrate that our model is general and can
+learn to solve graph problems such as the Traveling Salesman Problem 
+
+  Introduction
+The problem of aligning sequences is well studied in
+the literature across many domains       machine translation  Brown et al    Dyer et al    Bahdanau
+et al    speech recognition  Graves et al   
+  handwriting recognition  Graves et al    Graves
+  Schmidhuber    alignment of books with movies
+made based on them  Zhu et al    and more  The
+alignment is often done sequentially  one step at   time  We
+propose   neural network architecture  capable of aligning
+two input sequences globally and at once 
+We focus on the alignment of source code and its translation to the compiled object code  During compilation 
+source code typically written in   humanreadable high
+level programming language  such as       and Java  is
+transformed by the compiler to object code  Every object
+code statement stems from   speci   location in the source
+code  and  therefore  there is   statementlevel alignment
+
+ The School of Computer Science  Tel Aviv University
+Correspondence to  Dor Levy
+
+ Facebook AI Research 
+ dor levy cs tau ac il  Lior Wolf  wolf cs tau ac il 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+between source code and object code 
+As far as we know  statementby statement alignment of
+sourceand objectcode is not treated in the literature  It is
+challenging  since the perstatement outcome of the compilation process also depends on other statements of the
+source code  In addition  this outcome is produced in increasing levels of sophistication that are determined by the
+compiler   optimization  ags 
+Our compound deep neural network combines one embedding and one RNN per input sequence    CNN applied to
+  grid of sequence representation pairs and multiple softmax layers  Training is performed using both realworld
+and synthetic data that we created for this purpose  The
+realworld data consists of   short functions from  
+opensource projects of the GNU project  Three levels of
+compiler optimization are used and the ground truth alignment labels are extracted from the compiler   output 
+Our experiments  show that the neural network presented is
+able to predict the alignment considerably more accurately
+than the literature baselines  Moreover  our method is general and transcends the problem of aligning sequences  We
+demonstrate it by using exactly the same architecture for
+learning the Traveling Salesman Problem 
+
+  Our Contributions
+
+We propose   novel network architecture and challenge it
+with   dif cult alignment problem  which has unique characteristics  the input sequences  representations are not per
+token  but per statement    subsequence of tokens  The
+alignment is predicted by our architecture not sequentially
+      by employing attention  but by considering the entire grid of potential alignments at once  This is done using an architecture that combines   toplevel CNN with
+LSTMs  Hochreiter   Schmidhuber   
+While neural networks have been shown to be capable of
+aligning sequences in the domain of NLP  where   sentence in one natural  human  language is aligned with its
+translation  Bahdanau et al    the current domain has
+additional challenges  First  each source or objectcode
+statement contains both an operation    reserved   key 
+
+ Our code and data are publicly available at  https 
+
+github com DorLevyML learnalign
+
+Learning to Align the Source Code to the Compiled Object Code
+
+word or an opcode  and potentially multiple parameters 
+and are  therefore  typically more complex than natural language words  Second  highly optimized compilation means
+that the alignment is highly nonmonotonous  Third  the
+alignment is very often partial  since not all sourcecode
+statements are aligned with the objectcode statements  Finally  the meaning of each code statement is completely
+context dependent  since  for example  the variables are
+reused within multiple statements 
+In natural languages 
+the context helps to resolve ambiguities  However    direct
+dictionary based alignment already provides   moderately
+accurate result  In the current domain  the alignment process has to depend entirely on the context 
+
+  Related Work
+
+Extensive work was done on the problem of predicting the
+alignment and computing its probability given   pair consisting of   source sentence and   candidate target sentence  Brown et al    Dyer et al    The alignment probability is then used for reranking the translation
+candidates in the translation pipeline 
+Bahdanau et al    propose an architecture for jointly
+aligning and translating between two languages  The encoder of the source language is based on   bidirectional
+RNN  During the decoding process  in which the new sentence in the target language is created  an RNN is used to
+predict one word at   time  This RNN pools as one of its
+inputs    weighted combination of the representations of
+the various words in the source language  The weights of
+this combination are pseudoprobabilities that represent the
+similarity of the predicted word in the translated sentence
+to each of the words in the source sentence  In contrast to
+our work  the model described in  Bahdanau et al   
+implicitly aligns an input sequence to an output sequence 
+as part of the translation process  while our model explicitly aligns two input sequences  Note that most human languages are relatively similar and are constructed by similar
+rules  It is unlikely that the same translation architectures
+could successfully and accurately translate  for example   
+code to object code 
+Our work is close in concept to Pointer Networks  Vinyals
+et al    where the proposed architecture outputs discrete tokens corresponding to positions in the input sequence  The input sequence is  rst encoded by an LSTM to
+  representation sequence    second LSTM  at each time
+step  then points to   location in the input sequence through
+an attention mechanism and given the previously pointed
+value of the input sequence  Similarly  our architecture also
+points to locations in an input sequence  However  in contrast to Vinyals et al    our architecture receives two
+input sequences and points to locations on   grid formed by
+the two 
+
+The approach that is most closely related to ours is MatchLSTM  Wang   Jiang    This architecture is used
+to determine  given   premise sentence and   hypothesis
+sentence  whether the hypothesis can be inferred from the
+premise  The MatchLSTM is designed to do so by matching of the hypothesis and premise wordby word  First  the
+two sentences are processed using two LSTM networks 
+  third LSTM then processes sequentially the hypothesis
+representation sequence and for every word in the hypothesis sentence produces   match score for all words in the
+premise representation sequence using an attention mechanism  Finally  after the third LSTM is done processing
+the hypothesis sentence  its last hidden state is used to produce   single prediction for the relation between the hypothesis and the premise  Although our work is aimed to
+align two sequences  our proposed architecture is far from
+MatchLSTM  While MatchLSTM matches sequentially
+every word in the hypothesis sentence to all words in the
+premise  our architecture represents all the statement pairs
+as   grid and aligns all of them globally and combined  using   CNN  Another difference is that the alignment produced by MatchLSTM is only implicit  since the goal of
+the architecture is to predict the relation between the two
+sequences 
+In our architecture  the alignment is explicit
+and fully supervised during training 
+Another aspect in which our architecture differs from the
+ones proposed by Bahdanau et al    Vinyals et al 
+  Wang   Jiang   is that in order to align statements  it does not learn representations that correspond to
+tokens in the input sequences  but learns representations
+that correspond to segments in the input sequence   each
+segment being   minisequence of tokens that corresponds
+to one statement 
+Sequence processing with CNNs The use of CNNs for sequence processing tasks has been expanding recently  Such
+tasks include sequence encoding  Zhang et al    Lee
+et al    sentiment prediction  Blunsom et al   
+document summarization  Denil et al    and translation  Gehring et al    One reason is the computational ef ciency of CNNs compared to RNNs  which leads
+to faster computations both on GPU and CPU  Another reason is their ability to capture translation invariant features
+in text  as shown by       Allamanis et al    who use
+  convolutional attention mechanism in order to generate
+extreme summarization of source code functions 
+Neural networks and source code tasks Neural networks
+have been shown to be useful in tasks involving source
+code  For example  In  Zaremba   Sutskever     
+sequenceto sequence LSTM learns to execute simple class
+of python programs only from seeing inputoutput pairs 
+In Allamanis et al      model learns to generate meaningful summaries to short functions written in Java 
+
+Learning to Align the Source Code to the Compiled Object Code
+
+for EXP EXP EXP  or while EXP  including the corresponding expressions      else or do  Note
+that the following code
+
+       
+
+do
+ 
+ 
+
+ 
+ 
+ 
+ 
+                           
+contains  ve statements  as numbered  since the do  the  
+the   and the while are all separate statements 
+The object code statements follow the conventional de 
+nition  as shown  for example  in assembly code listings 
+Each statement contains   single opcode such as mov  jne 
+or pop  and its operands 
+An example is shown in Fig    which depicts both the
+source code of   single   language function  which contains       statements  and the compiled object code
+of this function  which contains       statements  The
+alignment between the two is shown graphically by using
+  matrix of size        Each column  row  of this matrix corresponds to one source  object  code statement  The
+matrix        element encodes the probability of aligning
+objectcode statement                 with the sourcecode
+statement                  Since the matrix is the ground
+truth label  all probabilities are either    black  or    white 
+In other words  each row   is   onehot vector showing the
+alignment of one objectcode statement   
+As can be seen in the  gure  the  rst opcode push corresponds to the function   statement   that opens the function   block  As expected  there are also many opcodes that
+implement the for statement  which comprises comparing  incrementing and jumping 
+The matrix representation is the target value of the neural alignment network  The network will output the rows
+of the alignment matrix as vectors of pseudo probabilities  We can view the resulting prediction matrix as   softalignment  In order to obtain hard alignments  we simply
+take the index of the maximal element in each row 
+Another dimension in which we challenge our alignment
+network 
+is compilation optimization  which drastically
+changes the object code based on the level of optimization
+used  see Fig    of supplementary material  This optimization makes the object code more ef cient and can render it
+shorter  more common  or longer than the code without optimization  see supplementary material 
+
+Figure   The alignment matrix  presenting statementby 
+statement alignment between   sample   function  columns  and
+the object code that results from compiling the   code  rows  The
+white cells indicate correspondence 
+
+  The Code Alignment Problem
+We consider source code written in the   programming
+language  in which statements are generally separated by
+  semicolon   The compiler translates the source code
+to object code  For example  the GCC compiler  Stallman et al    is used  We view the object code as assembly  where each statement contains an opcode and its
+operands  Since the source code is translated to object code
+during compilation  there is   wellde ned alignment between them  which is known to the compiler  GCC outputs
+this information when it runs with   debug con guration 
+
+  Problem Formalization
+
+In the GCC alignment output  the statement level alignment between sourceand objectcode is   manyto one
+map from object code statements to source code statements  while every objectcode statement is aligned to
+some sourcecode statement  not all sourcecode statements are covered  This is due to optimization performed
+by the compiler  Our de nition of   statement is slightly
+modi ed  due to the convention used in the GCC alignment output      statement can be one of the following 
+      simple statement in   containing one command ending with   semicolon   ii  curly parentheses  
+ iii  the signature of   function   iv  one of if EXP 
+
+Learning to Align the Source Code to the Compiled Object Code
+
+  The Neural Alignment Network
+Each statement is treated as   sequence of tokens  where
+the last token of each such sequence is always the endof 
+statement  EOS  token    function is given by concatenating all such sequences to one sequence 
+We employ   compound deep neural network for predicting the alignment  as explained in Sec    It consists of
+four parts  the  rst part is used for representing each source
+code statement   as   vector vj  The second part does the
+same for the object code  resulting in   representation vector ui  The third part processes using   convolutional neural
+network pairs of vector representations  one of each type 
+as   multichannel grid  and produces an alignment score
+       
+It is not   probability  However  the higher the
+alignment value  the more likely the two statements are to
+be aligned  The alignment scores are fed to the topmost
+part of the network  which computes the pseudo probabilities pij of aligning object code statement   to the source
+code statement    Speci cally  the fourth part considers
+for an objectcode statement    all sourcecode statements
+                  the alignment score  and employs the softmax function  pij  
+
+ cid  
+   exp   ui vk 
+
+exp   ui vj  
+
+  Encoding the Input Statements
+
+Our model incorporates two LSTM networks to encode the
+sequences  one for each sequence domain  source code and
+object code  Therefore  we  rst embed each token in the input sequences in   highdimensional space  We use different embeddings for source code and for object code  since
+each is composed of   different vocabulary  The vocabularies are hybrid  in the sense that they consist of both words
+and characters 
+The source code vocabulary is   hybrid of characters and
+the   language reserved words      reserved word is embedded to   single vector  while variable names  arguments
+and numeric values are decomposed to character by character sequences  The vocabulary contains the   language
+reserved words as atomic units  EOS  and the following single character elements      alphanumeric characters including all letters and digits   ii  the operators          
+        and  iii  the following punctuation marks   
+                              Let   denote the embedding of     token   to   vector  Then the  
+code string if     for example  is decomposed to
+the following sequence   if              
+     EOS 
+Similarly  the object code vocabulary is also   hybrid  and
+contains opcodes  registers and characters of numeric values and is based on the assembly representation of the object code  The opcode of each statement is one out of
+dozens of possible values  The operands are either regis 
+
+ters or numeric values  The vocabulary also includes the
+punctuation marks of the assembly language and  therefore 
+contains the following types of elements      the various
+opcodes   ii  the various registers   iii  hexadecimal digits   iv  the symbols     and     EOS  which ends
+every statement  Let  cid  denote the embedding of an object code token   to   vector  Then the following assembly string mov  eax   rbp  for example  is decomposed to the following sequence   cid mov   cid eax 
+ cid   cid   cid     cid   cid   cid rbp   cid   cid EOS 
+
+  Neural Network Architecture
+
+The network architecture is depicted in Fig      The input
+sequences introduce many complex and longrange dependencies  Therefore  the network employs two LSTM encoders  one for creating   representation of the source code
+statements and one is used for representing the object code
+statements  In all of our experiments  the LSTMs have one
+layer and   cells 
+Recall that each statement in the input sequences is   sequence of tokens  However  for alignment  only   single
+vector representation is required per statement 
+In order
+to obtain   single vector representation per statement  we
+sample the representation sequences output by the encoders
+only at time steps corresponding to EOS   
+It should be
+noted that information from other statements is not lost 
+since each RNN activation is affected by other activations
+in the sequence  Moreover  since EOS is ubiquitous  its
+representation must be based on its context  Otherwise  it
+is meaningless  During training  the network learns to create meaningful representations at the location of the EOS
+inputs 
+The result of the LSTM encoders are   representation vectors output by the sourcecode encoding LSTM  denoted by
+ vj       and   representation vectors output by the
+objectcode encoding LSTM  denoted by  ui      
+The statement representation vectors are then assembled in
+an     grid  such that the        element is  ui  vj  where
+  denotes vector concatenation  Since each encoder LSTM
+has   cells  the vector  ui  vj  has   channels 
+In order to transform the statement representation pairs
+to alignment scores  we employ   decoding Convolutional
+Neural Network  CNN  over the  channel grid  The decoding CNN has  ve convolutional layers  each with  
+       lters followed by ReLU nonlinearities  except for
+the last layer which consists of one        lter and no nonlinearities  The CNN output is  therefore    single channel
+      grid          representing the alignment score of
+object code statement   and source code statement   
+In the manyto one alignment problem  the network   output for each row should contain pseudo probabilities 
+
+Learning to Align the Source Code to the Compiled Object Code
+
+   
+
+   
+
+   
+
+   
+
+Figure   Various alignment networks  showing three source code statements and two object code statements  The sequences  tokens are
+ rst embedded  gray rectangles  The embedded sequences are then encoded by LSTMs  elongated white rectangles  The statement
+representations are fed to   decoder  different in every  gure  and then the alignment scores     output by the decoder are fed into
+one softmax layer per each object code statement  rounded rectangles  which generates pseudo probabilities         Our proposed
+Grid Decoder  in which the grid of encoded statements is processed by   CNN        The Ptr  and Ptr  baselines  respectively  in
+which   PtrNet decoder  Vinyals et al    processes sequentially the previously pointed source code statement  prev src  and
+either the current  Ptr  or previous  Ptr   prev obj  object code statement      The MatchLSTM baseline  Wang   Jiang    in
+which an LSTM decoder processes sequentially the current object code statement and the current attentionweighted sum of source code
+statements  The attention model receives the LSTM output of the previous time step  The MatchLSTM is similar to Ptr  except that
+instead of the pointed source code statement  it receives the attentionweighted sum of source code statements  prev att 
+
+Therefore  we add   softmax layer on top of the list of
+alignment scores computed for each objectcode statement
+     ui       ui               ui  vM        there are  
+softmax layers  each converting   alignment scores to  
+vector of probabilities  pij       for each row    
+             
+During training  the Negative Log Likelihood  NLL  loss
+is used  Let   be the set of   objectcode to sourcecode
+ cid 
+alignments        The training loss for   single training
+        log pij         the loss is
+sample is given by  
+ 
+the mean of NLL values of all   rows 
+
+  Local Grid Decoder
+
+For comparison  we also consider   model that performs
+decoding directly over the statements grid  In this model 
+the decoder consists only of   single layer network   attached to each one of the     pairs of object code and
+source code statement representations  ui and vj  The
+same network weights are shared between all     pairs
+and are trained jointly  This network is given by 
+
+  ui  vj    vT tanh Woui   Wsvj 
+
+Learning to Align the Source Code to the Compiled Object Code
+
+where    Wo and Ws are the network   weights  We consider another  simpler version of the Local Grid Decoder 
+  vj       an inner product operation
+where   ui  vj    uT
+ 
+is employed  instead of the single layer network 
+
+  Literature Baseline Methods
+In this section  we describe the baseline methods that we
+compare to our architecture  Our architecture and all baselines use LSTM encoders to encode the input sequences 
+and softmax layers on top of the decoder output in order to
+produce an alignment probability  as explained in Sec   
+The architectures differ only in the decoder part that produces alignment scores       in the model           profound difference between our architecture and the baselines  is that while our architecture predicts the alignment
+over the whole statements grid at once  the baselines predict the alignment sequentially 
+
+  Pointer Network
+
+This baseline adapts the Pointer Network  PtrNet  architecture proposed by  Vinyals et al    in two ways  PtrNet is designed to solve the task of producing   sequence
+of pointers to an input sequence  The PtrNet architecture
+employs an encoder LSTM to represent the input sequence
+as   sequence of hidden states ej    second decoder LSTM
+then produces hidden states that are used to point to locations in the input sequence via an attention mechanism 
+Denote the hidden states of the decoder as di  The attention
+mechanism is then given by 
+
+ui
+    vT tanh   ej     di 
+
+                
+
+pi   sof tmax ui 
+
+ 
+
+ 
+
+where   is the input sequence length and pi is the soft prediction at time step   of the decoder LSTM  The input to
+the decoder LSTM at time step   is arg max
+       the
+
+ ui 
+
+input token  pointed  by the attention mechanism at the
+previous step  Thus  the output of the decoder LSTM can
+be considered as   sequence of pointers to locations at the
+input sequence 
+Since in the alignment problem we need to align each object code statement to one of the source code statements 
+we adapt PtrNet to produce  pointers  to the source code
+statements sequence for every object code statement  The
+adaptation is not trivial  our problem presents two input
+sequences  while PtrNet is originally designed to handle
+one  We create two such adaptations  Ptr  and Ptr  which
+are depicted in Fig      and     respectively 
+In Ptr  we employ   PtrNet decoder at each time step
+  over the sequence of object code statement representations ui  The decoder is an LSTM network  whose hid 
+
+den state hi is fed to an attention model employed over the
+whole sequence of source code statement representations
+vj            vT tanh Wsvj   Whhi 
+The outputs         of the attention model are used as the
+alignment scores that will be fed later to the softmax layers  The PtrNet decoder receives at each time step   
+the source code statement representation that the attention
+model  pointed  to at the previous step            vpi 
+where pi   arg max
+
+        
+
+ 
+
+Finally  in order to condition the output of the pointer decoder at the current object code statement representation
+ui  the input of the pointer decoder LSTM is the concatenation of ui and vpi 
+
+hi   LST    ui  vpi  hi  ci  ci 
+
+where ci is the contents of the LSTM memory cells at time
+step    At the  rst time step       the value of vp  is the
+all  vector  and    is initialized with the last hidden state
+of the sourcecode statements encoding LSTM 
+It should be noted  that at each step  the PtrNet decoder
+sees the current object code statement and the previous
+ pointed  source code statement  It means that the LSTM
+sees the source code statement that is aligned to the previous object code statement    wiser adaptation would
+present the PtrNet decoder LSTM with the explicit alignment decision       the previous  pointed  source code
+statement and the previous object code statement  such that
+the input is   pair of two statements that were predicted
+to align  Thus  in the second adaptation of PtrNet to our
+problem  which we call Ptr  the input to the PtrNet decoder LSTM is the concatenation of ui  and vpi 
+
+hi   LST    ui  vpi    hi  ci  ci 
+
+The current object code statement representation ui is then
+fed directly to the attention model  in addition to the PtrNet decoder output and the source code statement representation            vT tanh Woui   Wsvj   Whhi 
+
+  MatchLSTM
+
+This baseline uses the matching scores of the MatchLSTM
+architecture  Wang   Jiang    The architecture receives as inputs two sentences    premise and   hypothesis 
+First  the two sentences are processed using two LSTM networks  to produce the hidden representation sequences vj
+and ui for the premise and hypothesis  respectively  Next 
+attention ai vectors are computed over the premise reprek   ijvj  where
+
+sentation sequence as follows  ai    cid  
+
+Learning to Align the Source Code to the Compiled Object Code
+
+Table   Mean SD for the two code alignment datasets 
+
+Table   Alignment accuracy results for synthetic code 
+
+DATASET
+
+SYNTHETIC  
+SYNTH  OBJ 
+GNU  
+GNU OBJ 
+
+ FUNCTIONS
+
+ 
+ 
+ 
+ 
+
+ STATEMENTS
+PER FUNCTION
+ 
+ 
+ 
+ 
+
+ TOKENS
+PER STMT
+ 
+ 
+ 
+ 
+
+ ij are the attention weights and are given by
+
+exp   ui  vj 
+   exp   ui  vk 
+
+ cid  
+
+ ij  
+
+          vT tanh Woui   Wsvj   Whhi 
+
+where hi
+is the hidden state of the third LSTM that
+processes the hypothesis representation sequence together
+with the attention vector computed over the whole premise
+sequence  hi   LST    ui  ai  hi  ci  ci 
+For further details about the MatchLSTM architecture 
+see  Wang   Jiang    In order to adapt MatchLSTM
+to our problem  we simply substitute the premise  hypothesis  representation sequence with the source  object  code
+statements representation sequence  and use the matching
+scores         as the alignment scores 
+
+  Evaluation
+Data collection We employ both synthetic   functions
+generated randomly and humanwritten   functions from
+realworld projects  In order to generate random   functions  we used pyfuzz  an opensource random program
+generator for python  Myint    and modi ed it so it
+will output short functions written in   rather than python 
+For the realworld humanwritten data set  we used over
+  short functions from   opensource projects  that
+are part of the GNU project and are written in    Among
+them are grep  nano  etc  Before compilation  we ran
+only the preprocessor of GCC  in order to clean the sources
+of noncode text  such as comments  macros   ifdef
+commands and more 
+In order to compile the source code with optimizations  we
+use the GCC compiler  Stallman et al    with the optimization levels         or     Each level turns on
+additional optimization  ags  Each of the datasets of generated and humanwritten   functions has three parts  each
+compiled using one of the three mentioned optimization
+levels  After compilation of the humanwritten projects 
+some functions contained object code from other  inline
+functions  These functions were excluded from the dataset
+in order to introduce the network with pure translation
+
+METHOD
+
+   
+
+   
+
+   
+
+ALL
+
+       
+PTR 
+PTR 
+       
+MATCHLSTM        
+       
+INNPROD GRID
+LOCAL GRID
+       
+       
+CONV  GRID
+
+Table   Alignment accuracy results for GNU code 
+
+METHOD
+
+   
+
+   
+
+   
+
+ALL
+
+       
+PTR 
+PTR 
+       
+MATCHLSTM        
+       
+INNPROD GRID
+LOCAL GRID
+       
+       
+CONV  GRID
+
+pairs       source code and object code that has originated entirely from it 
+In addition  we tell GCC to output debugging information that includes the statementlevel
+alignment between each   function and the object code
+compiled from it  Therefore  each sample in the resulting dataset consists of source code  object code compiled
+at some optimization level and the statementby statement
+alignment between them  Tab    reports the statistics of the
+code alignment datasets 
+
+Training procedure For each data set  we train one network for all optimization levels  The length of all functions
+has been limited to   tokens  The training set of synthetic functions contains   samples  The validation
+and the test sets contain   samples each  The training 
+validation and test sets of humanwritten functions contain     and   samples  respectively  During
+training  we use batches of   samples each 
+The weights of the LSTM and attention networks are initialized uniformly in     The CNN  lter weights
+are initialized using truncated normal distribution with  
+standard deviation of   The biases of the LSTM and
+CNN networks are initialized to   except for the biases
+of the LSTM forget gates  which are initialized to   in
+order to encourage memorization at the beginning of training    ozefowicz et al    The Adam learning rate
+scheme  Kingma   Ba    is used  with   learning rate
+of               and           
+
+Learning to Align the Source Code to the Compiled Object Code
+
+   
+
+   
+
+   
+
+Figure     sample TSP route     and its connectivity matrix  before     and after     permuting the node IDs 
+
+Table   Average length of predicted TSP route 
+
+ 
+
+ 
+ 
+
+OPT 
+
+  
+
+  
+
+  
+
+PTRNET GRID   
+
+ 
+ 
+
+ 
+ 
+
+ 
+ 
+
+ 
+ 
+
+ 
+ 
+
+ 
+ 
+
+  Alignment Results
+
+Our proposed network and the baseline methods are trained
+and evaluated over the datasets of synthetic and humanwritten code  Tab    and Tab    present the resulting accuracy  which is computed per objectcode statement as follows  First  the network predicts pseudoprobabilities of
+aligning source code statements to each object code statement  Second  in order to obtain hard alignments  we take
+the index of the maximal element in each row of the predicted soft alignment matrix  Third  for every object code
+statement  we count   true alignment only if the aligned
+source code statement is the ground truth alignment  The
+accuracy is reported separately for the three optimization
+levels and for all of them combined  As can be seen in
+Tab    all models excel over synthetic code  reaching almost perfect alignment accuracy with   slight advantage to
+our Convolutional and Local Grid Decoders  Tab    shows
+that the GNU code is more challenging to all methods 
+Our proposed Grid Decoder models outperform all baseline methods  and the Convolutional Grid Decoder is superior by   substantial margin over the local and inner product alternatives  The Ptr  Ptr  and MatchLSTM baselines
+reach about the same performance  It is an expected result 
+since these models are very similar  they all employ   decoding LSTM and an attention mechanism  with only small
+differences in performing the sequential processing of the
+encoded representation sequences 
+
+  Traveling Salesman Problem  TSP 
+
+We perform an additional experiment based on the TSP
+benchmark presented in  Vinyals et al    in order to di 
+
+rectly compare with the Pointer Network architecture  PtrNet  where it was already tested  The input of the TSP
+problem is   randomly ordered sequence of    points  The
+output is   sequence of all the points reordered  such that
+the route length  sum of distance between adjacent points 
+is minimal  For our method  we consider the connectivity
+matrix of the cycle graph in lieu of the alignment matrix 
+As reported in  Vinyals et al    over tting was observed here  Therefore  we performed the following data
+augmentation process  For each sample in the training set 
+the IDs of the    points are permuted randomly and independently of the other samples  It is equivalent to randomly
+shuf ing the order of the points in the sample sequence 
+The IDs in the label are then permuted accordingly  to represent the same target route  During training  the process
+was repeated at the beginning of every epoch  and independently of past epochs  Fig    depicts an example route and
+its connectivity matrix before and after permutation of the
+node IDs  The results are presented in Tab    along with
+the optimal and approximated results  see  Vinyals et al 
+  for further details  As can be seen  our method is
+comparable to the original PtrNet model for both      
+and      
+
+  Summary
+We present   neural network architecture for aligning two
+sequences  We challenge our network with aligning source
+code to its compiled object code  sequences that in some
+aspects are more complex than human language sentences 
+Our experiments demonstrate that the proposed architecture is successful in predicting the alignment  On this task 
+the network outperforms multiple literature baselines such
+as Pointer Networks and MatchLSTM  suggesting that  
+global  CNNbased approach to alignment is better than the
+sequential  RNNbased approach 
+Our model can be used for alignment of any two sequences
+with   manyto one map between them  and extended to
+other graph problems  as demonstrated for TSP 
+
+Learning to Align the Source Code to the Compiled Object Code
+
+Hochreiter     and Schmidhuber     Long shortterm mem 
+
+ory  Neural Comput     
+
+  ozefowicz     Zaremba     and Sutskever     An empirIn
+
+ical exploration of recurrent network architectures 
+ICML   
+
+Kingma        and Ba     Adam    method for stochastic
+
+optimization  In ICLR   
+
+Lee     Cho     and Hofmann     Fully characterlevel
+neural machine translation without explicit segmentation  arXiv preprint arXiv   
+
+Myint     Pyfuzz  Random program generator for python 
+
+https github com myint pyfuzz   
+
+Stallman        et al  Using The GNU Compiler Collection    GNU Manual For GCC Version   CreateSpace  Paramount  CA   
+
+Vinyals     Fortunato     and Jaitly     Pointer networks 
+
+In NIPS  pp     
+
+Wang     and Jiang     Learning natural language inference
+
+with LSTM  arXiv preprint arXiv   
+
+Zaremba     and Sutskever     Learning to execute  arXiv
+
+preprint arXiv   
+
+Zhang     Zhao     and LeCun     Characterlevel convolutional networks for text classi cation  In NIPS  pp 
+   
+
+Zhu     Kiros     Zemel     Salakhutdinov     Urtasun     Torralba     and Fidler     Aligning books
+and movies  Towards storylike visual explanations by
+watching movies and reading books  In ICCV   
+
+Acknowledgments
+The authors would like to thank     Press  Dotan Kaufman
+and Shimi Salant for useful advice and insightful discussions  This work was supported by     ICRC grant 
+
+References
+Allamanis     Peng     and Sutton       convolutional
+attention network for extreme summarization of source
+code  arXiv preprint arXiv   
+
+Bahdanau     Cho     and Bengio     Neural machine
+translation by jointly learning to align and translate 
+arXiv preprint     
+
+Blunsom     Grefenstette     and Kalchbrenner       convolutional neural network for modelling sentences 
+In
+Proc  of the  nd Annual Meeting of the Association for
+Computational Linguistics   
+
+Brown        DellaPietra        DellaPietra        and
+Mercer        The mathematics of statistical machine
+translation  Computational Linguistics   
+ 
+
+Denil     Demiraj     Kalchbrenner     Blunsom     and
+de Freitas     Modelling  visualising and summarising
+documents with   single convolutional neural network 
+arXiv preprint arXiv   
+
+Dyer     Chahuneau     and Smith          simple  fast 
+In
+and effective reparameterization of IBM model  
+HLTNAACL  pp    The Association for Computational Linguistics   
+
+Gehring     Auli     Grangier     Yarats     and
+Dauphin        Convolutional sequence to sequence
+learning  arXiv preprint arXiv   
+
+Graves     and Schmidhuber     Of ine handwriting recognition with multidimensional recurrent neural networks 
+In NIPS  pp     
+
+Graves     Fern andez     Gomez     and Schmidhuber    
+Connectionist temporal classi cation 
+labelling unsegmented sequence data with recurrent neural networks  In
+ICML   
+
+Graves     Liwicki     Fernndez     Bertolami    
+Bunke     and Schmidhuber       novel connectionist
+system for unconstrained handwriting recognition  IEEE
+Transactions on Pattern Analysis and Machine Intelligence    May  
+
+Graves        Mohamed     and Hinton     Speech recogIn  
+nition with deep recurrent neural networks 
+IEEE International Conference on Acoustics  Speech
+and Signal Processing  pp    May  
+
+

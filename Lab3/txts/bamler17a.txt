@@ -1,0 +1,1035 @@
+Dynamic Word Embeddings
+
+Robert Bamler   Stephan Mandt  
+
+Abstract
+
+We present   probabilistic language model for
+timestamped text data which tracks the semantic evolution of individual words over time 
+The model represents words and contexts by
+latent trajectories in an embedding space  At
+each moment in time 
+the embedding vectors
+are inferred from   probabilistic version of
+word vec  Mikolov et al      These embedding vectors are connected in time through
+  latent diffusion process  We describe two
+scalable variational inference algorithms skipgram smoothing and skipgram  ltering that allow us to train the model jointly over all times 
+thus learning on all data while simultaneously allowing word and context vectors to drift  Experimental results on three different corpora demonstrate that our dynamic model infers word embedding trajectories that are more interpretable
+and lead to higher predictive likelihoods than
+competing methods that are based on static models trained separately on time slices 
+
+  Introduction
+Language evolves over time and words change their meaning due to cultural shifts  technological inventions  or political events  We consider the problem of detecting shifts
+in the meaning and usage of words over   given time span
+based on text data  Capturing these semantic shifts requires
+  dynamic language model 
+Word embeddings are   powerful tool for modeling semantic relations between individual words  Bengio et al 
+  Mikolov et al      Pennington et al    Mnih
+  Kavukcuoglu    Levy   Goldberg    Vilnis  
+McCallum    Rudolph et al    Word embed 
+
+ Disney Research 
+
+PA   USA  Correspondence
+ Robert Bamler disneyresearch com 
+ Stephan Mandt disneyresearch com 
+
+  Forbes Avenue  Pittsburgh 
+Robert Bamler
+Stephan Mandt
+
+to 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+dings model the distribution of words based on their surrounding words in   training corpus  and summarize these
+statistics in terms of lowdimensional vector representations  Geometric distances between word vectors re ect
+semantic similarity  Mikolov et al      and difference
+vectors encode semantic and syntactic relations  Mikolov
+et al      which shows that they are sensible representations of language  Pretrained word embeddings are useful for various supervised tasks  including sentiment analysis  Socher et al      semantic parsing  Socher et al 
+    and computer vision  Fu   Sigal    As unsupervised models  they have also been used for the exploration of word analogies and linguistics  Mikolov et al 
+   
+Word embeddings are currently formulated as static models  which assumes that the meaning of any given word is
+the same across the entire text corpus  In this paper  we
+propose   generalization of word embeddings to sequential
+data  such as corpora of historic texts or streams of text in
+social media 
+Current approaches to learning word embeddings in   dynamic context rely on grouping the data into time bins
+and training the embeddings separately on these bins  Kim
+et al    Kulkarni et al    Hamilton et al   
+This approach  however  raises three fundamental problems  First  since word embedding models are nonconvex 
+training them twice on the same data will lead to different
+results  Thus  embedding vectors at successive times can
+only be approximately related to each other  and only if the
+embedding dimension is large  Hamilton et al    Second  dividing   corpus into separate time bins may lead to
+training sets that are too small to train   word embedding
+model  Hence  one runs the risk of over tting to few data
+whenever the required temporal resolution is  negrained 
+as we show in the experimental section  Third  due to the
+ nite corpus size the learned word embedding vectors are
+subject to random noise  It is dif cult to disambiguate this
+noise from systematic semantic drifts between subsequent
+times  in particular over short time spans  where we expect
+only minor semantic drift 
+In this paper  we circumvent these problems by introducing
+  dynamic word embedding model  Our contributions are
+as follows 
+
+Dynamic Word Embeddings
+
+Figure   Evolution of the   words that changed the most in cosine distance from   to   on Google books  using skipgram
+ ltering  proposed  Red  blue  curves correspond to the  ve closest words at the beginning  end  of the time span  respectively 
+
+  We derive   probabilistic state space model where
+word and context embeddings evolve in time according to   diffusion process  It generalizes the skipgram
+model  Mikolov et al      Barkan    to   dynamic setup  which allows endto end training  This
+leads to continuous embedding trajectories  smoothes
+out noise in the wordcontext statistics  and allows us
+to share information across all times 
+
+  We propose two scalable blackbox variational inference algorithms  Ranganath et al    Rezende
+et al    for  ltering and smoothing  These algorithms  nd word embeddings that generalize better to heldout data  Our smoothing algorithm carries
+out ef cient blackbox variational inference for structured Gaussian variational distributions with tridiagonal precision matrices  and applies more broadly 
+
+  We analyze three massive text corpora that span over
+long periods of time  Our approach allows us to automatically  nd the words whose meaning changes the
+most  It results in smooth word embedding trajectories and therefore allows us to measure and visualize the continuous dynamics of the entire embedding
+cloud as it deforms over time 
+
+Figure   exempli es our method  The plot shows      of
+our dynamic skipgram model to Google books  we give
+details in section   We show the ten words whose meaning changed most drastically in terms of cosine distance
+over the last   years  We thereby automatically discover words such as  computer  or  radio  whose meaning
+changed due to technological advances  but also words like
+
+ peer  and  notably  whose semantic shift is less obvious 
+Our paper is structured as follows  In section   we discuss
+related work  and we introduce our model in section   In
+section   we present two ef cient variational inference algorithms for our dynamic model  We show experimental
+results in section   Section   summarizes our  ndings 
+
+  Related Work
+Probabilistic models that have been extended to latent time
+series models are ubiquitous  Blei   Lafferty    Wang
+et al    Sahoo et al    Gultekin   Paisley   
+Charlin et al    Ranganath et al    Jerfel et al 
+  but none of them relate to word embeddings  The
+closest of these models is the dynamic topic model  Blei  
+Lafferty    Wang et al    which learns the evolution of latent topics over time  Topic models are based
+on bagof word representations and thus treat words as
+symbols without modelling their semantic relations  They
+therefore serve   different purpose 
+Mikolov et al        proposed the skipgram model
+with negative sampling  word vec  as   scalable word embedding approach that relies on stochastic gradient descent  This approach has been formulated in   Bayesian
+setup  Barkan    which we discuss separately in section   These models  however  do not allow the word
+embedding vectors to change over time 
+Several authors have analyzed different statistics of text
+data to analyze semantic changes of words over time  Mihalcea   Nastase    Sagi et al    Kim et al   
+
+date cosinedistancetextphotographsprefacereferencesmemorandumproductivitydiminishingelasticityaggregateutility marginaldateexactaccuratesamplingobservercleversoftwareusermachinedeviceprinter computerdatequamautquodArizonaaufEffectsEffectIn uenceAmerpp versusdatenominationoffendercustodyassignmentvotingwillingnessloyaltydedicationadherencedevotion commitmentdateperipheralbasaloscortexnuclearTVtelephonenewspapersphonecomputer radio date cosinedistanceobjectiveperceptionsubjectiveverbverbspossibilitiespotentiallypossibilityriskslikelihood potential datemateriallyfaithfullyeffectuallyclearlyabundantlyespeciallyparticularlyincludingnotableexempli ed notably datenoblemanlawyerknightmembernobilityclassroomcognitivenetworksteacherparent peer dateemphaticallysigni cantgesturessmiledsharplyconsiderablysubstantiallygreatlymateriallyslightly signi cantly dateprocessingPlanningFreudenzymespecializedcomputerWebtechnologyapplicationsdesign softwareDynamic Word Embeddings
+
+Figure      Bayesian skipgram model  Barkan       The
+dynamic skipgram model  proposed  connects   copies of the
+Bayesian skipgram model via   latent time series prior on the
+embeddings 
+
+Kulkarni et al    Hamilton et al    None of them
+explicitly model   dynamical process  instead  they slice
+the data into different time bins     the model separately
+on each bin  and further analyze the embedding vectors in
+postprocessing  By construction  these static models can
+therefore not share statistical strength across time  This
+limits the applicability of static models to very large corpora 
+Most related to our approach are methods based on word
+embeddings  Kim et al       word vec separately on
+different time bins  where the word vectors obtained for
+the previous bin are used to initialize the algorithm for the
+next time bin  The bins have to be suf ciently large and the
+found trajectories are not as smooth as ours  as we demonstrate in this paper  Hamilton et al    also trained
+word vec separately on several large corpora from different decades  If the embedding dimension is large enough
+ and hence the optimization problem less nonconvex  the
+authors argue that word embeddings at nearby times approximately differ by   global rotation in addition to   small
+semantic drift  and they approximately compute this rotation  As the latter does not exist in   strict sense  it is
+dif cult to distinguish artifacts of the approximate rotation
+from   true semantic drift  As discussed in this paper  both
+variants result in trajectories which are noisier 
+
+  Model
+We propose the dynamic skipgram model    generalization of the skipgram model  word vec   Mikolov et al 
+    to sequential text data  The model  nds word embedding vectors that continuously drift over time  allowing
+to track changes in language and word usage over short and
+long periods of time  Dynamic skipgram is   probabilistic
+model which combines   Bayesian version of the skipgram
+model  Barkan    with   latent time series  It is jointly
+
+  Rudolph   Blei   independently developed   similar
+model  using   different likelihood model  Their approach uses
+  nonBayesian treatment of the latent embedding trajectories 
+which makes the approach less robust to noise when the data per
+time step is small 
+
+trained endto end and scales to massive data by means of
+approximate Bayesian inference 
+The observed data consist of sequences of words from  
+ nite vocabulary of size    In section   all sequences
+ sentences from books  articles  or tweets  are considered
+timeindependent  in section   they will be associated
+with different time stamps  The goal is to maximize the
+probability of every word that occurs in the data given its
+surrounding words within   socalled context window  As
+detailed below  the model learns two vectors ui  vi   Rd
+for each word   in the vocabulary  where   is the embedding dimension  We refer to ui as the word embedding
+vector and to vi as the context embedding vector 
+
+  Bayesian SkipGram Model
+
+The Bayesian skipgram model  Barkan    is   probabilistic version of word vec  Mikolov et al      and
+forms the basis of our approach  The graphical model is
+shown in Figure     For each pair of words      in the
+vocabulary  the model assigns probabilities that word   appears in the context of word    This probability is    cid 
+  vj 
+with the sigmoid function                Let zij  
+    be an indicator variable that denotes   draw from that
+probability distribution  hence   zij          cid 
+  vj  The
+generative model assumes that many wordword pairs       
+are uniformly drawn from the vocabulary and tested for being   wordcontext pair  hence   separate random indicator
+zij is associated with each drawn pair 
+Focusing on words and their neighbors in   context window  we collect evidence of wordword pairs for which
+zij     These are called the positive examples  Denote   
+ij the number of times that   wordcontext pair
+       is observed in the corpus  This is   suf cient statistic of the model  and its contribution to the likelihood is
+    
+ij   However  the generative process also assumes the possibility to reject wordword pairs
+if zij     Thus  one needs to construct    ctitious second training set of rejected wordword pairs  called negative examples  Let the corresponding counts be   
+ij  The
+total likelihood of both positive and negative examples is
+then
+
+ij ui  vj       cid 
+
+  vj   
+
+  cid 
+
+               
+
+   cid 
+
+  vj   
+
+ij    cid 
+
+  vj  
+
+ 
+ij  
+
+ 
+
+    
+
+Above we used the antisymmetry               In
+our notation  dropping the subscript indices for    and   
+denotes the entire       matrices            uL   
+Rd   is the matrix of all word embedding vectors  and  
+is de ned analogously for the context vectors  To conij  
+struct negative examples  one typically chooses   
+            Mikolov et al      where       is the
+
+Dynamic Word Embeddings
+
+frequency of word   in the training corpus  Thus     is
+wellde ned up to   constant factor which has to be tuned 
+De ning             the combination of both positive
+and negative examples  the resulting log likelihood is
+
+  vj cid 
+
+log             
+
+  cid 
+
+ cid   
+
+ij log    cid 
+
+  vj      
+
+ij log    cid 
+
+ 
+
+    
+
+This is exactly the objective of the  nonBayesian  skipgram model  see  Mikolov et al      The count matrices    and    are either precomputed for the entire
+corpus  or estimated based on stochastic subsamples from
+the data in   sequential way  as done by word vec  Barkan
+  gives an approximate Bayesian treatment of the
+model with Gaussian priors on the embeddings 
+
+  Dynamic SkipGram Model
+
+The key extension of our approach is to use   Kalman  lter as   prior for the timeevolution of the latent embeddings  Welch   Bishop    This allows us to share
+information across all times while still allowing the embeddings to drift 
+
+Notation  We consider   corpus of   documents which
+were written at time stamps                  For each time
+step                  the suf cient statistics of wordcontext
+pairs are encoded in the       matrices   
+      
+  of positive
+ij   and   
+and negative counts with matrix elements   
+ij   
+respectively  Denote Ut           uL      Rd   the
+matrix of word embeddings at time    and de ne Vt correspondingly for the context vectors  Let        RT    
+denote the tensors of word and context embeddings across
+all times  respectively 
+
+Model  The graphical model is shown in Figure     We
+consider   diffusion process of the embedding vectors over
+time  The variance  
+  of the transition kernel is
+              
+ 
+
+ 
+where   is   global diffusion constant and       is the
+time between subsequent observations  Welch   Bishop 
+  At every time step    we add an additional Gaussian
+  which prevents the
+prior with zero mean and variance  
+embedding vectors from growing very large  thus
+
+  Ut Ut       Ut   
+
+        
+ 
+Computing the normalization  this results in
+
+ cid 
+ cid 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ cid 
+ cid 
+
+Ut Ut    
+
+Vt Vt    
+
+Ut
+     
+   
+ 
+Vt
+     
+   
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+     
+
+ 
+
+ 
+
+ 
+     
+
+ 
+
+  cid 
+
+  
+
+In practice     cid      so the damping to the origin is very
+weak  This is also called OrnsteinUhlenbeck process  Uhlenbeck   Ornstein    We recover the Wiener process
+for       but       prevents the latent time series
+from diverging to in nity  At time index       we de ne
+              
+Our joint distribution factorizes as follows 
+
+    and do the same for   
+
+             
+
+  Ut Ut    Vt Vt 
+
+    cid 
+
+  cid 
+
+    
+
+ij   ui    vj   
+
+ 
+
+  
+
+    
+
+The prior model enforces that the model learns embedding
+vectors which vary smoothly across time  This allows to associate words unambiguously with each other and to detect
+semantic changes  The model ef ciently shares information across the time domain  which allows to    the model
+even in setups where the data at every given point in time
+are small  as long as the data in total are large 
+
+  Inference
+We discuss two scalable approximate inference algorithms 
+Filtering uses only information from the past  it is required
+in streaming applications where the data are revealed to
+us sequentially  Smoothing is the other inference method 
+which learns better embeddings but requires the full sequence of documents ahead of time 
+In Bayesian inference  we start by formulating   joint distribution  Eq    over observations    and parameters  
+and     and we are interested in the posterior distribution
+over parameters conditioned on observations 
+
+            
+
+ cid              dU dV
+
+           
+
+ 
+
+The problem is that the normalization is intractable  In variational inference  VI   Jordan et al    Blei et al   
+one sidesteps this problem and approximates the posterior
+with   simpler variational distribution          by minimizing the KullbackLeibler  KL  divergence to the posterior  Here    summarizes all parameters of the variational
+distribution  such as the means and variances of   Gaussian 
+see below  Minimizing the KL divergence is equivalent to
+optimizing the evidence lower bound  ELBO   Blei et al 
+ 
+
+     Eq log            Eq log         
+
+ 
+
+For   restricted class of models  the ELBO can be computed in closedform  Hoffman et al    Our model is
+
+Dynamic Word Embeddings
+
+  cid 
+
+nonconjugate and requires instead blackbox VI using the
+reparameterization trick  Rezende et al    Kingma  
+Welling   
+
+  SkipGram Filtering
+
+In many applications such as streaming  the data arrive sequentially  Thus  we can only condition our model on past
+and not on future observations  We will  rst describe inference in such    Kalman   ltering setup  Kalman et al 
+  Welch   Bishop   
+In the  ltering scenario  the inference algorithm iteratively
+updates the variational distribution   as evidence from each
+time step   becomes available  We thereby use   variational
+distribution that factorizes across all times            
+     Ut  Vt  and we update the variational factor at  
+given time   based on the evidence at time   and the approximate posterior of the previous time step  Furthermore  at
+every time   we use   fullyfactorized distribution 
+
+ cid  
+
+  Ut  Vt   
+
+   ui     ui     ui      vi     vi   vi   
+
+  
+
+The variational parameters are the means  ui     vi     Rd
+and the covariance matrices  ui   and  vi    which we restrict to be diagonal  mean eld approximation 
+We now describe how we sequentially compute   Ut  Vt 
+and use the result to proceed to the next time step  As other
+Markovian dynamical systems  our model assumes the following recursion 
+  Ut  Vt   
+
+   Ut  Vt    Ut  Vt   
+
+therefore separates into   sum of   terms     cid 
+
+Within our variational approximation  the ELBO  Eq   
+  Lt with
+
+          
+
+   
+
+ 
+
+Lt     log     
+
+   Ut  Vt      log   Ut  Vt   
+
+   
+
+    log   Ut  Vt 
+
+ 
+
+where all expectations are taken under   Ut  Vt  We compute the entropy term    log    in Eq    analytically and
+estimate the gradient of the log likelihood by sampling
+from the variational distribution and using the reparameterization trick  Kingma   Welling    Salimans  
+Kingma    However  the second term of Eq    containing the prior at time    is still intractable  We approximate the prior as
+  Ut  Vt   
+
+     
+ 
+  Ut Vt  
+  Eq Ut Vt 
+
+ 
+   
+
+ cid   Ut  Vt Ut  Vt cid 
+ cid   Ut  Vt Ut  Vt cid 
+
+ 
+
+The remaining expectation involves only Gaussians and
+can be carriedout analytically  The resulting approximate
+
+ cid  
+prior is   fully factorized distribution   Ut  Vt   
+      ui     ui     ui      vi     vi     vit  with
+ cid 
+ ui      ui  
+
+ cid ui       
+    cid 
+ cid cid ui       
+    cid 
+
+ ui    
+
+   
+
+ ui   
+
+  
+
+ 
+
+     
+
+ 
+
+Analogous update equations hold for  vi   and  vi    Thus 
+the second contribution in Eq     the prior  yields   closedform expression  We can therefore compute its gradient 
+
+  SkipGram Smoothing
+
+In contrast to  ltering  where inference is conditioned on
+past observations until   given time     Kalman  smoothing
+performs inference based on the entire sequence of observations   
+     This approach results in smoother trajectories
+and typically higher likelihoods than with  ltering  because
+evidence is used from both future and past observations 
+Besides the new inference scheme  we also use   different
+variational distribution  As the model is  tted jointly to all
+time steps  we are no longer restricted to   variational distribution that factorizes in time  For simplicity we focus here
+on the variational distribution for the word embeddings   
+the context embeddings   are treated identically  We use  
+factorized distribution over both embedding space and vocabulary space 
+
+         
+
+  uik    
+
+ 
+
+  
+
+  
+
+In the time domain  our variational approximation is structured  To simplify the notation we now drop the indices
+for words   and embedding dimension    hence we write
+        for   uik     where we focus on   single factor 
+This factor is   multivariate Gaussian distribution in the
+time domain with tridiagonal precision matrix  
+
+               
+
+ 
+Both the means        and the entries of the tridiagonal precision matrix     RT   are variational parameters 
+This gives our variational distribution the interpretation of  
+posterior of   Kalman  lter  Blei   Lafferty    which
+captures correlations in time 
+We    the variational parameters by training the model
+jointly on all time steps  using blackbox VI and the reparameterization trick  As the computational complexity of
+an update step scales as     we  rst pretrain the model
+by drawing minibatches of   cid      random words and
+  cid  random contexts from the vocabulary  Hoffman et al 
+  We then switch to the full batch to reduce the sampling noise  Since the variational distribution does not factorize in the time domain we always include all time steps
+             in the minibatch 
+
+  cid 
+
+  cid 
+
+Dynamic Word Embeddings
+
+We also derive an ef cient algorithm that allows us to estimate the reparametrization gradient using      time and
+memory  while   naive implementation of blackbox variational inference with our structured variational distribution
+would require      of both resources  The main idea is to
+parametrize       cid   in terms of its Cholesky decomposition    which is bidiagonal           Stanica    and
+to express gradients of    in terms of gradients of    We
+use mirror ascent  BenTal et al    Beck   Teboulle 
+  to enforce positive de niteness of    The algorithm
+is detailed in our supplementary material 
+
+  Experiments
+We evaluate our method on three timestamped text corpora  We demonstrate that our algorithms  nd smoother
+embedding trajectories than methods based on   static
+model  This allows us to track semantic changes of individual words by following nearestneighbor relations over
+time  In our quantitative analysis  we  nd higher predictive
+likelihoods on heldout data compared to our baselines 
+
+Algorithms and Baselines  We report results from our
+proposed algorithms from section   and compare against
+baselines from section  
+
+  SGI denotes the nonBayesian skipgram model
+with independent random initializations of word vectors  Mikolov et al      We used our own implementation of the model by dropping the Kalman  ltering prior and pointestimating embedding vectors 
+Word vectors at nearby times are made comparable by
+approximate orthogonal transformations  which corresponds to Hamilton et al   
+
+  SGP denotes the same approach as above  but with
+word and context vectors being preinitialized with the
+values from the previous year  as in Kim et al   
+
+  DSGF  dynamic skipgram  ltering  proposed 
+  DSGS  dynamic skipgram smoothing  proposed 
+
+Data and preprocessing  Our three corpora exemplify
+opposite limits both in the covered time span and in the
+amount of text per time step 
+
+   the latest available  In   the size of the data
+is approximately       words  We used the  gram
+counts  resulting in   context window size of  
+
+  We used the  State of the Union   SoU  addresses of
+     presidents  which spans more than two centuries 
+resulting in       different time steps and approximately   observed words  Some presidents gave
+both   written and an oral address  if these were less
+than   week apart we concatenated them and used the
+average date  We converted all words to lower case
+and constructed the positive sample counts   
+ij using
+  context window size of  
+
+  We used   Twitter corpus of news tweets for   randomly drawn dates from   to   The median
+number of tweets per day is   We converted all
+tweets to lower case and used   context window size
+of   which we restricted to stay within single tweets 
+
+ij   
+
+ij   
+
+ij   cid 
+
+ratio    cid 
+
+Hyperparameters  The vocabulary for each corpus was
+constructed from the   most frequent words throughout the given time period  In the Google books corpus  the
+number of words per year grows by   factor of   from the
+year   to   To avoid that the vocabulary is dominated by modern words we normalized the word frequencies separately for each year before adding them up 
+For the Google books corpus  we chose the embedding
+dimension       which was also used in Kim et al 
+  We set       for SoU and Twitter  as      
+resulted in over tting on these much smaller corpora  The
+ij   of negative to positive wordcontext pairs was       The precise construction of the
+matrices   
+is explained in the supplementary material 
+We used the global prior variance  
+      for all corpora
+and all algorithms  including the baselines  The diffusion
+constant   controls the time scale on which information
+is shared between time steps  The optimal value for  
+depends on the application    single corpus may exhibit
+semantic shifts of words on different time scales  and the
+optimal choice for   depends on the time scale in which
+one is interested  We used       per year for Google
+books and SoU  and       per year for the Twitter corpus 
+which spans   much shorter time range  In the supplementary material  we provide details of the optimization procedure 
+
+ 
+
+  We used data from the Google books corpus   Michel
+et al    from the last two centuries       
+This amounts to   million digitized books and approximately   observed words  The corpus consists of
+ngram tables with                 annotated by year
+of publication  We considered the years from   to
+
+ http storage googleapis com books 
+
+ngrams books datasetsv html
+
+Qualitative results  We show that our approach results in
+smooth word embedding trajectories on all three corpora 
+We can automatically detect words that undergo signi cant
+semantic changes over time 
+Figure   in the introduction shows      of the dynamic
+skipgram  ltering algorithm to the Google books corpus 
+
+ http www presidency ucsb edu sou php
+
+Dynamic Word Embeddings
+
+Figure   Word embeddings over   sequence of years trained on
+Google books  using DSGF  proposed  top row  and compared
+to the static method by Hamilton et al     bottom  We used
+dynamic tSNE  Rauber et al    for dimensionality reduction  Colored lines in the second to fourth column indicate the trajectories from the previous year  Our method infers smoother trajectories with only few words that move quickly  Figure   shows
+that these effects persist in the original embedding space 
+
+Here  we show the ten words whose word vectors change
+most drastically over the last   years in terms of cosine distance  Figure   visualizes word embedding clouds
+over four subsequent years of Google books  where we
+compare DSGF against SGI  We mapped the normalized embedding vectors to two dimensions using dynamic
+tSNE  Rauber et al     see supplement for details 
+Lines indicate shifts of word vectors relative to the preceding year  In our model only few words change their position
+in the embedding space rapidly  while embeddings using
+SGI show strong  uctuations  making the cloud   motion
+hard to track 
+Figure   visualizes the smoothness of the trajectories directly in the embedding space  without the projection to
+two dimensions  We consider differences between word
+vectors in the year   and the subsequent   years 
+In more detail  we compute histograms of the Euclidean
+distances  uit   ui    over the word indexes    where
+                 as discussed previously  SGI uses   global
+rotation to optimally align embeddings  rst  In our model 
+embedding vectors gradually move away from their original position as time progresses  indicating   directed motion  In contrast  both baseline models show only little directed motion after the  rst time step  suggesting that most
+temporal changes are due to  nitesize  uctuations of   
+ij   
+Initialization schemes alone  thus  seem to have   minor
+effect on smoothness 
+Our approach allows us to detect semantic shifts in the usage of speci   words  Figures   and   both show the cosine
+distance between   given word and its neighboring words
+ colored lines  as   function of time  Figure   shows results
+on all three corpora and focuses on   comparison across
+methods  We see that DSGS and DSGF  both proposed 
+
+Figure   Histogram of distances between word vectors in the
+year   and their positions in subsequent years  colors 
+DSGF  top panel  displays   continuous growth of these distances over time  indicating   directed motion 
+In contrast  in
+SGP  middle   Kim et al    and SGI  bottom   Hamilton
+et al    the distribution of distances jumps from the  rst to
+the second year but then remains largely stationary  indicating absence of   directed drift       almost all motion is random 
+
+result in trajectories which display less noise than the baselines SGP and SGI  The fact that the baselines predict zero
+cosine distance  no correlation  between the chosen word
+pairs on the SoU and Twitter corpora suggests that these
+corpora are too small to successfully    these models  in
+contrast to our approach which shares information in the
+time domain  Note that as in dynamic topic models  skipgram smoothing  DSGS  may diffuse information into the
+past  see  presidential  to  clintontrump  in Fig   
+
+Quantitative results  We show that our approach generalizes better to unseen data  We thereby analyze heldout
+predictive likelihoods on wordcontext pairs at   given time
+   where   is excluded from the training set 
+
+     cid 
+
+    log     
+ cid   
+  
+ 
+ij       
+
+   
+
+     Ut   Vt 
+
+ cid  denotes the total num 
+
+ 
+
+Above     
+ber of wordcontext pairs at time     Since inference is different in all approaches  the de nitions of word and context embedding matrices  Ut and  Vt in Eq    have to be
+adjusted 
+
+ij  
+
+  For SGI and SGP  we did   chronological pass
+through the time sequence and used the embeddings
+ Ut   Ut  and  Vt   Vt  from the previous time
+step to predict the statistics   
+
+ij   at time step   
+  For DSGF  we did the same pass to test   
+
+ij    We
+thereby set  Ut and  Vt to be the modes Ut  Vt  of
+the approximate posterior at the previous time step 
+
+  For DSGS  we held out     and   of the
+documents from the Google books  SoU  and Twitter
+corpora for testing  respectively  After training  we
+estimated the word  context  embeddings  Ut    Vt  in
+
+Dynamic Word Embeddings
+
+Figure   Smoothness of word embedding trajectories  compared across different methods  We plot the cosine distance between two
+words  see captions  over time  High values indicate similarity  Our methods  DSGS and DSGF   nd more interpretable trajectories
+than the baselines  SGI and SGP  The different performance is most pronounced when the corpus is small  SoU and Twitter 
+
+Figure   Predictive loglikelihoods  Eq    for two proposed versions of the dynamic skipgram model  DSGF   DSGS  and two
+competing methods SGI  Hamilton et al    and SGP  Kim et al    on three different corpora  high values are better 
+
+Eq    by linear interpolation between the values of
+Ut   Vt  and Ut   Vt  in the mode of the variational distribution  taking into account that the time
+stamps    are in general not equally spaced 
+
+The predictive likelihoods as   function of time    are
+shown in Figure   For the Google Books corpus  left panel
+in  gure   the predictive loglikelihood grows over time
+with all four methods  This must be an artifact of the corpus since SGI does not carry any information of the past 
+  possible explanation is the growing number of words per
+year from   to   in the Google Books corpus  On
+all three corpora  differences between the two implementations of the static model  SGI and SGP  are small  which
+suggests that preinitializing the embeddings with the previous result may improve their continuity but seems to have
+little impact on the predictive power  Loglikelihoods for
+the skipgram  lter  DSGF  grow over the  rst few time
+steps as the  lter sees more data  and then saturate  The
+improvement of our approach over the static model is particularly pronounced in the SoU and Twitter corpora  which
+are much smaller than the massive Google books corpus 
+There  sharing information between across time is crucial
+because there is little data at every time slice  Skipgram
+smoothing outperforms skipgram  ltering as it shares in 
+
+formation in both time directions and uses   more  exible
+variational distribution 
+
+  Conclusions
+We presented the dynamic skipgram model    Bayesian
+probabilistic model that combines word vec with   latent
+continuous time series  We showed experimentally that
+both dynamic skipgram  ltering  which conditions only
+on past observations  and dynamic skipgram smoothing
+ which uses all data  lead to smoothly changing embedding
+vectors that are better at predicting wordcontext statistics
+at heldout time steps  The bene ts are most drastic when
+the data at individual time steps is small  such that  tting  
+static word embedding model is hard  Our approach may
+be used as   data mining and anomaly detection tool when
+streaming text on social media  as well as   tool for historians and social scientists interested in the evolution of
+language 
+
+Acknowledgements
+
+We would like to thank Marius Kloft  Cheng Zhang 
+Andreas Lehrmann  Brian McWilliams  Romann Weber 
+Michael Clements  and Ari Pakman for valuable feedback 
+
+date cos  distance computer  to  accurate Google Booksdate community  to  nature State of the Union  addresses date presidential  to  barack TwitterDSGSDSG FSGISGP date cos  distance computer  to  machine date community  to  transportation date presidential  to  clintontrump date of test books normalized log predictive likelihood Google booksDSGSDSG FSGISGP date of test SoU address State of the Union  addressesDSGSDSG FSGISGP date of test tweets TwitterDSGSDSG FSGISGP Dynamic Word Embeddings
+
+References
+Barkan  Oren  Bayesian Neural Word Embedding  In Proceedings of the ThirtyFirst AAAI Conference on Arti 
+cial Intelligence   
+
+Beck  Amir and Teboulle  Marc  Mirror Descent and Nonlinear Projected Subgradient Methods for Convex Optimization  Operations Research Letters   
+ 
+
+BenTal  Aharon  Margalit  Tamar  and Nemirovski 
+Arkadi  The Ordered Subsets Mirror Descent Optimization Method with Applications to Tomography  SIAM
+Journal on Optimization     
+
+Bengio  Yoshua  Ducharme    ejean  Vincent  Pascal  and
+Jauvin  Christian    Neural Probabilistic Language
+Model  Journal of Machine Learning Research   
+   
+
+Blei  David   and Lafferty  John    Dynamic Topic Models  In Proceedings of the  rd International Conference
+on Machine Learning  pp    ACM   
+
+Blei  David    Kucukelbir  Alp  and McAuliffe  Jon   
+Variational Inference    Review for Statisticians  arXiv
+preprint arXiv   
+
+Charlin  Laurent  Ranganath  Rajesh  McInerney  James 
+and Blei  David    Dynamic Poisson Factorization 
+In Proceedings of the  th ACM Conference on Recommender Systems  pp     
+
+SemiSupervised
+Fu  Yanwei and Sigal  Leonid 
+In Proceedings of
+VocabularyInformed Learning 
+the IEEE Conference on Computer Vision and Pattern
+Recognition  pp     
+
+Gultekin  San and Paisley  John    Collaborative Kalman
+Filter for TimeEvolving Dyadic Processes  In Proceedings of the  nd International Conference on Data Mining  pp     
+
+Hamilton  William    Leskovec  Jure  and Jurafsky  Dan 
+Diachronic word embeddings reveal statistical laws of
+In Proceedings of the  th Annual
+semantic change 
+Meeting of the Association for Computational Linguistics  pp     
+
+Hoffman  Matthew    Blei  David    Wang  Chong  and
+Paisley  John William  Stochastic Variational Inference 
+Journal of Machine Learning Research   
+   
+
+Jerfel  Ghassen  Basbug  Mehmet    and Engelhardt  Barbara    Dynamic Compound Poisson Factorization  In
+Arti cial Intelligence and Statistics   
+
+Jordan  Michael
+
+   Ghahramani  Zoubin 
+
+Jaakkola 
+Tommi    and Saul  Lawrence    An Introduction to
+Variational Methods for Graphical Models  Machine
+learning     
+
+Kalman  Rudolph Emil et al    New Approach to Linear
+Filtering and Prediction Problems  Journal of Basic Engineering     
+
+       Emrah and Stanica  Pantelimon  The Inverse of
+Banded Matrices  Journal of Computational and Applied
+Mathematics     
+
+Kim  Yoon  Chiu  YiI  Hanaki  Kentaro  Hegde  Darshan  and Petrov  Slav  Temporal Analysis of Language
+In Proceedings of
+Through Neural Language Models 
+the ACL   Workshop on Language Technologies and
+Computational Social Science  pp     
+
+Kingma  Diederik   and Welling  Max  AutoEncoding
+In Proceedings of the  nd InternaVariational Bayes 
+tional Conference on Learning Representations  ICLR 
+ 
+
+Kulkarni  Vivek  AlRfou  Rami  Perozzi  Bryan  and
+Skiena  Steven  Statistically Signi cant Detection of
+In Proceedings of the  th InterLinguistic Change 
+national Conference on World Wide Web  pp   
+ 
+
+Levy  Omer and Goldberg  Yoav  Neural Word Embedding
+as Implicit Matrix Factorization  In Advances in Neural
+Information Processing Systems  pp     
+
+Michel 
+
+JeanBaptiste 
+
+Shen  Yuan Kui  Aiden 
+Aviva Presser  Veres  Adrian  Gray  Matthew   
+Pickett  Joseph    Hoiberg  Dale  Clancy  Dan  Norvig 
+Peter  Orwant  Jon  et al  Quantitative Analysis of
+Culture Using Millions of Digitized Books  Science 
+   
+
+Mihalcea  Rada and Nastase  Vivi  Word Epoch Disambiguation  Finding how Words Change Over Time 
+In Proceedings of the  th Annual Meeting of the Association for Computational Linguistics  Short PapersVolume   pp     
+
+Mikolov  Tomas  Chen  Kai  Corrado  Greg  and Dean  Jeffrey  Ef cient Estimation of Word Representations in
+Vector Space  arXiv preprint arXiv     
+
+Mikolov  Tomas  Sutskever  Ilya  Chen  Kai  Corrado 
+Greg    and Dean  Jeff  Distributed Representations of
+Words and Phrases and their Compositionality  In Advances in Neural Information Processing Systems   pp 
+     
+
+Dynamic Word Embeddings
+
+Socher  Richard  Bauer  John  Manning  Christopher   
+and Ng  Andrew    Parsing with Compositional Vector
+Grammars  In ACL   pp       
+
+Socher  Richard  Perelygin  Alex  Wu  Jean    Chuang  Jason  Manning  Christopher    Ng  Andrew    and Potts 
+Christopher  Recursive Deep Models for Semantic Compositionality over   Sentiment Treebank  In Proceedings
+of the   Conference on Empirical Methods in Natural Language Processing  EMNLP  volume   pp 
+     
+
+Uhlenbeck  George   and Ornstein  Leonard    On the
+Theory of the Brownian Motion  Physical Review   
+   
+
+Vilnis  Luke and McCallum  Andrew  Word RepresentaIn Proceedings of the
+tions via Gaussian Embedding 
+ nd International Conference on Learning Representations  ICLR   
+
+Wang  Chong  Blei  David  and Heckerman  David  Continuous time dynamic topic models  In Proceedings of
+the TwentyFourth Conference on Uncertainty in Arti 
+cial Intelligence  pp     
+
+Welch  Greg and Bishop  Gary  An Introduction to the
+
+Kalman Filter   
+
+Mikolov  Tomas  Yih  Wentau  and Zweig  Geoffrey  Linguistic Regularities in Continuous Space Word RepreIn Proceedings of the   Conference of
+sentations 
+the North American Chapter of the Association for Computational Linguistics  Human Language Technologies
+ NAACLHLT  pp       
+
+Mnih  Andriy and Kavukcuoglu  Koray  Learning Word
+Embeddings Ef ciently with NoiseContrastive Estimation  In Advances in Neural Information Processing Systems  pp     
+
+Pennington 
+
+Jeffrey  Socher  Richard  and Manning 
+Christopher    Glove  Global Vectors for Word Representation  In EMNLP  volume   pp     
+
+Ranganath  Rajesh  Gerrish  Sean  and Blei  David   
+Black Box Variational Inference  In AISTATS  pp   
+   
+
+Ranganath  Rajesh  Perotte  Adler    Elhadad  No emie  and
+Blei  David    The Survival Filter  Joint Survival AnalIn UAI  pp   
+ysis with   Latent Time Series 
+ 
+
+Rauber  Paulo    Falc ao  Alexandre    and Telea  Alexandru    Visualizing TimeDependent Data Using Dynamic tSNE  In EuroVis     Short Papers   
+
+Rezende  Danilo Jimenez  Mohamed  Shakir  and Wierstra 
+Daan  Stochastic Backpropagation and Approximate Inference in Deep Generative Models  In The  st International Conference on Machine Learning  ICML   
+
+Rudolph  Maja and Blei  David  Dynamic Bernoulli
+Embeddings for Language Evolution  arXiv preprint
+arXiv   
+
+Rudolph  Maja  Ruiz  Francisco  Mandt  Stephan  and Blei 
+David  Exponential Family Embeddings  In Advances
+in Neural Information Processing Systems  pp   
+ 
+
+Sagi  Eyal  Kaufmann  Stefan  and Clark  Brady  Tracing Semantic Change with Latent Semantic Analysis 
+Current Methods in Historical Semantics  pp   
+ 
+
+Sahoo  Nachiketa  Singh  Param Vir  and Mukhopadhyay 
+Tridas    Hidden Markov Model for Collaborative Filtering  MIS Quarterly     
+
+Salimans  Tim and Kingma  Diederik    Weight Normalization    Simple Reparameterization to Accelerate TrainIn Advances in Neural
+ing of Deep Neural Networks 
+Information Processing Systems  pp     
+
+

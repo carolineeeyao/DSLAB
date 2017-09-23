@@ -1,0 +1,4750 @@
+Grammar Variational Autoencoder
+
+Matt    Kusner       Brooks Paige       Jos  Miguel Hern ndezLobato  
+
+Abstract
+
+Deep generative models have been wildly successful at learning coherent latent representations
+for continuous data such as natural images  artwork  and audio  However  generative modeling of discrete data such as arithmetic expressions and molecular structures still poses signi 
+cant challenges  Crucially  stateof theart methods often produce outputs that are not valid  We
+make the key observation that frequently  discrete data can be represented as   parse tree from
+  contextfree grammar  We propose   variational autoencoder which directly encodes from
+and decodes to these parse trees  ensuring the
+generated outputs are always syntactically valid 
+Surprisingly  we show that not only does our
+model more often generate valid outputs  it also
+learns   more coherent latent space in which
+nearby points decode to similar discrete outputs 
+We demonstrate the effectiveness of our learned
+models by showing their improved performance
+in Bayesian optimization for symbolic regression
+and molecule generation 
+
+  Introduction
+Generative machine learning models have been used recently to produce extraordinary results  from realistic musical improvisation  Jaques et al    to changing facial expressions in images  Radford et al    Upchurch
+et al    to creating realistic looking artwork  Gatys
+et al    In large part  these generative models have
+been successful at representing data in continuous domains 
+Recently there is increased interest in training generative
+models to construct more complex  discrete data types such
+as arithmetic expressions  Kusner   Hern ndezLobato 
+  source code  Gaunt et al    Riedel et al   
+ Alan Turing Institute  University
+Correspondence
+ bpaige turing ac uk 
+
+of Warwick  University of Cambridge 
+to 
+ jmh cam ac uk 
+
+ Equal contribution
+
+ mkusner turing ac uk 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+and molecules    mezBombarelli et al     
+To train generative models for these tasks  these objects
+are often  rst represented as strings  This is in large part
+due to the fact that there exist powerful models for text sequence modeling such as Long Short Term Memory networks  LSTMs   Hochreiter   Schmidhuber    Gated
+Recurrent Units  GRUs   Cho et al    and Dynamic
+Convolutional Neural Networks  DCNNs   Kalchbrenner
+et al    For instance  molecules can be represented by
+socalled SMILES strings  Weininger    and   mezBombarelli et al      has recently developed   generative model for molecules based on SMILES strings that
+uses GRUs and DCNNs  This model is able to encode and
+decode molecules to and from   continuous latent space 
+allowing one to search this space for new molecules with
+desirable properties    mezBombarelli et al     
+However  one immediate dif culty in using strings to represent discrete objects is that the representation is very brittle  small changes in the string can lead to completely different objects  or often do not correspond to valid objects
+at all  Speci cally    mezBombarelli et al      described that while searching for new molecules  the probabilistic decoder   the distribution which maps from the
+continuous latent space into the space of molecular structures   would sometimes accidentally put high probability
+on strings which are not valid SMILES strings or do not encode plausible molecules 
+To address this issue  we propose to directly incorporate knowledge about the structure of discrete data using
+  grammar  Grammars exist for   wide variety of discrete domains such as symbolic expressions  Allamanis
+et al    standard programming languages such as  
+ Kernighan et al    and chemical structures  James
+et al    For instance the set of syntactically valid
+SMILES strings is described using   context free grammar 
+which can be used for parsing and validation 
+Given   grammar  every valid discrete object can be described as   parse tree from the grammar  Thus  we propose the grammar variational autoencoder  GVAE  which
+encodes and decodes directly from and to these parse trees 
+Generating parse trees as opposed to strings ensures that
+
+ http opensmiles org spec opensmiles grammar html
+
+Grammar Variational Autoencoder
+
+all outputs are valid based on the grammar  This frees the
+GVAE from learning syntactic rules and allows it to wholly
+focus on learning other  semantic  properties 
+We demonstrate the GVAE on two tasks for generating discrete data    generating simple arithmetic expressions and
+  generating valid molecules  We show not only does our
+model produce   higher proportion of valid outputs than  
+character based autoencoder  it also produces smoother latent representations  We also show that this learned latent
+space is effective for searching for arithmetic expressions
+that    data  for  nding better druglike molecules  and for
+making accurate predictions about target properties 
+
+  Background
+  Variational autoencoder
+We wish to learn both an encoder and   decoder for mapping data   to and from values   in   continuous space 
+The variational autoencoder  Kingma   Welling   
+Rezende et al    provides   formulation in which the
+encoding   is interpreted as   latent variable in   probabilistic generative model    probabilistic decoder is de ned
+by   likelihood function        and parameterized by  
+Alongside   prior distribution      over the latent variables 
+the posterior distribution                     can then
+be interpreted as   probabilistic encoder 
+To admit ef cient inference  the variational Bayes approach
+simultaneously learns both the parameters of        as
+well as those of   posterior approximation        This is
+achieved by maximizing the evidence lower bound  ELBO 
+ 
+          Eq       log           log         
+with           log      So long as        and
+       can be computed pointwise  and are differentiable
+with respect to their parameters  the ELBO can be maximized via gradient descent  this allows wide  exibility in
+choice of encoder and decoder models  Typically these will
+take the form of exponential family distributions whose parameters are the weights of   multilayer neural network 
+
+  Contextfree grammars
+  contextfree grammar  CFG  is traditionally de ned as  
+ tuple                   is    nite set of nonterminal
+symbols  the alphabet   is    nite set of terminal symbols  disjoint from       is    nite set of production rules 
+and   is   distinct nonterminal known as the start symbol 
+The rules   are formally described as       for      
+and            with   denoting the Kleene closure  In
+practice  these rules are de ned as   set of mappings from  
+single lefthand side nonterminal in   to   sequence of terminal and or nonterminal symbols  and can be interpreted
+as  replacement  instructions 
+
+Repeatedly applying production rules beginning with  
+nonterminal symbol de nes   tree  with symbols on the
+righthand side of the production rule becoming child
+nodes for the lefthand side parent  The grammar   thus
+de nes   set of possible trees extending from each nonterminal symbol in     produced by recursively applying
+rules in   to leaf nodes until all leaf nodes are terminal
+symbols in   The language of   is the set of all terminal symbol sequences that can be generated as leaf nodes
+in   tree  Given   string in the language         sequence
+of terminals    parse tree is   tree rooted at   which has
+this sequence of terminal symbols as its leaf nodes  The
+ubiquity of contextfree languages in computer science is
+due in part to the presence of ef cient parsing algorithms
+to generate parse trees  For more background on CFGs and
+automata theory  see      Hopcroft et al   
+Our work builds off the work of probabilistic contextfree
+grammars  PCFGs    PCFG assigns probabilities to each
+production rule in the grammar  and thus de nes   probability distribution over parse trees  Baker    Booth  
+Thompson      string can be generated by repeatedly sampling and applying production rules  beginning at
+the start symbol  until no nonterminals remain  Modern
+approaches allow the probabilities used at each stage to depend on the state of the parse tree  Johnson et al   
+
+  Methods
+In this section we describe how   grammar can improve
+variational autoencoders  VAE  for discrete data 
+It will
+do so by drastically reducing the number of invalid outputs generated from the VAE  We illustrate our approach
+on molecular data  however it will extend to any descrete
+data that can be described by   grammar 
+One glaring issue with   characterbased VAE is that it may
+frequently map latent points to sequences that are not valid 
+hoping the VAE will infer from training data what constitutes   valid sequence  Instead of implicitly encouraging
+the VAE to produce valid sequences  we propose to give
+the VAE explicit knowledge about how to produce valid sequences  We do this by using   grammar for the sequences 
+given   grammar we can take any valid sequence and parse
+it into   parse tree    preorder traversal on this parse tree
+yields   sequence of production rules  Applying these rules
+in order will yield the original sequence  Our approach then
+will be to learn   VAE that produces sequences of grammar
+production rules  The bene   is that it is trivial to generate
+valid sequences of production rules  as the grammar describes the valid set of rules that can be selected at any
+point during the generation process  Thus  our model is
+able to focus on learning semantic properties of sequence
+data without also having to learn syntactic constraints 
+
+Grammar Variational Autoencoder
+
+Figure   The encoder of the GVAE  We denote the start rule in blue and all rules that decode to terminal in green  See text for details 
+
+  An illustrative example
+We propose   grammar variational autoencoder  GVAE 
+that encodes decodes in the space of grammar production
+rules  We describe how it works with   simple example 
+
+Encoding  Consider   subset of the SMILES grammar as
+shown in Figure   box     These are the possible production rules that can be used for constructing   molecule 
+Imagine we are given as input the SMILES string for benzene     ccccc  Figure   box   shows this molecule 
+To encode this molecule into   continuous latent representation we begin by using the SMILES grammar to parse this
+string into   parse tree  partially shown in box     This
+tree describes how    ccccc  is generated by the grammar 
+We decompose this tree into   sequence of production rules
+by performing   preorder traversal on the branches of the
+parse tree from leftto right  shown in box     We convert
+these rules into  hot indicator vectors  where each dimension corresponds to   rule in the SMILES grammar  box
+    These  hot vectors are concatenated into the rows of
+  matrix   of dimension            where   is the number of production rules in the SMILES grammar  and      
+is the number of production rules used to generate   
+We use   deep convolutional neural network to map the
+collection of  hot vectors   to   continuous latent vector
+   The architecture of the encoding network is described in
+the supplementary material 
+
+Decoding  We now describe how we map continuous
+vectors back to   sequence of production rules  and thus
+SMILES strings  Crucially we construct the decoder so
+that  at any time while we are decoding   sequence  the decoder will only be allowed to select   subset of production
+rules that are  valid  This will cause the decoder to only
+produce valid parse sequences from the grammar 
+We begin by passing the continuous vector   through   recurrent neural network which produces   set of unnormalized log probability vectors  or  logits  shown in Figure  
+box   and     Exactly like the  hot vectors produced
+by the encoder  each dimension of the logit vectors cor 
+
+responds to   production rule in the grammar  We can
+again write these collection of logit vectors as   matrix
+    RTmax    where Tmax is the maximum number of
+timesteps  production rules  allowed by the decoder  During the rest of the decoding operations  we will use the rows
+of   to select   sequence of valid production rules 
+To ensure that any sequence of production rules generated
+from the decoder is valid  we keep track of the state of the
+parsing using   lastin  rstout  LIFO  stack  This is shown
+in Figure   box     At the beginning  every valid parse
+from the grammar must start with the start symbol  smiles 
+which is placed on the stack  Next we pop off whatever
+nonterminal symbol that was placed last on the stack  in
+this case smiles  and we use it to mask out the invalid
+dimensions of the current logit vector  Formally  for every nonterminal   we de ne    xed binary mask vector
+           This takes the value   for all indices in
+            corresponding to production rules that have   on
+their lefthand side 
+In the previous example  the only production rule in the
+grammar beginning with smiles is the  rst so we maskout every dimension except the  rst  shown in Figure  
+box     We then sample from the remaining unmasked
+rules  using their values in the logit vector  To sample from
+this masked logit at any timestep   we form the following
+masked distribution 
+
+    exp ftk 
+       exp ftj 
+
+ 
+
+ 
+
+  xt          
+
+PK
+
+where ftk is the       element of the logit matrix    As
+only the  rst rule is unmasked we will select this rule
+smiles   chain as the  rst rule in our sequence  box    
+Now the next rule must begin with chain  so we push it
+onto the stack  Figure   box     We sample this nonterminal and  as before  use it to mask out all of the rules
+that cannot be applied in the current logit vector  We then
+sample   valid rule from this logit vector  chain   chain 
+branched atom  Just as before we push the nonterminals
+on the righthand side of this rule onto the stack  adding
+the individual nonterminals in from right to left  such that
+the leftmost nonterminal is on the top of the stack  For the
+
+OOH   ccccc smileschain chainbranchedatomatomaromaticorganic   ringbonddigit branchedatomsmileschainchainbranchedatomchainbranchedatom atom  ringbondbranchedatomaromaticorganicatom   aromaticorganic ringbonddigitdigit form parse treeextract rulesconvert to  hot vectorsinput SMILESmap to latent space chain chainbranched atomsmileschainchainchain  branched atomatom  ringbondbranched atomatombranched atomaromatic organicatomaliphatic organicatomringbonddigitdigit   aromatic organic   aliphatic organic   aliphatic organicdigit SMILES grammarmap from latent space
+
+ 
+
+convert to logits
+
+ 
+
+    
+
+    
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Grammar Variational Autoencoder
+
+stack
+
+pop  rst 
+
+nonterminal
+
+ 
+smiles  
+
+chain 
+
+chain 
+branched
+atom 
+atom 
+aromatic
+organic     
+ringbond 
+
+digit 
+
+branched
+
+atom
+
+branched
+
+atom
+
+ringbond 
+
+ringbond 
+branched
+
+atom
+branched
+
+atom
+
+smiles  
+
+chain 
+
+chain 
+branched
+atom 
+atom
+aromatic
+organic
+ringbond
+
+digit
+
+branched
+
+atom
+
+branched
+
+atom
+
+mask out invalid rules
+
+ 
+
+sample rule  
+
+push nonterminals
+
+ 
+
+onto stack
+smiles  
+chain  
+
+concatenate 
+terminals
+   ccccc   
+
+ 
+
+    
+
+    
+
+chain  
+
+chain 
+
+branched
+atom         
+
+chain  
+branched
+atom        
+atom  
+aromatic
+organic    
+ringbond  
+
+digit  
+
+branched
+atom         
+atom  ringbond  
+aromatic
+organic    
+
+     
+
+digit  
+
+   
+
+translate 
+molecule
+
+ 
+
+Figure   The decoder of the GVAE  See text for details 
+
+masks    for each production rule  
+
+Algorithm   Sampling from the decoder
+Input  Deterministic decoder output     RTmax   
+Output  Sampled productions   from       
+  Initialize empty stack    and push the start symbol  
+onto the top  set      
+  while   is nonempty do
+ 
+ 
+ 
+ 
+
+Pop the lastpushed nonterminal   from the stack  
+Use Eq    to sample   production rule  
+Let xt be the  hot vector corresponding to  
+Let RHS    denote all nonterminals on the righthand side of rule    ordered from right to left
+for nonterminal   in RHS    do
+end for
+Set         xt 
+Set          
+
+ 
+ 
+ 
+ 
+ 
+  end while
+
+Push   on to the stack  
+
+next state we again pop the last rule placed on the stack and
+mask the current logit  etc  This process continues until the
+stack is empty or we reach the maximum number of logit
+vectors Tmax  We describe this decoding procedure formally in Algorithm   In practice  because sampling from
+the decoder often  nishes before   reaches Tmax  we introduce an additional  noop  rule to the grammar that we use
+to pad   until the number of rows equals Tmax 
+We note the explicit connection between the process in Algorithm   and parsing algorithms for pushdown automata 
+  pushdown automaton is    nite state machine which
+has access to   single stack for longterm storage  and are
+equivalent to contextfree grammars in the sense that every CFG can be converted into   pushdown automaton  and
+viceversa  Hopcroft et al    The decoding algorithm
+performs the sequence of actions taken by   nondeterministic pushdown automaton at each stage of   parsing algorithm  the nondeterminism is resolved by sampling according to the probabilities in the emitted logit vector 
+Contrasting the character VAE  Notice that the key
+difference between this grammar VAE decoder and  
+
+characterbased VAE decoder is that at every point in the
+generated sequence  the character VAE can sample any
+possible character  There is no stack or masking operation  The grammar VAE however is constrained to select
+syntacticallyvalid sequences 
+
+Syntactic vs  semantic validity 
+It is important to note
+that the grammar encodes syntactically valid molecules
+but not necessarily semantically valid molecules  This is
+mainly because of three reasons  First  certain molecules
+produced by the grammar may be very unstable molecules
+or not chemicallyvalid  for instance an oxygen atom cannot bond to   other atoms as it only has   free electrons for
+bonding  although it would be possible to generate this in
+  molecule from the grammar  Second  the SMILES language has noncontext free aspects         ringbond must be
+opened and closed by the same digit  starting with    as is
+the case for benzene    ccccc  The particular challenge
+for matching digits  in contrast to matching grouping symbols such as parentheses  is that they do not compose in  
+nested manner  for example     CCCCC CCCCC  is
+  valid molecule  Keeping track of which digit to use for
+each ringbond is not contextfree  Third  we note that the
+GVAE can output an undetermined sequence if there are
+still nonterminal symbols on the stack after processing all
+Tmax logit vectors  While this could be  xed by   procedure that converts these nonterminals to terminals  for
+simplicity we mark these sequences as invalid 
+
+  Training
+During training  each input SMILES encoded as   sequence
+of  hot vectors        Tmax    also de nes   sequence of Tmax mask vectors  Each mask at timestep
+              Tmax is selected by the lefthand side of the production rule indicated in the  hot vector xt  Given these
+masks we can compute the decoder   mapping
+
+        
+
+  xt        
+
+ 
+
+with the individual probabilities at each timestep de ned as
+in Eq    We pad any remaining timesteps after       up
+
+     Yt 
+
+Grammar Variational Autoencoder
+
+  
+
+Algorithm   Training the Grammar VAE
+Input  Dataset       
+Output  Trained VAE model              
+  while VAE not converged do
+ 
+ 
+ 
+ 
+ 
+
+Select element           
+Encode            
+Decode  given    compute logits     RTmax  
+for   in           Tmax  do
+
+    or minibatch 
+
+Compute   xt    via Eq    with mask mxt
+and logits ft
+
+ 
+ 
+
+end for
+Update     using estimates               via
+gradient descent on the ELBO in Eq   
+
+  end while
+
+to Tmax with    noop  rule    onehot vector indicating the
+parse tree is complete and no actions are to be taken 
+In all our experiments         is   Gaussian distribution
+whose mean and variance parameters are the output of the
+encoder network  with an isotropic Gaussian prior       
+       At training time  we sample   value of   from
+       to compute the ELBO
+
+          Eq       log           log         
+
+ 
+
+Following Kingma   Welling   we apply   noncentered parameterization on the encoding Gaussian distribution and optimize Eq    using gradient descent  learning encoder and decoder neural network parameters   and
+  Algorithm   summarizes the training procedure 
+
+  Experiments
+We show the usefulness of our proposed grammar variational autoencoder  GVAE  on two sequence optimization problems    searching for an arithmetic expression
+that best  ts   dataset and    nding new drug molecules 
+We begin by showing the latent space of the GVAE and
+  character variational autoencoder  CVAE  similar to
+that of   mezBombarelli et al      on each of
+the problems  We demonstrate that the GVAE learns  
+smooth  meaningful latent space for arithmetic equations
+and molecules  Given this we perform optimization in this
+latent space using Bayesian optimization  inspired by the
+technique of   mezBombarelli et al      We demonstrate that the GVAE improves upon   previous character
+variational autoencoder  by selecting an arithmetic expression that matches the data nearly perfectly  and by  nding
+novel molecules with better drug properties 
+
+ Code available at  https github com mkusner grammarVAE
+ https github com maxhodak kerasmolecules
+
+Character VAE
+   exp exp 
+ exp exp 
+ exp exp 
+ exp exp 
+   exp   
+   exp   
+   exp     
+   exp   
+   exp   
+ exp 
+   exp 
+ exp   
+   exp xx 
+ exp   
+  exp sin 
+  exp sin 
+ exp     
+ exp 
+  exp   
+  exp 
+ sin 
+   sin     
+  exp   ex 
+  exp   ex   
+  exp     
+  exp     
+  exp   
+   exp 
+
+Grammar VAE
+   exp exp 
+   exp exp 
+   exp   exp 
+   exp   exp 
+     exp   
+     exp     
+   exp     
+   exp   
+   exp   
+ exp     
+     
+     
+   
+ exp   
+  exp sin 
+  exp sin 
+  exp   sin   
+    sin   exp   
+   sin     
+   sin 
+ sin 
+   sin     
+   sin     
+   sin   
+   exp 
+   exp 
+   exp 
+   exp 
+
+Table   Linear interpolation between two equations  in bold  at
+top and bottom of each cell  The character VAE often passes
+through intermediate strings which do not decode to   valid equation  shown in red  The grammar VAE makes more  negrained
+perturbations at each stage 
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+
+   
+
+  exp            
+
+                   
+   
+
+  Problems
+We describe in detail the two sequence optimization problems we seek to solve  The  rst consists in optimizing
+the    of an arithmetic expression  We are given   set of
+  randomly generated univariate arithmetic expressions from the following grammar 
+                                     
+                 
+   
+        
+where   and   are nonterminals and the symbol   separates the possible production rules generated from each
+nonterminal  By parsing this grammar we can randomly
+generate strings of univariate arithmetic equations  functions of    such as the following  sin        
+        sin  and      exp   exp       We
+limit the length of every selected string to have at most
+  production rules  Given this dataset we train both the
+CVAE and GVAE to learn   latent space of arithmetic expressions  We propose to perform optimization in this latent space of expressions to  nd an expression that best  ts
+   xed dataset    common measure of best    is the test
+MSE between the predictions made by   selected expression and the true data  In the generated expressions  the
+presence of exponential functions can result in very large
+MSE values  For this reason  we use as target variable
+log    MSE  instead of MSE 
+
+Grammar Variational Autoencoder
+
+For the second optimization problem  we follow    mezBombarelli et al      and optimize the drug properties
+of molecules  Our goal is to maximize the wateroctanol
+partition coef cient  logP  an important metric in drug
+design that characterizes the druglikeness of   molecule 
+As in   mezBombarelli et al      we consider   penalized logP score that takes into account other molecular properties such as ring size and synthetic accessibility  Ertl   Schuffenhauer    The training data for
+the CVAE and GVAE models are   SMILES strings
+ Weininger    extracted at random from the ZINC
+database by   mezBombarelli et al      We describe
+the contextfree grammar for SMILES strings that we use
+to train our GVAE in the supplementary material 
+
+  Visualizing the latent space
+Arithmetic expressions  To qualitatively evaluate the
+smoothness of the VAE embeddings for arithmetic expressions  we attempt interpolating between two arithmetic expressions  as in Bowman et al    This is done by
+encoding two equations and then performing linear interpolation in the latent space  Results comparing the character and grammar VAEs are shown in Table   Although
+the character VAE smoothly interpolates between the text
+representation of equations  it passes through intermediate
+points which do not decode to valid equations 
+In contrast  the grammar VAE also provides smooth interpolation and produces valid equations for any location in the
+latent space    further exploration of    dimensional latent space is shown in the appendix 
+
+Molecules  We are interested if the GVAE produces   coherent latent space of molecules  To assess this we begin by
+encoding   molecule  We then generate   random orthogonal unit vectors in latent space  scaled down to only search
+the neighborhood of the molecules  Moving in combinations of these directions de nes   grid and at each point in
+the grid we decode the latent vector   times  We select the molecule that appears most often as the representative molecule  Figure   shows this latent space search surrounding two different molecules  Compare this to Figures
+  in   mezBombarelli et al      We note that
+in each plot of the GVAE the latent space is very smooth 
+in many cases moving from one grid point to another will
+only change   single atom in   molecule 
+In the CVAE
+   mezBombarelli et al      we do not observe such
+ negrained smoothness 
+
+  Bayesian optimization
+We now perform   series of experiments using the autoencoders to produce novel sequences with improved properties  For this  we follow the approach proposed by   mezBombarelli et al      and after training the GVAE  we
+
+train an additional model to predict properties of sequences
+from their latent representation  To propose promising new
+sequences  we can start from the latent vector of an encoded
+sequence and then use the output of this predictor  including its gradient  to move in the latent space direction most
+likely to improve the property  The resulting new latent
+points can then be decoded into corresponding sequences 
+In practice  measuring the property of each new sequence
+could be an expensive process  For example  the sequence
+could represent an organic photovoltaic molecule and the
+property could be the result of an expensive quantum mechanical simulation used to estimate the molecule   powerconversion ef ciency  Hachmann et al    The sequence could also represent   program or expression which
+may be computationally expensive to evaluate  Therefore 
+ideally  we would like the optimization process to perform
+only   reduced number of property evaluations  For this 
+we use Bayesian optimization methods  which choose the
+next point to evaluate by maximizing an acquisition function that quanti es the bene   of evaluating the property at
+  particular location  Shahriari et al   
+After training the GVAE  we obtain   latent feature vector
+for each sequence in the training data  given by the mean
+of the variational encoding distributions  We use these vectors and their corresponding property estimates to train  
+sparse Gaussian process  SGP  model with   inducing
+points  Snelson   Ghahramani    which is used to
+make predictions for the properties of new points in latent space  After training the SGP  we then perform   iterations of batch Bayesian optimization using the expected
+improvement  EI  heuristic  Jones et al    On each
+iteration  we select   batch of   latent vectors by sequentially maximizing the EI acquisition function  We use the
+Kriging Believer Algorithm to account for pending evaluations in the batch selection process  Cressie    That is 
+after selecting each new data point in the batch  we add that
+data point as   new inducing point in the sparse GP model
+with associated target variable equal to the mean of the GP
+predictive distribution at that point  Once   new batch of  
+latent vectors is selected  each point in the batch is transformed into its corresponding sequence using the decoder
+network in the GVAE  The properties of the newly generated sequences are then computed and the resulting data
+is added to the training set before retraining the SGP and
+starting the next BO iteration  Note that some of the new
+sequences will be invalid and consequently  it will not be
+possible to obtain their corresponding property estimate  In
+this case we    the property to be equal to the worst value
+observed in the original training data 
+
+Arithmetic expressions  Our goal is to see if we can
+ nd an arithmetic expression that best  ts    xed dataset 
+Speci cally  we generate this dataset by selecting  
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+OH
+
+NH
+ 
+ 
+
+ 
+
+ 
+ 
+
+ 
+
+ 
+
+ 
+
+OH
+
+NH
+
+ 
+
+ 
+
+ 
+
+OH
+
+NH
+
+OH
+
+ 
+
+OH
+
+NH
+
+NH
+OH
+
+OH
+
+NH 
+
+NH
+
+NH 
+
+OH
+
+NH 
+
+NH 
+
+NH 
+
+NH 
+
+NH 
+
+NH 
+
+NH 
+
+NH 
+
+NH 
+
+NH 
+
+NH
+
+NH
+NH
+
+NH
+
+NH 
+
+NH
+
+NH
+
+NH 
+
+NH 
+
+NH
+
+NH
+
+NH
+
+NH
+
+ 
+NH 
+
+NH
+
+ 
+
+NH
+NH
+
+ 
+
+ 
+
+NH
+
+ 
+
+ 
+
+NH
+
+ 
+
+ 
+
+ 
+ 
+
+ 
+
+ 
+
+NH
+
+NH
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+NH
+
+NH
+ 
+
+NH
+
+NH
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+
+ 
+
+NH
+
+NH
+NH
+
+NH
+
+NH
+
+NH
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+
+ 
+
+NH
+
+NH
+NH
+
+NH
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+
+ 
+ 
+
+ 
+
+NH
+
+HS
+
+ 
+
+Grammar Variational Autoencoder
+
+OH
+
+ 
+
+ 
+
+ 
+
+ 
+
+OH
+
+ 
+
+HO
+
+NH
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+HO
+NH
+
+HO
+
+NH
+
+HO
+
+NH
+
+ 
+
+ 
+
+OH
+
+OH
+
+OH
+
+OH
+
+OH
+
+NH
+
+NH
+
+OH
+
+NH
+
+NH
+
+NH
+
+NH
+
+NH
+
+NH
+
+NH
+
+NH
+NH
+
+ 
+NH
+
+NH
+
+NH
+
+NH
+
+NH
+
+NH
+
+ 
+
+NH
+
+ 
+
+ 
+
+ 
+
+ 
+
+NH
+
+ 
+
+ 
+
+ 
+
+ 
+
+NH
+
+NH
+
+ 
+
+NH
+
+ 
+
+ 
+ 
+
+NH
+
+ 
+
+ 
+
+NH
+
+ 
+
+ 
+ 
+
+ 
+
+NH
+
+NH
+
+NH
+
+NH
+
+ 
+
+ 
+
+ 
+
+NH
+ 
+
+NH
+
+ 
+
+NH
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+NH
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+SH
+
+ 
+
+ 
+
+SH
+
+SH
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+NH
+
+ 
+
+ 
+
+ 
+
+NH
+
+NH
+
+ 
+
+ 
+
+ 
+ 
+
+ 
+ 
+
+ 
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+NH
+NH
+
+NH
+ 
+
+ 
+
+ 
+
+NH
+
+ 
+NH 
+
+ 
+
+ 
+
+NH 
+
+NH 
+
+SH
+
+ 
+
+ 
+
+NH 
+
+SH
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+SH
+
+ 
+
+ 
+
+ 
+
+SH
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+HS
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+
+ 
+ 
+
+ 
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+NH
+ 
+
+NH
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+NH 
+
+ 
+
+ 
+
+NH 
+
+NH 
+
+SH
+
+ 
+
+ 
+
+NH 
+
+NH 
+
+ 
+
+ 
+
+NH 
+
+SH
+
+SH
+
+SH
+
+NH
+
+NH
+
+ 
+
+SH
+NH
+
+ 
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+Cl
+
+ 
+
+ 
+
+ 
+
+Cl
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+Cl
+
+ 
+
+ 
+ 
+
+ 
+
+ 
+
+ 
+
+OH
+
+NH
+
+ 
+
+ 
+
+OH
+
+NH
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+NH
+
+ 
+
+NH
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+NH
+
+NH
+
+ 
+
+ 
+
+NH
+
+ 
+
+NH
+
+NH
+ 
+
+ 
+
+ 
+
+NH
+NH
+
+ 
+NH
+
+ 
+
+ 
+
+ 
+
+HO
+
+HO
+
+HO
+
+NH
+
+ 
+
+HO
+
+NH
+
+ 
+
+ 
+
+OH
+
+NH
+
+OH
+
+NH
+
+ 
+
+ 
+
+ 
+
+  
+
+NH
+
+ 
+
+NH
+
+NH
+
+  
+
+NH
+
+ 
+
+ 
+
+HO
+
+NH
+
+ 
+
+HO
+
+HO
+NH
+
+ 
+
+NH
+
+HO
+
+HO
+NH
+
+NH
+
+HO
+
+HO
+NH
+
+ 
+
+OH
+
+ 
+
+HO
+
+OH
+
+OH
+
+OH
+
+OH
+
+ 
+
+ 
+
+Cl
+
+NH
+
+ 
+
+ 
+
+Cl
+
+HO
+
+NH
+
+ 
+
+NH
+
+ 
+
+HO
+
+HO
+NH
+
+ 
+
+NH
+
+HO
+
+NH
+NH
+
+NH
+
+NH
+
+NH
+
+OH
+
+Cl
+
+ 
+ 
+
+Cl
+
+ 
+
+OH
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+NH
+
+ 
+
+ 
+
+ 
+
+NH
+NH
+
+ 
+
+ 
+
+OH
+
+NH
+
+ 
+
+Cl
+
+Cl
+
+ 
+
+ 
+
+NH
+
+NH
+
+NH
+
+Cl
+
+Cl
+
+ 
+
+ 
+
+NH
+
+NH
+
+NH
+
+Cl
+
+Cl
+
+Cl
+
+HO
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+NH
+
+ 
+
+ 
+
+ 
+
+Cl
+
+ 
+
+IH 
+
+ 
+
+ 
+
+NH
+
+ 
+
+ 
+
+  
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+Cl
+
+ 
+
+ 
+
+Cl
+
+Cl
+
+Cl
+
+Cl
+
+Cl
+
+ 
+
+ 
+
+  
+
+ 
+
+ 
+
+Cl
+
+Cl
+
+Cl
+
+Cl
+
+Cl
+
+OH
+
+Cl
+Cl
+
+HO
+
+NH
+
+ 
+
+Cl
+
+HO
+
+HO
+NH
+
+NH
+
+HO
+
+NH
+NH
+
+NH
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+HO
+
+ 
+
+HO
+
+ 
+
+ 
+
+Cl
+
+Cl
+
+ 
+ 
+
+Cl
+
+ 
+
+ 
+
+HO
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+Cl
+
+ 
+
+Cl
+
+Cl
+
+ 
+
+ 
+
+ 
+
+Cl
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+Cl
+
+Cl
+
+Cl
+
+IH 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+Cl
+
+OH
+
+OH
+HO
+
+OH
+
+OH
+
+HO
+
+OH
+
+OH
+
+Cl
+
+OH
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+
+Cl
+
+Cl
+
+NH
+
+NH
+
+NH
+
+NH
+
+NH
+
+NH
+
+NH
+
+NH
+
+NH
+
+ 
+
+ 
+
+NH
+ 
+
+ 
+
+ 
+
+ 
+
+OH
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+OH
+
+OH
+
+SH
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+OH
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+SH
+
+ 
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+NH
+ 
+
+ 
+
+NH
+
+ 
+
+ 
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+SH
+
+ 
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+SH
+
+ 
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+NH
+
+ 
+
+NH
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+NH
+
+ 
+
+ 
+
+ 
+
+ 
+
+NH
+
+NH
+
+ 
+
+NH
+
+ 
+
+ 
+
+NH
+
+ 
+
+ 
+
+ 
+
+NH
+
+NH
+
+ 
+
+ 
+
+ 
+
+NH
+
+NH
+
+ 
+
+ 
+
+NH
+
+NH
+
+ 
+
+ 
+
+NH
+
+NH
+
+ 
+
+NH
+
+NH
+
+NH
+
+NH
+
+NH
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+NH
+
+ 
+
+ 
+
+NH
+
+ 
+
+NH
+
+ 
+
+NH
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+NH
+ 
+
+NH
+
+NH
+
+NH
+
+ 
+
+NH
+
+ 
+
+ 
+
+NH
+
+ 
+
+ 
+
+NH
+
+ 
+
+NH
+
+ 
+
+NH
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+NH
+
+ 
+
+ 
+
+NH
+
+NH
+
+ 
+
+ 
+
+NH
+
+NH
+
+ 
+
+ 
+
+NH
+
+ 
+
+ 
+
+NH
+
+ 
+
+Cl
+
+NH
+
+ 
+
+ 
+
+Cl
+
+ 
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+OH
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+OH
+
+Br
+
+ 
+
+ 
+
+Br
+
+NH 
+
+ 
+
+NH
+
+NH 
+
+Br
+
+Br
+
+Br
+
+NH
+
+NH
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+Cl
+
+Cl
+
+Cl
+
+Br
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+NH
+
+ 
+
+ 
+
+NH
+
+ 
+ 
+
+ 
+
+ 
+
+ 
+
+NH
+ 
+
+NH
+
+NH
+
+NH
+
+ 
+
+ 
+
+NH
+
+ 
+
+NH
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+Br
+
+NH
+
+NH
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+NH
+
+ 
+
+Br
+
+ 
+
+NH
+
+Cl
+
+ 
+
+ 
+
+ 
+
+Cl
+
+ 
+
+NH
+
+ 
+
+NH
+
+ 
+
+ 
+
+ 
+
+NH
+
+ 
+
+ 
+
+NH
+
+NH
+
+ 
+
+ 
+
+ 
+
+Cl
+
+Cl
+
+ 
+
+OH
+
+OH
+
+OH
+
+ 
+
+ 
+
+NH
+
+NH
+
+ 
+
+ 
+NH
+
+OH
+
+ 
+
+NH
+
+OH
+
+ 
+
+ 
+NH
+
+Cl
+
+OH
+
+CCl
+
+ 
+
+ 
+
+ 
+
+ 
+
+  
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+NH
+
+  
+
+ 
+
+NH
+  
+
+ 
+
+  
+
+  
+
+  
+
+ 
+
+ 
+
+ 
+  
+
+ 
+
+ 
+
+NH
+
+NH
+
+NH
+
+NH
+
+NH
+
+SH
+
+  
+
+ 
+
+NH
+
+NH
+ 
+
+  
+
+ 
+SH
+
+ 
+
+NH
+
+NH
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+NH
+
+ 
+
+ 
+
+NH
+
+NH
+
+ 
+
+ 
+
+NH
+
+NH
+
+ 
+
+ 
+
+  
+
+NH
+
+NH
+
+ 
+
+ 
+
+NH
+
+ 
+
+NH
+
+ 
+NH
+
+ 
+
+ 
+
+  
+
+ 
+
+ 
+
+NH
+
+  
+
+ 
+
+ 
+
+ 
+
+  
+
+ 
+
+NH
+
+ 
+
+ 
+
+ 
+
+ 
+
+OH
+
+ 
+
+ 
+
+OH
+
+ 
+
+ 
+
+OH
+
+ 
+
+NH
+
+NH
+
+ 
+
+ 
+
+OH
+
+OH
+
+ 
+
+ 
+
+OH
+
+OH
+
+ 
+
+ 
+
+OH
+
+OH
+
+ 
+
+ 
+
+OH
+
+OH
+
+ 
+
+OH
+
+Br
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+OH
+
+OH
+
+ 
+
+ 
+
+OH
+
+OH
+
+ 
+
+ 
+
+OH
+
+OH
+
+ 
+
+ 
+
+OH
+
+OH
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+Br
+
+ 
+
+Cl
+
+ 
+
+ 
+ 
+
+ 
+
+Cl
+
+ 
+
+ 
+
+NH
+
+NH
+
+Cl
+
+ 
+
+ 
+
+ 
+
+NH
+
+ 
+
+ 
+
+ 
+
+ 
+
+NH
+
+Cl
+
+ 
+
+ 
+
+OH
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+OH
+
+OH
+
+ 
+
+ 
+
+OH
+
+OH
+
+ 
+
+ 
+
+OH
+
+OH
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+OH
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+NH
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+HO
+
+HO
+
+HO
+
+HO
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+Cl
+
+ 
+
+ 
+
+NH
+
+Cl
+
+NH
+
+NH
+
+NH
+
+NH
+
+NH
+
+NH
+
+NH
+
+NH
+
+ 
+
+NH
+
+ 
+
+ 
+
+NH
+
+ 
+
+NH
+ 
+
+Br
+
+  
+
+ 
+
+ 
+
+Br
+
+ 
+
+  
+
+  
+
+ 
+
+ 
+
+ 
+
+  
+
+ 
+
+NH
+
+ 
+
+ 
+
+ 
+
+NH
+
+NH
+
+ 
+
+NH
+
+OH
+
+NH
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+OH
+
+OH
+
+ 
+
+ 
+
+NH
+
+HO
+OH
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+HO
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+HO
+
+HO
+
+HO
+
+HO
+
+HO
+
+HO
+
+HO
+
+HO
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+Cl
+
+ 
+
+ 
+
+NH
+
+ 
+
+NH
+
+Cl
+
+Cl
+
+NH
+
+NH
+
+NH
+
+NH
+
+NH
+
+NH
+
+NH
+
+NH
+
+ 
+
+NH
+ 
+
+Cl
+
+  
+
+ 
+
+  
+
+  
+
+ 
+
+ 
+
+ 
+
+Br
+
+  
+
+ 
+
+ 
+
+ 
+
+Br
+
+OH
+
+ 
+
+ 
+
+ 
+
+ 
+
+OH
+
+OH
+
+NH
+
+NH
+
+Cl
+
+ 
+
+ 
+
+ 
+
+ 
+
+OH
+
+OH
+
+ 
+
+ 
+
+OH
+
+ 
+
+OH
+
+ 
+
+ 
+
+ 
+
+NH
+
+Cl
+
+ 
+
+ 
+
+ 
+
+OH
+OH
+
+ 
+
+ 
+
+ 
+
+ 
+
+OH
+
+HO
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+HO
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+OH
+
+ 
+
+ 
+
+OH
+
+OH
+
+ 
+
+ 
+
+OH
+
+OH
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+NH
+
+NH
+
+NH
+
+NH
+
+NH
+
+NH
+
+NH
+
+ 
+
+OH
+
+ 
+
+ 
+
+OH
+
+OH
+
+ 
+
+OH
+
+ 
+
+Br
+
+ 
+
+ 
+
+ 
+
+Br
+
+Br
+
+ 
+
+ 
+
+ 
+
+ 
+
+Br
+
+Br
+
+ 
+
+ 
+
+ 
+
+ 
+
+Br
+
+Br
+
+ 
+
+ 
+
+ 
+
+ 
+
+Br
+
+OH
+
+NH
+
+NH
+
+NH
+
+ 
+
+OH
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+NH
+
+NH
+ 
+
+NH
+
+OH
+
+NH
+
+NH
+ 
+
+ 
+
+OH
+
+OH
+
+NH
+
+NH
+ 
+
+ 
+
+OH
+
+NH
+
+ 
+
+ 
+
+NH
+
+OH
+
+ 
+
+ 
+NH
+
+OH
+
+OH
+
+ 
+
+ 
+
+OH
+
+OH
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+OH
+
+ 
+
+Br
+
+ 
+
+ 
+
+ 
+
+OH
+
+OH
+
+ 
+
+ 
+
+Br
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+OH
+
+ 
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  
+
+OH
+
+ 
+
+ 
+
+  
+
+OH
+
+ 
+
+ 
+
+  
+
+ 
+ 
+
+ 
+
+OH
+
+OH
+
+ 
+
+  
+
+ 
+
+ 
+
+ 
+OH
+
+OH
+
+ 
+
+ 
+
+OH
+
+OH
+
+ 
+
+ 
+
+OH
+
+OH
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+OH
+
+ 
+
+ 
+
+OH
+
+Cl
+
+ 
+
+Cl
+
+ 
+
+ 
+
+OH
+
+ 
+
+ 
+
+OH
+
+OH
+
+ 
+
+ 
+
+ 
+
+OH
+
+OH
+
+ 
+
+ 
+
+OH
+
+OH
+
+ 
+
+ 
+
+OH
+
+OH
+
+Cl
+
+ 
+
+ 
+
+ 
+
+ 
+
+Cl
+
+OH
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+Cl
+
+Cl
+
+Cl
+
+ 
+
+ 
+
+Cl
+
+Cl
+
+ 
+
+ 
+
+Cl
+
+Cl
+
+ 
+
+ 
+
+Br
+
+ 
+
+ 
+
+Br
+
+Br
+
+ 
+
+ 
+
+Br
+
+OH
+
+ 
+
+OH
+
+OH
+
+NH
+
+OH
+
+Cl
+
+NH
+
+ 
+
+NH
+
+NH
+
+ 
+NH
+
+NH
+
+NH
+
+NH
+
+ 
+
+IH 
+
+NH
+
+Br
+
+NH
+
+ 
+
+ 
+
+NH
+
+NH
+
+NH
+
+NH
+
+NH
+
+IH 
+
+IH 
+
+ 
+
+ 
+
+Br
+
+Br
+
+IH 
+
+IH 
+
+ 
+
+Br
+
+Br
+
+ 
+
+NH
+
+ 
+
+SH
+
+ 
+IH 
+
+Br
+
+ 
+
+ 
+
+SH
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+Br
+
+ 
+
+NH
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+Br
+
+Br
+
+NH
+
+NH
+ 
+
+ 
+
+Br
+
+OH
+
+NH
+
+NH
+ 
+
+ 
+
+OH
+
+OH
+
+NH
+
+NH
+ 
+
+ 
+
+OH
+
+NH
+
+ 
+
+ 
+
+NH
+
+OH
+
+ 
+
+NH
+
+ 
+
+OH
+
+NH
+
+ 
+
+ 
+
+NH
+
+NH
+
+ 
+
+NH
+
+Figure   Searching the  dimensional latent space of the GVAE  starting at the molecule in the center 
+
+Table   Best expressions found by each method
+
+Method
+
+GVAE
+
+CVAE
+
+  Expression
+ 
+ 
+ 
+ 
+ 
+ 
+
+     sin    sin       
+          sin       
+            sin       
+        sin    sin 
+        sin    sin     
+        sin    sin     
+
+Score
+ 
+ 
+ 
+ 
+ 
+ 
+
+Figure   Plot of best expressions found by each method
+
+Table   Results  nding best expression and molecule
+Problem Method Frac  valid
+ 
+Expressions
+ 
+ 
+ 
+
+Avg  score
+   
+ 
+   
+ 
+
+GVAE
+CVAE
+GVAE
+CVAE
+
+Molecules
+
+input values    
+that are linearlyspaced between  
+and   We then pass these through our true function
+        sin        to generate the true target observations  We use Bayesian optimization  BO  as described
+above search for this equation  We run BO for   iterations and average across   repetitions of the process  Table    rows       shows the results obtained  The third
+column in the table reports the fraction of arithmetic sequences found by BO that are valid  The GVAE nearly
+always  nds valid sequences  The only cases in which it
+does not is when there are still nonterminals on the stack of
+
+the decoder upon reaching the maximum number of timesteps Tmax  however this is rare  Additionally  the GVAE
+ nds squences with better scores on average when compared with the CVAE 
+Table   shows the top   expressions found by GVAE and
+CVAE during the BO search  together with their associated score values  Figure   shows how the best expression
+found by GVAE and CVAE compare to the true function 
+We note that the CVAE has failed to  nd the sinusoidal portion of the true expression  while the difference between the
+GVAE expression and the true function is negligible 
+
+Molecules  We now consider the problem of  nding new
+druglike molecules  We perform   iterations of BO  and
+average results across   trials  Table    rows       shows
+the overall BO results 
+In this problem  the GVAE produces about twice more valid sequences than the CVAE 
+The valid sequences produced by the GVAE also result in
+higher scores on average  The best found SMILES strings
+by each method and their scores are shown in Table   the
+molecules themselves are plotted in Figure  
+
+Grammar Variational Autoencoder
+
+Table   Test Loglikelihood  LL  and RMSE for the sparse GP
+predictions of penalized LogP score from the latent space
+Objective Method
+GVAE
+CVAE
+GVAE
+CVAE
+
+Molecules
+   
+ 
+   
+ 
+
+Expressions
+ 
+ 
+   
+ 
+
+RMSE
+
+LL
+
+current neural network grammars  Dyer et al    produce sequences through   linear traversal of the parse tree 
+but focus on the case where the underlying grammar is unknown and not contextfree  Maddison   Tarlow  
+describe generative models of natural source code based on
+probabilistic context free grammars and neuroprobabilistic
+language models  However  these works are not geared towards learning   latent representation of the data 
+Learning arithmetic expressions to    data  often called
+symbolic regression  are generally based on genetic programming  Willis et al    or other computationally demanding evolutionary algorithms to propose candidate expressions  Schmidt   Lipson    Alternatives include
+running particle MCMC inference to estimate   Bayesian
+posterior over parse trees  Perov   Wood   
+In molecular design  searching for new molecules is traditionally done by sifting through large databases of potential molecules and then subjecting them to   virtual screening process  PyzerKnapp et al      mezBombarelli
+et al      These databases are too large to search
+via exhaustive enumeration  and require novel stochastic
+search algorithms tailored to the domain  Virshup et al 
+  Rupakheti et al    Segler et al      
+  recurrent neural network to chemicals represented by
+SMILES strings  however their goal is more akin to density estimation 
+they learn   simulator which can sample proposals for novel molecules  but it is not otherwise
+used as part of an optimization or inference process itself 
+Our work most closely resembles   mezBombarelli et al 
+    for novel molecule synthesis  in that we also learn
+  latent variable model which admits   continuous representation of the domain  However  both Segler et al   
+and   mezBombarelli et al      use characterlevel
+models for molecules 
+
+  Discussion
+Empirically  it is clear that representing molecules and
+equations by way of their parse tree generated from  
+grammar outperforms textbased representations  We believe this approach will be broadly useful for representation
+learning  inference  and optimization in any domain which
+can be represented as text in   contextfree language 
+
+Figure   Plot of best molecules found by each method 
+
+Table   Best molecules found by each method
+
+Method
+
+GVAE
+
+CVAE
+
+SMILE
+
+ 
+  CCCc ccc   cc   CCCc 
+  CC   CCCCCc ccc Cl nc 
+  CCCc ccc Cl cc CCCCOC
+  Cc ccccc CCCC CCC CCc nncs 
+  Cc ccccc CCCC COC CCc nnn 
+ 
+
+CCCCCCCCC CCCC CCCnC COC   csss 
+
+Score
+ 
+ 
+ 
+ 
+ 
+ 
+
+  Predictive performance of latent representation
+We now perform   series of experiments to evaluate the predictive performance of the latent representations found by
+each autoencoder  For this  we use the sparse GP model
+used in the previous Bayesian optimization experiments
+and look at its predictive performance on   leftout test set
+with   of the data  where the data is formed by the latent
+representation of the available sequences  these are the inputs to the sparse GP model  and the associated properties
+of those sequences  these are the outputs in the sparse GP
+model  Table   show the average test RMSE and test loglikelihood for the GVAE and the CVAE across   different
+splits of the data for the expressions and for the molecules 
+This table shows that the GVAE produces latent features
+that yield much better predictive performance than those
+produced by the CVAE 
+
+  Related Work
+Parse trees have been used to learn continuous representations of text in recursive neural network models  Socher
+et al    Irsoy   Cardie    Paulus et al   
+These models learn   vector at every nonterminal in the
+parse tree by recursively combining the vectors of child
+nodes  Recursive autoencoders learn these representations
+by minimizing the reconstruction error between true child
+vectors and those predicted by the parent  Socher et al 
+      Recently  Allamanis et al    learn representations for symbolic expressions from their parse trees 
+Importantly  all of these methods are discriminative and do
+not learn   generative latent space  Like our decoder  re 
+
+IClNClONNSONNNNHOSSS st nd rdGVAECVAEGrammar Variational Autoencoder
+
+Acknowledgements
+This work was supported by The Alan Turing Institute under the EPSRC grant EP   
+
+References
+Allamanis  Miltiadis  Chanthirasegaran  Pankajan  Kohli 
+Pushmeet  and Sutton  Charles  Learning continuous semantic representations of symbolic expressions  arXiv
+preprint arXiv   
+
+Baker  James    Trainable grammars for speech recognition  The Journal of the Acoustical Society of America 
+         
+
+Booth  Taylor   and Thompson  Richard    Applying
+probability measures to abstract languages  IEEE transactions on Computers     
+
+Bowman  Samuel    Vilnis  Luke  Vinyals  Oriol  Dai  Andrew    Jozefowicz  Rafal  and Bengio  Samy  Generating sentences from   continuous space  CoNLL  
+pp     
+
+Cho  Kyunghyun  Van Merri nboer  Bart  Gulcehre 
+Caglar  Bahdanau  Dzmitry  Bougares  Fethi  Schwenk 
+Holger  and Bengio  Yoshua  Learning phrase representations using rnn encoderdecoder for statistical machine
+translation  arXiv preprint arXiv   
+
+Cressie  Noel  The origins of kriging  Math  Geol   
+
+   
+
+Dyer  Chris  Kuncoro  Adhiguna  Ballesteros  Miguel  and
+Smith  Noah    Recurrent neural network grammars  In
+Proceedings of NAACLHLT  pp     
+
+Ertl  Peter and Schuffenhauer  Ansgar  Estimation of synthetic accessibility score of druglike molecules based on
+molecular complexity and fragment contributions  Journal of cheminformatics     
+
+Gatys  Leon    Ecker  Alexander    and Bethge  Matthias 
+arXiv preprint
+
+  neural algorithm of artistic style 
+arXiv   
+
+Gaunt  Alexander    Brockschmidt  Marc  Singh  Rishabh 
+Kushman  Nate  Kohli  Pushmeet  Taylor  Jonathan 
+and Tarlow  Daniel  Terpret    probabilistic programming language for program induction  arXiv preprint
+arXiv   
+
+  mezBombarelli  Rafael  AguileraIparraguirre  Jorge 
+Hirzel  Timothy    Duvenaud  David  Maclaurin  Dougal  BloodForsythe  Martin    Chae  Hyun Sik  et al 
+Design of ef cient molecular organic lightemitting
+
+diodes by   highthroughput virtual screening and experimental approach  Nature Materials   
+   
+
+Jos  Miguel  AguileraIparraguirre 
+
+  mezBombarelli  Rafael  Duvenaud  David  Hern ndezLobato 
+Jorge 
+Hirzel  Timothy    Adams  Ryan    and AspuruGuzik 
+Al    Automatic chemical design using   datadriven
+continuous representation of molecules  arXiv preprint
+arXiv     
+
+Hachmann     OlivaresAmaya     AtahanEvrenk    
+AmadorBedolla     SanchezCarrera        GoldParker     Vogt     Brockway        and AspuruGuzik     The Harvard Clean Energy Project  LargeScale Computational Screening and Design of Organic
+Photovoltaics on the World Community Grid     Phys 
+Chem  Lett    sep  
+
+Hochreiter  Sepp and Schmidhuber    rgen  Long shortterm memory  Neural computation   
+ 
+
+Hopcroft  John    Motwani  Rajeev  and Ullman  Jeffrey   
+Introduction to Automata theory  languages  and computation   
+
+Irsoy  Ozan and Cardie  Claire  Deep recursive neural netIn NIPS  pp 
+
+works for compositionality in language 
+   
+
+James  Craig    Vandermeersch     and Dalke     Opens 
+
+miles speci cation   
+
+Jaques  Natasha  Gu  Shixiang  Turner  Richard    and Eck 
+Douglas  Tuning recurrent neural networks with reinforcement learning  arXiv preprint arXiv 
+ 
+
+Johnson  Mark  Grif ths  Thomas    Goldwater  Sharon 
+et al  Adaptor grammars    framework for specifying compositional nonparametric bayesian models  Advances in neural information processing systems   
+   
+
+Jones  Donald    Schonlau  Matthias 
+
+and Welch 
+William    Ef cient global optimization of expensive
+blackbox functions  Journal of Global optimization   
+   
+
+Kalchbrenner  Nal  Grefenstette  Edward  and Blunsom 
+Phil    convolutional neural network for modelling sentences   
+
+Kernighan  Brian    Ritchie  Dennis    and Ejeklint  Per 
+The   programming language  volume   PrenticeHall
+Englewood Cliffs   
+
+Grammar Variational Autoencoder
+
+Kingma  Diederik   and Welling  Max  Autoencoding
+variational Bayes 
+In Proceedings of the International
+Conference on Learning Representations  ICLR   
+
+Kusner  Matt   and Hern ndezLobato  Jos  Miguel  Gans
+for sequences of discrete elements with the gumbelsoftmax distribution  arXiv   
+
+Maddison  Chris and Tarlow  Daniel  Structured generative
+models of natural source code  In Proceedings of the  st
+International Conference on Machine Learning  ICML 
+pp     
+
+Paulus  Romain  Socher  Richard  and Manning  Christopher    Global belief recursive neural networks  In Advances in Neural Information Processing Systems  pp 
+   
+
+Perov  Yura and Wood  Frank  Automatic sampler discovery via probabilistic programming and approximate
+bayesian computation 
+In International Conference on
+Arti cial General Intelligence  pp     
+
+PyzerKnapp  Edward    Suh  Changwon    mezBombarelli  Rafael  AguileraIparraguirre  Jorge  and
+AspuruGuzik  Al    What is highthroughput virtual
+screening    perspective from organic materials discovery  Annual Review of Materials Research   
+ 
+
+Radford  Alec  Metz  Luke  and Chintala  Soumith  Unsupervised representation learning with deep convolutional generative adversarial networks  arXiv preprint
+arXiv   
+
+Rezende  Danilo Jimenez  Mohamed  Shakir  and Wierstra  Daan  Stochastic backpropagation and approximate inference in deep generative models  arXiv preprint
+arXiv   
+
+Riedel  Sebastian  Bosnjak  Matko  and Rockt schel  Tim 
+Programming with   differentiable forth interpreter 
+CoRR  abs   
+
+Rupakheti  Chetan  Virshup  Aaron  Yang  Weitao  and
+Beratan  David    Strategy to discover diverse optimal molecules in the small molecule universe  Journal
+of chemical information and modeling   
+ 
+
+Schmidt  Michael and Lipson  Hod  Distilling freeform
+Science   
+
+natural laws from experimental data 
+   
+
+Segler  Marwin HS  Kogej  Thierry  Tyrchan  Christian 
+and Waller  Mark    Generating focussed molecule libraries for drug discovery with recurrent neural networks  arXiv preprint arXiv   
+
+Shahriari  Bobak  Swersky  Kevin  Wang  Ziyu  Adams 
+Ryan    and de Freitas  Nando  Taking the human out
+of the loop    review of bayesian optimization  Proceedings of the IEEE     
+
+Snelson  Edward and Ghahramani  Zoubin  Sparse Gaussian processes using pseudoinputs  In NIPS  pp   
+   
+
+Socher  Richard  Huang  Eric    Pennington  Jeffrey  Ng 
+Andrew    and Manning  Christopher    Dynamic pooling and unfolding recursive autoencoders for paraphrase
+detection  In NIPS  volume   pp       
+
+Socher  Richard  Pennington  Jeffrey  Huang  Eric   
+Ng  Andrew    and Manning  Christopher    Semisupervised recursive autoencoders for predicting sentiment distributions 
+In Proceedings of the conference
+on empirical methods in natural language processing 
+pp    Association for Computational Linguistics 
+   
+
+Socher  Richard  Perelygin  Alex  Wu  Jean    Chuang 
+Jason  Manning  Christopher    Ng  Andrew    Potts 
+Christopher  et al  Recursive deep models for semantic
+compositionality over   sentiment treebank  In Proceedings of the conference on empirical methods in natural
+language processing  EMNLP  volume   pp   
+Citeseer   
+
+Upchurch  Paul  Gardner  Jacob  Bala  Kavita  Pless 
+Robert  Snavely  Noah  and Weinberger  Kilian  Deep
+feature interpolation for image content changes  arXiv
+preprint arXiv   
+
+Virshup  Aaron    ContrerasGarc    Julia  Wipf  Peter 
+Yang  Weitao  and Beratan  David    Stochastic voyages into uncharted chemical space produce   representative library of all possible druglike compounds  Journal of the American Chemical Society   
+   
+
+Weininger  David  Smiles    chemical language and information system    introduction to methodology and encoding rules     Chem  Inf  Comput  Sci   
+ 
+
+Willis  MJ  Hiden  Hugo    Marenbach  Peter  McKay 
+Ben  and Montague  Gary    Genetic programming  An
+introduction and survey of applications  In Genetic Algorithms in Engineering Systems  pp    IET   
+
+Zhao  Shengjia  Song  Jiaming  and Ermon  Stefano  Infovae  Information maximizing variational autoencoders 
+arXiv preprint arXiv   
+
+

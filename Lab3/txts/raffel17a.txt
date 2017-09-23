@@ -1,0 +1,1016 @@
+Online and LinearTime Attention by Enforcing Monotonic Alignments
+
+Colin Raffel   MinhThang Luong   Peter    Liu   Ron    Weiss   Douglas Eck  
+
+Abstract
+
+Recurrent neural network models with an attention mechanism have proven to be extremely
+effective on   wide variety of sequenceto 
+sequence problems  However  the fact that soft
+attention mechanisms perform   pass over the
+entire input sequence when producing each element in the output sequence precludes their use
+in online settings and results in   quadratic time
+complexity  Based on the insight that the alignment between input and output sequence elements is monotonic in many problems of interest 
+we propose an endto end differentiable method
+for learning monotonic alignments which  at test
+time  enables computing attention online and in
+linear time  We validate our approach on sentence summarization  machine translation  and
+online speech recognition problems and achieve
+results competitive with existing sequenceto 
+sequence models 
+
+the
+
+ sequenceto sequence 
+
+  Introduction
+Recently 
+framework
+ Sutskever et al    Cho et al    has facilitated
+the use of recurrent neural networks  RNNs  on sequence
+transduction problems such as machine translation and
+speech recognition  In this framework  an input sequence
+is processed with an RNN to produce an  encoding  this
+encoding is then used by   second RNN to produce the
+target sequence  As originally proposed  the encoding is
+  single  xedlength vector representation of the input
+sequence  This requires the model to effectively compress
+all important information about the input sequence into  
+single vector  In practice  this often results in the model
+having dif culty generalizing to longer sequences than
+those seen during training  Bahdanau et al   
+An effective solution to these shortcomings are attention
+
+ Google Brain  Mountain View  California  USA  Correspon 
+
+dence to  Colin Raffel  craffel gmail com 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+mechanisms  Bahdanau et al   
+In   sequenceto 
+sequence model with attention  the encoder produces   sequence of hidden states  instead of   single  xedlength
+vector  which correspond to entries in the input sequence 
+The decoder is then allowed to refer back to any of the encoder states as it produces its output  Similar mechanisms
+have been used as soft addressing schemes in memoryaugmented neural network architectures  Graves et al 
+  Sukhbaatar et al    and RNNs used for sequence
+generation  Graves    Attentionbased sequenceto 
+sequence models have proven to be extremely effective on
+  wide variety of problems  including machine translation
+ Bahdanau et al    Luong et al    image captioning  Xu et al    speech recognition  Chorowski
+et al    Chan et al    and sentence summarization  Rush et al    In addition  attention creates an
+implicit soft alignment between entries in the output sequence and entries in the input sequence  which can give
+useful insight into the model   behavior 
+  common criticism of soft attention is that the model must
+perform   pass over the entire input sequence when producing each element of the output sequence  This results
+in the decoding process having complexity         where
+  and   are the input and output sequence lengths respectively  Furthermore  because the entire sequence must be
+processed prior to outputting any symbols  soft attention
+cannot be used in  online  settings where output sequence
+elements are produced when the input has only been partially observed 
+The focus of this paper is to propose an alternative attention mechanism which has lineartime complexity and
+can be used in online settings  To achieve this  we  rst
+note that in many problems  the inputoutput alignment is
+roughly monotonic  For example  when transcribing an
+audio recording of someone saying  good morning  the
+region of the speech utterance corresponding to  good 
+will always precede the region corresponding to  morning  Even when the alignment is not strictly monotonic 
+it often only contains local inputoutput reorderings  Separately  despite the fact that soft attention allows for assignment of focus to multiple disparate entries of the input
+sequence  in many cases the attention is assigned mostly to
+  single entry  For examples of alignments with these characteristics  we refer to       Chorowski et al    Figure
+
+Online and LinearTime Attention by Enforcing Monotonic Alignments
+
+  Chan et al    Figure   Rush et al    Figure  
+Bahdanau et al    Figure   etc  Of course  this is not
+true in all problems  for example  when using soft attention
+for image captioning  the model will often change focus
+arbitrarily between output steps and will spread attention
+across large regions of the input image  Xu et al   
+Motivated by these observations  we propose using hard
+monotonic alignments for sequenceto sequence problems
+because  as we argue in section   they enable computing
+attention online and in linear time  Towards this end  we
+show that it is possible to train such an attention mechanism with   quadratictime algorithm which computes its
+expected output  This allows us to continue using standard
+backpropagation for training while still facilitating ef cient
+online decoding at testtime  On all problems we studied 
+we found these added bene ts only incur   small decrease
+in performance compared to softmaxbased attention 
+The rest of this paper is structured as follows  In the following section  we develop an interpretation of soft attention as
+optimizing   stochastic process in expectation and formulate   corresponding stochastic process which allows for
+online and lineartime decoding by relying on hard monotonic alignments  In analogy with soft attention  we then
+show how to compute the expected output of the monotonic attention process and elucidate how the resulting algorithm differs from standard softmax attention  After giving an overview of related work  we apply our approach to
+the tasks of sentence summarization  machine translation 
+and online speech recognition  achieving results competitive with existing sequenceto sequence models  Finally 
+we present additional derivations  experimental details  and
+ideas for future research in the appendix 
+
+  Online and LinearTime Attention
+To motivate our approach  we  rst point out that softmaxbased attention is computing the expected output of   simple stochastic process  We then detail an alternative process
+which enables online and lineartime decoding  Because
+this process is nondifferentiable  we derive an algorithm for
+computing its expected output  allowing us to train   model
+with standard backpropagation while applying our online
+and lineartime process at test time  Finally  we propose
+an alternative energy function motivated by the differences
+between monotonic attention and softmaxbased attention 
+
+  Soft Attention
+To begin with  we review the commonlyused form of
+soft attention proposed originally in  Bahdanau et al 
+  Broadly    sequenceto sequence model produces
+  sequence of outputs based on   processed input sequence  The model consists of two RNNs  referred to
+
+as the  encoder  and  decoder  The encoder RNN processes the input sequence                 xT  to produce
+  sequence of hidden states                 hT  We refer to   as the  memory  to emphasize its connection to
+memoryaugmented neural networks  Graves et al   
+Sukhbaatar et al    The decoder RNN then produces
+an output sequence                 yU  conditioned on the
+memory  until   special endof sequence token is produced 
+When computing yi    soft attentionbased decoder uses  
+learnable nonlinear function    to produce   scalar value
+ei   for each entry hj in the memory based on hj and the decoder   state at the previous timestep si  Typically    
+is   singlelayer neural network using   tanh nonlinearity 
+but other functions such as   simple dot product between
+si  and hj have been used  Luong et al    Graves
+et al    These scalar values are normalized using the
+softmax function to produce   probability distribution over
+the memory  which is used to compute   context vector ci as
+the weighted sum of    Because items in the memory have
+  sequential correspondence with items in the input  these
+attention distributions create   soft alignment between the
+output and input  Finally  the decoder updates its state to si
+based on si  and ci and produces yi  In total  producing
+yi involves
+
+ei       si  hj 
+
+       exp ei    TXk 
+
+exp ei   
+
+si      si  yi  ci 
+yi     si  ci 
+
+ci  
+
+   jhj
+
+TXj 
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+
+where     is   recurrent neural network  typically one or
+more LSTM  Hochreiter   Schmidhuber    or GRU
+ Chung et al    layers  and    is   learnable nonlinear
+function which maps the decoder state to the output space
+      an af ne transformation followed by   softmax when
+the target sequences consist of discrete symbols 
+To motivate our monotonic alignment scheme  we observe
+that eqs    and   are computing the expected output of
+  simple stochastic process  which can be formulated as
+follows  First    probability      is computed independently
+for each entry hj of the memory  Then    memory index  
+is sampled by     Categorical    and ci is set to hk  We
+visualize this process in       Clearly  eq    shows that
+soft attention replaces sampling   and assigning ci   hk
+with direct computation of the expected value of ci 
+
+Online and LinearTime Attention by Enforcing Monotonic Alignments
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Memory  
+
+Memory  
+
+the
+
+Figure   Schematic of
+stochastic process underlying
+softmaxbased attention decoders 
+Each node represents  
+possible alignment between an entry of the output sequence
+ vertical axis  and the memory  horizontal axis  At each output
+timestep  the decoder inspects all memory entries  indicated in
+gray  and attends to   single one  indicated in black    black
+node indicates that memory element hj is aligned to output yi  In
+terms of which memory entry is chosen  there is no dependence
+across output timesteps or between memory entries 
+
+Figure   Schematic of our novel monotonic stochastic decoding
+process  At each output timestep  the decoder inspects memory
+entries  indicated in gray  from leftto right starting from where
+it left off at the previous output timestep and chooses   single
+one  indicated in black    black node indicates that memory
+element hj is aligned to output yi  White nodes indicate that  
+particular inputoutput alignment was not considered because it
+violates monotonicity  Arrows indicate the order of processing
+and dependence between memory entries and output timesteps 
+
+    Hard Monotonic Attention Process
+The discussion above makes clear that softmaxbased attention requires   pass over the entire memory to compute
+the terms      required to produce each element of the output sequence  This precludes its use in online settings  and
+results in   complexity of         for generating the output sequence  In addition  despite the fact that   represents
+  transformation of   sequence  which ostensibly exhibits
+dependencies between subsequent elements  the attention
+probabilities are computed independent of temporal order
+and the attention distribution at the previous timestep 
+We address these shortcomings by  rst formulating  
+stochastic process which explicitly processes the memory
+in   leftto right manner  Speci cally  for output timestep
+  we begin processing memory entries from index ti 
+where ti is the index of the memory entry chosen at output
+timestep    for convenience  letting        We sequentially compute  for     ti  ti      ti           
+
+ei       si  hj 
+pi       ei   
+zi     Bernoulli pi   
+
+ 
+ 
+ 
+where    is   learnable deterministic  energy function 
+and    is the logistic sigmoid function  As soon as we
+sample zi       for some    we stop and set ci   hj
+and ti       choosing  memory entry   for the context
+vector  Each zi   can be seen as representing   discrete
+choice of whether to ingest   new item from the memory
+ zi       or produce an output  zi       For all sub 
+
+sequent output timesteps  we repeat this process  always
+starting from ti   the memory index chosen at the previous timestep  If for any output timestep   we have zi      
+for     ti             we simply set ci to   vector of zeros  This process is visualized in       and is presented
+more explicitly in algorithm    appendix   
+Note that by construction  in order to compute pi    we only
+need to have computed hk for                  It follows
+that our novel process can be computed in an online manner       we do not need to wait to observe the entire input
+sequence before we start producing the output sequence 
+Furthermore  because we start inspecting memory elements
+from where we left off at the previous output timestep      
+at index ti  the resulting process only computes at most
+max        terms pi    giving it   linear runtime  Of course 
+it also makes the strong assumption that the alignment between the input and output sequence is strictly monotonic 
+
+  Training in Expectation
+The online alignment process described above involves
+sampling  which precludes the use of standard backpropagation  In analogy with softmaxbased attention  we therefore propose training with respect to the expected value of
+ci  which can be computed straightforwardly as follows 
+We  rst compute ei   and pi   exactly as in eqs    and  
+where pi   are interpreted as the probability of choosing
+memory element   at output timestep    The attention distribution over the memory is then given by  see appendix  
+
+Online and LinearTime Attention by Enforcing Monotonic Alignments
+
+for   derivation 
+
+       pi  
+
+jXk      
+  Yl  
+  pi      pi   
+
+    pi   
+       
+
+     
+pi   
+
+ 
+
+ 
+
+We provide   solution to the recurrence relation of eq   
+which allows computing      for                  in parallel
+with cumulative sum and cumulative product operations in
+appendix    De ning qi          pi   gives the following
+procedure for computing      
+
+ei       si  hj 
+pi       ei   
+qi         pi   qi          
+       pi jqi  
+
+ 
+ 
+ 
+ 
+
+where we de ne the special cases of qi      pi     
+to maintain equivalence with eq    As in softmaxbased attention  the      values produce   weighting over
+the memory  which are then used to compute the context vector at each timestep as in eq    However  note
+that    may not be   valid probability distribution because
+
+Pj          Using    asis  without normalization  effectively associates any additional probability not allocated
+to memory entries to an additional allzero memory location  Normalizing    so thatPT
+            has two issues 
+First  we can   perform this normalization at test time and
+still achieve online decoding because the normalization depends on      for                  and second  it would result in   mismatch compared to the probability distribution
+induced by the hard monotonic attention process which sets
+ci to   vector of zeros when zi       for     ti            
+Note that computing ci still has   quadratic complexity because we must compute      for                  for each
+output timestep    However  because we are training directly with respect to the expected value of ci  we will train
+our decoders using eqs    to   and then use the online  lineartime attention process of section   at test time 
+Furthermore  if pi         these approaches are equivalent  so in order for the model to exhibit similar behavior at
+training and test time  we need pi       or pi       We
+address this in section  
+
+  Modi ed Energy Function
+While various  energy functions     have been proposed 
+the most common to our knowledge is the one proposed in
+ Bahdanau et al   
+
+  si  hj       tanh   si      hj     
+
+ 
+
+where   and   are weight matrices    is   bias vector 
+and   is   weight vector  We make two modi cations to
+eq    for use with our monotonic decoder  First  while
+the softmax is invariant to offset  the logistic sigmoid is
+not  As   result  we make the simple modi cation of adding
+  scalar variable   after the tanh function  allowing the
+model to learn the appropriate offset for the presigmoid
+activations  Note that eq    tends to exponentially decay attention over the memory because     pi        
+we therefore initialized   to   negative value prior to training so that     pi   tends to be close to   Second  the
+use of the sigmoid nonlinearity in eq    implies that our
+mechanism is particularly sensitive to the scale of the energy terms ei    or correspondingly  the scale of the energy
+vector    We found an effective solution to this issue was
+to apply weight normalization  Salimans   Kingma   
+to    replacing it by gv kvk where   is   scalar parameter  Initializing   to the inverse square root of the attention
+hidden dimension worked well for all problems we studied 
+The above produces the energy function
+
+  
+kvk
+
+  si  hj     
+
+tanh   si      hj           
+The addition of the two scalar parameters   and   prevented
+the issues described above in all our experiments while incurring   negligible increase in the number of parameters 
+
+  Encouraging Discreteness
+As mentioned above  in order for our mechanism to exhibit
+similar behavior when training in expectation and when using the hard monotonic attention process at test time  we
+require that pi       or pi         straightforward way to
+encourage this behavior is to add noise before the sigmoid
+in eq    as was done      in  Frey    Salakhutdinov
+  Hinton    Foerster et al    We found that simply adding zeromean  unitvariance Gaussian noise to the
+presigmoid activations was suf cient in all of our experiments  This approach is similar to the recently proposed
+GumbelSoftmax trick  Jang et al    Maddison et al 
+  except we did not  nd it necessary to anneal the
+temperature as suggested in  Jang et al   
+Note that once we have   model which produces pi   which
+are effectively discrete  we can eschew the sampling involved in the process of section   and instead simply set
+zi       pi       where   is the indicator function and  
+is   threshold  We used this approach in all of our experiments  setting       Furthermore  at test time we do
+not add presigmoid noise  making decoding purely deter 
+
+   is occasionally omitted  but we found it often improves performance and only incurs   modest increase in parameters  so we
+include it 
+
+ That is  softmax      softmax        for any       
+
+Online and LinearTime Attention by Enforcing Monotonic Alignments
+
+ministic  Combining all of the above  we present our differentiable approach to training the monotonic alignment
+decoder in algorithm    appendix   
+
+  Related Work
+ Luo et al    and  Zaremba   Sutskever    both
+study   similar framework in which   decoder RNN can
+decide whether to ingest another entry from the input sequence or emit an entry of the output sequence  Instead of
+training in expectation  they maintain the discrete nature of
+this decision while training and use reinforcement learning
+ RL  techniques  We initially experimented with RLbased
+training methods but were unable to  nd an approach which
+worked reliably on the different tasks we studied  Empirically  we also show superior performance to  Luo et al 
+  on online speech recognition tasks  we did not attempt any of the tasks from  Zaremba   Sutskever   
+ Aharoni   Goldberg    also study hard monotonic
+alignments  but their approach requires target alignments
+computed via   separate statistical alignment algorithm in
+order to be trained 
+As an alternative approach to monotonic alignments  Connectionist Temporal Classi cation  CTC   Graves et al 
+  and the RNN Transducer  Graves    both assume that the output sequences consist of symbols  and add
+an additional  null  symbol which corresponds to  produce
+no output  More closely to our model   Yu et al     
+similarly add  shift  and  emit  operations to an RNN  Finally  the Segmental RNN  Kong et al    treats   segmentation of the input sequence as   latent random variable 
+In all cases  the alignment path is marginalized out via  
+dynamic program in order to obtain   conditional probability distribution over label sequences and train directly with
+maximum likelihood  These models either require conditional independence assumptions between output symbols
+or don   condition the decoder  language model  RNN on
+the input sequence  We instead follow the framework of
+attention and marginalize out alignment paths when computing the context vectors ci which are subsequently fed
+into the decoder RNN  which allows the decoder to condition on its past output as well as the input sequence  Our
+approach can therefore be seen as   marriage of these CTCstyle techniques and attention  Separately  instead of performing an approximate search for the most probable output sequence at test time  we use hard alignments which
+facilitates lineartime decoding 
+  related idea is proposed in  Raffel   Lawson   
+where  subsampling  probabilities are assigned to each entry in the memory and   stochastic process is formulated
+which involves keeping or discarding entries from the input
+sequence according to the subsampling probabilities    dynamic program similar to the one derived in section   is
+
+then used to compute the expected output which allows for
+training with standard backpropagation  Our approach differs in that we utilize an RNN decoder to construct the output sequence  and furthermore allows for output sequences
+which are longer than the input 
+Some similar ideas to those in section   were proposed
+in the context of speech recognition in  Chorowski et al 
+  First  the prior attention distributions are convolved
+with   bank of onedimensional  lters and then included in
+the energy function calculation  Second  instead of computing attention over the entire memory they only compute
+it over   sliding window  This reduces the runtime complexity at the expense of the strong assumption that memory locations attended to at subsequent output timesteps fall
+within   small window of one another  Finally  they also
+advocate replacing the softmax function with   sigmoid 
+but they then normalize by the sum of these sigmoid activations across the memory window instead of interpreting
+these probabilities in the leftto right framework we use 
+While these modi cations encourage monotonic attention 
+they do not explicitly enforce it  and so the authors do not
+investigate online decoding 
+In   similar vein   Luong et al    explore only computing attention over   small window of the memory  In addition to simply monotonically increasing the window location at each output timestep  they also consider learning
+  policy for producing the center of the memory window
+based on the current decoder state 
+ Kim et al    also make the connection between soft
+attention and selecting items from memory in expectation 
+They consider replacing the softmax in standard soft attention with an elementwise sigmoid nonlinearity  but do not
+formulate the interpretation of addressing memory from
+leftto right and the corresponding probability distributions
+as we do in section  
+ Jaitly et al    apply standard softmax attention in online settings by splitting the input sequence into chunks and
+producing output tokens using the attentive sequenceto 
+sequence framework over each chunk  They then devise  
+dynamic program for  nding the approximate best alignment between the model output and the target sequence 
+In contrast  our ingest emit probabilities pi   can be seen as
+adaptively chunking the input sequence  rather than providing    xed setting of the chunk size  and we instead train by
+exactly computing the expectation over alignment paths 
+
+  Experiments
+To validate our proposed approach for learning monotonic alignments  we applied it to   variety of sequenceto sequence problems  sentence summarization  machine
+translation  and online speech recognition  In the follow 
+
+Online and LinearTime Attention by Enforcing Monotonic Alignments
+
+ing subsections  we give an overview of the models used
+and the results we obtained  for more details about hyperparamers and training speci cs please see appendix   
+Incidentally  all experiments involved predicting discrete
+symbols       phonemes  characters  or words  as   result 
+the output of the decoder in each of our models was fed
+into an af ne transformation followed by   softmax nonlinearity with   dimensionality corresponding to the number of possible symbols  At test time  we performed  
+beam search over softmax predictions on all problems except machine translation  All networks were trained using
+standard crossentropy loss with teacher forcing against target sequences using the Adam optimizer  Kingma   Ba 
+  All of our decoders used the monotonic attention
+mechanism of section   during training to address the
+hidden states of the encoder  For comparison  we report
+testtime results using both the hard lineartime decoding
+method of section   and the  soft  monotonic attention
+distribution  We also present the results of   synthetic
+benchmark we used to measure the potential speedup offered by our lineartime decoding process in appendix   
+Online Speech Recognition Online speech recognition
+involves transcribing the words spoken in   speech utterance in realtime       as   person is talking  This problem
+is   natural application for monotonic alignments because
+online decoding is an explicit requirement  In addition  this
+precludes the use of bidirectional RNNs  which degrades
+performance somewhat  Graves et al    We tested our
+approach on two datasets  TIMIT  Garofolo et al   
+and the Wall Street Journal corpus  Paul   Baker   
+Speech recognition on the TIMIT dataset involves transcribing the phoneme sequence underlying   given speech
+utterance 
+Speech utterances were represented as sequences of  lter  plus energy  mel lterbank spectra 
+computed every   milliseconds  with deltaand deltadelta features  Our encoder RNN consisted of three unidirectional LSTM layers  Following  Chan et al   
+after the  rst and second LSTM layer we placed time reduction layers which skip every other sequence element 
+Our decoder RNN was   single unidirectional LSTM  Our
+output softmax had   dimensions  corresponding to the
+  phonemes from TIMIT plus special startof sequence
+and endof sequence tokens  At test time  we utilized  
+beam search over softmax predictions  with   beam width
+of   We report the phone error rate  PER  after applying the standard mapping to   phonemes  Graves et al 
+  We used the standard train validation test split and
+report results on the test set 
+Our model   performance  with   comparison to other online approaches  is shown in table   We achieve better
+performance than recently proposed sequenceto sequence
+models  Luo et al    Jaitly et al    though the
+
+Table   Phone error rate on the TIMIT dataset for different online
+methods 
+
+Method
+ Luo et al     stacked LSTM 
+ Jaitly et al     endto end 
+ Luo et al     grid LSTM 
+Hard Monotonic Attention  ours 
+Soft Monotonic Attention  ours  of ine 
+ Graves et al     CTC 
+
+PER
+ 
+ 
+ 
+ 
+ 
+ 
+
+small size of the TIMIT dataset and the resulting variability of results precludes making substantiative claims about
+one approach being best  We note that  Jaitly et al   
+were able to improve performance by precomputing alignments using an HMM system and providing them as   supervised signal to their decoder  we did not experiment
+with this idea  CTC  Graves et al    still outperforms
+all sequenceto sequence models 
+In addition  there remains   substantial gap between these online results and
+of ine results using bidirectional LSTMs        Chorowski
+et al    achieves     phone error rate using  
+softmaxbased attention mechanism and  Graves et al 
+  achieved   using   pretrained RNN transducer
+model  We are interested in investigating ways to close this
+gap in future work 
+Because of the size of the dataset  performance on TIMIT is
+often highly dependent on appropriate regularization  We
+therefore also evaluated our approach on the Wall Street
+Journal  WSJ  speech recognition dataset  which is about
+  times larger  For the WSJ corpus  we present speech
+utterances to the network as  lter mel lterbank spectra with deltaand deltadelta features  and normalized using perspeaker mean and variance computed of ine  The
+model architecture is   variation of that from  Zhang et al 
+  using an   layer encoder including 
+two convolutional layers which downsample the sequence in time 
+followed by one unidirectional convolutional LSTM layer 
+and  nally   stack of three unidirectional LSTM layers interleaved with linear projection layers and batch normalization  The encoder output sequence is consumed by the
+proposed online attention mechanism which is passed into
+  decoder consisting of   single unidirectional LSTM layer
+followed by   softmax layer 
+Our output softmax predicted one of   symbols  consisting of alphanumeric characters  punctuation marks  and
+startof sequence  endof sequence   unknown   noise 
+and word delimiter tokens  We utilized label smoothing
+during training  Chorowski   Jaitly    replacing the
+targets at time yt with   convex weighted combination of
+the surrounding  ve labels  full details in appendix   
+Performance was measured in terms of word error rate
+ WER  on the test set after segmenting the model   predic 
+
+Online and LinearTime Attention by Enforcing Monotonic Alignments
+
+Table   Word error rate on the WSJ dataset  All approaches used
+  unidirectional encoder  results in grey indicate of ine models 
+
+Method
+CTC  our model 
+ Luo et al     hard attention 
+ Wang et al     CTC 
+Hard Monotonic Attention  our model 
+Soft Monotonic Attention  our model 
+Softmax Attention  our model 
+
+WER
+ 
+ 
+ 
+ 
+ 
+ 
+
+tions according to the word delimiter tokens  We used the
+standard dataset split of si  for training  dev  for validation  and eval  for testing  We did not use   language
+model to improve decoding performance 
+Our results on WSJ are shown in table   Our model  with
+hard monotonic decoding  achieved   signi cantly lower
+WER than the other online methods  While these  gures
+show   clear advantage to our approach  our model architecture differed signi cantly from those of  Luo et al 
+  Wang et al    We therefore additionally measured performance against   baseline model which was
+identical to our model except that it used softmaxbased
+attention  which makes it quadratictime and of ine  instead of   monotonic alignment decoder  This resulted in
+  small decrease of   WER  suggesting that our hard
+monotonic attention approach achieves competitive performance while being substantially more ef cient  To get  
+qualitative picture of our model   behavior compared to the
+softmaxattention baseline  we plot each model   inputoutput alignments for two example speech utterances in
+       appendix    Both models learn roughly the same
+alignment  with some minor differences caused by ours being both hard and strictly monotonic 
+Sentence Summarization Speech recognition exhibits
+  strictly monotonic inputoutput alignment  We are interested in testing whether our approach is also effective
+on problems which only exhibit approximately monotonic
+alignments  We therefore ran    sentence summarization 
+experiment using the Gigaword corpus  which involves predicting the headline of   news article from its  rst sentence 
+Overall  we used the model of  Liu   Pan    modifying it only so that it used our monotonic alignment decoder instead of   soft attention decoder  Because online
+decoding is not important for sentence summarization  we
+utilized bidirectional RNNs in the encoder for this task
+ as is standard  We expect that the bidirectional RNNs
+will give the model local context which may help allow
+for strictly monotonic alignments  The model both took
+as input and produced as output onehot representations of
+the word IDs  with   vocabulary of the   most common words in the training set  Our encoder consisted of
+
+Table   ROUGE Fmeasure scores for sentence summarization
+on the Gigaword test set of  Rush et al   
+ Rush et al 
+  reports ROUGE recall scores  so we report the    scores
+computed for that approach from  Chopra et al    As is
+standard  we report unigram  bigram  and longest common subsequence metrics as       and RL respectively 
+
+Method
+ Zeng et al   
+ Rush et al   
+ Yu et al     
+ Chopra et al   
+ Miao   Blunsom   
+ Nallapati et al   
+ Yu et al     
+ Suzuki   Nagata   
+Hard Monotonic  ours 
+Soft Monotonic  ours 
+ Liu   Pan   
+
+  
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+  
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+RL
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Figure   Example sentencesummary pair with attention alignments for our hard monotonic model and the softmaxbased attention model of  Liu   Pan    Attention matrices are displayed so that black corresponds to   and white corresponds to
+  The groundtruth summary is  greece pumps more money and
+personnel into bird    defense 
+
+  word embedding matrix  which was initialized randomly
+and trained as part of the model  followed by four bidirectional LSTM layers  We used   single LSTM layer for the
+decoder  For data preparation and evaluation  we followed
+the approach of  Rush et al    measuring performance
+using the ROUGE metric 
+Our results  along with the scores achieved by other approaches  are presented in table   While the monotonic
+alignment model outperformed existing models by   substantial margin  it fell slightly behind the model of  Liu
+  Pan    which we used as   baseline  The higher
+performance of our model and the model of  Liu   Pan 
+  can be partially explained by the fact that their encoders have roughly twice as many layers as most models
+proposed in the literature 
+For qualitative evaluation  we plot an example inputoutput
+
+Online and LinearTime Attention by Enforcing Monotonic Alignments
+
+pair and alignment matrices for our hard monotonic attention model and the softmaxattention baseline of  Liu  
+Pan    in        an additional example is shown in
+      appendix    Most apparent is that   given word
+in the summary is not always aligned to the most obvious word in the input sentence  the hard monotonic decoder aligns the  rst four words in the summary reasonably  greek   greek  government    nance  approves  
+approved  more   more  but the latter four words have
+unexpected alignments  funds   in  to   for  bird   measures  bird       We believe this is due to the ability of
+the multilayer bidirectional RNN encoder to reorder words
+in the input sequence  This effect is also apparent in      
+ appendix    where the monotonic alignment decoder is
+able to produce the phrase  human rights criticism  despite
+the fact that the input sentence has the phrase  criticism
+of human rights  Separately  we note that the softmax
+attention model   alignments are extremely  soft  and nonmonotonic  this may be advantageous for this problem and
+partially explain its slightly superior performance 
+Machine Translation We also evaluated our approach
+on machine translation  another task which does not exhibit
+strictly monotonic alignments  In fact  for some language
+pairs       English and Japanese  English and Korean  we
+do not expect monotonicity at all  However  for other pairs
+      English and French  English and Vietnamese  only
+local word reorderings are required  Our translation experiments therefore involved English to Vietnamese translation using the parallel corpus of TED talks    sentence pairs  provided by the IWSLT   Evaluation Campaign  Cettolo et al    Following  Luong   Manning 
+  we tokenize the corpus with the default Moses tokenizer  preserve casing  and replace words whose frequencies are less than   by  unk  As   result  our vocabulary sizes are    and    for English and Vietnamese
+respectively  We use the TED tst    sentences  as  
+validation set for hyperparameter tuning and TED tst 
+  sentences  as   test set  We report results in both
+perplexity and BLEU 
+Our baseline neural machine translation  NMT  system is
+the softmax attentionbased sequenceto sequence model
+described in  Luong et al    From that baseline  we
+substitute the softmaxbased attention mechanism with our
+proposed monotonic alignment decoder  The model utilizes twolayer unidirectional LSTM networks for both the
+encoder and decoder 
+In  Luong et al    the authors demonstrated that under their proposed architecture    dot productbased energy
+function worked better than eq    Since our architecture is based on that of  Luong et al    to facilitate
+comparison we also tested the following variant 
+
+Table   Performance on the IWSLT   EnglishVietnamese
+TED talks for our monotonic alignment model and the baseline
+softmaxattention model of  Luong   Manning   
+
+Method
+ Luong   Manning   
+Hard Monotonic  energy function eq   
+Hard Monotonic  energy function eq   
+
+BLEU
+ 
+ 
+ 
+
+where   and   are scalars  initialized as in section   and
+  is   weight matrix 
+Our results are shown in Table   To get   better picture of each model   behavior  we plot inputoutput alignments in        appendix    Most noticeable is that the
+monotonic alignment model tends to focus attention later
+in the input sequence than the baseline softmaxattention
+model  We hypothesize that this is   way to compensate
+for nonmonotonic alignments when   unidirectional encoder is used       the model has effectively learned to focus on words at the end of phrases which require reordering  at which point the unidirectional encoder has observed
+the whole phrase  This can be seen most clearly in the
+example on the right  where translating    huge famine 
+to Vietnamese requires reordering  as suggested by the
+softmaxattention model   alignment  so the hard monotonic alignment model focuses attention on the  nal word
+in the phrase  famine  while producing its translation 
+We suspect our model   small decrease in BLEU compared
+to the baseline model may be due in part to this increased
+modeling burden 
+
+  Discussion
+Our results show that our differentiable approach to enforcing monotonic alignments can produce models which  following the decoding process of section   provide ef 
+cient online decoding at test time without sacri cing substantial performance on   wide variety of tasks  We believe
+our framework presents   promising environment for future work on online and lineartime sequenceto sequence
+models  We are interested in investigating various extensions to this approach  which we outline in appendix   
+To facilitate experimentation with our proposed attention
+mechanism  we have made an example TensorFlow  Abadi
+et al    implementation of our approach available online  and added   reference implementation to TensorFlow   tf contrib seq seq module  We also provide    practitioner   guide  in appendix   
+
+  si  hj                  
+
+ 
+
+ https github com craffel mad
+
+Online and LinearTime Attention by Enforcing Monotonic Alignments
+
+Acknowledgements
+We thank Jan Chorowski  Mark Daoust  Pietro Kreitlon Carolino  Dieterich Lawson  Navdeep Jaitly  George
+Tucker  Quoc    Le  Kelvin Xu  Cinjon Resnick  Melody
+Guan  Matthew    Hoffman  Jeffrey Dean  Kevin Swersky 
+Ashish Vaswani  and members of the Google Brain team
+for helpful discussions and insight 
+
+References
+Abadi  Martin  Barham  Paul  Chen  Jianmin  Chen 
+Zhifeng  Davis  Andy  Dean  Jeffrey  Devin  Matthieu 
+Ghemawat  Sanjay  Irving  Geoffrey  Isard  Michael 
+Kudlur  Manjunath  Levenberg  Josh  Monga  Rajat 
+Moore  Sherry  Murray  Derek    Steiner  Benoit 
+Tucker  Paul  Vasudevan  Vijay  Warden  Pete  Wicke 
+Martin  Yu  Yuan  and Zheng  Xiaoqiang  TensorFlow 
+  system for largescale machine learning  In Operating
+Systems Design and Implementation   
+
+Aharoni  Roee and Goldberg  Yoav  Sequence to sequence
+arXiv
+
+transduction with hard monotonic attention 
+preprint arXiv   
+
+Bahdanau  Dzmitry  Cho  Kyunghyun  and Bengio 
+Yoshua  Neural machine translation by jointly learning
+to align and translate 
+In International Conference on
+Learning Representations   
+
+Cettolo  Mauro  Niehues  Jan  St ker  Sebastian  Bentivogli  Luisa  Cattoni  Roldano  and Federico  Marcello 
+The IWSLT   evaluation campaign  In International
+Workshop on Spoken Language Translation   
+
+Chan  William  Jaitly  Navdeep  Le  Quoc    and Vinyals 
+Oriol  Listen  attend and spell    neural network for
+large vocabulary conversational speech recognition  In
+International Conference on Acoustics  Speech and Signal Processing   
+
+Cho  Kyunghyun  van Merri nboer  Bart      ehre     glar 
+Bahdanau  Dzmitry  Bougares  Fethi  Schwenk  Holger 
+and Bengio  Yoshua  Learning phrase representations using RNN encoder decoder for statistical machine translation  In Conference on Empirical Methods in Natural
+Language Processing   
+
+Chopra  Sumit  Auli  Michael  and Rush  Alexander   
+Abstractive sentence summarization with attentive recurrent neural networks  Conference of the North American
+Chapter of the Association for Computational Linguistics  Human Language Technologies   
+
+Chorowski  Jan  Bahdanau  Dzmitry  Serdyuk  Dmitriy 
+Cho  Kyunghyun  and Bengio  Yoshua  Attentionbased
+models for speech recognition  In Conference on Neural
+Information Processing Systems   
+
+Chung  Junyoung  Gulcehre  Caglar  Cho  Kyunghyun  and
+Bengio  Yoshua  Empirical evaluation of gated recurrent
+neural networks on sequence modeling  arXiv preprint
+arXiv   
+
+Foerster  Jakob  Assael  Yannis    de Freitas  Nando  and
+Whiteson  Shimon  Learning to communicate with deep
+multiagent reinforcement learning  In Advances in Neural Information Processing Systems   
+
+Frey  Brendan    Continuous sigmoidal belief networks
+trained using slice sampling  Advances in neural information processing systems   
+
+Garofolo  John    Lamel  Lori    Fisher  William    Fiscus  Jonathon    and Pallett  David    DARPA TIMIT
+acousticphonetic continous speech corpus   
+
+Graves  Alex  Sequence transduction with recurrent neural
+
+networks  arXiv preprint arXiv   
+
+Graves  Alex  Generating sequences with recurrent neural
+
+networks  arXiv preprint arXiv   
+
+Graves  Alex  Fern ndez  Santiago  Gomez  Faustino  and
+Schmidhuber    rgen  Connectionist temporal classi 
+cation  labelling unsegmented sequence data with recurrent neural networks  In International conference on Machine learning   
+
+Graves  Alex  Mohamed  Abdelrahman  and Hinton  Geoffrey  Speech recognition with deep recurrent neural
+networks 
+In International Conference on Acoustics 
+Speech and Signal Processing   
+
+Graves  Alex  Wayne  Greg  and Danihelka  Ivo  Neural
+turing machines  arXiv preprint arXiv   
+
+Hochreiter  Sepp and Schmidhuber    rgen  Long short 
+
+term memory  Neural computation     
+
+Jaitly  Navdeep  Sussillo  David  Le  Quoc    Vinyals 
+Oriol  Sutskever  Ilya  and Bengio  Samy    neural transducer  arXiv preprint arXiv   
+
+Jang  Eric  Gu  Shixiang  and Poole  Ben  Categorical
+reparameterization with gumbelsoftmax  arXiv preprint
+arXiv   
+
+Chorowski  Jan and Jaitly  Navdeep  Towards better decoding and language model integration in sequence to sequence models  arXiv preprint arXiv   
+
+Kim  Yoon  Denton  Carl  Hoang  Luong  and Rush 
+arXiv
+
+Alexander    Structured attention networks 
+preprint arXiv   
+
+Online and LinearTime Attention by Enforcing Monotonic Alignments
+
+Kingma  Diederik and Ba 
+
+Jimmy 
+method for stochastic optimization 
+arXiv   
+
+Adam 
+
+ 
+arXiv preprint
+
+Kong  Lingpeng  Dyer  Chris  and Smith  Noah    SegarXiv preprint
+
+mental recurrent neural networks 
+arXiv   
+
+Liu  Peter    and Pan  Xin  Text summarization with Ten 
+
+sorFlow  http goo gl RNEu   
+
+Luo  Yuping  Chiu  ChungCheng  Jaitly  Navdeep  and
+Learning online alignments with
+arXiv preprint
+
+Sutskever 
+continuous rewards policy gradient 
+arXiv   
+
+Ilya 
+
+Luong  MinhThang and Manning  Christopher    Stanford neural machine translation systems for spoken language domain 
+In International Workshop on Spoken
+Language Translation   
+
+Luong  MinhThang  Pham  Hieu  and Manning  Christopher    Effective approaches to attentionbased neural
+machine translation  In Conference on Empirical Methods in Natural Language Processing   
+
+concrete distribution 
+
+Maddison  Chris    Mnih  Andriy  and Teh  Yee Whye 
+relaxarXiv preprint
+
+The
+ation of discrete random variables 
+arXiv   
+
+  continuous
+
+Miao  Yishu and Blunsom  Phil  Language as   latent variable  Discrete generative models for sentence compression  arXiv preprint arXiv   
+
+Nallapati  Ramesh 
+
+Zhou  Bowen 
+
+dos Santos 
+  cero Nogueira      ehre   aglar 
+and Xiang 
+Bing  Abstractive text summarization using sequenceto sequence RNNs and beyond 
+In Conference on
+Computational Natural Language Learning   
+
+Paul  Douglas    and Baker  Janet    The design for the
+Wall Street Journalbased CSR corpus  In Workshop on
+Speech and Natural Language   
+
+Salimans  Tim and Kingma  Diederik    Weight normalization    simple reparameterization to accelerate training
+of deep neural networks  In Advances in Neural Information Processing Systems   
+
+Sukhbaatar  Sainbayar  Szlam  Arthur  Weston  Jason  and
+Fergus  Rob  Endto end memory networks  In Advances
+in neural information processing systems   
+
+Sutskever  Ilya  Vinyals  Oriol  and Le  Quoc    Sequence
+to sequence learning with neural networks  In Advances
+in neural information processing systems   
+
+Suzuki  Jun and Nagata  Masaaki  Cuttingoff redundant
+repeating generations for neural abstractive summarization  arXiv preprint arXiv   
+
+Wang  Chong  Yogatama  Dani  Coates  Adam  Han  Tony 
+Hannun  Awni  and Xiao  Bo  Lookahead convolution
+layer for unidirectional recurrent neural networks 
+In
+Workshop Extended Abstracts of the  th International
+Conference on Learning Representations   
+
+Xu  Kelvin  Ba  Jimmy  Kiros  Ryan  Cho  Kyunghyun 
+Courville  Aaron  Salakhudinov  Ruslan  Zemel  Rich 
+and Bengio  Yoshua  Show  attend and tell  Neural image caption generation with visual attention  In International Conference on Machine Learning   
+
+Yu  Lei  Blunsom  Phil  Dyer  Chris  Grefenstette  Edward 
+and Kocisky  Tomas  The neural noisy channel  arXiv
+preprint arXiv     
+
+Yu  Lei  Buys  Jan  and Blunsom  Phil  Online segment to
+segment neural transduction  In Conference on Empirical Methods in Natural Language Processing     
+
+Zaremba  Wojciech and Sutskever 
+
+Reinforcement learning neural turing machines  arXiv preprint
+arXiv     
+
+Ilya 
+
+Zeng  Wenyuan  Luo  Wenjie  Fidler  Sanja  and Urtasun  Raquel  Ef cient summarization with readagain
+and copy mechanism  arXiv preprint arXiv 
+ 
+
+Raffel  Colin and Lawson  Dieterich  Training   subarXiv preprint
+
+sampling mechanism in expectation 
+arXiv   
+
+Zhang  Yu  Chan  William  and Jaitly  Navdeep  Very deep
+convolutional networks for endto end speech recognition  arXiv preprint arXiv   
+
+Rush  Alexander    Chopra  Sumit  and Weston  Jason   
+neural attention model for abstractive sentence summarization  In Conference on Empirical Methods in Natural
+Language Processing   
+
+Salakhutdinov  Ruslan and Hinton  Geoffrey  Semantic
+hashing  International Journal of Approximate Reasoning     
+
+

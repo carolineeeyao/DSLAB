@@ -1,0 +1,1272 @@
+Neural Message Passing for Quantum Chemistry
+
+Justin Gilmer   Samuel    Schoenholz   Patrick    Riley   Oriol Vinyals   George    Dahl  
+
+Abstract
+
+Supervised learning on molecules has incredible potential to be useful in chemistry  drug discovery  and materials science  Luckily  several promising and closely related neural network
+models invariant to molecular symmetries have
+already been described in the literature  These
+models learn   message passing algorithm and
+aggregation procedure to compute   function of
+their entire input graph  At this point  the next
+step is to  nd   particularly effective variant of
+this general approach and apply it to chemical
+prediction benchmarks until we either solve them
+or reach the limits of the approach  In this paper  we reformulate existing models into   single common framework we call Message Passing Neural Networks  MPNNs  and explore additional novel variations within this framework 
+Using MPNNs we demonstrate state of the art results on an important molecular property prediction benchmark  these results are strong enough
+that we believe future work should focus on
+datasets with larger molecules or more accurate
+ground truth labels 
+
+  Introduction
+The past decade has seen remarkable success in the use
+of deep neural networks to understand and translate natural language  Wu et al    generate and decode complex audio signals  Hinton et al    and infer features from realworld images and videos  Krizhevsky et al 
+  Although chemists have applied machine learning to many problems over the years  predicting the properties of molecules and materials using machine learning
+ and especially deep learning  is still in its infancy  To
+date  most research applying machine learning to chemistry
+tasks  Hansen et al    Huang   von Lilienfeld   
+
+ Google Brain  Google  Google DeepMind  Correspondence to  Justin Gilmer  gilmer google com  George    Dahl
+ gdahl google com 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+Figure     Message Passing Neural Network predicts quantum
+properties of an organic molecule by modeling   computationally
+expensive DFT calculation 
+
+Rupp et al    Rogers   Hahn    Montavon et al 
+  Behler   Parrinello    Schoenholz et al   
+has revolved around feature engineering  While neural networks have been applied in   variety of situations  Merkwirth   Lengauer    Micheli    Lusci et al   
+Duvenaud et al    they have yet to become widely
+adopted  This situation is reminiscent of the state of image
+models before the broad adoption of convolutional neural
+networks and is due  in part  to   dearth of empirical evidence that neural architectures with the appropriate inductive bias can be successful in this domain 
+Recently  large scale quantum chemistry calculation and
+molecular dynamics simulations coupled with advances in
+high throughput experiments have begun to generate data
+at an unprecedented rate  Most classical techniques do
+not make effective use of the larger amounts of data that
+are now available  The time is ripe to apply more powerful and  exible machine learning methods to these problems  assuming we can  nd models with suitable inductive
+biases  The symmetries of atomic systems suggest neural networks that operate on graph structured data and are
+invariant to graph isomorphism might also be appropriate
+for molecules  Suf ciently successful models could someday help automate challenging chemical search problems
+in drug discovery or materials science 
+In this paper  our goal is to demonstrate effective machine learning models for chemical prediction problems
+
+DFT secondsMessagePassingNeuralNet secondsE Targets Neural Message Passing for Quantum Chemistry
+
+that are capable of learning their own features from molecular graphs directly and are invariant to graph isomorphism 
+To that end  we describe   general framework for supervised learning on graphs called Message Passing Neural
+Networks  MPNNs  that simply abstracts the commonalities between several of the most promising existing neural
+models for graph structured data  in order to make it easier
+to understand the relationships between them and come up
+with novel variations  Given how many researchers have
+published models that    into the MPNN framework  we
+believe that the community should push this general approach as far as possible on practically important graph
+problems and only suggest new variations that are well
+motivated by applications  such as the application we consider here  predicting the quantum mechanical properties
+of small organic molecules  see task schematic in  gure  
+In general  the search for practically effective machine
+learning  ML  models in   given domain proceeds through
+  sequence of increasingly realistic and interesting benchmarks  Here we focus on the QM  dataset as such   benchmark  Ramakrishnan et al    QM  consists of   
+molecules with   properties for each molecule which are
+approximated by an expensive  quantum mechanical simulation method  DFT  to yield   corresponding regression
+tasks  These tasks are plausibly representative of many important chemical prediction problems and are  currently 
+dif cult for many existing methods  Additionally  QM 
+also includes complete spatial information for the single
+low energy conformation of the atoms in the molecule that
+was used in calculating the chemical properties  QM 
+therefore lets us consider both the setting where the complete molecular geometry is known  atomic distances  bond
+angles  etc  and the setting where we need to compute
+properties that might still be de ned in terms of the spatial positions of atoms  but where only the atom and bond
+information       graph  is available as input  In the latter case  the model must implicitly    something about the
+computation used to determine   low energy    conformation and hopefully would still work on problems where it is
+not clear how to compute   reasonable    conformation 
+When measuring the performance of our models on QM 
+there are two important benchmark error levels  The  rst
+is the estimated average error of the DFT approximation
+to nature  which we refer to as  DFT error  The second  known as  chemical accuracy  is   target error that
+has been established by the chemistry community  Estimates of DFT error and chemical accuracy are provided
+for each of the   targets in Faber et al    One important goal of this line of research is to produce   model
+which can achieve chemical accuracy with respect to the
+
+ By comparison  the inference time of the neural networks dis 
+
+cussed in this work is    times faster 
+
+true targets as measured by an extremely precise experiment  The dataset containing the true targets on all   
+molecules does not currently exist  However  the ability
+to    the DFT approximation to within chemical accuracy
+would be an encouraging step in this direction  For all  
+targets  achieving chemical accuracy is at least as hard as
+achieving DFT error  In the rest of this paper when we talk
+about chemical accuracy we generally mean with respect to
+our available ground truth labels 
+In this paper  by exploring novel variations of models in the
+MPNN family  we are able to both achieve   new state of
+the art on the QM  dataset and to predict the DFT calculation to within chemical accuracy on all but two targets  In
+particular  we provide the following key contributions 
+
+  We develop an MPNN which achieves state of the art
+results on all   targets and predicts DFT to within
+chemical accuracy on   out of   targets 
+
+  We develop several different MPNNs which predict
+DFT to within chemical accuracy on   out of   targets while operating on the topology of the molecule
+alone  with no spatial information as input 
+
+  We develop   general method to train MPNNs with
+larger node representations without   corresponding
+increase in computation time or memory  yielding  
+substantial savings over previous MPNNs for high dimensional node representations 
+
+We believe our work is an important step towards making
+welldesigned MPNNs the default for supervised learning
+on modestly sized molecules 
+In order for this to happen  researchers need to perform careful empirical studies to  nd the proper way to use these types of models
+and to make any necessary improvements to them  it is
+not suf cient for these models to have been described in
+the literature if there is only limited accompanying empirical work in the chemical domain 
+Indeed convolutional
+neural networks existed for decades before careful empirical work applying them to image classi cation  Krizhevsky
+et al    helped them displace SVMs on top of handengineered features for   host of computer vision problems 
+
+  Message Passing Neural Networks
+There are at least eight notable examples of models from
+the literature that we can describe using our Message Passing Neural Networks  MPNN  framework  For simplicity
+we describe MPNNs which operate on undirected graphs
+  with node features xv and edge features evw  It is trivial to extend the formalism to directed multigraphs  The
+forward pass has two phases    message passing phase and
+  readout phase  The message passing phase runs for  
+
+Neural Message Passing for Quantum Chemistry
+
+time steps and is de ned in terms of message functions Mt
+and vertex update functions Ut  During the message passing phase  hidden states ht
+  at each node in the graph are
+updated based on messages mt 
+
+according to
+
+ 
+
+ cid 
+
+mt 
+
+   
+
+Mt ht
+
+   ht
+
+   evw 
+
+       
+ht 
+    Ut ht
+
+   mt 
+
+ 
+
+ 
+
+where in the sum        denotes the neighbors of   in graph
+   The readout phase computes   feature vector for the
+whole graph using some readout function   according to
+
+       hT
+
+          
+
+The message functions Mt  vertex update functions Ut  and
+readout function   are all learned differentiable functions 
+  operates on the set of node states and must be invariant to
+permutations of the node states in order for the MPNN to be
+invariant to graph isomorphism  In what follows  we de ne
+previous models in the literature by specifying the message
+function Mt  vertex update function Ut  and readout function   used  Note one could also learn edge features in
+an MPNN by introducing hidden states for all edges in the
+evw and updating them analogously to equations  
+graph ht
+and   Of the existing MPNNs  only Kearnes et al   
+has used this idea 
+Convolutional Networks for Learning Molecular Fingerprints  Duvenaud et al   
+The message function used is    hv  hw  evw   
+ hw  evw  where     denotes concatenation  The vertex
+ 
+update function used is Ut ht
+where   is the sigmoid function  deg    is the degree of
+is   learned matrix for each time step  
+vertex   and    
+ 
+and vertex degree      has skip connections to all previous
+
+   mt 
+
+      
+
+deg   
+ 
+
+mt 
+
+ 
+
+ 
+
+ cid 
+
+hidden states ht
+
+  and is equal to  
+
+softmax Wtht
+  
+
+ 
+
+ cid cid 
+
+   
+
+     cid  ht
+
+  cid  evw    which separately
+
+where   is   neural network and Wt are learned readout
+matrices  one for each time step    This message passing scheme may be problematic since the resulting message vector is mt 
+sums over connected nodes and connected edges  It follows that the message passing implemented in Duvenaud
+et al    is unable to identify correlations between edge
+states and node states 
+Gated Graph Neural Networks  GGNN  Li et al 
+ 
+The message function used is Mt ht
+  
+   evw    Aevw ht
+where Aevw is   learned matrix  one for each edge label  
+ the model assumes discrete edge types  The update function is Ut   GRU ht
+  where GRU is the Gated
+
+   ht
+
+   mt 
+
+ 
+
+ 
+
+ 
+
+ 
+
+Recurrent Unit introduced in Cho et al    This work
+used weight tying  so the same update function is used at
+each time step    Finally 
+
+   
+
+ 
+
+       
+
+ 
+
+    
+  
+
+       
+
+ 
+
+ 
+
+ 
+
+ cid 
+
+ cid 
+
+ cid 
+
+ cid 
+
+ cid 
+
+ cid 
+
+   
+
+there is   graph level output         cid 
+
+where   and   are neural networks  and  cid  denotes elementwise multiplication 
+Interaction Networks  Battaglia et al   
+This work considered both the case where there is   target at each node in the graph  and where there is   graph
+level target 
+It also considered the case where there are
+node level effects applied at each time step  in such  
+case the update function takes as input the concatenation
+ hv  xv  mv  where xv is an external vector representing
+some outside in uence on the vertex    The message function    hv  hw  evw  is   neural network which takes the
+concatenation  hv  hw  evw  The vertex update function
+   hv  xv  mv  is   neural network which takes as input
+the concatenation  hv  xv  mv  Finally  in the case where
+    where   is
+hT
+  neural network which takes the sum of the  nal hidden
+states hT
+    Note the original work only de ned the model
+for      
+Molecular Graph Convolutions  Kearnes et al   
+This work deviates slightly from other MPNNs in
+vw which
+that
+are
+phase 
+The message function used for node messages
+is
+vw  The vertex update function
+   ht
+   ht
+  where
+is Ut ht
+    denotes concatenation    is the ReLU activation
+The edge
+and       are learned weight matrices 
+state update is de ned by et 
+   ht
+vw     cid   et
+    
+   where the Wi are
+   ht
+vw     ht
+      et
+also learned weight matrices 
+Deep Tensor Neural Networks  Sch utt et al   
+The message from   to   is computed by
+
+representations et
+passing
+
+vw    et
+   et
+   mt 
+ 
+
+         ht
+
+it
+updated
+
+the message
+
+introduces
+
+   mt 
+
+during
+
+vw  ht
+
+edge
+
+   
+
+ 
+
+Mt   tanh cid         cf ht
+
+        cid     df evw     cid 
+
+where          cf     df are matrices and       are bias
+vectors  The update function used is Ut ht
+   
+  The readout function passes each node indeht
+    mt 
+pendently through   single hidden layer neural network and
+sums the outputs  in particular
+
+   mt 
+
+ 
+
+ 
+
+ cid 
+
+   
+
+NN hT
+
+   
+
+ 
+
+Laplacian Based Methods  Bruna et al    Defferrard et al    Kipf   Welling  
+
+Neural Message Passing for Quantum Chemistry
+
+        
+
+vwht
+
+These methods generalize the notion of the convolution operation typically applied to image datasets to an operation
+that operates on an arbitrary graph   with   real valued adjacency matrix    The operations de ned in Bruna et al 
+  Defferrard et al    result in message functions
+of the form Mt ht
+   where the matrices
+vw are parameterized by the eigenvectors of the graph
+   
+laplacian    and the learned parameters of the model  The
+vertex update function used is Ut ht
+     mt 
+ 
+where   is some pointwise nonlinearity  such as ReLU 
+The Kipf   Welling   model results in   message function Mt ht
+  where cvw  
+ deg   deg    Avw  The vertex update function is
+    ReLU   tmt 
+  For the exact expresU  
+vw and the derivation of the reformulation of
+sions for the    
+these models as MPNNs  see the supplementary material 
+
+     cvwht
+
+   mt 
+
+   ht
+
+  ht
+
+   mt 
+
+ 
+
+ 
+
+ 
+
+   ht
+
+ 
+
+  Moving Forward
+
+Given how many instances of MPNNs have appeared in the
+literature  we should focus on pushing this general family as far as possible in   speci   application of substantial practical importance  This way we can determine the
+most crucial implementation details and potentially reach
+the limits of these models to guide us towards future modeling improvements 
+One downside of all of these approaches is computation
+time  Recent work has adapted the GGNN architecture to
+larger graphs by passing messages on only subsets of the
+graph at each time step  Marino et al    In this work
+we also present   MPNN modi cation that can improve the
+computational costs 
+
+  Related Work
+Although in principle quantum mechanics lets us compute
+the properties of molecules  the laws of physics lead to
+equations that are far too dif cult to solve exactly  Therefore scientists have developed   hierarchy of approximations to quantum mechanics with varying tradeoffs of speed
+and accuracy  such as Density Functional Theory  DFT 
+with   variety of functionals  Becke    Hohenberg  
+Kohn    the GW approximation  Hedin    and
+Quantum MonteCarlo  Ceperley   Alder    Despite
+being widely used  DFT is simultaneously still too slow to
+    where Ne is
+be applied to large systems  scaling as      
+the number of electrons  and exhibits systematic as well as
+random errors relative to exact solutions to Schr odinger  
+equation  For example  to run the DFT calculation on   single   heavy atom molecule in QM  takes around an hour
+on   single core of   Xeon      GHz  using   version of Gaussian     ES LG RevD   Bing et al 
+  For     heavy atom molecule  computation time is
+
+up to   hours  Empirical potentials have been developed 
+such as the StillingerWeber potential  Stillinger   Weber 
+  that are fast and accurate but must be created from
+scratch  from  rst principles  for every new composition of
+atoms 
+Hu et al    used neural networks to approximate   particularly troublesome term in DFT called the exchange correlation potential to improve the accuracy of DFT  However  their method fails to improve upon the ef ciency of
+DFT and relies on   large set of ad hoc atomic descriptors 
+Two more recent approaches by Behler   Parrinello  
+and Rupp et al    attempt to approximate solutions
+to quantum mechanics directly without appealing to DFT 
+In the  rst case singlehidden layer neural networks were
+used to approximate the energy and forces for con gurations of   Silicon melt with the goal of speeding up molecular dynamics simulations  The second paper used Kernel Ridge Regression  KRR  to infer atomization energies
+over   wide range of molecules 
+In both cases hand engineered features were used  symmetry functions and the
+Coulomb matrix  respectively  that built physical symmetries into the input representation  Subsequent papers have
+replaced KRR by   neural network 
+Both of these lines of research used hand engineered features that have intrinsic limitations  The work of Behler  
+Parrinello   used   representation that was manifestly
+invariant to graph isomorphism  but has dif culty when applied to systems with more than three species of atoms and
+fails to generalize to novel compositions  The representation used in Rupp et al    is not invariant to graph
+isomorphism  Instead  this invariance must be learned by
+the downstream model through dataset augmentation 
+In addition to the eight MPNNs discussed in Section   there
+have been   number of other approaches to machine learning on graphical data which take advantage of the symmetries in   number of ways  One such family of approaches
+de ne   preprocessing step which constructs   canonical
+graph representation which can then be fed into into   standard classi er  Examples in this family include Niepert
+et al    and Rupp et al    Finally Scarselli et al 
+  de ne   message passing process on graphs which
+is run until convergence  instead of for    nite number of
+time steps as in MPNNs 
+
+  QM  Dataset
+To investigate the success of MPNNs on predicting chemical properties  we use the publicly available QM  dataset
+ Ramakrishnan et al    Molecules in the dataset consist of Hydrogen     Carbon     Oxygen     Nitrogen
+    and Flourine     atoms and contain up to   heavy  non
+Hydrogen  atoms  In all  this results in about    drug 
+
+Neural Message Passing for Quantum Chemistry
+
+like organic molecules that span   wide range of chemistry 
+For each molecule DFT is used to  nd   reasonable low
+energy structure and hence atom  positions  are available 
+Additionally   wide range of interesting and fundamental
+chemical properties are computed  Given how fundamental some of the QM  properties are  it is hard to believe
+success on more challenging chemical tasks will be possible if we can   make accurate statistical predictions for the
+properties computed in QM 
+We can group the different properties we try to predict into
+four broad categories  First  we have four properties related to how tightly bound together the atoms in   molecule
+are  These measure the energy required to break up the
+molecule at different temperatures and pressures  These
+include the atomization energy at         eV  atomization energy at room temperature     eV  enthalpy of atomization at room temperature     eV  and free energy of
+atomization     eV 
+Next there are properties related to fundamental vibrations
+of the molecule  including the highest fundamental vibrational frequency    cm  and the zero point vibrational
+energy  ZPVE   eV 
+Additionally  there are   number of properties that concern
+the states of the electrons in the molecule  They include
+the energy of the electron in the highest occupied molecular orbital  HOMO   HOMO  eV  the energy of the lowest
+unoccupied molecular orbital  LUMO   LUMO  eV  and the
+electron energy gap    eV  The electron energy gap is
+simply the difference  HOMO    LUMO 
+Finally  there are several measures of the spatial distribution of electrons in the molecule  These include the electronic spatial extent  cid   cid   Bohr  the norm of the dipole
+moment    Debye  and the norm of static polarizability  
+ Bohr  For   more detailed description of these properties  see the supplementary material 
+
+  MPNN Variants
+We began our exploration of MPNNs around the GGNN
+model which we believe to be   strong baseline  We focused on trying different message functions  output functions   nding the appropriate input representation  and
+properly tuning hyperparameters 
+For the rest of the paper we use   to denote the dimension
+of the internal hidden representation of each node in the
+graph  and   to denote the number of nodes in the graph 
+Our implementation of MPNNs in general operates on directed graphs with   separate message channel for incoming and outgoing edges  in which case the incoming message mv is the concatenation of min
+    this was also
+used in Li et al    When we apply this to undirected
+
+  and mout
+
+chemical graphs we treat the graph as directed  where each
+original edge becomes both an incoming and outgoing edge
+with the same label  Note there is nothing special about the
+direction of the edge  it is only relevant for parameter tying 
+Treating undirected graphs as directed means that the size
+of the message channel is    instead of   
+The input to our MPNN model is   set of feature vectors
+for the nodes of the graph  xv  and an adjacency matrix  
+with vector valued entries to indicate different bonds in the
+molecule as well as pairwise spatial distance between two
+atoms  We experimented as well with the message function used in the GGNN family  which assumes discrete
+edge labels  in which case the matrix   has entries in   disv are set
+crete alphabet of size    The initial hidden states   
+to be the atom input feature vectors xv and are padded up
+to some larger dimension    All of our experiments used
+weight tying at each time step    and   GRU  Cho et al 
+  for the update function as in the GGNN family 
+
+  Message Functions
+Matrix Multiplication  We started with the message function used in GGNN which is de ned by the equation
+   hv  hw  evw    Aevw hw 
+Edge Network  To allow vector valued edge features
+we propose the message function    hv  hw  evw   
+  evw hw where   evw  is   neural network which maps
+the edge vector evw to         matrix 
+Pair Message  One property that the matrix multiplication
+rule has is that the message from node   to node   is  
+function only of the hidden state hw and the edge evw  In
+   In
+particular  it does not depend on the hidden state ht
+theory    network may be able to use the message channel
+more ef ciently if the node messages are allowed to depend on both the source and destination node  Thus we
+also tried using   variant on the message function as described in  Battaglia et al    Here the message from
+   evw  where   is
+  to   along edge   is mwv      ht
+  neural network 
+When we apply the above message functions to directed
+graphs  there are two separate functions used    in and an
+  out  Which function is applied to   particular edge evw
+depends on the direction of that edge 
+
+   ht
+
+  Virtual Graph Elements
+
+We explored two different ways to change how the messages are passed throughout the model  The simplest modi cation involves adding   separate  virtual  edge type for
+pairs of nodes that are not connected  This can be implemented as   data preprocessing step and allows information
+to travel long distances during the propagation phase 
+
+Neural Message Passing for Quantum Chemistry
+
+We also experimented with using   latent  master  node 
+which is connected to every input node in the graph with
+  special edge type  The master node serves as   global
+scratch space that each node both reads from and writes to
+in every step of message passing  We allow the master node
+to have   separate node dimension dmaster  as well as separate weights for the internal update function  in our case
+  GRU  This allows information to travel long distances
+during the propagation phase  It also  in theory  allows additional model capacity       large values of dmaster  without   substantial hit in performance  as the complexity of
+the master node model is          nd 
+  Readout Functions
+
+master 
+
+We experimented with two readout functions  First is the
+readout function used in GGNN  which is de ned by equation   Second is   set set model from Vinyals et al   
+The set set model is speci cally designed to operate on sets
+and should have more expressive power than simply summing the  nal node states  This model  rst applies   linear
+projection to each tuple  hT
+    xv  and then takes as input
+    xv  Then  after  
+the set of projected tuples      hT
+steps of computation  the set set model produces   graph
+level embedding     which is invariant to the order of the of
+the tuples     We feed this embedding     through   neural
+network to produce the output 
+
+  Multiple Towers
+
+One issue with MPNNs is scalability  In particular    single step of the message passing phase for   dense graph
+requires         oating point multiplications  As   or  
+get large this can be computationally expensive  To address
+this issue we break the   dimensional node embeddings ht
+ 
+and run
+into   different     dimensional embeddings ht  
+ 
+  propagation step on each of the   copies separately to get
+temporary embeddings  ht  
+         using separate
+message and update functions for each copy  The   temporary embeddings of each node are then mixed together
+according to the equation
+
+ 
+
+ cid     
+
+ cid ht 
+
+ cid 
+
+ cid ht 
+
+    ht 
+
+            ht  
+ 
+
+     ht 
+
+             ht  
+ 
+
+ 
+
+where   denotes   neural network and              denotes
+concatenation  with   shared across all nodes in the graph 
+This mixing preserves the invariance to permutations of
+the nodes  while allowing the different copies of the graph
+to communicate with each other during the propagation
+phase  This can be advantageous in that it allows larger
+hidden states for the same number of parameters  which
+yields   computational speedup in practice  For example  when the message function is matrix multiplication
+ as in GGNN    propagation step of   single copy takes
+
+  cid       cid  time  and there are   copies  therefore the
+
+Feature
+
+Table   Atom Features
+Description
+
+Atom type
+Atomic number
+Acceptor
+Donor
+Aromatic
+Hybridization
+Number of Hydrogens
+
+               onehot 
+Number of protons  integer 
+Accepts electrons  binary 
+Donates electrons  binary 
+In an aromatic system  binary 
+sp  sp  sp   onehot or null 
+ integer 
+
+overall time complexity is   cid       cid  with some addi 
+
+tional overhead due to the mixing network  For      
+      and       we see   factor of   speedup in inference time over               and       architecture 
+This variation would be most useful for larger molecules 
+for instance molecules from GDB   Ruddigkeit et al 
+ 
+
+  Input Representation
+There are   number of features available for each atom in
+  molecule which capture both properties of the electrons
+in the atom as well as the bonds that the atom participates
+in  For   list of all of the features see table   We experimented with making the hydrogen atoms explicit nodes in
+the graph  as opposed to simply including the count as  
+node feature  in which case graphs have up to   nodes 
+Note that having larger graphs signi cantly slows training
+time  in this case by   factor of roughly   For the adjacency matrix there are three edge representations used depending on the model 
+Chemical Graph  In the abscence of distance information 
+adjacency matrix entries are discrete bond types  single 
+double  triple  or aromatic 
+Distance bins  The matrix multiply message function assumes discrete edge types  so to include distance information we bin bond distances into   bins  the bins are obtained by uniformly partitioning the interval     into  
+bins  followed by adding   bin     and   These
+bins were hand chosen by looking at   histogram of all distances  The adjacency matrix then has entries in an alphabet of size   indicating bond type for bonded atoms and
+distance bin for atoms that are not bonded  We found the
+distance for bonded atoms to be almost completely determined by bond type 
+Raw distance feature  When using   message function
+which operates on vector valued edges  the entries of the
+adjacency matrix are then   dimensional  where the  rst dimension indicates the euclidean distance between the pair
+of atoms  and the remaining four are   onehot encoding of
+
+Neural Message Passing for Quantum Chemistry
+
+the bond type 
+
+  Training
+Each model and target combination was trained using   uniform random hyper parameter search with   trials    was
+constrained to be in the range            in practice  any
+      works  The number of set set computations  
+was chosen from the range           All models were
+trained using SGD with the ADAM optimizer  Kingma  
+Ba   with batch size   for   million steps    
+epochs  The initial learning rate was chosen uniformly between     and     We used   linear learning rate decay
+that began between   and   of the way through training and the initial learning rate   decayed to    nal learning
+rate         using   decay factor   in the range    
+The QM  dataset has   molecules in it  We randomly chose   samples for validation    samples
+for testing  and used the rest for training  We use the validation set to do early stopping and model selection and we
+report scores on the test set  All targets were normalized
+to have mean   and variance   We minimize the mean
+squared error between the model output and the target  although we evaluate mean absolute error 
+
+  Results
+In all of our tables we report the ratio of the mean absolute error  MAE  of our models with the provided estimate of chemical accuracy for that target  Thus any model
+with error ratio less than   has achieved chemical accuracy for that target  In the supplementary material we list
+the chemical accuracy estimates for each target  these are
+the same estimates that were given in Faber et al   
+In this way  the MAE of our models can be calculated as
+ Error Ratio     Chemical Accuracy  Note  unless otherwise indicated  all tables display result of models trained
+individually on each target  as opposed to training one
+model to predict all  
+We performed numerous experiments in order to  nd the
+best possible MPNN on this dataset as well as the proper
+input representation  In our experiments  we found that including the complete edge feature vector  bond type  spatial
+distance  and treating hydrogen atoms as explicit nodes in
+the graph to be very important for   number of targets  We
+also found that training one model per target consistently
+outperformed jointly training on all   targets 
+In some
+cases the improvement was up to   Our best MPNN
+variant used the edge network message function  set set
+output  and operated on graphs with explicit hydrogens  We
+were able to further improve performance on the test set by
+ensembling the predictions of the  ve models with lowest
+validation error 
+
+In table   we compare the performance of our best MPNN
+variant  denoted with enns    and the corresponding ensemble  denoted with enns sens  with the previous state
+of the art on this dataset as reported in Faber et al   
+For clarity the error ratios of the best nonensemble models are shown in bold  This previous work performed
+  comparison study of several existing ML models for
+QM  and we have taken care to use the same train  validation  and test split  These baselines include   different hand engineered molecular representations  which then
+get fed through   standard  offthe shelf classi er  These
+input representations include the Coulomb Matrix  CM 
+Rupp et al    Bag of Bonds  BoB  Hansen et al 
+  Bonds Angles  Machine Learning  BAML  Huang
+  von Lilienfeld   Extended Connectivity Fingerprints  ECPF  Rogers   Hahn   and  Projected
+Histograms   HDAD  Faber et al    representations 
+In addition to these hand engineered features we include
+two existing baseline MPNNs  the Molecular Graph Convolutions model  GC  from Kearnes et al    and the
+original GGNN model Li et al    trained with distance bins  Overall  our new MPNN achieves chemical accuracy on   out of   targets and state of the art on all  
+targets 
+Training Without Spatial Information  We also experimented in the setting where spatial information is not included in the input  In general  we  nd that augmenting the
+MPNN with some means of capturing long range interactions between nodes in the graph greatly improves performance in this setting  To demonstrate this we performed  
+experiments  one where we train the GGNN model on the
+sparse graph  one where we add virtual edges  one where
+we add   master node  and one where we change the graph
+level output to   set set output  The error ratios averaged
+across the   targets are shown in table   Overall  these
+three modi cations help on all   targets  and the Set Set
+output achieves chemical accuracy on   out of   targets 
+For more details  consult the supplementary material  The
+experiments shown tables   and   were run with   partial
+charge feature as   node input  This feature is an output of
+the DFT calculation and thus could not be used in an applied setting  The state of art numbers we report in table  
+do not use this feature 
+Towers  Our original intent in developing the towers variant was to improve training time  as well as to allow the
+model to be trained on larger graphs  However  we also
+found some evidence that the multitower structure improves generalization performance 
+In table   we compare GGNN   towers   set set output vs   baseline GGNN   set set output when distance bins are used  We do
+this comparison in both the joint training regime and when
+training one model per target  The towers model outperforms the baseline model on   out of   targets in both
+
+Neural Message Passing for Quantum Chemistry
+
+Table   Comparison of Previous Approaches  left  with MPNN baselines  middle  and our methods  right 
+
+GGNN DTNN enns  
+
+enns sens 
+
+Target
+
+BAML BOB CM ECFP  HDAD GC
+
+ 
+mu
+alpha
+ 
+HOMO  
+ 
+LUMO
+ 
+gap
+ 
+  
+ZPVE
+ 
+ 
+  
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Cv
+ 
+Omega
+Average
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Table   Models Trained Without Spatial Information
+Model
+GGNN
+GGNN   Virtual Edge
+GGNN   Master Node
+GGNN   set set
+
+Average Error Ratio
+ 
+ 
+ 
+ 
+
+Table   Towers vs Vanilla GGNN  no explicit hydrogen 
+Model
+GGNN   joint training
+towers    joint training
+GGNN   individual training
+towers    individual training
+
+Average Error Ratio
+ 
+ 
+ 
+ 
+
+individual and joint target training  We believe the bene  
+of towers is that it resembles training an ensemble of models  Unfortunately  our attempts so far at combining the
+towers and edge network message function have failed to
+further improve performance  possibly because the combination makes training more dif cult  Further training details  and error ratios on all targets can be found in the supplementary material 
+Additional Experiments  In preliminary experiments  we
+tried disabling weight tying across different time steps 
+However  we found that the most effective way to increase
+performance was to tie the weights and use   larger hidden
+dimension    We also early on found the pair message function to perform worse than the edge network function  This
+included   toy path nding problem which was originally
+
+ As reported in Sch utt et al    The model was trained
+on   different train test split with    training samples vs   
+used in our experiments 
+
+designed to bene   from using pair messages  Also  when
+trained jointly on the   targets the edge network function
+outperforms pair message on   out of   targets  and has
+an average error ratio of   compared to   for pair
+message  Given the dif culties with training this function
+we did not pursue it further  For performance on smaller
+sized training sets  consult the supplementary material 
+
+  Conclusions and Future Work
+Our results show that MPNNs with the appropriate message  update  and output functions have   useful inductive bias for predicting molecular properties  outperforming
+several strong baselines and eliminating the need for complicated feature engineering  Moreover  our results also reveal the importance of allowing long range interactions between nodes in the graph with either the master node or the
+set set output  The towers variation makes these models
+more scalable  but additional improvements will be needed
+to scale to much larger graphs 
+An important future direction is to design MPNNs that can
+generalize effectively to larger graphs than those appearing in the training set or at least work with benchmarks
+designed to expose issues with generalization across graph
+sizes  Generalizing to larger molecule sizes seems particularly challenging when using spatial information  First of
+all  the pairwise distance distribution depends heavily on
+the number of atoms  Second  our most successful ways
+of using spatial information create   fully connected graph
+where the number of incoming messages also depends on
+the number of nodes  To address the second issue  we believe that adding an attention mechanism over the incoming message vectors could be an interesting direction to explore 
+
+Neural Message Passing for Quantum Chemistry
+
+Acknowledgements
+We would like to thank Lukasz Kaiser  Geoffrey Irving 
+Alex Graves  and Yujia Li for helpful discussions  Thank
+you to Adrian Roitberg for pointing out an issue with the
+use of partial charges in an earlier version of this paper 
+
+References
+Battaglia  Peter  Pascanu  Razvan  Lai  Matthew  Rezende 
+Danilo Jimenez  and Kavukcuoglu  Koray 
+Interaction networks for learning about objects  relations and
+physics  In Advances in Neural Information Processing
+Systems  pp     
+
+Becke  Axel    Densityfunctional thermochemistry  iii 
+the role of exact exchange  The Journal of Chemical Physics      doi   
+  URL http dx doi org 
+ 
+
+Behler 
+
+  org and Parrinello  Michele 
+
+Generalized neuralnetwork representation of highdimensional
+Phys  Rev  Lett   
+potentialenergy surfaces 
+  Apr  
+doi   PhysRevLett 
+  URL http link aps org doi 
+ PhysRevLett 
+
+Bing  Huang  von Lillenfeld     Anatole  and Bakowies 
+
+Dirk  personal communication   
+
+Bruna  Joan  Zaremba  Wojciech  Szlam  Arthur  and LeCun  Yann  Spectral networks and locally connected networks on graphs  arXiv preprint arXiv   
+
+Ceperley  David and Alder     Quantum monte carlo  Sci 
+
+ence     
+
+Cho  Kyunghyun  Van Merri enboer  Bart  Bahdanau 
+Dzmitry  and Bengio  Yoshua  On the properties of neural machine translation  Encoderdecoder approaches 
+arXiv preprint arXiv   
+
+Defferrard  Micha el  Bresson  Xavier  and Vandergheynst 
+Pierre  Convolutional neural networks on graphs with
+fast localized spectral  ltering  In Advances in Neural
+Information Processing Systems  pp     
+
+Duvenaud  David    Maclaurin  Dougal 
+
+Iparraguirre 
+Jorge  Bombarell  Rafael  Hirzel  Timothy  AspuruGuzik  Al an  and Adams  Ryan    Convolutional networks on graphs for learning molecular  ngerprints  In
+Advances in neural information processing systems  pp 
+   
+
+Lilienfeld     Anatole  Fast machine learning models of electronic and energetic properties consistently
+reach approximation errors better than dft accuracy 
+https arxiv org abs   
+
+Hansen  Katja  Biegler  Franziska  Ramakrishnan  Raghunathan  Pronobis  Wiktor  von Lilienfeld     Anatole 
+Mller  KlausRobert  and Tkatchenko  Alexandre  Machine learning predictions of molecular properties  Accurate manybody potentials and nonlocality in chemThe journal of physical chemistry letical space 
+ters      doi   acs jpclett 
+    URL http dx doi org 
+acs jpclett   
+
+Hedin  Lars  New method for calculating the oneparticle
+green   function with application to the electrongas
+problem  Phys  Rev        Aug   doi 
+ PhysRev    URL http link 
+aps org doi PhysRev   
+
+Hinton  Geoffrey  Deng  Li  Yu  Dong  Dahl  George   
+Mohamed  Abdelrahman  Jaitly  Navdeep  Senior  Andrew  Vanhoucke  Vincent  Nguyen  Patrick  Sainath 
+Tara    et al  Deep neural networks for acoustic modeling in speech recognition  The shared views of four
+research groups  IEEE Signal Processing Magazine   
+   
+
+Hohenberg     and Kohn     Inhomogeneous electron gas 
+Phys  Rev        Nov   doi   
+PhysRev    URL http link aps org 
+doi PhysRev   
+
+Hu  LiHong  Wang  XiuJun  Wong  LaiHo  and Chen 
+GuanHua  Combined  rstprinciples calculation and
+neuralnetwork correction approach for heat of formation  The Journal of Chemical Physics   
+   
+
+Huang  Bing and von Lilienfeld     Anatole  Communication  Understanding molecular representations in
+machine learning  The role of uniqueness and target
+similarity  The Journal of Chemical Physics   
+    doi    URL http 
+ dx doi org 
+
+Kearnes  Steven  McCloskey  Kevin  Berndl  Marc  Pande 
+Vijay  and Riley  Patrick  Molecular graph convolutions 
+Moving beyond  ngerprints  Journal of ComputerAided
+Molecular Design     
+
+Faber  Felix  Hutchison  Luke  Huang  Bing  Gilmer 
+Justin  Schoenholz  Samuel    Dahl  George    Vinyals 
+Oriol  Kearnes  Steven  Riley  Patrick    and von
+
+Kingma  Diederik and Ba 
+
+Jimmy 
+method for stochastic optimization 
+arXiv   
+
+Adam 
+
+ 
+arXiv preprint
+
+Neural Message Passing for Quantum Chemistry
+
+database gdb  Journal of chemical information and
+modeling     
+
+Rupp  Matthias  Tkatchenko  Alexandre haand   uller 
+KlausRobert  and von Lilienfeld     Anatole 
+Fast
+and accurate modeling of molecular atomization energies with machine learning  Physical review letters   
+  Jan   URL http dx doi org 
+ PhysRevLett 
+
+Scarselli  Franco  Gori  Marco  Tsoi  Ah Chung  Hagenbuchner  Markus  and Monfardini  Gabriele  The graph
+IEEE Transactions on Neural
+neural network model 
+Networks     
+
+Schoenholz  Samuel    Cubuk  Ekin    Sussman 
+Daniel    Kaxiras  Efthimios  and Liu  Andrea     
+structural approach to relaxation in glassy liquids  Nature Physics   
+
+Sch utt  Kristof    Arbabzadah  Farhad  Chmiela  Stefan 
+  uller  Klaus    and Tkatchenko  Alexandre  Quantumchemical insights from deep tensor neural networks  Nature Communications     
+
+Stillinger  Frank    and Weber  Thomas    Computer simulation of local order in condensed phases of silicon 
+Phys  Rev       Apr   doi   
+PhysRevB  URL http link aps org 
+doi PhysRevB 
+
+Vinyals  Oriol  Bengio  Samy  and Kudlur  Manjunath 
+Order matters  Sequence to sequence for sets  arXiv
+preprint arXiv   
+
+Wu  Yonghui  Schuster  Mike  Chen  Zhifeng  Le  Quoc   
+Norouzi  Mohammad  Macherey  Wolfgang  Krikun 
+Maxim  Cao  Yuan  Gao  Qin  Macherey  Klaus  et al 
+Google   neural machine translation system  Bridging
+the gap between human and machine translation  arXiv
+preprint arXiv   
+
+Kipf        and Welling     SemiSupervised Classi 
+cation with Graph Convolutional Networks  ArXiv eprints  September  
+
+Krizhevsky  Alex  Sutskever  Ilya  and Hinton  Geoffrey   
+Imagenet classi cation with deep convolutional neural
+networks  In Advances in neural information processing
+systems  pp     
+
+Li  Yujia  Tarlow  Daniel  Brockschmidt  Marc  and Zemel 
+Richard  Gated graph sequence neural networks  ICLR 
+ 
+
+Lusci  Alessandro  Pollastri  Gianluca  and Baldi  Pierre 
+Deep architectures and deep learning in chemoinformatics 
+the prediction of aqueous solubility for druglike
+molecules  Journal of chemical information and modeling     
+
+Marino  Kenneth  Salakhutdinov  Ruslan  and Gupta  Abhinav  The more you know  Using knowledge graphs for
+image classi cation  arXiv preprint arXiv 
+ 
+
+Merkwirth  Christian and Lengauer  Thomas  Automatic
+generation of complementary descriptors with molecular
+graph networks  Journal of chemical information and
+modeling     
+
+Micheli  Alessio  Neural network for graphs    contextual constructive approach  IEEE Transactions on Neural Networks     
+
+Montavon  Gr egoire  Hansen  Katja  Fazli  Siamac 
+Rupp  Matthias  Biegler  Franziska  Ziehe  Andreas 
+Tkatchenko  Alexandre  von Lilienfeld     Anatole  and
+  uller  KlausRobert  Learning invariant representations of molecules for atomization energy prediction  In
+Advances in Neural Information Processing Systems  pp 
+   
+
+Niepert  Mathias  Ahmed  Mohamed  and Kutzkov  Konstantin  Learning convolutional neural networks for
+graphs  In Proceedings of the  rd annual international
+conference on machine learning  ACM   
+
+Ramakrishnan  Raghunathan  Dral  Pavlo    Rupp 
+Matthias  and Von Lilienfeld    Anatole 
+Quantum chemistry structures and properties of   kilo
+molecules  Scienti   data     
+
+Rogers  David and Hahn  Mathew  Extendedconnectivity
+ ngerprints  Journal of chemical information and modeling     
+
+Ruddigkeit  Lars  Van Deursen  Ruud  Blum  Lorenz   
+and Reymond  JeanLouis  Enumeration of   billion organic small molecules in the chemical universe
+
+

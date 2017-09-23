@@ -1,0 +1,1349 @@
+Analogical Inference for Multirelational Embeddings
+
+Hanxiao Liu   Yuexin Wu   Yiming Yang  
+
+Abstract
+
+Largescale multirelational embedding refers to
+the task of learning the latent representations for
+entities and relations in large knowledge graphs 
+An effective and scalable solution for this problem is crucial for the true success of knowledgebased inference in   broad range of applications  This paper proposes   novel framework
+for optimizing the latent representations with respect to the analogical properties of the embedded entities and relations  By formulating the
+learning objective in   differentiable fashion  our
+model enjoys both theoretical power and computational scalability  and signi cantly outperformed   large number of representative baseline
+methods on benchmark datasets  Furthermore 
+the model offers an elegant uni cation of several
+wellknown methods in multirelational embedding  which can be proven to be special instantiations of our framework 
+
+  Introduction
+Multirelational embedding  or knowledge graph embedding  is the task of  nding the latent representations of
+entities and relations for better inference over knowledge
+graphs  This problem has become increasingly important
+in recent machine learning due to the broad range of important applications of largescale knowledge bases  such
+as Freebase  Bollacker et al    DBpedia  Auer et al 
+  and Google   Knowledge Graph  Singhal    including questionanswering  Ferrucci et al    information retrieval  Dalton et al    and natural language
+processing  Gabrilovich   Markovitch   
+  knowledge base  KB  typically stores factual information as subjectrelation object triplets  The collection of
+such triplets forms   directed graph whose nodes are entities and whose edges are the relations among entities  Real 
+
+ Carnegie Mellon University  Pittsburgh  PA   USA 
+
+Correspondence to  Hanxiao Liu  hanxiaol cs cmu edu 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+nucleus
+
+surrounded by
+
+electrons
+
+do    
+
+scale
+
+do    
+
+ 
+ 
+ 
+ 
+
+ 
+ 
+
+attract
+
+scale
+
+surrounded by
+
+sun
+
+planets
+
+charge
+
+attract
+
+do    
+
+scale
+
+ 
+ 
+ 
+ 
+
+ 
+ 
+
+mass
+
+Figure   Commutative diagram for the analogy between the Solar System  red  and the RutherfordBohr Model  blue   atom
+system  By viewing the atom system as    miniature  of the
+solar system  via the scale down relation  one is able to complete missing facts  triplets  about the latter by mirroring the facts
+about the former  The analogy is built upon three basic analogical structures  parallelograms   sun is to planets as nucleus
+is to electrons   sun is to mass as nucleus is to charge  and
+ planets are to mass as eletrons are to charge 
+
+world knowledge graph is both extremely large and highly
+incomplete by nature  Min et al    How can we use
+the observed triplets in an incomplete graph to induce the
+unobserved triples in the graph presents   tough challenge
+for machine learning research 
+Various statistical relational
+learning methods  Getoor 
+  Nickel et al    have been proposed for this task 
+among which vectorspace embedding models are most
+particular due to their advantageous performance and scalability  Bordes et al    The key idea in those approaches is to  nd dimensionality reduced representations
+for both the entities and the relations  and hence force the
+models to generalize during the course of compression 
+Representative models of this kind include tensor factorization  Singhal    Nickel et al    neural tensor networks  Socher et al    Chen et al    translationbased models  Bordes et al    Wang et al    Lin
+et al      bilinear models and its variants  Yang et al 
+  Trouillon et al    pathwise methods  Guu et al 
+  embeddings based on holographic representations
+ Nickel et al    and product graphs that utilizes additional site information for the predictions of unseen edges
+in   semisupervised manner  Liu   Yang     
+
+Analogical Inference for Multirelational Embeddings
+
+Learning the embeddings of entities and relations can be
+viewed as   knowledge induction process  as those induced
+latent representations can be used to make inference about
+new triplets that have not been seen before 
+Despite the substantial efforts and great successes so far in
+the research on multirelational embedding  one important
+aspect is missing       to study the solutions of the problem
+from the analogical inference point of view  by which we
+mean to rigorously de ne the desirable analogical properties for multirelational embedding of entities and relations 
+and to provide algorithmic solution for optimizing the embeddings        the analogical properties  We argue that
+analogical inference is particularly desirable for knowledge
+base completion  since for instance if system      subset
+of entities and relations  is analogous to system    another
+subset of entities and relations  then the unobserved triples
+in   could be inferred by mirroring their counterparts in   
+Figure   uses   toy example to illustrate the intuition  where
+system   corresponds to the solar system with three concepts  entities  and system   corresponds the atom system
+with another three concepts  An analogy exists between the
+two systems because   is    miniature  of    As   result 
+knowing how the entities are related to each other in system   allows us to make inference about how the entities
+are related to each other in system   by analogy 
+Although analogical reasoning was an active research
+topic in classic AI  arti cial intelligence  early computational models mainly focused on nondifferentiable rulebased reasoning  Gentner    Falkenhainer et al   
+Turney    which can hardly scale to very large KBs
+such as Freebase or Google   Knowledge Graph  How to
+leverage the intuition of analogical reasoning via statistical
+inference for automated embedding of very large knowledge graphs has not been studied so far  to our knowledge 
+It is worth mentioning that analogical structures have been
+observed in the output of several word entity embedding
+models  Mikolov et al    Pennington et al   
+However  those observations stopped there as merely empirical observations  Can we mathematically formulate the
+desirable analogical structures and leverage them in our objective functions to improve multirelational embedding 
+In this case  can we develop new algorithms for tractable inference for the embedding of very large knowledge graphs 
+These questions present   fundamental challenge which has
+not been addressed by existing work  and answering these
+questions are the main contributions we aim in this paper  We name this open challenge as the analogical inference problem  for the distinction from rulebased analogical reasoning in classic AI 
+Our speci   novel contributions are the following 
+
+models analogical structures in multirelational embedding  and that improves the stateof theart performance on benchmark datasets 
+
+  The algorithmic solution for conducting analogical inference in   differentiable manner  whose implementation is as scalable as the fastest known relational embedding algorithms 
+
+  The theoretical insights on how our framework provides   uni ed view of several representative methods
+as its special  and restricted  cases  and why the generalization of such cases lead to the advantageous performance of our method as empirically observed 
+
+The rest of this paper is organized as follows    introduces
+related background where multirelational embedding is
+formulated as linear maps    describes our new optimization framework where the desirable analogical structures
+are rigorously de ned by the the commutative property of
+linear maps    offers an ef cient algorithm for scalable inference by exploiting the special structures of commutative
+linear maps    shows how our framework subsumes several representative approaches in   principled way  and  
+reports our experimental results  followed by the concluding remarks in  
+
+  Related Background
+  Notations
+Let   and   be the space of all entities and their relations 
+  knowledge base   is   collection of triplets              
+where                     stand for the subject  object
+and their relation  respectively  Denote by            
+lookup table where ve   Rm is the vector embedding for
+entity    and denote by tensor             another
+lookup table where Wr   Rm   is the matrix embedding
+for relation    Both   and   are to be learned from   
+
+  Relations as Linear Maps
+
+We formulate each relation   as   linear map that  for any
+given                transforms the subject   from its original position in the vector space to somewhere near the object    In other words  we expect the latent representations
+for any valid           to satisfy
+
+  Wr     cid 
+  cid 
+
+ 
+
+ 
+
+The degree of satisfaction in the approximated form of  
+can be quanti ed using the inner product of   cid 
+  Wr and vo 
+That is  we de ne   bilinear score function as 
+
+             cid   cid 
+
+  Wr  vo cid      cid 
+
+  Wrvo
+
+ 
+
+    new framework that  for the  rst time  explicitly
+
+Our goal is to learn   and   such that           gives high
+scores to valid triples  and low scores to the invalid ones 
+
+Analogical Inference for Multirelational Embeddings
+
+In contrast to some previous models  Bordes et al   
+where relations are modeled as additive translating operators  namely vs   wr   vo  the multiplicative formulation
+in   offers   natural analogy to the  rstorder logic where
+each relation is treated as   predicate operator over input arguments  subject and object in our case  Clearly  the linear
+transformation de ned by   matrix           linear map  is
+  richer operator than the additive transformation de ned
+by   vector  Multiplicative models are also found to substantially outperform additive models empirically  Nickel
+et al    Yang et al   
+
+  Normal Transformations
+
+Instead of allowing arbitrary linear maps to be used for
+representing relations    particular family of matrices has
+been studied for  wellbehaved  linear maps  This family
+is named as the normal matrices 
+De nition    Normal Matrix    real matrix   is normal
+if and only if   cid     AA cid 
+
+Normal matrices have nice theoretical properties which are
+often desirable form relational modeling       they are unitarily diagonalizable and hence can be conveniently analyzed by the spectral theorem  Dunford et al    Representative members of the normal family include 
+       cid 
+
+  Symmetric Matrices for which WrW  cid 
+
+  Wr  
+    These includes all diagonal matrices and posiW  
+tive semide nite matrices  and the symmetry implies
+                      They are suitable for modeling
+symmetric relations such as is identical 
+
+  Skew Antisymmetric Matrices for which WrW  cid 
+
+   
+  Wr       
+   cid 
+    which implies            
+          These matrices are suitable for modeling
+asymmetric relations such as is parent of 
+
+  Rotation Matrices for which WrW  cid 
+
+  Wr  
+Im  which suggests that the relation   is invertible as
+   
+always exists  Rotation matrices are suitable for
+modeling  to  relationships  bijections 
+
+       cid 
+
+ 
+
+  Circulant Matrices  Gray et al    which have
+been implicitly used in recent work on holographic
+representations  Nickel et al    These matrices
+are usually related to the learning of latent representations in the Fourier domain  see   for more details 
+
+In the remaining parts of this paper  we denote all the real
+normal matrices in Rm   as Nm   
+
+  Proposed Analogical Inference Framework
+Analogical reasoning is known to play   central role in human induction about knowledge  Gentner    Minsky 
+
+  Holyoak et al    Hofstadter    Here we
+provide   mathematical formulation of the analogical structures of interest in multirelational embedding in   latent
+semantic space  to support algorithmic inference about the
+embeddings of entities and relations in   knowledge graph 
+
+  Analogical Structures
+
+Consider the famous example in the word embedding literature  Mikolov et al    Pennington et al    for
+the following entities and relations among them 
+
+ man is to king as woman is to queen 
+
+In an abstract notion we denote the entities by    as man 
+     as king     as woman  and    as queen  and the relations by    as crown  and   cid   as male  cid    emale  respectively  These give us the subjectrelation object triplets as
+follows 
+
+    cid    
+
+    cid   
+
+       
+
+       
+
+ 
+For multirelational embeddings    and   cid  are members of
+  and are modeled as linear maps in our case 
+The relational maps in   can be visualized using   commutative diagram  Ad amek et al    Brown   Porter 
+  from the Category Theory  as shown in Figure  
+where each node denotes an entity and each edge denotes  
+linear map that transforms one entity to the other  We also
+refer to such   diagram as    parallelogram  to highlight its
+particular algebraic structure 
+
+ 
+
+  cid 
+
+ 
+
+ 
+
+  cid 
+
+ 
+
+ 
+
+ 
+
+Figure   Parallelogram diagram for the analogy of    is to   as  
+is to    where each edge denotes   linear map 
+
+The parallelogram in Figure   represents   very basic analogical structure which could be informative for the inference about unknown facts  triplets  To get   sense about
+why analogies would help in the inference about unobserved facts  we notice that for entities            which form
+an analogical structure in our example  the parallelogram
+structure is fully determined by symmetry  This means that
+if we know        and     cid     then we can induce the
+remaining triplets of        and     cid     In other words  understanding the relation between man and king helps us to
+ ll up the unknown relation between woman and queen 
+
+ Notice that this is different from parallelograms in the geometric sense because each edge here is   linear map instead of the
+difference between two nodes in the vector space 
+
+Analogical Inference for Multirelational Embeddings
+
+Analogical structures are not limited to parallelograms  of
+course  though parallelograms often serve as the building
+blocks for more complex analogical structures  As an example  in Figure   of   we show   compound analogical
+structure in the form of   triangular prism  for mirroring the
+correspondent entities relations between the atom system
+and the solar system  Formally de ne the desirable analogical structures in   computationally tractable objective for
+optimization is the key for solving our problem  which we
+will introduce next 
+
+  Commutative Constraint for Linear Maps
+
+Although it is tempting to explore all potentially interesting
+parallelograms in the modeling of analogical structure  it is
+computationally intractable to examine the entire powerset
+of entities as the candidate space of analogical structures 
+  more reasonable strategy is to identify some desirable
+properties of the analogical structures we want to model 
+and use those properties as constraints for reducing the candidate space 
+An desirable property of the linear maps we want is that all
+the directed paths with the same starting node and end node
+form the compositional equivalence  Denoting by   the
+composition operator between two relations  the parallelogram in Figure   contains two equivalent compositions as 
+
+      cid      cid     
+
+ 
+which means that   is connected to   via either path  We
+call this the commutativity property of the linear maps 
+which is   necessary condition for forming commutative
+parallelograms and therefore the corresponding analogical
+structures  Yet another example is given by Figure   where
+sun can traverse to charge along multiple alternative paths
+of length three  implying the commutativity of relations
+surrounded by  made of  scale down 
+The composition of two relations  linear maps  is naturally
+implemented via matrix multiplication  Yang et al   
+Guu et al    hence equation   indicates
+
+Wr   cid    WrWr cid    Wr cid Wr
+
+ 
+One may further require the commutative constraint   to
+be satis ed for any pair of relations in   because they may
+be simultaneously present in the same commutative parallelogram for certain subsets of entities  In this case  we say
+the relations in   form   commuting family 
+It is worth mentioning that Nm    is not closed under matrix multiplication  As the result  the composition rule in
+eq    may not always yield   legal new relation Wr   cid 
+may no longer be   normal matrix  However  any commuting family in Nm    is indeed closed under multiplication 
+This explains the necessity of having   commuting family
+of relations from an alternative perspective 
+
+  The Optimization Objective
+
+The generic goal for multirelational embedding is to  nd
+entity and relation representations such that positive triples
+labeled as       receive higher score than the negative
+triples labeled as       This can be formulated as
+
+Es          cid                   
+
+ 
+
+min
+   
+
+where                    cid 
+  Wrvo is our score function based
+on the embeddings   cid  is our loss function  and   is the data
+distribution constructed based on the training set   
+To impose analogical structures among the representations 
+we in addition require the linear maps associated with relations to form   commuting family of normal matrices  This
+gives us the objective function for ANALOGY 
+Es          cid                   
+  Wr       
+WrWr cid    Wr cid Wr       cid     
+
+min
+   
+     WrW  cid 
+
+       cid 
+
+ 
+ 
+
+ 
+
+where constraints   and   are corresponding to the normality and commutativity requirements  respectively  Such
+  constrained optimization may appear to be computationally expensive at the  rst glance  In   however  we will
+recast it as   simple lightweight problem for which each
+SGD update can be carried out ef ciently in      time 
+
+  Ef cient Inference Algorithm
+The constrained optimization   is computationally challenging due to the large number of model parameters in tensor     the matrix normality constraints  and the quadratic
+number of pairwise commutative constraints in  
+Interestingly  by exploiting the special properties of commuting normal matrices  we will show in Corollary  
+that ANALOGY can be alternatively solved via an another
+formulation of substantially lower complexity  Our  ndings are based on the following lemma and theorem 
+Lemma    Wilkinson   Wilkinson    For any real
+normal matrix    there exists   real orthogonal matrix  
+and   blockdiagonal matrix   such that     QBQ cid 
+where each diagonal block of   is either     real scalar 
+or      dimensional real matrix in the form of
+ 
+where both      are real scalars 
+
+ cid     
+
+ cid 
+
+ 
+
+ 
+
+The lemma suggests any real normal matrix can be blockdiagonalized into an almostdiagonal canonical form 
+Theorem    Proof given in the supplementary material 
+If   set of real normal matrices         form   commuting family  namely AiAj   AjAi        then they can be
+blockdiagonalized by the same real orthogonal basis   
+
+Analogical Inference for Multirelational Embeddings
+
+The theorem above implies that the set of dense relational
+matrices  Wr      if mutually commutative  can always
+be simultaneously blockdiagonalized into another set of
+sparse almostdiagonal matrices  Br     
+Corollary    Alternative formulation for ANALOGY 
+For any given solution         of optimization   there
+always exists an alternative set of embeddings       
+such that                                              and
+       is given by the solution of 
+
+min
+   
+
+Es          cid                  
+Br   Bn
+
+        
+
+ 
+  denotes all       almostdiagonal matrices in
+
+where Bn
+Lemma   with       real scalars on the diagonal 
+
+ 
+
+proof sketch  With the commutative constraints  there must
+exist some orthogonal matrix    such that Wr   QBrQ cid 
+           We can plugin these expressions into
+Br   Bn
+optimization   and let     vQ  obtaining
+
+                  cid 
+   cid 
+
+  Wrvo     cid 
+  QBrQ cid vo
+  Bruo                
+
+ 
+ 
+
+In addition  it is not hard to verify that constraints   and
+  are automatically satis ed by exploiting the facts that  
+is orthogonal and Bn
+
+  is   commutative normal family 
+
+Constraints   in the alternative optimization problem
+can be handled by simply binding together the coef cients
+within each of those       blocks in Br  Note that each Br
+consists of only   free parameters  allowing the gradient
+       any given triple to be ef ciently evaluated in     
+
+  Uni ed View of Representative Methods
+In the following we provide   uni ed view of several embedding models  Yang et al    Trouillon et al   
+Nickel et al    by showing that they are restricted versions under our framework  hence are implicitly imposing
+analogical properties  This explains their strong empirical
+performance as compared to other baselines  
+
+  DistMult
+
+DistMult  Yang et al    embeds both entities and relations as vectors  and de nes the score function as
+
+             cid vs  vr  vo cid 
+where vs  vr  vo   Rm        
+
+ 
+ 
+
+where  cid cid  denotes the generalized inner product 
+Proposition   DistMult embeddings can be fully recovered by ANALOGY embeddings when       
+
+Proof  This is trivial to verify as the score function   can
+be rewritten as               cid 
+  Brvo where Br is   diagonal
+matrix given by Br   diag vr 
+
+Entity analogies are encouraged in DistMult as the diagonal
+matrices diag vr   are both normal and mutually commutative  However  DistMult is restricted to model symmetric
+relations only  since                      
+
+  Complex Embeddings  ComplEx 
+
+ComplEx  Trouillon et al    extends the embeddings
+to the complex domain    which de nes
+
+ 
+ 
+
+             cid   cid vs  vr  vo cid 
+
+where vs  vr  vo   Cm        
+where   denotes the complex conjugate of   
+Proposition   ComplEx embeddings of embedding size
+  can be fully recovered by ANALOGY embeddings of embedding size    when      
+Proof  Let  cid    and  cid    be the real and imaginary parts
+of any complex vector    We recast   in   as
+
+             cid cid vr cid vs cid vo cid 
+ cid cid vr cid vs cid vo cid 
+ cid cid vr cid vs cid vo cid 
+ cid cid vr cid vs cid vo cid      cid 
+
+ 
+
+ 
+ 
+ 
+ 
+
+ cid 
+
+Brv cid 
+
+ 
+
+The last equality is obtained via   change of variables  For
+any complex entity embedding     Cm  we de ne   new
+real embedding   cid        such that
+
+ cid 
+
+   cid    
+   cid  
+   cid       cid    
+
+                  
+
+The corresponding Br is   blockdiagonal matrix in   
+with its kth block given by
+
+ cid cid vr    cid vr  
+
+ cid 
+
+ 
+
+  
+
+ cid vr  
+
+ cid vr  
+
+  Holographic Embeddings  HolE 
+
+HolE  Nickel et al    de nes the score function as
+
+             cid vr  vs   vo cid 
+where vs  vr  vo   Rm        
+
+ 
+ 
+
+where the association of   and   is implemented via circular
+correlation denoted by   This formulation is motivated by
+the holographic reduced representation  Plate   
+To relate HolE with ANALOGY  we rewrite   in   bilinear form with   circulant matrix   vr  in the middle
+
+              cid 
+
+    vr vo
+
+ 
+
+where entries of   circulant matrix are de ned as
+
+Analogical Inference for Multirelational Embeddings
+
+ 
+
+  
+  
+ 
+xm 
+xm
+
+ 
+
+xm
+  
+
+  
+
+xm 
+
+    
+xm
+
+  
+ 
+    
+
+  
+  
+ 
+ 
+  xm
+  
+
+      
+
+ 
+
+It is not hard to verify that circulant matrices are normal
+and commute  Gray et al    hence entity analogies
+are encouraged in HolE  for which optimization   reduces
+to an unconstrained problem as equalities   and   are
+automatically satis ed when all Wr   are circulant 
+The next proposition further reveals that HolE is equivalent
+to ComplEx with minor relaxation 
+Proposition   HolE embeddings can be equivalently obtained using the following score function
+
+             cid   cid vs  vr  vo cid 
+where vs  vr  vo     Rm        
+
+ 
+ 
+where   Rm  denotes the image of Rm in Cm through the
+Discrete Fourier Transform  DFT  In particular  the above
+reduces to ComplEx by relaxing   Rm  to Cm 
+
+Proof  Let   be the DFT operator de ned by           
+where     Cm   is called the Fourier basis of DFT   
+wellknown property for circulant matrices is that any     
+can always be diagonalized by     and its eigenvalues are
+given by      Gray et al   
+Hence the score function can be further recast as
+
+ cid 
+
+ 
+
+      diag   vr   vo
+              cid 
+ 
+   vs 
+ 
+ cid   vs    vr    vo cid 
+ 
+ 
+ 
+   cid 
+
+ cid   
+
+ cid   vs    vr    vo cid 
+
+diag   vr   vo 
+
+ cid 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+      vs    cid 
+
+Let   cid 
+exactly the same score function as used in ComplEx
+
+      vo  and   cid 
+
+    vr  we obtain
+
+     
+
+             cid cid cid   cid 
+
+  cid cid 
+
+     cid 
+
+     cid 
+
+ 
+
+  is equivalent to   apart from an additional constraint
+that   cid 
+
+  are the image of   in the Fourier domain 
+
+     cid 
+
+     cid 
+
+  Experiments
+  Datasets
+
+We evaluate ANALOGY and the baselines over two benchmark datasets for multirelational embedding released by
+
+previous work  Bordes et al    namely   subset of
+Freebase  FB    for generic facts and WordNet  WN 
+for lexical relationships between words 
+The dataset statistics are summarized in Table  
+
+   
+Dataset
+FB    
+WN 
+ 
+
+   
+ 
+
+ 
+
+ train
+ 
+ 
+
+ valid
+ 
+ 
+
+ test
+ 
+ 
+
+Table   Dataset statistics for FB   and WN 
+
+  Baselines
+
+We compare the performance of ANALOGY against   variety types of multirelational embedding models developed
+in recent years  Those models can be categorized as 
+
+  Translationbased models where relations are modeled as translation operators in the embedding space 
+including TransE  Bordes et al    and its variants TransH  Wang et al    TransR  Lin et al 
+    TransD  Ji et al    STransE  Nguyen
+et al    and RTransE  GarciaDuran et al   
+  Multirelational latent factor models including LFM
+ Jenatton et al    and RESCAL  Nickel et al 
+  based collective matrix factorization 
+
+  Models involving neural network components such
+as neural tensor networks  Socher et al    and
+PTransERNN  Lin et al      where RNN stands
+for recurrent neural networks 
+
+  Pathwise models including three different variants of
+PTransE  Lin et al      which extend TransE by
+explicitly taking into account indirect connections  relational paths  between entities 
+
+  Models subsumed under our proposed framework
+  including DistMult  Yang et al    based
+simple multiplicative interactions  ComplEx  Trouillon et al    using complex coef cients and HolE
+ Nickel et al    based on holographic representations  Those models are implicitly leveraging analogical structures per our previous analysis 
+
+  Models enhanced by external side information  We
+use Node LinkFeat  NLF   Toutanova   Chen   
+as   representative example  which leverages textual
+mentions derived from the ClueWeb corpus 
+
+  Evaluation Metrics
+
+Following the literature of multirelational embedding  we
+use the conventional metrics of Hits   and Mean Reciprocal Rank  MRR  which evaluate each systemproduced
+
+Analogical Inference for Multirelational Embeddings
+
+ranked list for each test instance and average the scores over
+all ranked lists for the entire test set of instances 
+The two metrics would be  awed for the negative instances
+created in the test phase as   ranked list may contain some
+positive instances in the training and validation sets  Bordes et al      recommended remedy  which we followed  is to remove all trainingand validationset triples
+from all ranked lists during testing  We use  lt  and  raw 
+to indicate the evaluation metrics with or without  ltering 
+respectively 
+In the  rst set of our experiments  we used on Hits   with
+   which has been reported for most methods in the
+literature  We also provide additional results of ANALOGY and   subset of representative baseline methods using
+MRR  Hits  and Hits  to enable the comparison with
+the methods whose published results are in those metrics 
+
+  Implementation Details
+
+  LOSS FUNCTION
+
+We use the logistic loss for ANALOGY throughout all experiments  namely  cid                 log            
+where   is the sigmoid activation function  We empirically
+found this simple loss function to perform reasonably well
+as compared to more sophisticated ranking loss functions 
+
+  ASYNCHRONOUS ADAGRAD
+Our    implementation  runs over   CPU  as ANALOGY only requires lightweight linear algebra routines  We
+use asynchronous stochastic gradient descent  SGD  for
+optimization  where the gradients with respect to different minibatches are simultaneously evaluated in multiple
+threads  and the gradient updates for the shared model parameters are carried out without synchronization  Asynchronous SGD is highly ef cient  and causes little performance drop when parameters associated with different
+minibatches are mutually disjoint with   high probability
+ Recht et al    We adapt the learning rate based on
+historical gradients using AdaGrad  Duchi et al   
+
+  CREATION OF NEGATIVE SAMPLES
+
+Since only valid triples  positive instances  are explicitly
+given in the training set  invalid triples  negative instances 
+need to be arti cially created  Speci cally  for every positive example           we generate three negative instances
+   cid              cid              cid  by corrupting         with random entities relations   cid         cid         cid       The union
+of all positive and negative instances de nes our data distribution   for SGD updates 
+
+ Code available at https github com quark ANALOGY 
+
+FB  
+
+Table   Hits   lt  of all models on WN  and FB   categories into three groups        baselines without modeling analogies   ii    baselines and our proposed ANALOGY which implicitly or explicitly enforce analogical properties over the induced
+embeddings  see    iii  One baseline relying on large external
+data resources in addition to the provided training set 
+WN 
+Models
+ 
+Unstructured  Bordes et al   
+RESCAL  Nickel et al   
+ 
+NTN  Socher et al   
+ 
+ 
+SME  Bordes et al   
+ 
+SE  Bordes et al   
+LFM  Jenatton et al   
+ 
+ 
+TransH  Wang et al   
+ 
+TransE  Bordes et al   
+TransR  Lin et al     
+ 
+TKRL  Xie et al   
+RTransE  GarciaDuran et al   
+TransD  Ji et al   
+CTransR  Lin et al     
+KG    He et al   
+STransE  Nguyen et al   
+DistMult  Yang et al   
+TransSparse  Ji et al   
+PTransEMUL  Lin et al     
+PTransERNN  Lin et al     
+PTransEADD  Lin et al     
+NLF  with external corpus 
+ Toutanova   Chen   
+ComplEx  Trouillon et al   
+HolE  Nickel et al   
+Our ANALOGY
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+
+  MODEL SELECTION
+
+We conducted   grid search to  nd the hyperparameters
+of ANALOGY which maximize the  ltered MRR on the
+validation set  by enumerating all combinations of the embedding size            cid  weight decay factor
+          of model coef cients   and    
+and the ratio of negative over positive samples        
+The resulting hyperparameters for the WN  dataset are
+                  and those for the FB  
+dataset are                   The number of
+   
+scalars on the diagonal of each Br is always set to be  
+We set the initial learning rate to be   for both datasets
+and adjust it using AdaGrad during optimization  All models are trained for   epochs 
+
+  Results
+
+Table   compares the Hits  score of ANALOGY with
+that of   competing methods using the published scores
+
+Analogical Inference for Multirelational Embeddings
+
+Table   MRR and Hits  of   subset of representative models on WN  and FB    The performance scores of TransE and
+REACAL are cf  the results published in  Trouillon et al    and  Nickel et al    respectively 
+
+Models
+
+RESCAL  Nickel et al   
+TransE  Bordes et al   
+DistMult  Yang et al   
+HolE  Nickel et al   
+ComplEx  Trouillon et al   
+Our ANALOGY
+
+WN 
+
+FB 
+
+MRR
+ lt 
+ 
+ 
+ 
+ 
+ 
+ 
+
+MRR
+ raw 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Hits 
+ lt 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Hits 
+ lt 
+ 
+ 
+ 
+ 
+ 
+ 
+
+MRR
+ lt 
+ 
+ 
+ 
+ 
+ 
+ 
+
+MRR
+ raw 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Hits 
+ lt 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Hits 
+ lt 
+ 
+ 
+ 
+ 
+ 
+ 
+
+for these methods in the literature on the WN  and FB  
+datasets  For the methods not having both scores  the missing slots are indicated by   The best score on each
+dataset is marked in the bold face  if the differences among
+the top second or third scores are not statistically signi cant
+from the top one  then these scores are also bold faced  We
+used onesample proportion test  Yang   Liu    at the
+  pvalue level for testing the statistical signi cances 
+Table   compares the methods  including ours  whose results in additional metrics are available  The usage of the
+bold faces is the same as those in Table  
+In both tables  ANALOGY performs either the best or the
+ nd best which is in the equivalent class with the best score
+in each case according statistical signi cance test  Speci 
+cally  on the harder FB   dataset in Table   which has  
+very large number of relations  our model outperforms all
+baseline methods  These results provide   good evidence
+for the effective modeling of analogical structures in our
+approach  We are pleased to see in Table   that ANALOGY
+outperforms DistMult  ComplEx and HolE in all the metrics  as the latter three can be viewed as more constrained
+versions of our method  as discussed in   Furthermore 
+our assertion on HolE for being   special case of ComplEx
+  is justi ed in the same table by the fact that the performance of HolE is dominated by ComplEx 
+In Figure   we show the empirical scalability of ANALOGY  which not only completes one epoch in   few seconds on both datasets  but also scales linearly in the size of
+the embedding problem  As compared to singlethreaded
+AdaGrad  our asynchronous AdaGrad over   CPU threads
+offers    and    speedup on FB   and WN  respectively  on   single commercial desktop 
+
+ Notice that proportion tests only apply to performance scores
+as proportions  including Hits    but are not applicable to nonproportional scores such as MRR  Hence we only conducted the
+proportion tests on the Hits   scores 
+
+Figure   CPU run time per epoch  secs  of ANALOGY  The  gure on the left shows the run time over increasing embedding sizes
+with   CPU threads  Figure on the right shows the run time over
+increasing number of CPU threads with embedding size  
+
+  Conclusion
+We presented   novel framework for explicitly modeling
+analogical structures in multirelational embedding  along
+with   differentiable objective function and   lineartime inference algorithm for largescale embedding of knowledge
+graphs  The proposed approach obtains the stateof theart
+results on two popular benchmark datasets  outperforming
+  large number of strong baselines in most cases 
+Although we only focused on the multirelational inference
+for knowledgebase embedding  we believe that analogical structures exist in many other machine learning problems beyond the scope of this paper  We hope this work
+shed light on   broad range of important problems where
+scalable inference for analogical analysis would make an
+impact  such as machine translation and image captioning
+ both problems require modeling crossdomain analogies 
+We leave these interesting topics as our future work 
+
+Acknowledgments
+We thank the reviewers for their helpful comments  This
+work is supported in part by the National Science Founda 
+
+                                        Embedding sizeFB KWN                                 Number of threadsFB KWN Analogical Inference for Multirelational Embeddings
+
+tion  NSF  under grant IIS 
+
+References
+Ad amek  Ji    Herrlich  Horst  and Strecker  George    Ab 
+
+stract and concrete categories  the joy of cats   
+
+Auer    oren  Bizer  Christian  Kobilarov  Georgi 
+Lehmann  Jens  Cyganiak  Richard  and Ives  Zachary 
+Dbpedia    nucleus for   web of open data  In The semantic web  pp    Springer   
+
+Bollacker  Kurt  Evans  Colin  Paritosh  Praveen  Sturge 
+Tim  and Taylor  Jamie  Freebase    collaboratively
+created graph database for structuring human knowledge  In Proceedings of the   ACM SIGMOD international conference on Management of data  pp   
+  AcM   
+
+Bordes  Antoine  Weston  Jason  Collobert  Ronan  and
+Bengio  Yoshua  Learning structured embeddings of
+In Conference on arti cial intelliknowledge bases 
+gence  number EPFLCONF   
+
+Bordes  Antoine  Glorot  Xavier  Weston  Jason  and Bengio  Yoshua  Joint learning of words and meaning representations for opentext semantic parsing  In AISTATS 
+volume   pp     
+
+Bordes  Antoine  Usunier  Nicolas  GarciaDuran  Alberto 
+Weston  Jason  and Yakhnenko  Oksana  Translating
+embeddings for modeling multirelational data  In Advances in neural information processing systems  pp 
+   
+
+Brown  Ronald and Porter  Tim  Category theory  an abIn What is
+
+stract setting for analogy and comparison 
+category theory  volume   pp     
+
+Chen  Danqi  Socher  Richard  Manning  Christopher   
+and Ng  Andrew    Learning new facts from knowledge
+bases with neural tensor networks and semantic word
+vectors  arXiv preprint arXiv   
+
+Dalton  Jeffrey  Dietz  Laura  and Allan  James  Entity
+query feature expansion using knowledge base links  In
+Proceedings of the  th international ACM SIGIR conference on Research   development in information retrieval  pp    ACM   
+
+Duchi  John  Hazan  Elad  and Singer  Yoram  Adaptive
+subgradient methods for online learning and stochastic
+optimization  Journal of Machine Learning Research 
+ Jul   
+
+Falkenhainer  Brian  Forbus  Kenneth    and Gentner  Dedre  The structuremapping engine  Algorithm and examples  Arti cial intelligence     
+
+Ferrucci  David  Brown  Eric  ChuCarroll  Jennifer  Fan 
+James  Gondek  David  Kalyanpur  Aditya    Lally 
+Adam  Murdock    William  Nyberg  Eric  Prager  John 
+et al  Building watson  An overview of the deepqa
+project  AI magazine     
+
+Gabrilovich  Evgeniy and Markovitch  Shaul  Wikipediabased semantic interpretation for natural language processing  Journal of Arti cial Intelligence Research   
+   
+
+GarciaDuran  Alberto  Bordes  Antoine  and Usunier 
+Nicolas  Composing relationships with translations 
+PhD thesis  CNRS  Heudiasyc   
+
+Gentner  Dedre  Structuremapping    theoretical framework for analogy  Cognitive science   
+ 
+
+Getoor  Lise  Introduction to statistical relational learning 
+
+MIT press   
+
+Gray  Robert   et al  Toeplitz and circulant matrices   
+review  Foundations and Trends   cid  in Communications
+and Information Theory     
+
+Guu  Kelvin  Miller  John  and Liang  Percy  Traversing knowledge graphs in vector space  arXiv preprint
+arXiv   
+
+He  Shizhu  Liu  Kang  Ji  Guoliang  and Zhao  Jun  Learning to represent knowledge graphs with gaussian embedding  In Proceedings of the  th ACM International
+on Conference on Information and Knowledge Management  pp    ACM   
+
+Hofstadter  Douglas    Analogy as the core of cognition 
+The analogical mind  Perspectives from cognitive science  pp     
+
+Holyoak  Keith    Holyoak  Keith James  and Thagard 
+Paul  Mental leaps  Analogy in creative thought  MIT
+press   
+
+Jenatton  Rodolphe  Roux  Nicolas    Bordes  Antoine 
+and Obozinski  Guillaume      latent factor model for
+highly multirelational data  In Advances in Neural Information Processing Systems  pp     
+
+Dunford  Nelson  Schwartz  Jacob    Bade  William    and
+Bartle  Robert    Linear operators  Wileyinterscience
+New York   
+
+Ji  Guoliang  He  Shizhu  Xu  Liheng  Liu  Kang  and
+Zhao  Jun  Knowledge graph embedding via dynamic
+mapping matrix  In ACL   pp     
+
+Analogical Inference for Multirelational Embeddings
+
+Ji  Guoliang  Liu  Kang  He  Shizhu  and Zhao  Jun 
+Knowledge graph completion with adaptive sparse
+In Proceedings of the Thirtieth AAAI
+transfer matrix 
+Conference on Arti cial Intelligence  February  
+  Phoenix  Arizona  USA  pp      URL
+http www aaai org ocs index php 
+AAAI AAAI paper view 
+
+Nickel  Maximilian  Rosasco  Lorenzo  and Poggio 
+Tomaso    Holographic embeddings of knowledge
+In Proceedings of the Thirtieth AAAI Confergraphs 
+ence on Arti cial Intelligence  February    
+Phoenix  Arizona  USA  pp      URL
+http www aaai org ocs index php 
+AAAI AAAI paper view 
+
+Lin  Yankai  Liu  Zhiyuan  Luan  Huanbo  Sun  Maosong 
+Rao  Siwei  and Liu  Song  Modeling relation paths
+for representation learning of knowledge bases  arXiv
+preprint arXiv     
+
+Lin  Yankai  Liu  Zhiyuan  Sun  Maosong  Liu  Yang  and
+Zhu  Xuan  Learning entity and relation embeddings for
+knowledge graph completion  In AAAI  pp   
+   
+
+Liu  Hanxiao and Yang  Yiming  Bipartite edge prediction
+via transductive learning over product graphs  In ICML 
+pp     
+
+Pennington 
+
+Jeffrey  Socher  Richard  and Manning 
+Christopher    Glove  Global vectors for word representation  In EMNLP  volume   pp     
+
+Plate  Tony    Holographic reduced representation  Dis 
+
+tributed representation for cognitive structures   
+
+Recht  Benjamin  Re  Christopher  Wright  Stephen  and
+Niu  Feng  Hogwild    lockfree approach to parallelizing stochastic gradient descent  In Advances in Neural
+Information Processing Systems  pp     
+
+Singhal  Amit  Introducing the knowledge graph  things 
+
+not strings  Of cial google blog   
+
+Liu  Hanxiao and Yang  Yiming  Crossgraph learning
+of multirelational associations  In Proceedings of The
+ rd International Conference on Machine Learning 
+pp     
+
+Socher  Richard  Chen  Danqi  Manning  Christopher   
+and Ng  Andrew  Reasoning with neural tensor networks
+for knowledge base completion  In Advances in neural
+information processing systems  pp     
+
+Mikolov  Tomas  Sutskever  Ilya  Chen  Kai  Corrado 
+Greg    and Dean  Jeff  Distributed representations of
+In Adwords and phrases and their compositionality 
+vances in neural information processing systems  pp 
+   
+
+Min  Bonan  Grishman  Ralph  Wan  Li  Wang  Chang 
+and Gondek  David  Distant supervision for relation exIn HLTtraction with an incomplete knowledge base 
+NAACL  pp     
+
+Minsky  Marvin  Society of mind  Simon and Schuster 
+
+ 
+
+Nguyen  Dat Quoc  Sirts  Kairit  Qu  Lizhen  and Johnson  Mark  Stranse    novel embedding model of entities and relationships in knowledge bases  arXiv preprint
+arXiv   
+
+Nickel  Maximilian  Tresp  Volker  and Kriegel  HansPeter    threeway model for collective learning on
+multirelational data  In Proceedings of the  th international conference on machine learning  ICML  pp 
+   
+
+Nickel  Maximilian  Murphy  Kevin  Tresp  Volker  and
+Gabrilovich  Evgeniy    review of relational machine learning for knowledge graphs  arXiv preprint
+arXiv   
+
+Toutanova  Kristina and Chen  Danqi  Observed versus latent features for knowledge base and text inference  In
+Proceedings of the  rd Workshop on Continuous Vector Space Models and their Compositionality  pp   
+ 
+
+Trouillon  Th eo  Welbl 
+Johannes  Riedel  Sebas 
+ Eric 
+and Bouchard  Guillaume 
+tian  Gaussier 
+for
+simple link prediction 
+Complex embeddings
+In Proceedings of
+the  nd International Conference on Machine Learning  ICML   New York
+City  NY  USA  June     pp   
+  URL http jmlr org proceedings 
+papers   trouillon html 
+
+Turney  Peter    The latent relation mapping engine  Algorithm and experiments  Journal of Arti cial Intelligence
+Research     
+
+Wang  Zhen  Zhang  Jianwen  Feng  Jianlin  and Chen 
+Zheng  Knowledge graph embedding by translating on
+hyperplanes  In AAAI  pp    Citeseer   
+
+Wilkinson  James Hardy and Wilkinson  James Hardy  The
+algebraic eigenvalue problem  volume   Clarendon
+Press Oxford   
+
+Xie  Ruobing  Liu  Zhiyuan  and Sun  Maosong  Representation learning of knowledge graphs with hierarchical
+types  In Proceedings of the TwentyFifth International
+
+Analogical Inference for Multirelational Embeddings
+
+Joint Conference on Arti cial Intelligence  pp   
+   
+
+Yang  Bishan  Yih  Wentau  He  Xiaodong  Gao  Jianfeng  and Deng  Li  Embedding entities and relations
+for learning and inference in knowledge bases  CoRR 
+abs    URL http arxiv org 
+abs 
+
+Yang  Yiming and Liu  Xin    reexamination of text categorization methods  In Proceedings of the  nd annual
+international ACM SIGIR conference on Research and
+development in information retrieval  pp    ACM 
+ 
+
+

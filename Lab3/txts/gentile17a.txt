@@ -1,0 +1,1203 @@
+On ContextDependent Clustering of Bandits
+
+Claudio Gentile   Shuai Li   Purushottam Kar   Alexandros Karatzoglou   Giovanni Zappella   Evans Etrue  
+
+Abstract
+
+We investigate   novel clusterof bandit algorithm CAB for collaborative recommendation
+tasks that implements the underlying feedback
+sharing mechanism by estimating user neighborhoods in   contextdependent manner  CAB
+makes sharp departures from the state of the art
+by incorporating collaborative effects into inference  as well as learning processes in   manner
+that seamlessly interleaves exploreexploit tradeoffs and collaborative steps  We prove regret
+bounds for CAB under various datadependent
+assumptions which exhibit   crisp dependence on
+the expected number of clusters over the users 
+  natural measure of the statistical dif culty of
+the learning task  Experiments on production and
+realworld datasets show that CAB offers significantly increased prediction performance against
+  representative pool of stateof theart methods 
+
+  Introduction
+In many prominent applications of bandit algorithms  such
+as computational advertising  webpage content optimization and recommendation systems  one of the main sources
+of information is embedded in the preference relationships
+between users and the items served  Preference patterns 
+emerging from clicks  views or purchase of items  are typically exploited through collaborative  ltering techniques 
+In fact  it is common knowledge in recommendation systems practice  that collaborative effects carry more information about user preferences than say  demographic metadata  Pilaszy   Tikk    Yet  as content recommendation functionalities are incorporated in diverse online services  the requirements differ vastly too  For instance  in  
+
+ DiSTA  University of Insubria  Italy  University of Cambridge  United Kingdom  IIT Kanpur  India  Telefonica Research  Spain  Amazon Dev Center  Germany  work done while
+at the University of Milan  Italy  Correspondence to  Claudio
+Gentile  claudio gentile uninsubria it 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+movie recommendation system  where the catalog is relatively static and ratings for items accumulate  one can easily deploy collaborative  ltering methods such as matrix
+factorization or restricted Boltzmann machines  However 
+the same methods become practically impossible to use in
+more dynamic environments such as in news or YouTube
+video recommendation  where one has to deal with   nearcontinuous stream of new items to be recommended  along
+with new users to be served  These dynamic environments
+pose   dual challenge to recommendation methods    How
+to present the new items to the users  or  vice versa  which
+items to present to new users  in order to optimally gather
+preference information on the new content  exploration 
+and   How to use all the available useritem preference information gathered so far  exploitation  Ideally  one would
+like to exploit both the content information but also  and
+more importantly  the collaborative effects that can be observed across users and items 
+When the users to serve are many and the content universe
+ or content popularity  changes rapidly over time  recommendation services have to show both strong adaptation
+in matching user preferences and high degree of algorithmic scalability responsiveness so as to allow effective online deployment  In typical scenarios like social networks 
+where users are engaged in technologymediated interactions in uencing each other   behavior  it is often possible
+to single out   few groups or communities made up of users
+sharing similar interests and or behavior  Such communities are not static over time and  more often than not  are
+clustered around speci   content types  so that   given set
+of users can in fact host   multiplex of interdependent communities depending on speci   content items  which can
+change dramatically on the     We call this multiplex of
+interdependent clusterings over users induced by the content universe    contextdependent clustering  In addition
+to the above  the set of users itself can change over time 
+for new users get targeted by the service  others may sign
+out or unregister  Thus    recommendation method has to
+readily adapt to   changing set of both users and items 
+In this paper  we introduce and analyze the CAB  ContextAware clustering of Bandits  algorithm    simple and  exible algorithm rooted in the linear contextual bandit framework that does the above by incorporating collaborative effects which traditional approaches to contextual bandits ig 
+
+On ContextDependent Clustering of Bandits
+
+nore        Auer    Li et al    Chu et al   
+AbbasiYadkori et al    CAB adapts to match user
+preferences in the face of   constantly evolving content universe and set of targeted users and implements the contextdependent clustering intuition by computing clusterings of
+bandits which allows each content item to cluster users into
+groups  which are few relative to the total number of users 
+where within each group  users tend to react similarly
+when that item gets recommended  CAB distinguishes itself in allowing distinct items to induce distinct clusterings
+which is frequently observed in practice  Sutskever et al 
+  These clusterings are in turn suggestive of   natural contextdependent feedback sharing mechanism across
+users  CAB is thus able to exploit collaborative effects in
+contextual bandit settings in   manner similar to neighborhood techniques in batch collaborative  ltering 
+We analyze CAB from both  theoretical and experimental
+standpoints  We show that CAB enjoys   regret bound
+wherein the number of users engaged essentially enters
+in the regret bound only through the expected number of
+contextdependent clusters over the users    natural measure of the predictive hardness of learning these users  We
+extend this result to provide   sharper bound under sparsity assumptions on the user model vectors  Experimentally  we present comparative evidence on production and
+realworld datasets that CAB signi cantly outperforms  in
+terms of predictive performance  stateof theart contextual
+bandit algorithms that either do not leverage any clustering
+at all or do so in   contextindependent fashion 
+
+  Related Work
+
+The literature on contextual bandit algorithms is too vast
+to be surveyed here 
+In the sequel  we point out works
+that most closely relate to ours  The technique of sequentially clustering users in the bandit setting was introduced
+by Gentile et al    and Maillard   Mannor   but
+has also been inspired by earlier works such as  Azar et al 
+  on transfer learning for stochastic bandits  and  Djolonga et al    on lowrank  Gaussian Process  bandits 
+This led to further developments such as  Nguyen   Lauw 
+  which relies on kmeans clustering   Korda et al 
+  which proposes distributed clustering of con dence
+ball algorithms for solving linear bandit problems in peer
+to peer networks  and  Zhou   Brunskill    that learns
+the latent classes of users  the clusters  so as to better serve
+new users  Related papers that implement feedback sharing
+mechanisms by leveraging  additional  social information
+among users include  CesaBianchi et al    Wu et al 
+  In all these cases  the way users are grouped is not
+contextdependent  Even more related to our work is the
+recent work of Li et al    which proposes to simultaneously cluster users as well as items  with item clusters
+dictating user clusters  However    signi cant limitation of
+
+this approach is that the content universe has to be  nite
+and known in advance  and in addition to the resulting algorithm being somewhat involved 
+It is worth stressing that having contextdependent clusters
+not only changes the model considerably  as compared to
+previous works  but the algorithms as well  All previous
+works have   clustering process which is contextoblivious 
+or else assume   static item universe    speci   drawback of works such as  Gentile et al    Li et al   
+is that the clustering is unidirectional  in that users items
+once  erroneously  separated into different clusters cannot
+be joined again  even if future evidence suggests so  Compared to previous works  our approach distinguishes itself
+for being simple and  exible       we can seamlessly accommodate the inclusion exclusion of items and users  as
+well as for performing feedback propagation among users
+in   contextdependent manner  As will be demonstrated
+in Section   this offers signi cant performance boosts in
+realworld recommendation settings 
+
+  Notation and Preliminaries
+We will consider the bandit clustering model standard in
+the literature  but with the crucial difference that we will
+allow user behavior similarity to be represented by   family of clusterings that depend on the speci   item context
+under consideration  In particular  we let                 
+represent the set of   users  An item  represented by its
+feature vector     Rd will be seen as inducing    potentially unique  partition of the user set   into   small
+number      of clusters                    Um     
+where       cid     Users belonging to the same cluster
+Uj    share similar behavior                they both like or
+both dislike the item represented by    while users lying
+in different clusters have signi cantly different behavior 
+This is   very  exible model that allows users to agree on
+their opinion of certain items and disagree on others  something that often holds in practice  It is important to note that
+the mapping                        Um      specifying the partitioning of   into the clusters determined by
+   including the number of clusters      and the common user behavior within each cluster are unknown to the
+learner  and have to be inferred based on user feedback 
+For the sake of simplicity  we assume that the contextdependent clustering is determined by linear functions    
+     each one parameterized by an unknown vector ui  
+  cid 
+Rd hosted at user        with  cid ui cid      for all    in such
+  way that if users      cid      are in the same cluster         
+  cid     and if      cid      are in different clusters
+        cid 
+then   cid 
+         then    cid 
+        cid 
+  cid         for some gap parameter       We will henceforth call this assumption the
+
+  As usual  this hypothesis may be relaxed by assuming the
+
+On ContextDependent Clustering of Bandits
+
+ 
+
+ xt  
+
+it
+
+        cid 
+
+ gap assumption  For user vectors            un   Rd corresponding to the   users  note that these vectors are unknown to the algorithm  context     Rd  and user index
+       we denote by Ni    the true neighborhood of         
+        Ni                 cid 
+     Hence  Ni   
+is simply the cluster  over    that   belongs to           Notice that     Ni    for any   and any    We will henceforth
+assume that all items vectors   satisfy  cid   cid     
+As is standard in linear bandit settings  Auer    Chu
+et al    AbbasiYadkori et al    Krause   Ong 
+  Crammer   Gentile    Yue et al    Djolonga et al    CesaBianchi et al    Agrawal  
+Goyal    Gentile et al    Li et al    Korda
+et al    the  unknown  user vector ui determines the
+average behavior of user    More precisely  upon encountering an item context vector    user    reacts  by delivering   payoff value yi        cid 
+              where       is  
+conditionally zeromean subGaussian error variable with
+ conditional  variance parameter         for all   
+Hence  conditioned on the past  the quantity   cid 
+    is indeed
+the expected payoff observed at user   for context vector   
+For the sake of concreteness  we will assume that for all
+      and     Rd we have yi              
+Learning takes place over   discrete sequence of time steps
+ or rounds  At each time                 the learner receives
+  user index it      representing the user to serve content  Notice that the user to serve may change from round
+to round  and the same user may recur several times  Together with it  the learner receives   set of context vectors
+Ct    xt  xt          xt ct    Rd  such that  cid xt   cid     
+for all   and               ct  encoding the content which
+is currently available for recommendation to user it  The
+learner is compelled to pick some  xt   xt kt   Ct to
+recommend to it  and then observes it   feedback in the
+form of   payoff yt       whose  conditional  expectation is   cid 
+    
+                       iT   CT   are generated by an exogenous process and  in   sense  represents the  data at
+hand  As we shall see in Section   the performance of
+our algorithm will depend on the properties of these data 
+The practical goal of the learner is to maximize its tot  yt over   time steps  From   theoretical
+standpoint  we are instead interested in bounding the cumulative regret incurred by our algorithm  More precisely  let
+the regret rt of the learner at time   be the extent to which
+the average payoff of the best choice in hindsight at user it
+exceeds the average payoff of the algorithm   choice      
+
+ xt  The sequence of pairings  it  Ct  
+
+tal payoff cid  
+
+it
+
+  cid     the other for the betweencluster distance 
+
+existence of two thresholds  one for the withincluster distance of
+  cid 
+    and   cid 
+  Recall that   zeromean random variable   is subGaussian
+with variance parameter   if   exp sX    exp      for
+all        Any variable   with          and         is
+subGaussian with variance parameter upper bounded by   
+
+rt  
+
+  cid 
+
+it
+
+ cid 
+
+max
+  Ct
+
+ cid   cid 
+randomness  the cumulative regret cid  
+
+We are aimed at bounding with high probability  over the
+noise variables  it    xt  and any other possible source of
+   rt   As   special
+case of the above model  when the set of items do not possess informative features  we can always resort to the noncontextual bandit setting        Auer et al    Audibert
+et al    To implement this approach  we simply take
+the set of all items  which must be  nite for this technique
+to work  and apply   onehot encoding by assigning to the
+ith item  the ith canonical basis vector ei  with one at the
+ith position and zero everywhere else as the context vector  It is easy to see that the expected payoff given by user
+  on item   will simply be the jth component of vector ui 
+Our aim would be to obtain   regret bound that gracefully
+improves as the contextdependent clustering structure over
+the users becomes stronger  More speci cally  values taken
+by the number of clusters      would be of particular interest since we expect to reap the strongest collaborative effects when      is small whereas not much can be done by
+way of collaborative analysis if           Consequently 
+  desirable regret bound would be one that scales with
+     Yet  recall that      is   function of the context
+vector    which means that we expect our regret bound to
+also depend on the properties of the actual data  it  Ct  
+  
+We will see in Section   that  under suitable stochastic assumptions on the way  it  Ct  
+   is generated  our regret
+analysis essentially replaces the dependence on the total
+number of users   by the  possibly much  smaller quantity        the expected number of clusters over users 
+the expectation being over the draw of context vectors   
+
+  The ContextAware Bandit Algorithm
+We present ContextAware  clustering of  Bandits  dubbed
+as CAB  see Algorithm   an uppercon dence boundbased algorithm for performing recommendations in the
+contextsensitive bandit clustering model  Similar to previous works  CesaBianchi et al    Gentile et al   
+Nguyen   Lauw    Li et al    Wu et al   
+CAB maintains   vector estimate wi   to serve as   proxy
+to the unknown user vector ui at time    CAB also maintains standard correlation matrices Mi    The standard con 
+ dence bound function for user   for item   at time   is dei      for   suitable funcrived as CBi           
+ 
+tion         
+  log   
+However  CAB makes sharp departures from previous
+works both in the way items are recommended  as well as
+in they way the proxy estimates wi   are updated 
+Item Recommendation  At time    we are required to
+serve user it     by presenting an item out of   set of items
+
+  cid   
+
+ cid 
+
+On ContextDependent Clustering of Bandits
+
+ cid 
+
+ cid 
+
+Algorithm   ContextAware clustering of Bandits  CAB 
+  Input  Separation parameter   exploration parameter    
+  Init  bi        Rd and Mi        Rd          
+  for                   do
+ 
+    bi   
+ 
+  cid  
+ 
+ 
+
+for all       
+Set wi       
+       for all          
+ 
+Use CBi           
+Receive user it     to be served  and context vectors Ct  
+ xt          xt ct  for items to be recommended from 
+Compute neighborhood  cid Nk    cid Nit   xt    for this item
+for               ct do
+ cid Nk  
+ cid 
+it   xt      
+ cid 
+ cid 
+  CBit   xt      CBj   xt   
+ cid 
+Set   cid Nk       
+  cid Nk
+ cid Nk 
+Set CB cid Nk   xt       
+  cid Nk
+ cid Nk 
+ cid 
+end for
+Recommend item  xt   xt kt   Ct such that
+  cid Nk   
+kt   argmax
+  ct
+Observe payoff yt      
+if CBit     xt      then
+
+ cid 
+xt     CB cid Nk   xt   
+
+        
+
+    xt   
+ cid 
+
+CBj   xt   
+
+wj   
+
+ cid 
+
+ 
+
+ 
+
+else
+
+Set Mit     Mit       xt    cid 
+   
+Set bit     bit      yt  xt 
+Set Mj     Mj    bj     bj    for all    cid  it 
+
+Mj     Mj       xt    cid 
+   
+bj     bj      yt  xt 
+
+for all      cid Nkt such that CBj     xt      do
+Set Mj     Mj    bj     bj    for all      cid Nkt and
+for      cid Nkt such that CBj     xt       
+
+end for
+
+ 
+ 
+
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+end if
+ 
+  end for
+
+Ct    xt          xt ct  available at time    To do so  CAB
+ rst computes for each item xt   in Ct  the set of users that
+ cid Nit   xt    is the estimated neighborhood of user it with
+are likely to give the item   similar payoff as it  This set
+respect to item xt      user   is included in  cid Nit   xt    if
+
+ cid 
+
+the estimated payoff it gives to the item xt   is suf ciently
+close to that given to the item by user it  see step  
+CAB incorporates collaborative effects by lifting the notions of the user proxy and con dence bounds to   set of
+users        CAB uses an inexpensive   at averag 
+ cid 
+    CBj      and wN    
+ing lift  CBN           
+    wj    Next  CAB uses  see step   aggre 
+   
+gated con dence bounds CB cid Nit   xt   xt    and aggregated proxy vectors   cid Nit   xt      to select an item  xt  
+xt kt   Ct based on an upper con dence estimation step 
+Proxy Updates  Classical approaches update the user
+proxies wi   by solving   regularized least squares problem
+involving  feature representations of  items served previously to user   and payoffs received  However  CAB re 
+
+mains fully committed to the collaborative approach  see
+steps   by allowing   user   to inherit updates due to
+an item   served to another user   if the two users are indeed deemed to agree on their opinion on item   with  
+suf ciently high degree of con dence  The proxies wj  
+are updated after receiving the feedback yt from user it 
+If CAB is not too con dent regarding the opinion it has
+along the direction  xt  formally CBit     xt      then
+only the proxy at user it is updated  see step   However  if CAB is con dent       if CBit     xt      then
+the proxy updates are performed  see steps   for all
+users   in it   estimated neighborhood with respect to  xt
+about whose opinions CAB is con dent too  Notice that
+all such users   undergo the same update  which is motii    that the conditional expectation   cid 
+is actually also equal to   cid 
+such that CBj     xt     
+It is worth noting that CAB is extremely  exible in handling    uid set of users    Due to its contextsensitive user
+aggregation step  which is repeated at every round  CAB
+allows users to be added or dropped on the     in   seamless manner  This is in strike contrast to past approaches
+to bandit aggregation  such as GobLin  CesaBianchi et al 
+  CLUB  Gentile et al    and COFIBA  Li et al 
+  where more involved feedback sharing mechanisms
+across the users are implemented which are based either on
+static network Laplacians or on timeevolving connected
+components of graphs over   given set of users 
+
+vated by the algorithm   belief that  cid Nit     xt    Nit   xt 
+   xt for all users      cid Nit     xt 
+
+ xt of yt given  xt
+
+it
+
+  Regret Analysis
+Our regret analysis depends on   speci   measure of hardness of the data at hand 
+for an observed sequence of
+users  it  
+                 iT  and corresponding sequence
+of item sets  Ct  
+                 CT  where Ct  
+ xt          xt ct  the hardness HD it  Ct  
+     of the
+pairing  it  Ct  
+   at level       is de ned as
+HD it  Ct  
+  max
+
+                                         kt   
+
+    
+
+ cid 
+
+xs ks  
+
+  ks has smallest eigenvalue    
+ cid 
+
+ 
+
+ cid 
+
+  cid 
+
+   
+
+      is  
+
+Given   data sequence  it  Ct  HD it  Ct  
+     measures the number of rounds we need to wait until correlation matrices Mj    corresponding to all users       have
+eigenvalues lower bounded by   For sake of convenience
+the above quantity is calculated using the worst possible
+way of updating the matrices Mj   through rankone adjustments based on the data  Based on the above hardness
+de nition  the following result summarizes our main efforts
+in this section 
+
+On ContextDependent Clustering of Bandits
+
+ 
+
+    regret bound 
+
+et al    will still easily yield  
+  suf cient condition for controlling the hardness term in
+Theorem   is provided by the following lemma 
+Lemma   For each round    let the context vectors Ct  
+ xt          xt ct  be generated         conditioned on it  ct 
+past data  is  Cs   
+   and rewards            yt  from  
+subGaussian random vector     Rd with  conditional 
+variance parameter   such that  cid   cid           and
+  XX cid  is full rank with smallest eigenvalue       Let
+ct     for all    and      
+  ln      Finally  let the sequence
+ it  
+   be generated uniformly at random    independent
+of all other variables  Then with probability at least      
+
+ cid it  Ct  
+
+HD
+
+ cid 
+
+    
+
+   
+
+ cid     
+
+ cid    nd
+
+ cid cid 
+
+  log
+
+ 
+
+ 
+
+The following lemma handles the second term in the bound
+of Theorem  
+Lemma   For each round    let the context vectors Ct  
+ xt          xt ct  be generated         conditioned on it  ct 
+past data  is  Cs   
+   and rewards            yt  from  
+random vector     Rd with  cid   cid      Let also ct    
+for all    Then  with probability at least      
+
+ cid  log  
+
+ cid 
+
+ 
+
+ 
+
+Theorem   Suppose CAB is executed on  it  Ct  
+   such
+  tx   
+        cid 
+that ct     for all    and the condition    cid 
+ gap assumption  Then the cumulative regret cid  
+CBj      holding for all            Rd  along with the
+   rt of
+ cid 
+  cid 
+
+CAB can be deterministically upper bounded as follows 
+
+      
+
+ cid 
+
+rt       
+
+  HD
+
+  
+
+ cid it  Ct  
+ cid cid cid cid   log  
+
+  
+
+ 
+
+ 
+
+  cid 
+
+  
+
+ 
+
+ Nit    xt 
+
+ cid 
+
+ 
+
+ 
+
+        cid 
+
+ 
+where we set          
+log     Some comments are in
+order  Theorem   delivers   deterministic regret bound on
+the cumulative regret  and is composed of two terms  The
+ rst term is   measure of hardness of the data sequence
+ it  Ct  
+ 
+   at hand whereas the second term is the usual
+   style term in linear bandit regret analyses  Auer   
+Chu et al    AbbasiYadkori et al    However 
+note that the dependence of the second term on the total
+number   of users to be served gets replaced by   much
+ Nit    xt  that depends on the actual size of
+smaller quantity
+contextdependent clusters of the served users  The statement of the theorem requires    cid 
+  tx    CBj       
+which  see Lemma   below  holds from standard results 
+We will shortly see that if the pairings  it  Ct  
+   are generated in   favorable manner  such as sampling the item
+vectors xt          from    possibly unknown  distribution
+over the instance space  see Lemma   below  the hardness
+measure can be upper bounded with high probability by  
+term of the form log  
+    Similarly  for the second term  in
+the simple case when Nit   xt      for all    the second
+      up to log factors  Notice that
+ 
+  is roughly the regret effort for learning   single bandit 
+   many  unrelated 
+clusters of bandits when the clustering is known  Thus  in
+this example  it is the ratio  
+  that quanti es the hardness of
+the problem  insofar clustering is concerned  Again  under
+favorable circumstances  see Lemma   below  we can re 
+ Nit    xt  to the expected number of
+contextdependent clusters of users  the expectation being
+       the random draw of item context vectors 
+On the other hand  making no assumptions whatsoever
+on the way  it  Ct  
+   is generated makes it hard to exploit the cluster structure  For instance  if  it  Ct  
+  
+is generated by an adaptive adversary  this might cause
+
+term has the form cid   
+and cid   
+late the quantity cid  
+
+    cid  to become linear in   for any constant
+
+HD cid it  Ct  
+
+    is the effort for learning  
+
+      thereby making the bound in Theorem   vacuous  However    naive algorithm that disregards the cluster
+structure  making no attempts to incorporate collaborative
+effects  and running nmany independent LINUCBlike algorithms  Auer    AbbasiYadkori et al    Chu
+
+  
+
+ 
+
+  cid 
+
+  
+
+ 
+
+ Nit    xt               
+
+ 
+
+    log
+
+ 
+
+ Ni            
+ cid 
+
+Remark   The linear dependence on   can be turned to
+logarithmic       at the cost of an extra subGaussian assumption on variables
+
+Finally  we recall the following upper con dence bound 
+from  AbbasiYadkori et al   
+
+Lemma   Let CBj           
+
+  cid cid 
+
+  log    
+ 
+
+ cid 
+
+  cid   
+
+       with      
+  Then  under the payoff noise model dej tx    CBj      holds uni 
+
+   cid 
+        cid 
+
+ ned in Section  
+formly for all            Rd  and              
+
+  straightforward combination of Theorem   with Lemmata     and   yields the following result 
+
+Corollary   Let CBj      be de ned with     as in
+Lemma   and let the  gap assumption hold  Assume context vectors are generated as in Lemma   in such   way that
+
+ 
+
+number of rounds where it      Then cid  
+
+  To see this  simply observe that each of the   LINUCBlike
+Ti  where Ti is the
+Ti  
+
+algorithms has   regret bound of the form
+ 
+
+   rt  cid  
+
+      with equality if Ti        for all   
+  Any  nonuniform  process  it  
+
+   that nevertheless ensures that each user   gets served   number of times that is likely
+to grow unbounded with   would suf ce here 
+
+ 
+
+  
+
+  The bigoh notation here hides the dependence on the vari 
+
+ance   of the payoff values 
+
+On ContextDependent Clustering of Bandits
+
+the subGaussian assumption therein holds with ct      Finally  let the sequence  it  
+   be generated as described in
+Lemma   Then  with probability at least       the regret
+of CAB  Algorithm   satis es
+
+  cid 
+
+rt        cid   cid 
+
+  
+
+where the  cid Onotation hides logarithmic factors in      
+
+ 
+
+ 
+
+and   is of the form 
+
+ 
+
+ cid 
+  cid             
+ cid    nd
+ cid 
+
+log 
+
+ 
+
+ 
+
+ 
+
+   
+
+ 
+
+     
+   
+
+Sparse user models  We conclude with   pointer to an
+extension of the CAB framework for sparse linear models
+that extends past analyses on sparse linear bandits for   single user  AbbasiYadkori et al    Carpentier   Munos 
+  Carpentier    to include collaborative effects  If
+all user vectors are sparse       for all         cid ui cid       for
+   cid     then by replacing the leastsquares solution in Step
+  of Algorithm   with the solution computed by   fully corrective sparse recovery method  Dai   Milenkovic   
+Jain et al    Needell   Tropp    we can obtain
+an improved regret bound  Speci cally  we can replace the
+   and the factor  
+factor  
+multiplying the
+
+  in the term   above by   
+
+   term by   term of the form
+
+    
+
+ 
+
+ 
+
+ 
+
+  Experiments
+We tested CAB on production and realworld datasets  and
+compared them to standard baselines as well as to stateof theart bandit and clustering of bandit algorithms  For
+datasets with no item features    onehot encoding was
+used  We attempted to follow  as closely as possible  previous experimental settings  such as those as described
+in  CesaBianchi et al    Gentile et al    Korda
+et al    Li et al   
+
+  Dataset Description
+Tuenti  Tuenti  owned by Telefonica  is   Spanish social
+network website that serves ads on its site  the data contains
+ad impressions viewed by users along with   variable that
+registers   click on an ad  The dataset contains      
+ads          users  and    records timesteps  We
+adopted   one hot encoding scheme for the items  hence
+items are described by the unitnorm vectors            ed 
+Since the available payoffs are those associated with the
+items served by the system  we performed of ine policy
+evaluation through   standard importance sampling technique  we discarded on the    all records where the system   recommendation  the logged policy  did not coincide
+
+  We note that no special efforts have been devoted here to
+
+obtain sharper upper bounds on   
+
+with the algorithms  recommendations  The resulting number of retained records was around         loosely depending on the different algorithms and runs  Yet  because
+this technique delivers reliable estimates when the logged
+policy makes random choices        Li et al    we
+actually simulated   random logged policy as follows  At
+each round    we retained the ad served to the current user it
+with payoff value at      clicked       not clicked  but
+also included   extra items  hence ct     for all    drawn
+uniformly at random in such   way that  for any item ej  if
+ej occurs in some set Ct  this item will be the one served
+by system only   of the times  Notice that this random
+selection was independent of the available payoff at 
+KDD Cup  This dataset was released for the KDD Cup
+  Online Advertising Competition  where the instances
+were derived from the session logs of the search engine
+soso com    search session included user  query and ad
+information  and was divided into multiple instances  each
+being described using the ad impressed at that time at   certain depth and position  Instances were aggregated with the
+same user ID  ad ID  and query  We took the chronological order among all the instances  and seeded the algorithm
+with the  rst ct     instances  the length of recommendation lists  Payoffs at are again binary  The resulting
+dataset had         distinct users  and        
+distinct ads  Similar to the Tuenti dataset  we generated
+random recommendation lists  and   random logged policy  We employed onehot encoding as well in this dataset 
+The number of retained records was around        
+Avazu  This dataset was released for the Avazu ClickThrough Rate Prediction Challenge on Kaggle  Here
+clickthrough data were ordered chronologically  and nonclicks and clicks were subsampled according to different
+strategies  As before  we simulated   random logged policy over recommendation lists of size ct         Payoffs
+are once again binary  The  nal dataset had        
+users  ct     for all            items  while the number
+of retained records was around         Again  we took
+the onehot encoding for the items 
+LastFM and Delicious  These two datasets  are extracted
+from the music streaming service Last fm and the social
+bookmarking web service Delicious  The LastFM dataset
+includes       users  and   items  the artists  Delicious refers to       users  and   items  URLs 
+Preprocessing of data followed previous experimental settings where these datasets have been used        CesaBianchi et al    Gentile et al    Speci cally  using   tfidf representation of the available items  the context vectors xt   were generated by retaining only the  rst
+
+ http www kddcup org   kddcup track 
+ https www kaggle com   avazuctr prediction
+ www grouplens org node 
+
+On ContextDependent Clustering of Bandits
+
+Table   Dataset statistics  Here    is the number of users    is the
+dimension of the item vectors  which corresponds to the number
+of items for Tuenti  KDD Cup and Avazu  ct is the size of the
+recommendation lists  and   is the number of records  or just
+retained records  in the case of Tuenti  KDD Cup and Avazu 
+
+DATASET
+TUENTI
+KDD CUP
+AVAZU
+LASTFM
+DELICIOUS
+
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+
+ct
+ 
+   cid 
+ cid 
+ 
+   cid 
+ 
+ 
+ 
+ 
+
+      principal components  Binary payoffs were created
+as follows  LastFM  If   user listened to an artist at least
+once the payoff is   otherwise it is   Delicious  the payoff
+is   if the user bookmarked the URL  and   otherwise  We
+processed the datasets to make them suitable for use with
+multiarmed bandit algorithms  Recommendation lists Ct
+of size ct        were generated at random by  rst selecting index it at random over the   users  and then padding
+with   vectors chosen at random from the available items
+up to that time step  in such   way that at least one of these
+  items had payoff   for the current user it  This was repeated for         times for the two datasets 
+
+  Algorithms
+
+We used the  rst   of each dataset to tune the algorithms  parameters through   grid search  and report results
+on the remaining   All results are averaged over   runs 
+We compared to   number of stateof the art bandit and
+clusteringof bandit methods 
+
+  CLUB  Gentile et al   
+
+sequentially re nes
+user clusters based on their con dence ellipsoid balls 
+We seeded the graph over users by an initial random ErdosRenyi graphs with sparsity parameter    
+  log      Since this is   randomized algorithm 
+each run was repeated  ve times  and the results averaged  the observed variance turned out to be small 
+  DynUCB  Nguyen   Lauw    uses   traditional
+
+kMeans algorithm to cluster bandits 
+
+  LinUCBSINGLE  uses   single instance of LinUCB  Chu et al    to serve all users       all users
+belong to the same cluster  independent of the items 
+  LinUCBMULTIPLE  uses an independent instance
+of LinUCB per user with no user interactions  Each
+user forms his own cluster  independent of the items 
+  The following variant of CAB  see Algorithm  
+each user   is considered for addition to the estimated
+
+neighborhoods  cid Nk of the currently served user it only
+
+if wj    has been updated at least once in the past 
+  RAN  recommends   uniformly random item from Ct 
+
+Figure   Clickthrough Rate vs  retained records  time  on three
+online advertising datasets  The higher the curves the better 
+
+tested algorithms
+
+ cid   cid Ni tx log       We tuned   for all algorithms
+
+All
+ except RAN  are based on
+uppercon dence bounds of
+the form CBi       
+across the grid                 The   parameter
+in CLUB was tuned within                 The number of clusters in DynUCB was increased in an exponential
+progression  starting from   and ending to    Finally  the  
+parameter in CAB was simply set to   In fact  the value
+of   did not happen to have   signi cant in uence on the
+performance of the version of CAB we tested 
+
+  Results
+
+Figures       summarize our experimental results  For the
+online advertising datasets Tuenti  KDD Cup  and Avazu
+ Figure   we report performance using the ClickThrough
+Rate  CTR  hence the higher the curves the better  For the
+LastFM and Delicious datasets  Figure   we report the
+ratio of the cumulative regret of the tested algorithm to the
+cumulative regret of RAN  hence the lower the better 
+Our experimental setting  as well some results reproduced
+here  are in line with past work in the area  Li et al   
+CesaBianchi et al    Gentile et al    Li et al 
+  Given the way data have been prepared  our  ndings give reliable estimates of the actual CTR  Figure   or
+regret  Figure   performance of the tested algorithms 
+
+    TimeCTRTuenti  CABCLUBDynUCBLinUCB SINGLELinUCB MULTIPLE    TimeCTRKDD Cup  CABCLUBDynUCBLinUCB SINGLELinUCB MULTIPLE    TimeCTRAvazu  CABCLUBDynUCBLinUCB SINGLELinUCB MULTIPLEOn ContextDependent Clustering of Bandits
+
+ever  to be relatively poor  this can be attributed to the way
+the LastFM dataset was generated  Here users typically
+have little interaction with the music serving system and  
+lot of the songs played were generated by   recommender 
+Hence while there are collaborative effects  they are relatively weak compared to datasets such as Tuenti 
+On the other hand  on the Delicious dataset
+the best
+performing strategy seems to be LinUCBMULTIPLE 
+which deliberately avoids any feedback sharing mechanism
+among the users  This dataset re ects user webbrowsing
+patterns  as evinced by their bookmarks  As noted previously  Gentile et al    this dataset does not seem to
+contain any collaborative information  hence we can hardly
+expect to take advantage of clustering efforts  To shed further light  in Figure   we plot the average distance between
+  linear model for user it and the corresponding linear models for all other users    cid  it  as   function of    For each
+user of these two datasets  these linear models were computed by taking the whole test set and treating each pairing
+ xt    yt    with it      and yt       as   training sample
+for    regularized  leastsquares estimator for user    The
+conclusion we can draw after visually comparing the left
+and the right plots in Figure   is that on Delicious these estimated user models tend to be signi cantly more separated
+than on LastFM  which readily explains the effectiveness
+of LinUCBMULTIPLE  Moreover  on Delicious  studies
+have shown that tags which are used as item features are
+generally chosen by users to re ect their interests and for
+personal use  hence we can expect these features to diverge
+even for similar websites  On the other hand  LastFM tags
+are typically indicative of the genre of the song 
+
+  Conclusions and Ongoing Research
+In this paper we proposed CAB    novel contextual bandit algorithm for personalized recommendation systems 
+CAB effectively incorporates collaborative effects by implementing   simple contextdependent feedback sharing
+mechanism which greatly relaxes restrictions imposed by
+earlier works  We established crisp regret bounds for CAB
+which scale gracefully with the expected number of clusters over the users  We further found CAB to outperform
+existing approaches in practice  using extensive experimentation on   number of production and realworld datasets 
+We have begun preliminary experiments with Thompson
+sampling versions of CAB and its competitors but have thus
+far not observed statistically signi cant deviations from results in Section   From   theoretical standpoint  it would
+be nice to complement our upper bound in Corollary   with
+  lower bound helping characterize the regret complexity
+of our problem  We are also planning to experimentally
+benchmark with performance of the sparse bandit version
+of CAB that infers sparse user models 
+
+Figure   Ratio of the cumulative regret of the algorithms to
+the cumulative regret of RAN against time on the two datasets
+LastFM and Delicious  The lower the curves the better 
+
+Figure   Average  estimated  Euclidean distance between the
+served user it and all other users  as   function of   for the two
+datasets LastFM  left  and Delicious  right  The distance is
+computed by associating with each user   model vector obtained
+through   regularized leastsquares solution based on all available
+data for that user  instance vectors and corresponding payoffs 
+
+In four out of  ve datasets  CAB was found to offer performance superior to all other baselines  CAB performed
+particularly well on the Tuenti dataset where it delivered
+almost double the CTR compared to some of the baselines 
+CAB   performance advantage was more moderate on the
+KDD Cup and Avazu datasets  This is expected since exploiting collaborative effects is more important on   dataset
+like Tuenti  where users are exposed to   few     ads 
+as compared to the KDD Cup dataset  where ads are modulated by   user query  and the Avazu dataset  both of which
+have   much broader ad base     This provides  
+strong indication that CAB effectively exploits collaborative effects  In general  on Tuenti  KDD Cup  and Avazu
+ Figure   CAB was found to offer bene ts in the coldstart region       the initial relatively small fraction of time
+horizon  but also continued to maintain   lead throughout 
+On the LastFM and Delicious datasets  Figure   the results we report are consistent with  Gentile et al   
+On LastFM all methods are again outperformed by CAB 
+The overall performance of all bandit methods seems how 
+
+    TimeCum  Regr  of Alg    Cum  Regr  of RANLastFM  CAB CLUB DynUCB LinUCB SINGLE LinUCB MULTIPLE    TimeCum  Regr  of Alg    Cum  Regr  of RANDelicious  CAB CLUB DynUCB LinUCB SINGLE LinUCB MULTIPLE    TimeAverage Euclidean distanceLastFM  Average Euclidean distance of served user to remaining users    TimeAverage Euclidean distanceDelicious  Average Euclidean distance of served user to remaining usersOn ContextDependent Clustering of Bandits
+
+Acknowledgments
+The authors thank the ICML reviewers for useful comments  CG acknowledges partial support from Criteo
+through   Faculty Research Award  PK is supported by the
+Deep Singh and Daljeet Kaur Faculty Fellowship and the
+ResearchI foundation at IIT Kanpur  and thanks Microsoft
+Research India for   research grant  GZ would like to thank
+   CesaBianchi for inspiring discussions regarding bandit
+algorithms and related topics 
+
+References
+AbbasiYadkori  Yasin  Pal  David  and Szepesvari  Csaba 
+Improved Algorithms for Linear Stochastic Bandits  In
+Proceedings of the  th Annual Conference on Neural
+Information Processing Systems  NIPS   
+
+AbbasiYadkori  Yasin    al    avid  and Szepesv ari  Csaba 
+Onlineto Con denceSet Conversions and Application
+to Sparse Stochastic Bandits  In Proceedings of the  th
+International Conference on Arti cial Intelligence and
+Statistics  AISTATS   
+
+Agrawal  Shipra and Goyal  Navin  Thompson Sampling
+for Contextual Bandits with Linear Payoffs  In Proceedings of the  th International Conference on Machine
+Learning  ICML   
+
+Audibert  Jean Yves  Munos  Remi  and Szepesvari  Csaba 
+Explorationexploitation Tradeoff using Variance Estimates in Multiarmed Bandits  Theoretical Computer
+Science     
+
+Auer  Peter  Using Con dence Bounds for ExplorationExploitation TradeOffs  Journal of Machine Learning
+Research     
+
+Auer  Peter  CesaBianchi  Nicolo  and Fischer  Paul 
+Finitetime Analysis of the Multiarmed Bandit Problem 
+Machine Learning     
+
+Azar  Mohammad Gheshlaghi  Lazaric  Alessandro  and
+Brunskill  Emma  Sequential Transfer in Multiarmed
+Bandit with Finite Set of Models  In Proceedings of the
+ th Annual Conference on Neural Information Processing Systems  NIPS   
+
+Carpentier  Alexandra  Implementable Con dence Sets in
+In Proceedings of the
+High Dimensional Regression 
+ th International Conference on Arti cial Intelligence
+and Statistics  AISTATS   
+
+Carpentier  Alexandra and Munos  Remi  Bandit Theory meets Compressed Sensing for Highdimensional
+In Proceedings of the  th
+Stochastic Linear Bandit 
+International Conference on Arti cial Intelligence and
+Statistics  AISTATS   
+
+CesaBianchi  Nicolo  Gentile  Claudio  and Zappella  Giovanni    Gang of Bandits  In Proceedings of the  th Annual Conference on Neural Information Processing Systems  NIPS   
+
+Chu  Wei  Li  Lihong  Reyzin  Lev  and Schapire  Robert 
+Contextual Bandits with Linear Payoff Functions 
+In
+Proceedings of the  th International Conference on Arti cial Intelligence and Statistics  AISTATS   
+
+Crammer  Koby and Gentile  Claudio  Multiclass Classi 
+cation with Bandit Feedback using Adaptive RegularizaIn Proceedings of the  th International Confertion 
+ence on Machine Learning  ICML   
+
+Dai  Wei and Milenkovic  Olgica 
+
+Subspace Pursuit
+for Compressive Sensing Signal Reconstruction  IEEE
+Transactions on Information Theory   
+ 
+
+Dekel  Ofer  Gentile  Claudio  and Sridharan  Karthik  Selective Sampling and Active Learning from Single and
+Multiple Teachers  Journal of Machine Learning Research     
+
+Djolonga  Josip  Krause  Andreas  and Cevher  Volkan 
+In ProHigh Dimensional Gaussian Process Bandits 
+ceedings of the  th Annual Conference on Neural Information Processing Systems  NIPS   
+
+Gentile  Claudio  Li  Shuai  and Zappella  Giovanni  OnIn Proceedings of the  st
+line Clustering of Bandits 
+International Conference on Machine Learning  ICML 
+ 
+
+Jain  Prateek  Tewari  Ambuj  and Kar  Purushottam 
+On Iterative Hard Thresholding Methods for Highdimensional MEstimation  In Proceedings of the  th
+Annual Conference on Neural Information Processing
+Systems  NIPS   
+
+Kakade     and Tewari     On the Generalization Ability
+of Online Strongly Convex Programming Algorithms  In
+Proceedings of the  nd Annual Conference on Neural
+Information Processing Systems  NIPS   
+
+Korda  Nathan  Szorenyi  Balazs  and Li  Shuai  Distributed Clustering of Linear Bandits in Peer to Peer Networks  In Proceedings of the  rd International Conference on Machine Learning  ICML   
+
+Krause  Andreas and Ong  Cheng Soon  Contextual Gaussian Process Bandit Optimization  In Proceedings of the
+ th Annual Conference on Neural Information Processing Systems  NIPS   
+
+Li  Lihong  Chu  Wei  Langford  John  and Schapire 
+Robert    ContextualBandit Approach to Personalized
+
+On ContextDependent Clustering of Bandits
+
+News Article Recommendation  In Proceedings of the
+ th International World Wide Web Conference  WWW 
+ 
+
+Li  Shuai  Karatzoglou  Alexandros  and Gentile  Claudio 
+Collaborative Filtering Bandits  In  th Annual International ACMSIGIR Conference on Research and Development in Information Retrieval  SIGIR   
+
+Maillard  OdalricAmbrym and Mannor  Shie  Latent Bandits  In Proceedings of the  st International Conference
+on Machine Learning  ICML   
+
+Needell  Deanna and Tropp  Joel    CoSaMP  Iterative
+Signal Recovery from Incomplete and Inaccurate Samples  Applied Computational Harmonic Analysis   
+   
+
+Nguyen  Trong and Lauw  Hady  Dynamic Clustering of
+Contextual MultiArmed Bandits  In Proceedings of the
+ rd ACM International Conference on Information and
+Knowledge Management  CIKM   
+
+Pilaszy  Istvan and Tikk  Domonkos  Recommending New
+Movies  Even   Few Ratings Are More Valuable Than
+Metadata  In Proceedings of the  rd ACM Conference
+on Recommender Systems  RecSys   
+
+Sutskever  Ilya  Salakhutdinov  Ruslan  and Tenenbaum 
+Joshua  Modelling Relational Data using Bayesian Clustered Tensor Factorization  In Proceedings of the  rd
+Annual Conference on Neural Information Processing
+Systems  NIPS   
+
+Tropp  Joel    Freedman   Inequality for Matrix Martingales  Electronic Communications in Probability   
+   
+
+Wu  Qingyun  Wang  Huazheng  Gu  Quanquan  and
+Wang  Hongning  Contextual Bandits in   Collaborative
+Environment  In  th Annual International ACMSIGIR
+Conference on Research and Development in Information Retrieval  SIGIR   
+
+Yue  Yisong  Hong  Sue Ann  and Guestrin  Carlos  Hierarchical Exploration for Accelerating Contextual Bandits 
+In Proceedings of the  th International Conference on
+Machine Learning  ICML   
+
+Zhou  Li and Brunskill  Emma  Latent Contextual Bandits and their Application to Personalized Recommendations for New Users  In Proceedings of the  th International Joint Conference on Arti cial Intelligence  IJCAI   
+
+

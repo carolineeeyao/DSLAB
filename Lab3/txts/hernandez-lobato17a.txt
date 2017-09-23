@@ -1,0 +1,994 @@
+Parallel and Distributed Thompson Sampling for
+
+Largescale Accelerated Exploration of Chemical Space
+
+Jos   Miguel Hern andezLobato     James Requeima       Edward    PyzerKnapp     Al an AspuruGuzik  
+
+Abstract
+
+Chemical space is so large that brute force
+searches for new interesting molecules are inHigh throughput virtual screening
+feasible 
+via computer cluster simulations can speed up
+the discovery process by collecting very large
+amounts of data in parallel       up to hundreds
+or thousands of parallel measurements  Bayesian
+optimization  BO  can produce additional acceleration by sequentially identifying the most useful simulations or experiments to be performed
+next  However  current BO methods cannot scale
+to the large numbers of parallel measurements
+and the massive libraries of molecules currently
+used in highthroughput screening  Here  we
+propose   scalable solution based on   parallel and distributed implementation of Thompson
+sampling  PDTS  We show that  in small scale
+problems  PDTS performs similarly as parallel
+expected improvement  EI    batch version of
+the most widely used BO heuristic  Additionally  in settings where parallel EI does not scale 
+PDTS outperforms other scalable baselines such
+as   greedy search   greedy approaches and  
+random search method  These results show that
+PDTS is   successful solution for largescale parallel BO 
+
+  Introduction
+Chemical space is huge  it is estimated to contain over  
+molecules  Among these  fewer than   million compounds can be found in public repositories or databases
+ Reymond et al    This discrepancy between known
+
+ Equal contribution  University of Cambridge  Cambridge 
+UK  Invenia Labs  Cambridge  UK  Harvard University  Cambridge  USA  IBM Research  UK  Correspondence to 
+Jos  
+Miguel Hern andezLobato  jmh cam ac uk  Edward   
+PyzerKnapp  epyzerk uk ibm com 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+compounds and possible compounds indicates the potential
+for discoverying many new compounds with highly desirable functionality       new energy materials  pharmaceuticals  dyes  etc  While the vast size of chemical space
+makes this an enormous opportunity  it also presents   signi cant dif culty in the identi cation of new relevant compounds among the many unimportant ones  This challenge
+is so great that any discovery process relying purely on the
+combination of scienti   intuition with trial and error experimentation is slow  tedious and in many cases infeasible 
+To accelerate the search  highthroughput approaches can
+be used in   combinatorial exploration of small speci  
+areas of chemical space  Rajan    These have led
+to the development of highthroughput virtual screening
+ PyzerKnapp et al      omezBombarelli et al   
+in which large libraries of molecules are created and then
+analyzed using theoretical and computational techniques 
+typically by running   large number of parallel simulations
+in   computer cluster  The objective is to reduce an initially
+very large library of molecules to   small set of promising
+leads for which expensive experimental evaluation is justi 
+ ed  However  even though these techniques only search
+  tiny drop in the ocean of chemical space  they can result
+in massive libraries whose magnitude exceeds traditional
+computational capabilities  As   result  at present  there
+is an urgent need to accelerate highthroughput screening
+approaches 
+Bayesian optimization  BO   Jones et al    can speed
+up the discovery process by using machine learning to
+guide the search and make improved decisions about what
+molecules to analyze next given the data collected so far 
+However  current BO methods cannot scale to the large
+number of parallel measurements and the massive libraries
+of candidate molecules currently used in highthroughput
+screening  PyzerKnapp et al    While there are BO
+methods that allow parallel data collection  these methods
+have typically been limited to tens of data points per batch
+ Snoek et al    Shahriari et al    Gonzlez et al 
+  In contrast  highthroughput screening may allow
+the simultaneous collection of thousands of data points via
+largescale parallel computation  This creates   need for
+new scalable methods for parallel Bayesian optimization 
+
+Parallel and Distributed Thompson Sampling for Largescale Accelerated Exploration of Chemical Space
+
+   mi  are as high as possible  with   being an expensiveto evaluate objective function  The objective   could be 
+for example  an estimate of the powerconversion ef ciency
+of organic photovoltaics  as given by expensive quantum
+mechanical simulations  Scharber et al    and we may
+want to identify the top   elements in   according to this
+score 
+Bayesian optimization methods can be used to identify the
+inputs that maximize an expensive objective function   by
+performing only   reduced number of function evaluations 
+For this  BO uses   model to make predictions for the value
+of   at new inputs given data from previous evaluations 
+The next point to evaluate is then chosen by maximizing an
+acquisition function that quanti es the bene   of evaluating
+the objective at   particular location 
+Let                 be Ddimensional feature vectors for
+the molecules in   and let DI    xi  yi           be  
+dataset with information about past evaluations  where  
+is   set with the indices of the molecules already evaluated  xi is the feature vector for the ith molecule in  
+and yi      mi  is the result of evaluating the objective
+function   on that molecule  We assume that the evaluations of   are noise free  however  the methods described
+here can be applied to the case in which the objective evaluations are corrupted with additive Gaussian noise  BO
+typically uses   probabilistic model to describe how the yi
+in DI are generated as   function of the corresponding features xi and some model parameters   that is  the model
+speci es   yi xi    Given the data DI and   prior distribution    the model also speci es   posterior distrii     yi xi    The predictive
+distribution for any mj        mi          is then given
+
+bution   DI      cid 
+by   yj xj DI   cid    yj xj     DI     BO methods
+
+use this predictive distribution to compute an acquisition
+function  AF  given by
+
+ xj DI    Ep yj xj  DI       yj xj DI   
+
+ 
+where    yj xj DI  is the utility of obtaining value yj
+when evaluating   at mj  Eq    is then maximized with
+respect to    cid    to select the next molecule mj on which to
+evaluate    The most common choice for the utility is the
+improvement     yj xj DI    max  yj     cid  where   cid 
+is equal to the best yi in DI  In this case  Eq    is called
+the expected improvement  EI   Jones et al    Ideally 
+the AF should encourage both exploration and exploitation 
+For this  the expected utility should increase when yj takes
+high values on average  to exploit  but also when there is
+high uncertainty about yj  to explore  The EI utility function satis es these two requirements 
+Thompson sampling  TS   Thompson    can be understood as   version of the previous framework in which
+the utility function is de ned as    yj xj DI    yj and
+the expectation in   is taken with respect to   yj xj   
+
+Figure   Illustration of Thompson sampling and PDTS 
+
+To address the above dif culty  we present here   scalable
+solution for parallel Bayesian optimization based on   distributed implementation of the Thompson sampling heuristic  Thompson    Chapelle   Li    We show that 
+for the case of small batch sizes  the proposed parallel and
+distributed Thompson sampling  PDTS  method performs
+as well as   parallel implementation of expected improvement  EI   Snoek et al    Ginsbourger et al    the
+most widely used Bayesian optimization heuristic  Parallel
+EI selects the batch entries sequentially and so EI proposals
+can   be parallelized  which limits its scalability properties 
+PDTS generates each batch of evaluation locations by selecting the different batch entries independently and in parallel  Consequently  PDTS is highly scalable and applicable to large batch sizes  We also evaluate the performance
+of PDTS in several realworld highthroughput screening
+experiments for material and drug discovery  where parallel EI is infeasible  In these problems  PDTS outperforms
+other scalable baselines such as   greedy search strategy 
+ greedy approaches and   random search method  These
+results indicate that PDTS is   successful solution for largescale parallel Bayesian optimization 
+
+Algorithm   Sequential Thompson sampling
+Input  initial data DI     xi  yi     
+for       to   do
+
+Compute current posterior   DI   
+Sample   from   DI   
+Select     argmaxj cid       yj xj   
+Collect yk by evaluating   at xk
+DI      DI       xk  yk 
+
+end for
+
+  BO and Thompson Sampling
+Let us assume we have   large library of candidate
+molecules                      Our goal is to identify   small subset of elements  mi      for which the
+
+objectiveobjectiveobjectivePosterior predictive distributionThompson sample  Thompson sample  objectiveSelected evaluation locationsParallel and Distributed Thompson Sampling for Largescale Accelerated Exploration of Chemical Space
+
+ cid    yj xj     DI     by Monte Carlo  using   single
+
+instead of   yj xj DI  with   being   sample from
+the posterior   DI  That is  when computing the
+in   yj xj DI   
+AF  TS approximates the integral
+sample from   DI  in the approximation  The TS utility
+function enforces only exploitation because the expected
+utility is insensitive to any variance in yj  Despite this  TS
+still enforces exploration because of the variance produced
+by the Monte Carlo approximation to   yj xj DI  Under
+TS  the probability of evaluating the objective at   particular location matches the probability of that location being
+the maximizer of the objective  given the model assumptions and the data from past evaluations  Algorithm   contains the pseudocode for TS  The plots in the top of Figure
+  illustrate how TS works  The topleft plot shows several samples from   posterior distribution on   induced by
+  DI  since each value of the parameters   corresponds
+to an associated value of    Sampling from   DI  is then
+equivalent to selecting one of these samples for    The selected sample represents the current AF  which is optimized
+in the topright plot in Figure   to select the next evaluation 
+
+  Parallel BO
+So far we have considered the sequential evaluation setting 
+where BO methods collect just   single data point in each
+iteration  However  BO can also be applied in the parallel
+setting  which involves choosing   batch of multiple points
+to evaluate next in each iteration  For example  when we
+run   parallel simulations in   computer cluster and each
+simulation performs one evaluation of   
+Snoek et al    describe how to extend sequential BO
+methods to the parallel setting  The idea is to select the  rst
+evaluation location in the batch in the same way as in the
+sequential setting  However  the next evaluation location
+is then selected while the previous one is still pending  In
+particular  given   set   with indexes of pending evaluation
+locations  we choose   new location in the batch based on
+the expectation of the AF under all possible outcomes of
+the pending evaluations according to the predictions of the
+model  Therefore  at any point  the next evaluation location
+is obtained by optimizing the AF
+
+ parallel xj DI     
+
+Ep yk     xk     DI    xj DI   DK   
+
+ 
+where DK    yk  xk     and  xj DI   DK  is given
+by   Computing this expression exactly is infeasible in
+most cases  Snoek et al    propose   Monte Carlo
+approximation in which the expectation in the second line
+is approximated by averaging across   few samples from
+the predictive distribution at the pending evaluations  that
+is    yk     xk     DI  These samples are referred
+to as fantasized data 
+This approach for parallel BO has been successfully used
+
+to collect small batches of data  about   elements in size 
+with EI as utility function and with   Gaussian process as
+the model for the data  Snoek et al    However  it
+lacks scalability to large batch sizes  failing when we need
+to collect thousands of simultaneous measurements  The
+reason for this is the high computational cost of adding  
+new evaluation to the current batch  The corresponding
+cost includes    sampling the fantasized data    updating
+the posterior predictive distribution to   yj xj DI   DK 
+which is required for evaluating  xj DI   DK  and  
+optimizing the Monte Carlo approximation to   Step  
+can be very expensive when the number of training points
+in DI is very large  This step is also considerably challenging when the model does not allow for exact inference  as
+it is often the case with Bayesian neural networks  Step  
+can also take   very long time when the library of candidate
+molecules   is very large       when it contains millions
+of elements  and among all the remaining molecules we
+have to  nd one that maximizes the AF 
+Despite these dif culties  the biggest disadvantage in this
+approach for parallel BO is that it cannot be parallelized
+since it is   sequential process in which   needs to be
+iteratively optimized  with each optimization step having
+  direct effect on the next one  This prevents this method
+from fully exploiting the acceleration provided by multiple
+processors in   computer cluster  The sequential nature of
+the algorithm is illustrated by the plot in the left of Figure  
+In this plot computer node   is controlling the BO process
+and decides the batch evaluation locations  Nodes            
+then perform the evaluations in parallel  Note that steps  
+and   from the above description have been highlighted in
+green and magenta colors 
+In the following section we describe an algorithm for batch
+BO which can be implemented in   fully parallel and distributed manner and which  consequently  can take full advantage of multiple processors in   computer cluster  This
+novel method is based on   parallel implementation of the
+Thompson sampling heuristic 
+
+Algorithm   Parallel and distributed Thompson sampling
+Input  initial data DI     xi  yi      batch size  
+for       to   do
+
+Compute current posterior   DI   
+for       to   do
+Sample   from   DI   
+Select        argmaxj cid       yj xj   
+Collect yk    by evaluating   at xk   
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+
+end for
+DI      DI       xk    yk    
+
+  
+
+end for
+
+Parallel and Distributed Thompson Sampling for Largescale Accelerated Exploration of Chemical Space
+
+Figure     visualization of one iteration of BO using parallel EI as implemented in  Snoek et al    and PDTS  Note that in PDTS
+the model is updated once and sample points are acquired independently by the nodes  With parallel EI  the the location of the next
+sample points is dependent on the location of previous sample points in the batch so these are computed sequentially 
+
+  Parallel and Distributed Thompson
+
+Sampling
+
+We present an implementation of the parallel BO method
+from Section   based on the Thompson sampling  TS 
+heuristic 
+In particular  we propose to apply to   the
+same approximation that TS applied to   For this  we
+choose in   the same utility function used by TS in the
+sequential setting  that is     yj xj DI   DK    yj  Then 
+we approximate the expectation with respect to  yk    
+in   by Monte Carlo  averaging across just one sample
+of  yk     drawn from   yk     xk     DI  After
+that   xj DI   DK  in   is approximated in the same
+way as in the sequential setting by  rst sampling   from
+  DI  DK  and then approximating   yj xj DI  DK 
+with   yj xj   
+Importantly  in this process  sampling
+ rst  yk     from   yk     xk     DI  and then  
+from   DI   DK  is equivalent to sampling   from just
+  DI  The reason for this is that updating   posterior
+distribution with synthetic data sampled from the model  
+predictive distribution produces on average the same initial posterior distribution  The result is that parallel TS
+with batch size   is the same as running sequential TS
+  times without updating the current posterior   DI 
+where each execution of sequential TS produces one of the
+evaluation locations in the batch  Importantly  these executions can be done in distributed manner  with each one
+running in parallel in   different node 
+The resulting parallel and distributed TS  PDTS  method is
+highly scalable and can be applied to very large batch sizes
+by running each execution of sequential TS on the same
+computer node that will then later evaluate   at the selected
+evaluation location  Algorithm   contains the pseudocode
+for PDTS  The parallel nature of the algorithm is illustrated
+by the plot in the right of Figure   In this plot computer
+node   is controlling the BO process  To collect four new
+function evaluations in parallel  computer node   sends the
+current posterior   DI  and   to nodes             Each
+of them samples then   value for   from the posterior and
+optimizes its own AF given by   yj xj    with    cid    
+The objective function is evaluated at the selected input and
+the resulting data is sent back to node   Figure   illustrates
+
+how PDTS selects two parallel evaluation locations  For
+this  sequential TS is run twice 
+The scalability of PDTS makes it   promising method for
+parallel BO in highthroughput screening  However  in this
+type of problem  the optimization of the AF is done over  
+discrete set of molecules  Therefore  whenever we collect  
+batch of data in parallel with PDTS  several of the simultaneous executions of sequential TS may choose to evaluate
+the same molecule    central computer node       the node
+controlling the BO process  maintaining   list of molecules
+currently selected for evaluation can be used to avoid this
+problem  In this case  each sequential TS node sends to the
+central node   ranked list with the top    the batch size 
+molecules according to its AF  From this list  the central
+node then selects the highest ranked molecule that has not
+been selected for evaluation before 
+
+  Related Work
+Ginsbourger et al   Ginsbourger et al    proposed the
+following framework for parallel BO  given   set of current observations DI and pending experiments  xk  
+  
+an additional set of fantasies DK    xk  yk  
+   can be
+assumed to be the result of those pending experiments   
+step of Bayesian optimization can then be performed using
+the augmented dataset DI   DK and the acquisition function    DI   DK  Two different values are proposed for
+the fantasies  the constant liar  where yk     for some
+constant   and all               and the Kriging believer 
+where yk is given by the GP predictive mean at xk 
+Snoek et al    compute   Monte Carlo approximation
+of the expected acquisition function over potential fantasies
+sampled from the model   predictive distribution  Recent
+methods have been proposed to modify the parallel EI procedure to recommend points jointly  Chevalier   Ginsbourger    Marmin et al    Wang et al   
+Azimi et al    describe   procedure called simulated
+matching whose goal is to propose   batch DK of points
+which is   good match for the set of samples that   sequential BO policy   would recommend  The authors consider
+  batch  good  if it contains   sample that yields  with high
+
+ Parallel EIParallel and Distributed TSNodeupdating modelcomunicating informationbetween nodesoptimizing acquisitionfunctionevaluating objectivefunctionidle nodeParallel and Distributed Thompson Sampling for Largescale Accelerated Exploration of Chemical Space
+
+probability  an objective value close to that of the best sample produced by   sequential execution of  
+Several authors have proposed to extend the upper con 
+dence bound  UCB  heuristic to the parallel setting  Since
+the GP predictive variance depends only on the input location of the observations  Desautels et al    propose GPBUCP acquisition which uses the UCB acquisition with this updated variance  Contal et al    introduce the Gaussian Process Upper Con dence Bound with
+Pure Exploration  GPUCB PE  Under this procedure  the
+ rst point is obtained using the standard UCB acquisition
+function while the remaining points are sequentially selected to be the ones yielding the highest predictive variance  while still lying in   region that contains the maximizer with high probability 
+Shah   Ghahramani   extend the Predictive Entropy
+Search  PES  heuristic to the parallel setting  PPES  PPES
+seeks to recommend   collection of samples DK that yields
+the greatest reduction in entropy for the posterior distribution of   cid  the latent objective maximizer  Wu   Frazier
+  propose the Parallel Knowledge Gradient Method
+which optimizes an acquisition function called the parallel knowledge gradient  qKG    measure of the expected
+incremental solution quality after   samples 
+An advantage of PDTS over parallel EI and other related
+methods is that the approximate marginalization of potential experimental outcomes adds no extra computational
+cost to our procedure and so PDTS is highly parallelizable 
+Finally  unlike other approaches  PDTS can be applied to  
+wide variety of models  such as GPs and Bayesian neural
+networks  since it only requires samples from an exact or
+approximate posterior distribution 
+  Bayesian Neural Networks for
+
+Highthroughput Screening
+
+Neural networks are wellsuited for implementing BO on
+molecules  They produce stateof theart predictions of
+chemical properties  Ma et al    Mayr et al   
+Ramsundar et al    and can be applied to large data
+sets by using stochastic optimization  Bousquet   Bottou    Typical applications of neural networks focus on the deterministic prediction scenario  However 
+in large search spaces with multiple local optima  which
+is the case when navigating chemical space  it is desirable to use   probabilistic approach that can produce accurate estimates of uncertainty for ef cient exploration
+and so  we use probabilistic backpropagation  PBP   
+recentlydeveloped technique for the scalable training of
+Bayesian neural networks  Hern andezLobato   Adams 
+  Note that other methods for approximate inference in Bayesian neural networks could have been chosen as well  Blundell et al    Snoek et al    Gal
+
+  Ghahramani    We prefer PBP because it is fast
+and it does not require the tuning of hyperparameters such
+as learning rates or regularization constants  Hern andezLobato   Adams   
+Given   dataset DI    xi  yi      we assume that
+yi      xi          where       is the output of   neural network with weights    The network output is corrupted with additive noise variables            The
+network has   layers  with Vl hidden units in layer    and
+   is the collection of Vl Vl    synaptic
+     Wl  
+weight matrices  The   is introduced here to account for
+the additional perlayer biases  The activation functions for
+the hidden layers are recti ers        max     
+The likelihood for the network weights   and the noise
+precision   is
+
+  yi       xi         
+
+   yi    xi     
+
+   
+
+ cid 
+
+   
+
+We specify   Gaussian prior distribution for each entry in
+each of the weight matrices in   
+
+      
+
+   wkj       
+
+ 
+
+  cid 
+
+Vl cid 
+
+Vl cid 
+
+  
+
+  
+
+  
+
+     
+
+    with shape  
+
+where wkj   is the entry in the kth row and jth column of
+Wl and   is   precision parameter  The hyperprior for  
+is gamma       Gam 
+     
+and inverse scale  
+      This relatively low value for
+the shape and inverse scale parameters makes this prior
+weaklyinformative  The prior for the noise precision  
+is also gamma       Gam 
+    We assume that
+the yi have been normalized to have unit variance and  as
+above  we     
+The exact computation of the posterior distribution for the
+model parameters         DI  is not tractable in most
+cases  PBP approximates the intractable posterior on     
+and   with the tractable approximation
+
+     
+
+      and  
+
+     
+
+          
+
+   wkj   mkj    vkj   
+
+  
+
+  
+
+  
+
+Gam       Gam       
+
+ 
+
+whose parameters are tuned by iteratively running an assumed density  ltering  ADF  algorithm over the training
+data  Opper    The main operation in PBP is the
+update of the mean and variance parameters of    that is 
+the mkj   and vkj   in   after processing each data point
+ xi  yi  For this  PBP matches moments between the
+new   and the product of the old   with the corresponding likelihood factor    yi      xi      The matching
+of moments for the distributions on the weights is achieved
+
+    cid 
+
+Vl cid 
+
+Vl cid 
+
+ 
+
+Parallel and Distributed Thompson Sampling for Largescale Accelerated Exploration of Chemical Space
+
+by using wellknown Gaussian ADF updates  see equations
+  and   in  Minka   
+To compute the ADF updates  PBP  nds   Gaussian
+approximation to the distribution of the network output
+   xi    when        This is achieved by doing  
+forward pass of xi through the network  with the weights
+  being randomly sampled from    In this forward pass
+the nonGaussian distributions followed by the output of
+the neurons are approximated with Gaussians that have
+the same means and variances as the original distributions 
+This is   Gaussian approximation by moment matching 
+We refer the reader to Hern andezLobato   Adams  
+for full details on PBP 
+After several ADF iterations over the data by PBP  we can
+then make predictions for the unknown target variable   cid 
+associated with   new feature vector   cid  For this  we obtain
+  Gaussian approximation to      cid    when       by
+applying the forward pass process described above 
+To implement TS  as described in Algorithm   we  rst
+sample the model parameters   from the posterior   DI 
+and then optimize the AF given by   yj xj    with    cid    
+When the model is   Bayesian neural network trained with
+PBP  the corresponding operations are sampling   from
+  and then optimizing the AF given by    xj    with
+   cid     This last step requires the use of   deterministic
+neural network  with weight values given by the posterior
+sample from    to make predictions on all the molecules
+that have not been evaluated yet  Then  the molecule with
+highest predictive value is selected for the next evaluation 
+
+  Experiments with GPs and Parallel EI
+We  rst compare the performance of our parallel and distributed Thompson sampling  PDTS  algorithm with the
+most popular approach for parallel BO  the parallel EI
+method from Section   Existing implementations of parallel EI such as spearmint  use   Gaussian process  GP 
+model for the objective function  To compare with these
+methods  we also adopt   GP as the model in PDTS  Note
+that parallel EI cannot scale to the large batch sizes used
+in highthroughput screening  Therefore  we consider here
+only parallel optimization problems with small batch sizes
+and synthetic objective functions  Besides PDTS and parallel EI  we also analyze the performance of the sequential
+versions of these algorithms  TS and EI 
+To implement Thompson sampling  TS  with   GP model 
+we approximate the nonparametric GP with   parametric
+approximation based on random features  as described in
+the supplementary material of  Hern andezLobato et al 
+  For the experiments  we consider   cluster with  
+
+ https github com HIPS Spearmint
+
+nodes  one central node for controlling the BO process and
+  additional nodes for parallel evaluations  We assume
+that all objective evaluations take   very large amount of
+time and that the cost of training the GPs and recomputing
+and optimizing the AF is negligible in comparison  Thus 
+in practice  we perform these experiments in   sequential
+ nonparallel  fashion with the GP model being updated
+only in blocks of   consecutive data points at   time 
+As objective functions we consider the two dimensional
+Bohachevsky and BraninHoo functions and the six dimensional Hartmann function  all available in Benchfunk  We
+also consider the optimization of functions sampled from
+the GP prior over the    unit square using   squared exponential covariance function with  xed   length scale 
+After each objective evaluation  we compute the immediate regret  IR  which we de ne as the difference between
+the best objective value obtained so far and the minimum
+value of the objective function  The measurement noise is
+zero in these experiments 
+Figure   reports mean and standard errors for the logarithm
+of the best IR seen so far  averaged across   repetitions of
+the experiments  In the plots  the horizontal axis shows the
+number of function evaluations performed so far  Note that
+in these experiments TS and EI update their GPs once per
+sample  while PDTS and parallel EI update only every  
+samples  Figure   shows that EI is better than TS in most
+cases  although the differences between these two methods
+are small in the BraninHoo function  However  EI is considerably much better than TS in Hartmann  The reason
+for this is that in Hartmann there are multiple equivalent
+global minima and TS tends to explore all of them  EI is
+by contrast more exploitative and focuses on evaluating the
+objective around only one of the minima  The differences
+between parallel EI and PDTS are much smaller  with both
+obtaining very similar results  The exception is again Hartmann  where parallel EI is much better than PDTS  probably because PDTS is more explorative than parallel EI 
+Interestingly  PDTS performs better than parallel EI on the
+random samples from the GP prior  although parallel EI
+eventually catches up 
+These results indicate that PDTS performs in practice very
+similarly to parallel EI  one of the most popular methods
+for parallel BO 
+
+  Experiments with Molecule Data Sets
+We describe the molecule data sets used in our experiments 
+The input features for all molecules are  bit Morgan circular  ngerprints  Rogers   Hahn    calculated with  
+bond radius of   and derived from the canonical SMILES
+as implemented in the RDkit package  Landrum 
+
+ https github com mwhoffman benchfunk
+
+Parallel and Distributed Thompson Sampling for Largescale Accelerated Exploration of Chemical Space
+
+Figure   Immediate regret in experiments with GPs  using TS  EI  PDTS and parallel EI for optimizing synthetic functions  rst   plots 
+and functions sampled from   GP prior  fourth plot 
+
+Harvard Clean Energy Project  The Clean Energy
+Project is the world   largest materials highthroughput
+virtual screening effort  Hachmann et al     
+and has scanned more than   million molecules to  nd
+those with high power conversion ef ciency  PCE  using
+quantumchemical techniques  taking over   years of
+CPU time  The target value within this data set is the power
+conversion ef ciency  PCE  which is calculated for the
+  million publicly released molecules  using the Scharber model  Dennler et al    and frontier orbitals calculated at the BP   Perdew    Becke    def SVP
+ Weigend   Ahlrichs    level of theory 
+DoseResponse Data Set  These data sets were obtained
+from the NCIcancer database  Many authors  The doseresponse target value has   potential range of   to  
+and reports   percentage cell growth relative to   nodrug
+control  Thus    value of   would correspond to    
+growth inhibition and   value of   would correspond
+to   lethality  Molecules with   positive value for the
+doseresponse are known as inhibitors  molecules with  
+score less than   have   cytotoxic effect  Results against
+the NCIH  cell line were taken against   constant logconcentration of    and where multiple identical conditions were present in the data an average was used for the
+target variables  In this data set we are interested in  nding
+molecules with smaller values of the target variable 
+Malaria Data Set  The Malaria data set was taken from the
+   falciparum whole cell screening derived by combining
+the GSK TCAMS data set  the NovatisGNF Malaria Box
+data set and the St Jude   Research Hospital data set  as
+released through the Medicines for Malaria Venture website  Spangenberg et al    The target variable is the
+EC  value  which is de ned as the concentration of the
+drug which gives half maximal response  Much like the
+Dose response data set  the focus here is on minimization 
+the lower the concentration  the stronger the drug 
+
+  Results
+
+We evaluate the gains produced by PDTS in experiments
+simulating   high throughput virtual screening setting  In
+these experiments  we sequentially sample molecules from
+
+libraries of candidate molecules given by the data sets from
+Section   After each sampling step  we calculate the  
+recall  that is  the fraction of the top   of molecules
+from the original library that are found among the sampled
+ones  For the CEP data  we compute recall by focusing
+on molecules with PCE larger than   In all data sets 
+each sampling step involves selecting   batch of molecules
+among those that have not been sampled so far 
+In the
+Malaria and Onedose data sets we use batches of size  
+These data sets each contain about   molecules  By
+contrast  the CEP data set contains   million molecules 
+In this latter case  we use batches of size   We use
+Bayesian neural networks with one hidden layer and  
+hidden units 
+We compare the performance of PDTS with two baselines 
+The  rst one  greedy  is   sampling strategy that only considers exploitation and does not perform any exploration 
+We implement this approach by selecting molecules according to the average of the probabilistic predictions generated by PBP  That is  the greedy approach ignores any
+variance in the predictions of the Bayesian neural network
+and generates batches by just ranking molecules according to the mean of the predictive distribution given by PBP 
+The second baseline is   Monte Carlo approach in which
+the batches of molecules are selected uniformly at random 
+These two baselines are comparable to PDTS in that they
+can be easily implemented in   large scale setting in which
+the library of candidate molecules contains millions of elements and data is sampled using large batch sizes 
+In the Malaria and Onedose data sets  we average across
+  different realizations of the experiments  This is not possible in the CEP data set  which is   times larger than the
+two other data sets  In the CEP case  we report results for
+  single realization of the experiment  in   second realization we obtained similar results  Figure   shows the recall
+obtained by each method in the molecule data sets  PDTS
+signi cantly outperforms the Monte Carlo approach  and
+also offers better performance than greedy sampling  This
+shows the importance of building in exploration into the
+sampling strategy  rather than relying on purely exploitative methods  The greedy approach performs best in the
+
+Parallel and Distributed Thompson Sampling for Largescale Accelerated Exploration of Chemical Space
+
+Figure   Recall obtained by PDTS on each data set  For the CEP data  the recall for molecules with   PCE     is reported  whilst
+for Onedose and Malaria we report the recall for the molecules in the top   In addition to the Monte Carlo sampling baseline  we also
+include results for   greedy sampling approach  in which there is no exploration  and the molecules are chosen according to the mean of
+the predictive distribution given by PBP  The overall lower performance of this greedy strategy illustrates the importance of exploration
+in this type of problems 
+
+CEP data set 
+In this case  the greedy strategy initially
+ nds better molecules than PDTS  but after   while PDTS
+overtakes  probably because   promising area of chemical
+space initially discovered by the greedy approach starts to
+become exhausted 
+The previous results allow us to consider the savings produced by BO  In the CEP data set  PDTS achieves about  
+times higher recall values than the Monte Carlo approach 
+which is comparable to the exhaustive enumeration that
+was used to collect the CEP data  We estimate that  with
+BO  the CEP virtual screening process would have taken
+  CPU years instead of the   that were actually
+used  Regarding the Onedose and Malaria data sets  PDTS
+can locate in both sets about   of the top   molecules
+by sampling approximately   molecules  By contrast 
+the Monte Carlo approach would require sampling  
+molecules  This represents   signi cant reduction in the
+discovery time for new therapeutic molecules and savings
+in the economic costs associated with molecule synthesis
+and testing 
+
+  Comparison with  greedy Approaches
+We can easily modify the greedy baseline from the previous
+section to include some amount of exploration by replacing   small fraction of the molecules in each batch with
+molecules chosen uniformly at random  This approach is
+often called  greedy  Watkins    where the variable
+  indicates the fraction of molecules that are sampled uniformly at random  The disadvantage of the  greedy approach is that it requires the tuning of   to the problem of
+interest whereas the amount of exploration is automatically
+set by PDTS 
+We compared PDTS with different versions of  greedy in
+the same way as above  using           and
+  The experiments with the Onedose and the Malaria
+data sets are similar to the ones done before  However 
+
+Table   Average rank and standard errors by each method 
+
+Method
+     
+     
+     
+     
+PDTS
+
+Rank
+
+ 
+ 
+ 
+ 
+ 
+
+we now subsample the CEP data set to be able to average across   different realizations of the experiment  we
+choose   molecules uniformly at random and then collect data in batches of size   across   different repetitions
+of the screening process  We compute the average rank obtained by each method across the           simulated
+screening experiments    ranking equal to   indicates that
+the method always obtains the highest recall at the end of
+the experiment  while   ranking equal to   indicates that
+the method always obtains the worst recall value  Table  
+shows that the lowest average rank is obtained by PDTS 
+which achieves better explorationexploitation tradeoffs
+than the  greedy approaches 
+
+  Conclusions
+We have presented   Parallel and Distributed implementation of Thompson Sampling  PDTS    highly scalable
+method for parallel Bayesian optimization  PDTS can be
+applied when scalability limits the applicability of competing approaches  We have evaluated the performance of
+PDTS in experiments with both Gaussian process and probabilistic neural networks  We show that PDTS compares favorably with parallel EI in problems with small batch sizes 
+We also demonstrate the effectiveness of PDTS on large
+scale real world applications that involve searching chemical space for new molecules wit improved properties  We
+show that PDTS outperforms other scalable approaches on
+these applications  in particular    greedy search strategy 
+ greedy approaches and   random search method 
+
+Parallel and Distributed Thompson Sampling for Largescale Accelerated Exploration of Chemical Space
+
+Acknowledgements
+
+         acknowledges support from the Rafael del Pino
+Foundation  The authors thank Ryan    Adams for useful discussions         and          acknowledge the
+Department of Energy Program on Theory and modeling
+through grant DESC 
+
+References
+Azimi  Javad  Fern  Alan  and Fern  Xiaoli    Batch Bayesian
+optimization via simulation matching  In NIPS  pp   
+ 
+
+Becke  Axel    Densityfunctional thermochemistry  III  The role
+of exact exchange  The Journal of Chemical Physics   
+   
+
+Blundell  Charles  Cornebise  Julien  Kavukcuoglu  Koray  and
+In
+
+Wierstra  Daan  Weight uncertainty in neural networks 
+ICML  pp     
+
+Bousquet  Olivier and Bottou    eon  The tradeoffs of large scale
+
+learning  In NIPS  pp     
+
+Chapelle  Olivier and Li  Lihong  An empirical evaluation of
+
+Thompson sampling  In NIPS  pp     
+
+Chevalier  Cl ement and Ginsbourger  David  Fast computation
+of the multipoints expected improvement with applications in
+batch selection  In International Conference on Learning and
+Intelligent Optimization  pp    Springer   
+
+Contal  Emile  Buffoni  David  Robicquet  Alexandre  and Vayatis  Nicolas  Parallel Gaussian process optimization with upper con dence bound and pure exploration  In Joint European
+Conference on Machine Learning and Knowledge Discovery in
+Databases  pp    Springer   
+
+Dennler     Scharber        Ameri     Denk     Forberich    
+Waldauf     and Brabec        Design rules for donors in
+bulkheterojunction tandem solar cells  towards   energyconversion ef ciency  Adv  Mater    feb  
+
+Desautels  Thomas  Krause  Andreas  and Burdick  Joel    Parallelizing explorationexploitation tradeoffs in Gaussian process
+bandit optimization  Journal of Machine Learning Research 
+   
+
+Gal  Yarin and Ghahramani  Zoubin  Dropout as   bayesian approximation  Representing model uncertainty in deep learning 
+In ICML  pp     
+
+Ginsbourger  David  Le Riche  Rodolphe  and Carraro  Laurent 
+Kriging is wellsuited to parallelize optimization  In Computational Intelligence in Expensive Optimization Problems  pp 
+  Springer   
+
+Ginsbourger  David  Janusevskis  Janis  and Le Riche  Rodolphe 
+Dealing with asynchronicity in parallel Gaussian process based
+In  th International Conference of the
+global optimization 
+ERCIM WG on computing   statistics  ERCIM   
+
+Ha  DongGwang  Wu  Tony  Markopoulos  Georgios  Jeon 
+Soonok  Kang  Hosuk  Miyazaki  Hiroshi  Numata  Masaki 
+Kim  Sunghan  Huang  Wenliang  Hong  Seong Ik  Baldo 
+Marc  Adams  Ryan    and AspuruGuzik  Al an  Design of
+ef cient molecular organic lightemitting diodes by   highthroughput virtual screening and experimental approach  Nature Materials  aug  
+
+Gonzlez     Dai     Hennig     and Lawrence     Batch Bayesian
+optimization via local penalization  In AISTATS  pp   
+ 
+
+Hachmann  Johannes  OlivaresAmaya  Roberto  AtahanEvrenk 
+Sule  AmadorBedolla  Carlos  SanchezCarrera  Roel   
+GoldParker  Aryeh  Vogt  Leslie  Brockway  Anna    and
+AspuruGuzik  Alan  The Harvard Clean Energy Project 
+LargeScale Computational Screening and Design of Organic
+Photovoltaics on the World Community Grid     Phys  Chem 
+Lett    sep  
+
+Hachmann  Johannes  OlivaresAmaya  Roberto  Jinich  Adrian 
+Appleton  Anthony    BloodForsythe  Martin    Seress 
+  aszl      Rom anSalgado  Carolina  Trepte  Kai  AtahanEvrenk  Sule  Er  Sleyman  Shrestha  Supriya  Mondal  Rajib  Sokolov  Anatoliy  Bao  Zhenan  and AspuruGuzik  Al an 
+Lead candidates for highperformance organic photovoltaics
+from highthroughput quantum chemistry   the Harvard Clean
+Energy Project  Energy Environ  Sci     
+
+Hern andezLobato  Jos   Miguel and Adams  Ryan    Probabilistic backpropagation for scalable learning of bayesian neural
+networks  In ICML  pp     
+
+Hern andezLobato  Jos   Miguel  Hoffman  Matthew    and
+Ghahramani  Zoubin  Predictive entropy search for ef cient
+global optimization of blackbox functions  In NIPS  pp   
+   
+
+Jones  Donald    Schonlau  Matthias  and Welch  William    Ef 
+ cient global optimization of expensive blackbox functions 
+Journal of Global optimization     
+
+Landrum  Greg  RDKit  Opensource cheminformatics 
+
+Ma  Junshui  Sheridan  Robert    Liaw  Andy  Dahl  George   
+and Svetnik  Vladimir  Deep neural nets as   method for quantitative structure activity relationships  Journal of Chemical
+Information and Modeling    feb  
+
+Many authors  NCI Database Download Page  URL http 
+
+cactus nci nih gov download nci 
+
+Marmin    ebastien  Chevalier  Cl ement  and Ginsbourger  David 
+Differentiating the multipoint expected improvement for opIn International Workshop on Machine
+timal batch design 
+Learning  Optimization and Big Data  pp    Springer 
+ 
+
+Mayr  Andreas  Klambauer  Gnter  Unterthiner  Thomas  and
+Hochreiter  Sepp  Deeptox  Toxicity prediction using deep
+learning  Front  Environ  Sci    feb  
+
+  omezBombarelli  Rafael  AguileraIparraguirre  Jorge  Hirzel 
+Timothy    Duvenaud  David  Maclaurin  Dougal  BloodForsythe  Martin    Chae  Hyun Sik  Einzinger  Markus 
+
+Minka  Thomas      family of algorithms for approximate
+Bayesian inference  PhD thesis  Massachusetts Institute of
+Technology   
+
+Parallel and Distributed Thompson Sampling for Largescale Accelerated Exploration of Chemical Space
+
+Opper  Manfred    Bayesian approach to online learning 
+
+In
+Saad  David  ed  OnLine Learning in Neural Networks  pp 
+  Cambridge University Press  CUP   
+
+Watkins  Christopher John Cornish Hellaby  Learning from delayed rewards  PhD thesis  University of Cambridge England 
+ 
+
+Weigend  Florian and Ahlrichs  Reinhart  Balanced basis sets
+of split valence triple zeta valence and quadruple zeta valence
+quality for   to Rn  Design and assessment of accuracy  Phys 
+Chem  Chem  Phys     
+
+Wu  Jian and Frazier  Peter  The parallel knowledge gradient
+method for batch Bayesian optimization  In NIPS  pp   
+   
+
+Perdew  John    Densityfunctional approximation for the correlation energy of the inhomogeneous electron gas  Phys  Rev    
+  jun  
+
+PyzerKnapp  Edward    Suh  Changwon    omezBombarelli 
+Rafael  AguileraIparraguirre  Jorge  and AspuruGuzik  Al an 
+What is highthroughput virtual screening    perspective from
+organic materials discovery  Annu  Rev  Mater  Res   
+  jul  
+
+Rajan  Krishna  Combinatorial Materials Sciences  Experimental
+Strategies for Accelerated Knowledge Discovery  Annu  Rev 
+Mater  Res    aug  
+
+Ramsundar  Bharath  Kearnes  Steven  Riley  Patrick  Webster 
+Dale  Konerding  David  and Pande  Vijay  Massively multitask
+networks for drug discovery  arXiv preprint arXiv 
+ 
+
+Reymond  JeanLouis  Ruddigkeit  Lars  Blum  Lorenz  and van
+Deursen  Ruud  The enumeration of chemical space  Wiley
+Interdisciplinary Reviews  Computational Molecular Science 
+  apr  
+
+Rogers  David and Hahn  Mathew  Extendedconnectivity  ngerprints  Journal of Chemical Information and Modeling   
+  may  
+
+Scharber       Mhlbacher     Koppe     Denk     Waldauf    
+Heeger       and Brabec       Design rules for donors in bulkheterojunction solar cells towards   energyconversion ef 
+ ciency  Advanced Materials     
+
+Shah  Amar and Ghahramani  Zoubin  Parallel predictive entropy search for batch global optimization of expensive objective functions  In NIPS  pp     
+
+Shahriari  Bobak  Wang  Ziyu  Hoffman  Matthew    BouchardAn entropy
+arXiv preprint
+
+  ot    Alexandre  and de Freitas  Nando 
+search portfolio for Bayesian optimization 
+arXiv   
+
+Snoek  Jasper  Larochelle  Hugo  and Adams  Ryan    Practical Bayesian optimization of machine learning algorithms  In
+NIPS  pp     
+
+Snoek  Jasper  Rippel  Oren  Swersky  Kevin  Kiros  Ryan  Satish 
+Nadathur  Sundaram  Narayanan  Patwary  Md  Mostofa Ali 
+Prabhat  and Adams  Ryan    Scalable Bayesian optimization
+using deep neural networks  In ICML  pp     
+
+Spangenberg  Thomas  Burrows  Jeremy    Kowalczyk  Paul 
+McDonald  Simon  Wells  Timothy       and Willis  Paul 
+The Open Access Malaria Box    Drug Discovery Catalyst
+for Neglected Diseases  PLoS ONE      jun  
+
+Thompson  William    On the likelihood that one unknown probability exceeds another in view of the evidence of two samples 
+Biometrika    dec  
+
+Wang  Jialei  Clark  Scott    Liu  Eric  and Frazier  Peter    Parallel Bayesian global optimization of expensive functions  arXiv
+preprint arXiv   
+
+

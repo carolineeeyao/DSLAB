@@ -1,0 +1,1132 @@
+Improved Variational Autoencoders for Text Modeling using Dilated
+
+Convolutions
+
+Zichao Yang   Zhiting Hu   Ruslan Salakhutdinov   Taylor BergKirkpatrick  
+
+Abstract
+
+Recent work on generative text modeling has
+found that variational autoencoders  VAE  with
+LSTM decoders perform worse than simpler
+LSTM language models  Bowman et al   
+This negative result is so far poorly understood 
+but has been attributed to the propensity of
+LSTM decoders to ignore conditioning information from the encoder 
+In this paper  we experiment with   new type of decoder for VAE 
+  dilated CNN  By changing the decoder   dilation architecture  we control the size of context from previously generated words 
+In experiments  we  nd that there is   tradeoff between contextual capacity of the decoder and effective use of encoding information  We show
+that when carefully managed  VAEs can outperform LSTM language models  We demonstrate
+perplexity gains on two datasets  representing the
+ rst positive language modeling result with VAE 
+Further  we conduct an indepth investigation of
+the use of VAE  with our new decoding architecture  for semisupervised and unsupervised labeling tasks  demonstrating gains over several
+strong baselines 
+
+  Introduction
+Generative models play an important role in NLP  both in
+their use as language models and because of their ability
+to effectively learn from unlabeled data  By parameterzing generative models using neural nets  recent work has
+proposed model classes that are particularly expressive and
+can pontentially model   wide range of phenomena in language and other modalities  We focus on   speci   instance
+
+ Carnegie Mellon University  Correspondence to  Zichao
+
+Yang  zichaoy cs cmu edu 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+of this class  the variational autoencoder   VAE   Kingma
+  Welling   
+The generative story behind the VAE  to be described in
+detail in the next section  is simple  First    continuous latent representation is sampled from   multivariate Gaussian  Then  an output is sampled from   distribution parameterized by   neural decoder  conditioned on the latent
+representation  The latent representation  treated as   latent
+variable during training  is intended to give the model more
+expressive capacity when compared with simpler neural
+generative models for example  conditional language models  The choice of decoding architecture and  nal output
+distribution  which connect the latent representation to output  depends on the kind of data being modeled  The VAE
+owes its name to an accompanying variational technique
+ Kingma   Welling    that has been successfully used
+to train such models on image data  Gregor et al   
+Salimans et al    Yan et al   
+The application of VAEs to text data has been far less successful  Bowman et al    Miao et al    The obvious choice for decoding architecture for   textual VAE
+is an LSTM    typical workhorse in NLP  However  Bowman et al    found that using an LSTMVAE for text
+modeling yields higher perplexity on heldout data than using an LSTM language model  In particular  they observe
+that the LSTM decoder in VAE does not make effective
+use of the latent representation during training and  as   result  VAE collapses into   simple language model  Related
+work  Miao et al    Larochelle   Lauly    Mnih
+  Gregor    has used simpler decoders that model text
+as   bag of words  Their results indicate better use of latent representations  but their decoders cannot effectively
+model longerrange dependencies in text and thus underperform in terms of  nal perplexity 
+Motivated by these observations  we hypothesize that the
+contextual capacity of the decoder plays an important role
+in whether VAEs effectively condition on the latent representation when trained on text data  We propose the use
+of   dilated CNN as   decoder in VAE  inspired by the recent success of using CNNs for audio  image and language
+
+ The name VAE is often used to refer to both   model class
+
+and an associated inference procedure 
+
+Improved Variational Autoencoders for Text Modeling using Dilated Convolutions
+
+modeling  van den Oord et al      Kalchbrenner et al 
+    van den Oord et al      In contrast with prior
+work where extremely large CNNs are used  we exploit the
+dilated CNN for its  exibility in varying the amount of conditioning context  In the two extremes  depending on the
+choice of dilation  the CNN decoder can reproduce   simple MLP using   bags of words representation of text  or
+can reproduce the longrange dependence of recurrent architectures  like an LSTM  by conditioning on the entire
+history  Thus  by choosing   dilated CNN as the decoder 
+we are able to conduct experiments where we vary contextual capacity   nding   sweet spot where the decoder can
+accurately model text but does not yet overpower the latent
+representation 
+We demonstrate that when this tradeoff is correctly managed  textual VAEs can perform substantially better than
+simple LSTM language models     nding consistent with
+recent image modeling experiments using variational lossy
+autoencoders  Chen et al    We go on to show that
+VAEs with carefully selected CNN decoders can be quite
+effective for semisupervised classi cation and unsupervised clustering  outperforming several strong baselines
+ from  Dai   Le    on both text categorization and
+sentiment analysis 
+Our contributions are as follows  First  we propose the use
+of   dilated CNN as   new decoder for VAE  We then empirically evaluate several dilation architectures with different
+capacities   nding that reduced contextual capacity leads
+to stronger reliance on latent representations  By picking  
+decoder with suitable contextual capacity  we  nd our VAE
+performs better than LSTM language models on two data
+sets  We also explore the use of dilated CNN VAEs for
+semisupervised classi cation and  nd they perform better
+than strong baselines from  Dai   Le    Finally  we
+verify that the same framework can be used effectively for
+unsupervised clustering 
+
+  Model
+In this section  we begin by providing background on the
+use of variational autoencoders for language modeling 
+Then we introduce the dilated CNN architecture that we
+will use as   new decoder for VAE in experiments  Finally 
+we describe the generalization of VAE that we will use to
+conduct experiments on semisupervised classi cation 
+
+  Background on Variational Autoencoders
+
+Neural language models  Mikolov et al    typically
+generate each token xt conditioned on the entire history of
+previously generated tokens 
+
+      
+
+  xt         xt 
+
+ 
+
+ cid 
+
+ 
+
+Stateof theart language models often parametrize these
+conditional probabilities using RNNs  which compute an
+evolving hidden state over the text which is used to predict
+each xt  This approach  though effective in modeling text 
+does not explicitly model variance in higherlevel properties of entire utterances      
+topic or style  and thus can
+have dif culty with heterogeneous datasets 
+Bowman et al    propose   different approach to generative text modeling inspired by related work on vision
+ Kingma   Welling    Instead of directly modeling
+the joint probability      as in Equation   we specify  
+generative process for which      is   marginal distribution  Speci cally  we  rst generate   continuous latent
+vector representation   from   multivariate Gaussian prior
+     and then generate the text sequence   from   conditional distribution        parameterized using   neural
+net  often called the generation model or decoder  Because
+this model incorporates   latent variable that modulates the
+entire generation of each whole utterance  it may be better
+able to capture highlevel sources of variation in the data 
+Speci cally  in contrast with Equation   this generating
+distribution conditions on latent vector representation   
+
+        
+
+  xt         xt    
+
+ 
+
+ cid 
+
+ 
+
+ cid 
+
+To estimate model parameters   we would ideally
+like to maximize the marginal probability       
+
+ cid            dz  However  computing this marginal is
+
+intractable for many decoder choices  Thus  the following variational lower bound is often used as an objective
+ Kingma   Welling   
+
+log          log
+
+          dz
+
+  Eq     log          KL           
+
+Here         is an approximation to the true posterior  often called the recognition model or encoder  and is parameterized by   Like the decoder  we have   choice of neural architecture to parameterize the encoder  However  unlike the decoder  the choice of encoder does not change the
+model class   it only changes the variational approximation
+used in training  which is   function of both the model parameters   and the approximation parameters   Training
+seeks to optimize these parameters jointly using stochastic
+gradient ascent     nal wrinkle of the training procedure
+involves   stochastic approximation to the gradients of the
+variational objective  which is itself intractable  We omit
+details here  noting only that the  nal distribution of the
+posterior approximation        is typically assumed to be
+Gaussian so that   reparametrization trick can be used  and
+refer readers to  Kingma   Welling   
+
+Improved Variational Autoencoders for Text Modeling using Dilated Convolutions
+
+  Training Collapse with Textual VAEs
+
+Together  this combination of generative model and variational inference procedure are often referred to as   variational autoencoder  VAE  We can also view the VAE
+as   regularized version of the autoencoder  Note  however  that while VAEs are valid probabilistic models whose
+likelihood can be evaluated on heldout data  autoencoders are not valid models 
+If only the  rst term of
+the VAE variational bound Eq     log        is used
+as an objective  the variance of the posterior probability
+       will become small and the training procedure reIt is the KLdivergence term 
+duces to an autoencoder 
+KL            that discourages the VAE memorizing each   as   single latent point 
+While the KL term is critical for training VAEs  historically  instability on text has been evidenced by the KL
+term becoming vanishingly small during training  as observed by Bowman et al    When the training procedure collapses in this way  the result is an encoder that has
+duplicated the Gaussian prior  instead of   more interesting posterior    decoder that completely ignores the latent
+variable    and   learned model that reduces to   simpler
+language model  We hypothesize that this collapse condition is related to the contextual capacity of the decoder
+architecture  The choice encoder and decoder depends on
+the type of data  For images  these are typically MLPs or
+CNNs  LSTMs have been used for text  but have resulted in
+training collapse as discussed above  Bowman et al   
+Here  we propose to use   dilated CNN as the decoder instead  In one extreme  when the effective contextual width
+of   CNN is very large  it resembles the behavior of LSTM 
+When the width is very small  it behaves like   bagof 
+words model  The architectural  exibility of dilated CNNs
+allows us to change the contextual capacity and conduct
+experiments to validate our hypothesis  decoder contextual
+capacity and effective use of encoding information are directly related  We next describe the details of our decoder 
+
+  Dilated Convolutional Decoders
+
+The typical approach to using CNNs used for text generation  Kalchbrenner et al      is similar to that used for
+images  Krizhevsky et al    He et al    but with
+the convolution applied in one dimension  We take this
+approach here in de ning our decoder 
+One dimensional convolution  For   CNN to serve as
+  decoder for text  generation of xt must only condition
+on past tokens      Applying the traditional convolution
+will break this assumption and use tokens     as inputs
+to predict xt 
+In our decoder  we avoid this by simply
+shifting the input by several slots  van den Oord et al 
+    With   convolution with  lter size of   and using
+  layers  our effective  lter size  the number of past tokens
+
+    VAE training graph using   dilated CNN decoder 
+
+    Digram of dilated CNN decoder 
+
+Figure   Our training and model architectures for textual
+VAE using   dilated CNN decoder 
+
+layers  then the effective  lter size is       cid 
+
+to condition to in predicting xt  would be               
+Hence  the  lter size would grow linearly with the depth of
+the network 
+Dilation  Dilated convolution  Yu   Koltun    was
+introduced to greatly increase the effective receptive  eld
+size without increasing the computational cost  With
+dilation    the convolution is applied so that       inputs
+are skipped each step  Causal convolution can be seen
+  special case with       With dilation  the effective
+receptive size grows exponentially with network depth  In
+Figure     we show dilation of sizes of   and   in the  rst
+and second layer  respectively  Suppose the dilation size in
+the ith layer is di and we use the same  lter size   in all
+  di    
+The dilations are typically set
+to double every layer
+di     di  so the effective receptive  eld size can grow
+exponentially  Hence  the contextual capacity of   CNN
+can be controlled across   greater range by manipulating
+the  lter size  dilation size and network depth  We use this
+approach in experiments 
+Residual
+connection 
+al 
+nection
+to speed up convergence and enable
+training of deeper models  We use
+  residual block  shown to the right 
+similar to that of  Kalchbrenner et al 
+    We use three convolutional
+layers with  lter size        
+respectively  and ReLU activation be 
+
+We
+ 
+
+residual
+the
+
+condecoder
+
+ He
+
+et
+
+use
+in
+
+LSTMzLSTMLSTMtastesreallygreatLSTMencoderCNNDecodertastesreallygreatBOSEOStastesreallygreattastesreallygreatinputembeddingdilation dilation zReLU      ReLU  xk   convReLU      convconvImproved Variational Autoencoders for Text Modeling using Dilated Convolutions
+
+tween convolutional layers 
+Overall architecture  Our VAE architecture is shown in
+Figure     We use LSTM as the encoder to get the posterior probability        which we assume to be diagonal
+Gaussian  We parametrize the mean   and variance   with
+LSTM output  We sample   from        the decoder is
+conditioned on the sample by concatenating   with every
+word embedding of the decoder input 
+
+  Semisupervised VAE
+
+In addition to conducting language modeling experiments 
+we will also conduct experiments on semisupervised classi cation of text using our proposed decoder  In this section  we brie   review semisupervised VAEs of  Kingma
+et al    that incorporate discrete labels as additional
+variables  Given the labeled set          DL and the unlabeled set     DU    Kingma et al    proposed   model
+whose latent representation contains continuous vector  
+and discrete label   
+
+                              
+
+ 
+
+The semisupervised VAE  ts   discriminative network
+       an inference network           and   generative
+network           jointly as part of optimizing   variational
+lower bound similar that of basic VAE  For labeled data
+       this bound is 
+
+log           Eq       log          
+
+  KL                 log     
+
+           log     
+
+For unlabeled data    the label is treated as   latent variable 
+yielding 
+log            
+
+ cid  Eq       log          
+
+  Eq     
+
+  KL                 log        log       cid 
+ cid 
+
+                KL           
+
+ 
+
+ 
+
+Combining the labeled and unlabeled data terms  we have
+the overall objective as 
+
+          DL            Ex DU       
+
+          DL log       
+
+where   controls the trade off between generative and discriminative terms 
+Gumbelsoftmax 
+Jang et al    Maddison et al 
+  propose   continuous approximation to sampling
+from   categorical distribution  Let   be   categorical distribution with probabilities           Samples from  
+
+can be approximated using 
+
+ cid  
+
+yi  
+
+exp log      gi   
+   exp log      gj   
+
+ 
+
+ 
+
+where gi follows Gumbel    The approximation is accurate when       and smooth when       In experiments 
+we use GumbelSoftmax to approximate the samples from
+       to reduce the computational cost  As   result  we
+can directly back propagate the gradients of       to the
+discriminator network  We anneal   so that sample variance is small when training starts and then gradually decrease  
+Unsupervised clustering 
+In this section we adapt the
+same framework for unsupervised clustering  We directly
+minimize the objective       which is consisted of two
+parts  reconstruction loss and KL regularization on       
+The  rst part encourages the model to assign   to label  
+such that the reconstruction loss is low  We  nd that the
+model can easily get stuck in two local optimum  the KL
+term is very small and        is close to uniform distribution or the KL term is very large and all samples collapse
+to one class  In order to make the model more robust  we
+modify the KL term by 
+
+KLy   max  KL           
+
+ 
+
+That is  we only minimize the KL term when it is large
+enough 
+
+  Experiments
+  Data sets
+
+Since we would like to investigate VAEs for language
+modeling and semisupervised classi cation  the data sets
+should be suitable for both purposes  We use two large
+scale document classi cation data sets  Yahoo Answer and
+Yelp  review  representing topic classi cation and sentiment classi cation data sets respectively  Tang et al   
+Yang et al    Zhang et al    The original data sets
+contain millions of samples  of which we sample    as
+training and    as validation and test from the respective
+partitions  The detailed statistics of both data sets are in Table   Yahoo Answer contains   topics including Society
+  Culture  Science   Mathematics etc  Yelp  contains  
+level of rating  with higher rating better 
+
+Data
+Yahoo
+Yelp 
+
+classes
+ 
+ 
+
+documents
+  
+  
+
+average    vocabulary
+  
+  
+
+ 
+ 
+
+Table   Data statistics
+
+Improved Variational Autoencoders for Text Modeling using Dilated Convolutions
+
+Model
+LSTMLM
+LSTMVAE 
+LSTMVAE    init
+SCNNLM
+SCNNVAE
+SCNNVAE   init
+MCNNLM
+MCNNVAE
+MCNNVAE   init
+LCNNLM
+LCNNVAE
+LCNNVAE   init
+VLCNNLM
+VLCNNVAE
+VLCNNVAE   init
+
+Size NLL  KL 
+   
+   
+   
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+   
+   
+ 
+   
+   
+ 
+   
+   
+ 
+   
+   
+ 
+   
+   
+
+    Yahoo
+
+PPL
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Model
+LSTMLM
+LSTMVAE 
+LSTMVAE    init
+SCNNLM
+SCNNVAE
+SCNNVAE   init
+MCNNLM
+MCNNVAE
+MCNNVAE   init
+LCNNLM
+LCNNVAE
+LCNNVAE   init
+VLCNNLM
+VLCNNVAE
+VLCNNVAE   init
+
+Size NLL  KL 
+   
+   
+   
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+   
+   
+ 
+   
+   
+ 
+   
+   
+ 
+   
+   
+ 
+   
+   
+
+    Yelp
+
+PPL
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Table   Language modeling results on the test set    is from  Bowman et al    We report negative log likelihood
+ NLL  and perplexity  PPL  on the test set  The KL component of NLL is given in parentheses  Size indicates the effective
+ lter size  VAE   init indicates pretraining of only the encoder using an LSTM LM 
+
+  Model con gurations and Training details
+
+We use an LSTM as an encoder for VAE and explore
+LSTMs and CNNs as decoders  For CNNs  we explore several different con gurations  We set the convolution  lter
+size to be   and gradually increase the depth and dilation
+from                 to                  
+  They represent small  medium and large model and we
+name them as SCNN  MCNN and LCNN  We also explore
+  very large model with dilations                  
+            and name it as VLCNN  The effective
+ lter size are       and   respectively  We use the
+last hidden state of the encoder LSTM and feed it though an
+MLP to get the mean and variance of        from which
+we sample   and then feed it through an MLP to get the
+starting state of decoder  For the LSTM decoder  we follow  Bowman et al    to use it as the initial state of
+LSTM and feed it to every step of LSTM  For the CNN decoder  we concatenate it with the word embedding of every
+decoder input 
+The architecture of the Semisupervised VAE basically follows that of the VAE  We feed the last hidden state of the
+encoder LSTM through   two layer MLP then   softmax
+to get        We use Gumbelsoftmax to sample   from
+       We then concatenate   with the last hidden state of
+encoder LSTM and feed them throught an MLP to get the
+mean and variance of             and   together are used
+as the starting state of the decoder 
+We use   vocabulary size of    for both data sets and set
+the word embedding dimension to be   The LSTM dimension is   The number of channels for convolutions
+
+in CNN decoders is   internally and   externally  as
+shown in Section   We select the dimension of   from
+    We  nd our model is not sensitive to this parameter 
+We use Adam  Kingma   Ba    to optimize all models
+and the learning rate is selected from            
+and   is selected from     Empirically  we  nd
+learning rate     and       to perform the best  We
+select drop out ratio of LSTMs  both encoder and decoder 
+from     Following  Bowman et al    we also
+use drop word for the LSTM decoder  the drop word ratio
+is selected from         For the CNN decoder 
+we use   drop out ratio of   at each layer  We do not
+use drop word for CNN decoders  We use batch size of
+  and all model are trained for   epochs  We start to
+half the learning rate every   epochs after epoch   Following  Bowman et al    we use KL cost annealing
+strategy  We set the initial weight of KL cost term to be
+  and increase it linearly until   given iteration     We
+treat   as   hyper parameter and select it from        
+   
+
+  Language modeling results
+
+The results for language modeling are shown in Table  
+We report the negative log likelihood  NLL  and perplexity
+ PPL  of the test set  For the NLL of VAEs  we decompose
+it into reconstruction loss and KL divergence and report the
+KL divergence in the parenthesis  To better visualize these
+results  we plot the results of Yahoo data set  Table     in
+Figure  
+
+Improved Variational Autoencoders for Text Modeling using Dilated Convolutions
+
+Figure   NLL decomposition of Table     Each group consists of three bars  representing LM  VAE and VAE init 
+For VAE  we decompose the loss into reconstruction loss
+and KL divergence  shown in blue and red respectively  We
+subtract all loss values with   for better visualization 
+
+We  rst look at the LM results for Yahoo data set  As
+we gradually increase the effective  lter size of CNN from
+SCNN  MCNN to LCNN  the NLL decreases from  
+  to   The NLL of LCNNLM is very close to
+the NLL of LSTMLM   But VLCNNLM is   little bit worse than LCNNLM  this indicates   little bit of
+over tting 
+We can see that LSTMVAE is worse than LSTMLM in
+terms of NLL and the KL term is nearly zero  which veri es
+the  nding of  Bowman et al    When we use CNNs
+as the decoders for VAEs  we can see improvement over
+pure CNN LMs  For SCNN  MCNN and LCNN  the VAE
+results improve over LM results from   to    
+to   and   to   respectively  The improvement is big for small models and gradually decreases as we
+increase the decoder model contextual capacity  When the
+model is as large as VLCNN  the improvement diminishes
+and the VAE result is almost the same with LM result  This
+is also re ected in the KL term  SCNNVAE has the largest
+KL of   and VLCNNVAE has the smallest KL of  
+When LCNN is used as the decoder  we obtain an optimal trade off between using contextual information and latent representation  LCNNVAE achieves   NLL of  
+which improves over LSTMLM with NLL of  
+We  nd that if we initialize the parameters of LSTM encoder with parameters of LSTM language model  we can
+improve the VAE results further  This indicates better
+encoder model is also   key factor for VAEs to work
+well  Combined with encoder initialization  LCNNVAE
+improves over LSTMLM from   to   in NLL and
+from   to   in PPL  Similar results for the sentiment
+data set are shown in Table     LCNNVAE improves over
+LSTMLM from   to   in NLL and from   to
+  in PPL 
+
+    Yahoo
+
+    Yelp
+
+Figure   Visualizations of learned latent representations 
+
+Latent representation visualization  In order to visualize the latent representation  we set the dimension of   to
+be   and plot the mean of posterior probability        as
+shown in Figure   We can see distinct different characteristics of topic and sentiment representation  In Figure    
+we can see that documents of different topics fall into different clusters  while in Figure     documents of different
+ratings form   continuum  they lie continuously on the xaxis as the review rating increases 
+
+Model
+LSTMVAE Semi
+SCNNVAE Semi
+MCNNVAE Semi
+LCNNVAE Semi
+
+ACCU NLL  KL 
+   
+   
+   
+   
+
+ 
+ 
+ 
+ 
+
+Table   Semisupervised VAE ablation results on Yahoo 
+We report both the NLL and classi cation accuracy of the
+test data  Accuracy is in percentage  Number of labeled
+samples is  xed to be  
+
+  Semisupervised VAE results
+
+Motivated by the success of VAEs for language modeling 
+we continue to explore VAEs for semisupervised learning 
+Following that of  Kingma et al    we set the number
+of labeled samples to be       and   respectively 
+Ablation Study  At  rst  we would like to explore the
+effect of different decoders for semisupervised classi cation  We    the number of labeled samples to be   and
+report both classi cation accuracy and NLL of the test set
+of Yahoo data set in Table    We can see that SCNNVAE 
+Semi has the best classi cation accuracy of   The accuracy decreases as we gradually increase the decoder contextual capacity  On the other hand  LCNNVAE Semi has
+the best NLL result  This classi cation accuracy and NLL
+trade off once again veri es our conjecture  with small contextual window size  the decoder is forced to use the encoder information  hence the latent representation is better
+
+NLLLSTMSCNNMCNNLCNNVLCNNLMVAEVAE initKLImproved Variational Autoencoders for Text Modeling using Dilated Convolutions
+
+Model
+LSTM
+LALSTM  Dai   Le   
+LMLSTM  Dai   Le   
+SCNNVAE Semi
+SCNNVAE Semi init
+
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+
+Model
+LSTM
+LALSTM  Dai   Le   
+LMLSTM  Dai   Le   
+SCNNVAE Semi
+SCNNVAE Semi init
+
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+
+    Yahoo
+
+    Yelp
+
+Table   Semisupervised VAE results on the test set  in percentage  LALSTM and LMLSTM come from  Dai   Le 
+  they denotes the LSTM is initialized with   sequence autoencoder and   language model 
+
+learned 
+Comparing the NLL results of Table   with that of Table     we can see the NLL improves  The NLL of semisupervised VAE improves over simple VAE from   to
+  for SCNN  from   to   for MCNN  and from
+  to   for LCNN  The improvement mainly comes
+from the KL divergence part  this indicates that better latent representations decrease the KL divergence  further
+improving the VAE results 
+Comparison with related methods  We compare Semisupervised VAE with the methods from  Dai   Le   
+which represent
+the previous stateof theart for semisupervised sequence learning  Dai   Le   pretrains
+  classi er by initializing the parameters of   classi er with
+that of   language model or   sequence autoencoder  They
+ nd it improves the classi cation accuracy signi cantly 
+Since SCNNVAE Semi performs the best according to Table   we    the decoder to be SCNN in this part  The
+detailed comparison is in Table   We can see that semisupervised VAE performs better than LMLSTM and LALSTM from  Dai   Le    We also initialize the encoder of the VAE with parameters from LM and  nd classi 
+ cation accuracy further improves  We also see the advantage of SCNNVAE Semi over LMLSTM is greater when
+the number of labeled samples is smaller  The advantage
+decreases as we increase the number of labeled samples 
+When we set the number of labeled samples to be    
+the SCNNVAE Semi achieves an accuracy of   which
+is similar to LMLSTM with an accuracy of   Also 
+SCNNVAE Semi performs better on Yahoo data set than
+Yelp data set  For Yelp  SCNNVAE Semi is   little bit
+worse than LMLSTM if the number of labeled samples is
+greater than   but becomes better when we initialize the
+encoder  Figure    explains this observation  It shows the
+documents are coupled together and are harder to classify 
+Also  the latent representation contains information other
+than sentiment  which may not be useful for classi cation 
+
+  Unsupervised clustering results
+
+We also explored using the same framework for unsupervised clustering  We compare with the baselines that ex 
+
+Model
+LSTM   GMM
+SCNNVAE   GMM
+SCNNVAE   init   GMM
+SCNNVAE Unsup   init
+
+ACCU
+ 
+ 
+ 
+ 
+
+Table   Unsupervised clustering results for Yahoo data set 
+We run each model   times and report the best results 
+LSTM GMM means we extract the features from LSTM
+language model  SCNNVAE   GMM means we use the
+mean of        as the feature  SCNNVAE   init   GMM
+means SCNNVAE is trained with encoder initialization 
+
+tract the feature with existing models and then run Gaussian
+Mixture Model  GMM  on these features  We  nd empirically that simply using the features does not perform well
+since the features are high dimensional  We run   PCA on
+these features  the dimension of PCA is selected from  
+    Since GMM can easily get stuck in poor local optimum  we run each model ten times and report the best
+result  We  nd directly optimizing       does not perform
+well for unsupervised clustering and we need to initialize
+the encoder with LSTM language model  The model only
+works well for Yahoo data set  This is potentially because
+Figure    shows that sentiment latent representations does
+not fall into clusters    in Equation   is   sensitive parameter  we select it from the range between   and   with
+an interval of   We use the following evaluation protocol  Makhzani et al    after we  nish training  for
+cluster    we  nd out the validation sample xn from cluster   that has the best   yi    and assign the label of xn
+to all samples in cluster    We then compute the test accuracy based on this assignment  The detailed results are
+in Table   We can see SCNNVAE Unsup   init performs
+better than other baselines  LSTM GMM performs very
+bad probably because the feature dimension is   and is
+too high for GMM  even though we already used PCA to
+reduce the dimension 
+Conditional text generation With the semisupervised
+VAE  we are able to generate text conditional on the label  Due to space limitation  we only show one example of
+
+Improved Variational Autoencoders for Text Modeling using Dilated Convolutions
+
+  star
+
+  star
+
+  star
+
+  star
+
+  star
+
+the food was good but the service was horrible   took forever to get our food   we had to ask
+twice for our check after we got our food   will not return  
+the food was good   but the service was terrible   took forever to get someone to take our drink
+order   had to ask   times to get the check   food was ok   nothing to write about  
+came here for the  rst time last night   food was good   service was   little slow   food was just
+ok  
+food was good   service was   little slow   but the food was pretty good     had the grilled chicken
+sandwich and it was really good   will de nitely be back  
+food was very good   service was fast and friendly   food was very good as well   will be back  
+
+Table   Text generated by conditioning on sentiment label 
+
+generated reviews conditioning on review rating in Table  
+For each group of generated text  we      and vary the label    while picking   via beam search with   beam size of
+ 
+
+  Related work
+Variational inference via the reparameterization trick was
+initially proposed by  Kingma   Welling    Rezende
+et al    and since then  VAE has been widely adopted
+as generative model for images  Gregor et al    Yan
+et al    Salimans et al    Gregor et al    Hu
+et al     
+Our work is in line with previous works on combining
+variational inferences with text modeling  Bowman et al 
+  Miao et al    Serban et al    Zhang et al 
+  Hu et al       Bowman et al    is the  rst
+work to combine VAE with language model and they use
+LSTM as the decoder and  nd some negative results  On
+the other hand   Miao et al    models text as bag of
+words  though improvement has been found  the model can
+not be used to generate text  Our work  lls the gaps between them   Serban et al    Zhang et al    applies variational inference to dialogue modeling and machine translation and found some improvement in terms of
+generated text quality  but no language modeling results are
+reported   Chung et al    Bayer   Osendorfer   
+Fraccaro et al    embedded variational units in every
+step of   RNN  which is different from our model in using
+global latent variables to learn high level features 
+Our use of CNN as decoder is inspired by recent success of
+PixelCNN model for images  van den Oord et al     
+WaveNet for audios  van den Oord et al      Video
+Pixel Network for video modeling  Kalchbrenner et al 
+    and ByteNet for machine translation  Kalchbrenner
+et al      But in contrast to those works showing using
+  very deep architecture leads to better performance  CNN
+as decoder is used in our model to control the contextual
+capacity  leading to better performance 
+Our work is closed related the recently proposed variational
+lossy autoencoder  Chen et al    which is used to pre 
+
+dict image pixels  They  nd that conditioning on   smaller
+window of   pixels leads to better results with VAE  which
+is similar to our  nding  Much  Rezende   Mohamed 
+  Kingma et al    Chen et al    has been done
+to come up more powerful prior posterior distribution representations with techniques such as normalizing  ows  We
+treat this as one of our future works  This work is largely
+orthogonal and could be potentially combined with   more
+effective choice of decoder to yield additional gains 
+There is much previous work exploring unsupervised sentence encodings  for example skipthought vectors  Kiros
+et al    paragraph vectors  Le   Mikolov    and
+sequence autoencoders  Dai   Le     Dai   Le   
+applies   pretrained model to semisupervised classi cation
+and  nd signi cant gains  we use this as the baseline for our
+semisupervised VAE 
+
+  Conclusion
+We showed that by controlling the decoder   contextual capacity in VAE  we can improve performance on both language modeling and semisupervised classi cation tasks by
+preventing   degenerate collapse of the training procedure 
+These results indicate that more carefully characterizing
+decoder capacity and understanding how it relates to common variational training procedures may represent important avenues for unlocking future unsupervised problems 
+
+References
+Bayer  Justin and Osendorfer  Christian  Learning stochastic recurrent networks  arXiv preprint arXiv 
+ 
+
+Bowman  Samuel    Vilnis  Luke  Vinyals  Oriol  Dai  Andrew    Jozefowicz  Rafal  and Bengio  Samy  Generating sentences from   continuous space  arXiv preprint
+arXiv   
+
+Chen  Xi  Kingma  Diederik    Salimans  Tim  Duan  Yan 
+Dhariwal  Prafulla  Schulman  John  Sutskever  Ilya  and
+Abbeel  Pieter  Variational lossy autoencoder  arXiv
+preprint arXiv   
+
+Improved Variational Autoencoders for Text Modeling using Dilated Convolutions
+
+Chung  Junyoung  Kastner  Kyle  Dinh  Laurent  Goel 
+Kratarth  Courville  Aaron    and Bengio  Yoshua   
+recurrent latent variable model for sequential data 
+In
+Advances in neural information processing systems  pp 
+   
+
+Kingma  Diederik    Mohamed  Shakir  Rezende 
+Danilo Jimenez  and Welling  Max  Semisupervised
+In Advances in
+learning with deep generative models 
+Neural Information Processing Systems  pp   
+ 
+
+Dai  Andrew   and Le  Quoc    Semisupervised sequence
+learning  In Advances in Neural Information Processing
+Systems  pp     
+
+Kingma  Diederik    Salimans  Tim  and Welling  Max  Improving variational inference with inverse autoregressive
+ ow  arXiv preprint arXiv   
+
+Fraccaro  Marco    nderby    ren Kaae  Paquet  Ulrich  and Winther  Ole  Sequential neural models with
+In Advances in Neural Information
+stochastic layers 
+Processing Systems  pp     
+
+Gregor  Karol  Danihelka  Ivo  Graves  Alex  Rezende 
+Danilo Jimenez  and Wierstra  Daan  Draw    recurrent neural network for image generation  arXiv preprint
+arXiv   
+
+Gregor  Karol  Besse  Frederic  Rezende  Danilo Jimenez 
+Danihelka  Ivo  and Wierstra  Daan  Towards concepIn Advances In Neural Information
+tual compression 
+Processing Systems  pp     
+
+He  Kaiming  Zhang  Xiangyu  Ren  Shaoqing  and Sun 
+Jian  Deep residual learning for image recognition  In
+Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition  pp     
+
+Hu  Zhiting  Yang  Zichao  Liang  Xiaodan  Salakhutdinov 
+Ruslan  and Xing  Eric    Controllable text generation 
+arXiv preprint arXiv     
+
+Hu  Zhiting  Yang  Zichao  Salakhutdinov  Ruslan  and
+Xing  Eric    On unifying deep generative models  arXiv
+preprint arXiv     
+
+Jang  Eric  Gu  Shixiang  and Poole  Ben  Categorical
+reparameterization with gumbelsoftmax  arXiv preprint
+arXiv   
+
+Kalchbrenner  Nal  Espeholt  Lasse  Simonyan  Karen 
+Oord  Aaron van den  Graves  Alex  and Kavukcuoglu 
+Koray  Neural machine translation in linear time  arXiv
+preprint arXiv     
+
+Kalchbrenner  Nal  Oord  Aaron van den  Simonyan 
+Karen  Danihelka  Ivo  Vinyals  Oriol  Graves  Alex 
+and Kavukcuoglu  Koray  Video pixel networks  arXiv
+preprint arXiv     
+
+Kingma  Diederik and Ba 
+
+Jimmy 
+method for stochastic optimization 
+arXiv   
+
+Adam 
+
+ 
+arXiv preprint
+
+Kingma  Diederik   and Welling  Max  Autoencoding
+arXiv preprint arXiv 
+
+variational bayes 
+ 
+
+Kiros  Ryan  Zhu  Yukun  Salakhutdinov  Ruslan    Zemel 
+Richard  Urtasun  Raquel  Torralba  Antonio  and Fidler 
+Sanja  Skipthought vectors  In Advances in neural information processing systems  pp     
+
+Krizhevsky  Alex  Sutskever  Ilya  and Hinton  Geoffrey   
+Imagenet classi cation with deep convolutional neural
+networks  In Advances in neural information processing
+systems  pp     
+
+Larochelle  Hugo and Lauly  Stanislas    neural autoregressive topic model  In Advances in Neural Information
+Processing Systems  pp     
+
+Le  Quoc   and Mikolov  Tomas  Distributed representations of sentences and documents  In ICML  volume  
+pp     
+
+concrete distribution 
+
+  continuous
+
+Maddison  Chris    Mnih  Andriy  and Teh  Yee Whye 
+relaxarXiv preprint
+
+The
+ation of discrete random variables 
+arXiv   
+
+Makhzani  Alireza  Shlens  Jonathon  Jaitly  Navdeep 
+Goodfellow  Ian  and Frey  Brendan  Adversarial autoencoders  arXiv preprint arXiv   
+
+Miao  Yishu  Yu  Lei  and Blunsom  Phil  Neural variIn Proc  ICML 
+
+ational inference for text processing 
+ 
+
+Mikolov  Tomas  Kara at  Martin  Burget  Lukas  Cernock    Jan  and Khudanpur  Sanjeev  Recurrent neural network based language model  In Interspeech  volume   pp     
+
+Mnih  Andriy and Gregor  Karol  Neural variational inference and learning in belief networks  arXiv preprint
+arXiv   
+
+Rezende  Danilo Jimenez and Mohamed  Shakir  Variational inference with normalizing  ows  arXiv preprint
+arXiv   
+
+Rezende  Danilo Jimenez  Mohamed  Shakir  and Wierstra  Daan  Stochastic backpropagation and approximate inference in deep generative models  arXiv preprint
+arXiv   
+
+Improved Variational Autoencoders for Text Modeling using Dilated Convolutions
+
+Salimans  Tim  Kingma  Diederik    Welling  Max  et al 
+Markov chain monte carlo and variational inference 
+Bridging the gap  In ICML  volume   pp   
+ 
+
+Serban  Iulian Vlad  Sordoni  Alessandro  Lowe  Ryan 
+Charlin  Laurent  Pineau  Joelle  Courville  Aaron  and
+Bengio  Yoshua    hierarchical latent variable encoderdecoder model for generating dialogues  arXiv preprint
+arXiv   
+
+Tang  Duyu  Qin  Bing  and Liu  Ting  Document modeling with gated recurrent neural network for sentiment
+classi cation  In EMNLP  pp     
+
+van den Oord    aron  Dieleman  Sander  Zen  Heiga  Simonyan  Karen  Vinyals  Oriol  Graves  Alex  Kalchbrenner  Nal  Senior  Andrew  and Kavukcuoglu  Koray  Wavenet    generative model for raw audio  CoRR
+abs     
+
+van den Oord  Aaron  Kalchbrenner  Nal  Espeholt  Lasse 
+Vinyals  Oriol  Graves  Alex  et al  Conditional image generation with pixelcnn decoders  In Advances in
+Neural Information Processing Systems  pp   
+   
+
+Yan  Xinchen  Yang  Jimei  Sohn  Kihyuk  and Lee 
+Honglak  Attribute image  Conditional image generation from visual attributes  In European Conference on
+Computer Vision  pp    Springer   
+
+Yang  Zichao  Yang  Diyi  Dyer  Chris  He  Xiaodong 
+Smola  Alex  and Hovy  Eduard  Hierarchical attention
+networks for document classi cation  In Proceedings of
+NAACLHLT  pp     
+
+Yu  Fisher and Koltun  Vladlen  Multiscale context
+arXiv preprint
+
+aggregation by dilated convolutions 
+arXiv   
+
+Zhang  Biao  Xiong  Deyi  Su  Jinsong  Duan  Hong  and
+Zhang  Min  Variational neural machine translation 
+arXiv preprint arXiv   
+
+Zhang  Xiang  Zhao  Junbo  and LeCun  Yann  Characterlevel convolutional networks for text classi cation 
+In
+Advances in neural information processing systems  pp 
+   
+
+

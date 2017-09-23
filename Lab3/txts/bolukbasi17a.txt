@@ -1,0 +1,1001 @@
+Adaptive Neural Networks for Ef cient Inference
+
+Tolga Bolukbasi   Joseph Wang   Ofer Dekel   Venkatesh Saligrama  
+
+Abstract
+
+We present an approach to adaptively utilize deep
+neural networks in order to reduce the evaluation
+time on new examples without loss of accuracy 
+Rather than attempting to redesign or approximate existing networks  we propose two schemes
+that adaptively utilize networks  We  rst pose an
+adaptive network evaluation scheme  where we
+learn   system to adaptively choose the components of   deep network to be evaluated for each
+example  By allowing examples correctly classi ed using early layers of the system to exit 
+we avoid the computational time associated with
+full evaluation of the network  We extend this to
+learn   network selection system that adaptively
+selects the network to be evaluated for each example  We show that computational time can be
+dramatically reduced by exploiting the fact that
+many examples can be correctly classi ed using
+relatively ef cient networks and that complex 
+computationally costly networks are only necessary for   small fraction of examples  We pose
+  global objective for learning an adaptive early
+exit or network selection policy and solve it by
+reducing the policy learning problem to   layerby layer weighted binary classi cation problem 
+Empirically  these approaches yield dramatic reductions in computational cost  with up to     
+speedup on stateof theart networks from the
+ImageNet image recognition challenge with minimal     loss of top  accuracy 
+
+  Introduction
+Deep neural networks  DNNs  are among the most powerful and versatile machine learning techniques  achieving
+stateof theart accuracy in   variety of important applications  such as visual object recognition  He et al   
+
+ Boston University  Boston  MA  USA  Amazon  Cambridge 
+MA  USA  Microsoft Research  Redmond  WA  USA  Correspondence to  Tolga Bolukbasi  tolgab bu edu 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+speech recognition  Hinton et al    and machine
+translation  Sutskever et al    However  the power
+of DNNs comes at   considerable cost  namely  the computational cost of applying them to new examples  This
+cost  often called the testtime cost  has increased rapidly
+for many tasks  see Fig    with evergrowing demands
+for improved performance in stateof theart systems  As
+  point of fact  the Resnet   He et al    architecture with   layers  realizes   substantial   accuracy
+gain in top  performance over GoogLeNet  Szegedy et al 
+  on the largescale ImageNet dataset  Russakovsky
+et al    but is about    slower at testtime  The high
+testtime cost of stateof theart DNNs means that they can
+only be deployed on powerful computers  equipped with
+massive GPU accelerators  As   result  technology companies spend billions of dollars   year on expensive and
+powerhungry computer hardware  Moreover  high testtime cost prevents DNNs from being deployed on resource
+constrained platforms  such as those found in Internet of
+Things  IoT  devices  smart phones  and wearables  This
+problem has given rise to   concentrated research effort to
+reduce the testtime cost of DNNs  Most of the work on this
+topic focuses on designing more ef cient network topologies and on compressing pretrained models using various
+techniques  see related work below  We propose   different approach  which leaves the original DNN intact and instead changes the way in which we apply the DNN to new
+
+Figure   Performance versus evaluation complexity of the DNN
+architectures that won the ImageNet challenge over past several
+years  The model evaluation times increase exponentially with
+respect to the increase in accuracy 
+
+Adaptive Neural Networks for Ef cient Inference
+
+examples  We exploit the fact that natural data is typically  
+mix of easy examples and dif cult examples  and we posit
+that the easy examples do not require the full power and
+complexity of   massive DNN 
+We pursue two concrete variants of this idea  First  we propose an adaptive earlyexit strategy that allows easy examples to bypass some of the network   layers  Before each
+expensive neural network layer       convolutional layers 
+we train   policy that determines whether the current example should proceed to the next layer  or be diverted to  
+simple classi er for immediate classi cation  Our second
+approach  an adaptive network selection method  takes   set
+of pretrained DNNs  each with   different cost accuracy
+tradeoff  and arranges them in   directed acyclic graph
+ Trapeznikov   Saligrama    Wang et al    with
+the the cheapest model  rst and the most expensive one
+last  We then train an exit policy at each node in the
+graph  which determines whether we should rely on the
+current model   predictions or predict the most bene cial
+next branch to forward the example to  In this context we
+pose   global objective for learning an adaptive early exit or
+network selection policy and solve it by reducing the policy learning problem to   layerby layer weighted binary
+classi cation problem 
+We demonstrate the merits of our techniques on the ImageNet object recognition task  using   number of popular pretrained DNNs  The early exit technique speeds up
+the average testtime evaluation of GoogLeNet  Szegedy
+et al    and Resnet   He et al    by  
+within reasonable accuracy margins  The network cascade achieves    speedup compared to pure Resnet 
+model at   top  accuracy loss and    speedup with no
+change in model accuracy  We also show that our method
+can approximate   oracle policy that can see true errors suffered for each instance 
+In addition to reducing the average testtime cost of DNNs 
+it is worth noting that our techniques are compatible with
+the common design of large systems of mobile devices 
+such as smart phone networks or smart surveillancecamera
+networks  These systems typically include   large number
+of resourceconstrained edge devices that are connected to
+  central and resourcerich cloud  One of the main challenges involved in designing these systems is determining
+whether the machinelearned models will run in the devices
+or in the cloud  Of oading all of the work to the cloud
+can be problematic due to network latency  limited cloud
+ingress bandwidth  cloud availability and reliability issues 
+and privacy concerns  Our approach can be used to design
+such   system  by deploying   small inaccurate model and
+an exit policy on each device and   large accurate model in
+the cloud  Easy examples would be handled by the devices 
+while dif cult ones would be forwarded to the cloud  Our
+
+approach naturally generalizes to   fog computing topology
+ where resource constrained edge devices are connected to
+  more powerful local gateway computer  which in turn is
+connected to   sequence of increasingly powerful computers along the path to the datacenter  Such designs allow
+our method to be used in memory constrained settings as
+well due to of oading of complex models from the device 
+
+  Related Work
+Past work on reducing evaluation time of deep neural networks has centered on reductions in precision and arithmetic computational cost  design of ef cient network structure  and compression or sparsi cation of networks to reduce the number of convolutions  neurons  and edges  The
+approach proposed in this paper is complimentary  Our approach does not modify network structure or training and
+can be applied in tandem with these approaches to further
+reduce computational cost 
+The early efforts to compress large DNNs used   large
+teacher model to generate an endless stream of labeled examples for   smaller student model  Bucila et al   
+Hinton et al    The wealth of labeled training data
+generated by the teacher model allowed the small student
+model to mimic its accuracy 
+Reduced precision networks  Gong et al    Courbariaux et al    Chen et al    Hubara et al     
+Wu et al    Rastegari et al    Hubara et al     
+have been extensively studied to reduce the memory footprint of networks and their testtime cost  Similarly  computationally ef cient network structures have also been
+proposed to reduce the computational cost of deep networks by exploiting ef cient operations to approximate
+complex functions  such as the inception layers introduced
+in GoogLeNet  Szegedy et al   
+Network sparsi cation techniques attempt to identify and
+prune away redundant parts of   large neural networks   
+common approach is to remove unnecessary nodes edges
+from the network Liu et al    Iandola et al    Wen
+et al   
+In convolutional neural networks  the expensive convolution layers can be approximated  Bagherinezhad et al    and redundant computation can be
+avoided  Figurnov et al     
+More recently  researchers have designed spatially adaptive networks  Figurnov et al      Bengio et al   
+where nodes in   layer are selectively activated  Others
+have developed cascade approaches  Leroux et al   
+Odena et al    that allow early exits based on con 
+dence feedback  Our approach can be seen as an instance
+of conditional computation  where we seek computational
+gains through layerby layer and networklevel early exits  However  we propose   general framework which opti 
+
+Adaptive Neural Networks for Ef cient Inference
+
+Figure    Left  An example network selection system topology for networks Alexnet    GoogLeNet    and Resnet    Green   blocks
+denote the selection policy  The policy evaluates Alexnet  receives con dence feedback and decides to jump directly to Resnet or send
+the sample to GoogLeNet Resnet cascade   Right  An example early exit system topology  based on Alexnet  The policy chooses one
+of the multiple exits available to it at each stage for feedback  If the sample is easy enough  the system sends it down to exit  otherwise
+it sends the sample to the next layer 
+
+mizes   novel system risk that includes computational costs
+as well as accuracy  Our method does not require within
+layer modi cations and works with directed acyclic graphs
+that allow multiple model evaluation paths 
+Our techniques for adaptive DNNs borrow ideas from the
+related sensor selection problem  Xu et al    Kusner et al    Wang et al      Trapeznikov  
+Saligrama    Nan et al    Wang   Saligrama 
+  The goal of sensor selection is to adaptively choose
+sensor measurements or features for each example 
+
+  Adaptive Early Exit Networks
+Our  rst approach to reducing the testtime cost of deep
+neural networks is an early exit strategy  We  rst frame  
+global objective function and reduce policy training for optimizing the systemwide risk to   layerby layer weighted
+binary classi cation  WBC  We denote   labeled example as          Rd               where   is the dimension of the data and             is the set of classes represented in the data  We de ne the distribution generating
+the examples as        For   predicted label     we denote the loss         In this paper  we focus on the task
+of classi cation and  for exposition  focus on the indicator
+loss                 in this section  In practice we upper
+bound the indicator functions with logistic loss for computational ef ciency 
+As   running DNN example  we consider the AlexNet architecture  Krizhevsky et al    which is composed of
+  convolutional layers followed   fully connected layers 
+During evaluation of the network  computing each convolutional layer takes more than   times longer than computing   fully connected layer  so we consider   system that
+allows an example to exit the network after each of the  rst
+  convolutional layers  Let       denote the label predicted
+by the network for example   and assume that computing
+this prediction takes   constant time of     Moreover  let
+      denote the output of the kth convolutional layer for
+
+example   and let tk denote the time it takes to compute
+this value  from the time that   is fed to the input layer 
+Finally  let  yk    be the predicted label if we exit after the
+kth layer 
+After computing the kth convolutional layer  we introduce  
+decision function    that determines whether the example
+should exit the network with   label of  yk    or proceed
+to the next layer for further evaluation  The input to this
+decision function is the output of the corresponding convolutional layer       and the value of         is either
+   indicating an early exit  or   This architecture is depicted on the righthand side of Fig   
+Globally  our goal is to minimize the evaluation time of the
+network such that the error rate of the adaptive system is no
+more than some userchosen value   greater than the full
+network 
+
+min
+
+ 
+
+Ex          
+
+               cid                          
+
+ 
+
+ cid     
+
+Here       is the prediction time for example   for
+the adaptive system            is the label predicted by
+the adaptive system for example    In practice  the time
+required to predict   label and the excess loss introduced
+by the adaptive system can be recursively de ned  As in
+ Wang et al    we can reduce the early exit policy
+training for minimizing the global risk to   WBC problem 
+The key idea is that  for each input    policy must identify
+whether or not the future reward  expected future accuracy
+minus comp  loss  outweighs the currentstage accuracy 
+To this end  we  rst focus on the problem of learning
+the decision function   which determines if an example
+should exit after the fourth convolutional layer or whether
+it will be classi ed using the entire network  The time it
+takes to predict the label of example   depends on this de 
+
+Adaptive Neural Networks for Ef cient Inference
+
+Empirically  we  nd that the most effective policies operate on classi er con dences such as classi cation entropy 
+Speci cally  we consider the family of functions   as the
+union of three functional families  the aforementioned constant functions  linear classi er on con dence features generated from linear classi ers applied to     and linear
+classi er on con dence features generated from deep classi ers applied to    
+Rather than optimizing jointly over all three networks  we
+leverage the fact that the optimal solution to Eqn    can be
+found by optimizing over each of the three families of functions independently  For each family of functions  the policy evaluation time     is constant  and therefore solving
+  over   single family of functions is equivalent to solving an unregularized learning problem  We exploit this by
+solving the three unregularized learning problems and taking the minimum over the three solutions 
+In order to learn the sequence of decision functions  we
+consider   bottomup training scheme  as previously proposed in sensor selection  Wang et al   
+In this
+scheme  we learn the deepest  in time  early exit block  rst 
+then    the outputs  Fixing the outputs of this trained function  we then train the early exit function immediately preceding the deepest early exit function   in Fig   
+For   general early exit system  we recursively de ne
+the future time  Tk        and the future predicted label 
+ yk        as
+
+Tk         
+
+         
+Tk      
+         
+tk        
+
+ 
+
+and
+
+cision and can be written as
+
+ cid 
+
+          
+
+       
+         otherwise
+
+if        
+
+ 
+
+ 
+
+ cid cid 
+
+ cid 
+
+where     is the computational time required to evaluate
+the function   Our goal is to learn   system that tradesoff
+the evaluation time and the induced error 
+
+ cid 
+
+argmin
+ 
+
+Ex                       
+
+          
+
+            
+
+   
+
+ 
+
+ 
+
+where   is the function      max      and       
+is   tradeoff parameter that balances between evaluation
+time and error  Note that the function          can be
+expressed as   sum of indicator functions 
+
+                       
+
+               
+
+                 
+
+argmin
+ 
+
+Substituting for        allows us to reduce the problem
+to an importance weighted binary learning problem 
+
+where     and         are the optimal decision and cost
+at stage   for the example        de ned 
+
+ cid       
+
+ 
+
+          cid          cid   
+ 
+
+          
+
+if    
+
+      
+
+ cid 
+
+ cid 
+
+ 
+
+otherwise
+
+ 
+
+           
+
+ cid 
+
+ cid 
+
+     
+
+and
+
+         cid cid                                    
+
+ cid cid   
+
+Note that the regularization term      is important to
+choose the optimal functional form for the function  
+as well as   natural mechanism to de ne the structure of
+the early exit system  Rather than limiting the family of
+function   to   single functional form such as   linear
+function or   speci   network architecture  we assume the
+family of functions   is the union of multiple functional
+families  notably including the constant decision functions
+               Although this constant function
+does not allow for adaptive network evaluation at the speci   location  it additionally does not introduce any computational overhead  that is          By including this
+constant function in   we guarantee that our technique can
+only decrease the testtime cost 
+
+ 
+ 
+
+     
+     
+
+ yk   
+
+if                  
+if                  
+
+otherwise
+
+if          
+if      
+
+and            
+
+if      
+
+and            
+
+ 
+
+otherwise
+
+ yk         
+
+ yk       
+
+Using these de nitions  we can generalize Eqn    For  
+system with   early exit functions  the kth early exit function can be trained by solving the supervised learning problem 
+
+          cid Ck          cid       
+
+ cid         
+
+argmin
+   
+
+ 
+
+where optimal decision and cost       and Ck       can be
+
+Adaptive Neural Networks for Ef cient Inference
+
+de ned 
+
+       
+
+Ck        
+
+ 
+ 
+
+ 
+
+ 
+
+ 
+
+if       and Tk          tk 
+      yk            yk      
+if       and     tk 
+      yk            yk      
+otherwise
+ cid 
+
+   yk            yk      
+
+ cid cid cid Tk          tk
+ cid 
+ cid cid cid     tk
+
+ 
+
+ cid cid cid 
+
+      yk                   
+
+ 
+
+ cid cid cid 
+
+Eqn    allows for ef cient training of an early exit system by sequentially training early exit decision functions
+from the bottom of the network upwards  Furthermore  by
+including constant functions in the family of functions  
+and training early exit functions in all potential stages of
+the system  the early exit architecture can also naturally be
+discovered  Finally  in the case of single option at each
+exit  the layerwise learning scheme is equivalent to jointly
+optimizing all the exits with respect to full system risk 
+
+  Network Selection
+As shown in Fig    the computational time has grown
+dramatically with respect to classi cation performance 
+Rather than attempting to reduce the complexity of the
+stateof theart networks  we instead leverage this nonlinear growth by extending the early exiting strategy to
+the regime of network selection  Conceptually  we seek
+to exploit the fact that many examples are correctly classi ed by relatively ef cient networks such as alexnet and
+googlenet  whereas only   small fraction of examples are
+correctly classi ed by computationally expensive networks
+such as resnet   and incorrectly classi ed by googlenet
+and alexnet 
+As an example  assume we have three pretrained networks 
+      and    For an example    denote the predictions
+for the networks as           and      Additionally  denote the evaluation times for each of the networks
+as             and      
+As in Fig    the adaptive system composed of two decision functions that determine which network is evaluated
+for each example  First                      is applied after evaluation of    to determine if the classi cation decision from    should be returned or if network   
+or network    should be evaluated for the example  For
+examples that are evaluated on                    
+determines if the classi cation decision from    should be
+returned or if network    should be evaluated 
+
+if      
+
+otherwise
+
+Our goal is to learn the functions   and   that minimize
+the average evaluation time subject to   constraint on the
+average loss induced by adaptive network selection  As in
+the adaptive early exit case  we  rst learn   to tradeoff
+between the average evaluation time and induced error 
+
+Ex   cid         
+ cid cid 
+ cid 
+
+            
+
+            
+
+ cid       
+ cid 
+
+          
+
+min
+ 
+
+ 
+
+     
+
+ 
+
+ 
+
+ 
+
+where        is   tradeoff parameter  As in the adaptive network usage case  this problem can be posed as an
+importance weighted supervised learning problem 
+
+ cid       
+
+ 
+
+min
+ 
+
+          cid          cid   
+ cid 
+
+where     and         are the cost and optimal decision
+at stage   for the example label pair        de ned 
+
+     
+
+and
+
+         
+
+  
+  
+
+if                                   
+otherwise
+
+ cid cid cid                                  
+
+ cid cid cid 
+
+ 
+
+Once   has been trained according to Eqn 
+the
+training times for examples that pass through    and are
+routed by   can be de ned                     
+          As in the adaptive early exit case  we
+train and    the last decision function    then train the
+earlier function    As before  we seek to tradeoff between evaluation time and error 
+
+ cid       
+Ex   cid                   
+                        
+ cid 
+
+          
+
+     
+
+min
+ 
+
+ cid 
+
+                          
+
+     
+
+ 
+
+This can be reduced to   cost sensitive learning problem 
+
+ cid 
+
+ cid 
+
+min
+ 
+
+         
+
+                         
+
+            
+
+     
+
+ 
+
+where the costs are de ned 
+
+                                
+                                        
+               
+
+Adaptive Neural Networks for Ef cient Inference
+
+Algorithm   Adaptive Network Learning Pseudocode
+
+Input  Data   xi  yi  
+  
+Models    routes     model costs    
+while   untrained   do
+
+  Choose the deepest policy decision         all downstream policies are trained
+for example                  do
+
+  Construct the weight vector  cid wi of costs per action from Eqn   
+
+end for
+      Learn clf     cid             xn   cid wn 
+  Evaluate    and update route costs to model   
+  xi  yi  sn  sj     cid wj
+     xi      xi  yi  sn  sj 
+
+end while
+  Prune models the policy does not route any example
+to from the collection
+Output  Policy functions              
+
+  Experimental Section
+We evaluate our method on the Imagenet   classi cation dataset  Russakovsky et al    which has  
+object classes  We train using the   million training
+images and evaluate the system using    validation images  We use the pretrained models from Caffe Model
+Zoo for Alexnet  GoogLeNet and Resnet   Krizhevsky
+et al    Szegedy et al    He et al    For preprocessing we follow the same routines proposed for these
+networks and verify the  nal network performances within
+  small margin     Note that it is common to use
+ensembles of networks and multiple crops to achieve maximum performance  These methods add minimal gain in
+accuracy while increasing the system cost dramatically  As
+the speedup margin increases  it becomes trivial for the policy to show signi cant speedups within the same accuracy
+tolerance  We believe such speedups are not useful in practice and focus on single crop with single model case 
+Temporal measurements  We measure network times using
+the builtin tool in the Caffe library on   server that utilizes
+  Nvidia Titan   Pascal with CuDNN   Since our focus
+is on the computational cost of the networks  we ignore the
+data loading and preprocessing times  The reported times
+are actual measurements including the policy overhead 
+Policy form and metafeatures  In addition to the outputs
+of the convolutional layers of earlier networks  we augment
+the feature space with the entropy of prediction probabilities  We relax the indicators in equations   and   learn
+linear logistic regression model on these features for our
+policy  We experimented with pooled internal representations  but in practice  inclusion of the entropy feature with
+
+  simple linear policy signi cantly outperforms more complex policy functions that exclude the entropy feature 
+
+  Network Selection
+
+Baselines  Our full system  depicted in Figure   starts with
+Alexnet  Following the evaluation of Alexnet  the system
+determines for each example either to return the prediction 
+route the example to GoogLeNet  or route the example to
+Resnet  For examples that are routed to GoogLeNet  the
+system either returns the prediction output by GoogLeNet
+or routes the example to Resnet  As baselines  we compare against   uniform policy and   myopic policy which
+learns   single threshold based on model con dence  We
+also report performance from different system topologies 
+To provide   bound on the achievable performance  we
+show the performance of   soft oracle  The soft oracle
+has access to classi cation labels and sends each example
+to the fastest model that correctly classi es the example 
+Since having access to the labels is too strong  we made
+the oracle softer by adding two constraints  First  it follows
+the same network topology  also it can not make decisions
+without observing the model feedback  rst  getting hit by
+the same overhead  Second  it can only exit at   cheaper
+model if all latter models agree on the true label  This second constraint is added due to the fact that our goal is not
+to improve the prediction performance of the system but
+to reduce the computational time  and therefore we prevent
+the oracle from  correcting  mistakes made by the most
+complex networks 
+We sweep the cost tradeoff parameter in the range   to
+  to achieve different budget points  Note that due to
+weights in our cost formulation  even when the pseudo labels are identical  policy behavior can differ  Conceptually 
+the weights balance the importance of the samples that gain
+in classi cation loss in future stages versus samples that
+gain in computational savings by exiting early stages 
+The results are demonstrated in Figure   We see that both
+full tree and        cascade achieve signi cant    
+speedup over using Resnet  while maintaining its accuracy within   The classi er feedback for the policy has
+  dramatic impact on its performance  Although  Alexnet
+introduces much less overhead compared to GoogLeNet
+  vs   the      policy performs signi cantly
+worse in lower budget regions  Our full tree policy learns to
+choose the best order for all budget regions  Furthermore 
+the policy matches the soft oracle performance in both the
+high and low budget regions 
+Note that GoogLeNet is   very well positioned at  ms
+per image budget  probably due to its ef ciency oriented
+architectural design with inception blocks  Szegedy et al 
+  For low budget regions  the overhead of the policy is   detriment  as even when it can learn to send al 
+
+Adaptive Neural Networks for Ef cient Inference
+
+Figure   Performance of network selection policy on Imagenet  Left  top  error Right  top  error  Our full adaptive system  denoted
+with blue dots  signi cantly outperforms any individual network for almost all budget regions and is close to the performance of the
+oracle  The performances are reported on the validation set of ImageNet dataset 
+
+Figure    Left  Different network selection topologies that we considered  Arrows denote possible jumps allowed to the policy      
+and   denote Alexnet  GoogLeNet and Resnet  respectively   Right  Statistics for proportion of total time spent on different networks
+and proportion of samples that exit at each network  Top row is sampled at  ms and bottom row is sampled at  ms system evaluation
+
+most half the samples to Alexnet instead of GoogLeNet
+with marginal loss in accuracy  the extra  ms Alexnet
+overhead brings the balance point     ms  very close
+to using only GoogLeNet at  ms  The ratio between network evaluation times is   signi cant factor for our system 
+Fortunately  as mentioned before  for many applications the
+ratio of different models can be very high  cloud computing
+upload times  resnet versus Alexnet difference etc 
+We further analyzed the network usage and runtime proportion statistics for samples at different budget regions 
+Fig    demonstrates the results at three different budget
+levels  Full tree policy avoids using GoogLeNet altogether
+for high budget regions  This is the expected behavior since
+the      policy performs just as well in those regions and
+using GoogLeNet in the decision adds too much overhead 
+At mid level budgets the policy distributes samples more
+evenly  Note that the sum of the overheads is close to useful
+runtime of cheaper networks in this region  This is possible
+
+since the earlier networks are very lightweight 
+
+  Network Early Exits
+
+To output   prediction following each convolutional layer 
+we train   single layer linear classi er after   global average
+pooling for each layer  We added global pooling to minimize the policy overhead in earlier exits  For Resnet  we
+added an exit after output layers of                    and    
+The dimensionality of the exit features after global average
+pooling are           and   in the same
+order as the layer names  For GoogLeNet we added the
+exits after concatenated outputs of every inception layer 
+Table   shows the early exit performance for different networks  The gains are more marginal compared to network
+selection  Fig   shows the accuracy gains per evaluation
+time for different layers  Interestingly  the accuracy gain
+per time is more linear within the same architecture com 
+
+Adaptive Neural Networks for Ef cient Inference
+
+Network
+GoogLeNet 
+GoogLeNet 
+GoogLeNet 
+Resnet 
+Resnet 
+Resnet 
+
+policy top 
+
+uniform top 
+
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+
+Table   Early exit performances at different accuracy budget
+tradeoffs for different networks     denotes   loss from full
+model accuracy and reported numbers are percentage speedups 
+pared to different network architectures  This explains why
+the adaptive policy works better for network selection compared to early exits 
+
+Figure   The plots show the accuracy gains at different layers for
+early exits for networks GoogLeNet  top  and Resnet   bottom 
+
+  Network Error Analysis
+
+Fig    shows the distributions over examples of the networks that correctly label the example  Notably    and
+  of the examples are correctly classi ed by all networks for top   and top   error  respectively  Similarly 
+  and   of the examples are incorrectly classi ed by
+all networks with respect to their top   and top   error  respectively  These results verify our hypothesis that for  
+large fraction of data  there is no need for costly networks 
+In particular  for the   and   of data with no change
+
+Figure   Analysis of top  and top  errors for different networks  Majority of the samples are easily classi ed by Alexnet 
+and only   minority of them require deeper networks 
+in top   and top   error  respectively  the use of any network
+apart from Alexnet is unnecessary and only adds unnecessary computational time 
+Additionally  it is worth noting the balance between examples incorrectly classi ed by all networks    and   respectively for top   and top   error  and the fraction of examples correctly classi ed by either GoogLeNet or Resnet
+but not Alexnet    and   for top   and top   error  respectively  This behavior supports our observation
+that entropy of classi cation decisions is an important feature in making policy decisions  as examples likely to be
+incorrectly classi ed by Alexnet are likely to be classi ed
+correctly by   later network 
+Note that our system is trained using the same data used to
+train the networks  Generally  the resulting evaluation error
+for each network on training data is signi cantly lower than
+error that arises on test data  and therefore our system is biased towards sending examples to more complex networks
+that generally show negligible training error  Practically 
+this problem is alleviated through the use of validation data
+to train the adaptive systems  In order to maintain the reported performance of the network without expansion of
+the training set  we instead utilize the same data for training both networks and adaptive systems  however we note
+that performance of our adaptive systems is generally better
+when trained on data excluded from the network training 
+
+  Conclusion
+We proposed two different schemes to adaptively trade off
+model accuracy with model evaluation time for deep neural
+networks  We demonstrated that signi cant gains in computational time is possible through our novel policy with
+negligible loss in accuracy on ImageNet image recognition dataset  We posed   global objective for learning an
+adaptive early exit or network selection policy and solved
+it by reducing the policy learning problem to   layerby 
+layer weighted binary classi cation problem  We believe
+that adaptivity is very important in the age of growing data
+for models with high variance in computational time and
+quality  We also showed that our method approximates an
+Oracle based policy that has bene   of access to true error
+for each instance from all the networks 
+
+Adaptive Neural Networks for Ef cient Inference
+
+Acknowledgements
+This material is based upon work supported in part by NSF
+Grants CCF    NSF Grant CNS    NSF
+CCF    the      Department of Homeland Security  Science and Technology Directorate  Of ce of University Programs  under Grant Award  ST ED 
+and by ONR contract      The views and
+conclusions contained in this document are those of the authors and should not be interpreted as necessarily representing the social policies  either expressed or implied  of the
+NSF       DHS  ONR or AF 
+
+References
+Bagherinezhad  Hessam  Rastegari  Mohammad  and
+Farhadi  Ali  Lcnn  Lookupbased convolutional neural
+network  arXiv preprint arXiv   
+
+Bengio  Emmanuel  Bacon  PierreLuc  Pineau  Joelle 
+Conditional computation in
+arXiv preprint
+
+and Precup  Doina 
+neural networks for faster models 
+arXiv   
+
+Bucila  Cristian  Caruana  Rich  and NiculescuMizil 
+Alexandru  Model compression  In Proceedings of the
+ th ACM SIGKDD international conference on Knowledge discovery and data mining  pp    ACM 
+ 
+
+Chen  Wenlin  Wilson  James    Tyree  Stephen  Weinberger  Kilian    and Chen  Yixin  Compressing neural
+In ICML  pp   
+networks with the hashing trick 
+   
+
+Courbariaux  Matthieu  Bengio  Yoshua  and David  JeanPierre  Binaryconnect  Training deep neural networks
+with binary weights during propagations  In Advances in
+Neural Information Processing Systems  pp   
+ 
+
+Figurnov  Michael  Collins  Maxwell    Zhu  Yukun 
+Zhang  Li  Huang  Jonathan  Vetrov  Dmitry  and
+Spatially adaptive compuSalakhutdinov  Ruslan 
+arXiv preprint
+tation time for residual networks 
+arXiv     
+
+Figurnov  Mikhail  Ibraimova  Aizhan  Vetrov  Dmitry   
+and Kohli  Pushmeet 
+Perforatedcnns  Acceleration
+through elimination of redundant convolutions  In Advances in Neural Information Processing Systems  pp 
+     
+
+Gong  Yunchao  Liu  Liu  Yang  Ming  and Bourdev 
+Lubomir  Compressing deep convolutional networks using vector quantization  arXiv preprint arXiv 
+ 
+
+He  Kaiming  Zhang  Xiangyu  Ren  Shaoqing  and Sun 
+Jian  Deep residual learning for image recognition  In
+Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition  pp     
+
+Hinton  Geoffrey  Deng  Li  Yu  Dong  Dahl  George   
+Mohamed  Abdelrahman  Jaitly  Navdeep  Senior  Andrew  Vanhoucke  Vincent  Nguyen  Patrick  Sainath 
+Tara    et al  Deep neural networks for acoustic modeling in speech recognition  The shared views of four
+research groups  IEEE Signal Processing Magazine   
+   
+
+Hinton  Geoffrey  Vinyals  Oriol  and Dean  Jeff  Distilling the knowledge in   neural network  arXiv preprint
+arXiv   
+
+Hubara  Itay  Courbariaux  Matthieu  Soudry  Daniel  ElYaniv  Ran  and Bengio  Yoshua  Binarized neural netIn Advances in Neural Information Processing
+works 
+Systems  pp       
+
+Hubara  Itay  Courbariaux  Matthieu  Soudry  Daniel  ElYaniv  Ran  and Bengio  Yoshua  Quantized neural networks  Training neural networks with low
+arXiv preprint
+precision weights and activations 
+arXiv     
+
+Iandola  Forrest    Han  Song  Moskewicz  Matthew   
+Ashraf  Khalid  Dally  William    and Keutzer  Kurt 
+Squeezenet  Alexnetlevel accuracy with    fewer paarXiv preprint
+rameters and    mb model size 
+arXiv   
+
+Krizhevsky  Alex  Sutskever  Ilya  and Hinton  Geoffrey   
+Imagenet classi cation with deep convolutional neural
+networks  In Advances in neural information processing
+systems  pp     
+
+Kusner     Chen     Zhou     Xu     Weinberger     and
+Chen     Featurecost sensitive learning with submodular trees of classi ers  In TwentyEighth AAAI Conference on Arti cial Intelligence   
+
+Leroux  Sam  Bohez  Steven  De Coninck  Elias  Verbelen 
+Tim  Vankeirsbilck  Bert  Simoens  Pieter  and Dhoedt 
+Bart  The cascading neural network  building the internet of smart things  Knowledge and Information Systems  pp     
+
+Liu  Baoyuan  Wang  Min  Foroosh  Hassan  Tappen  Marshall  and Pensky  Marianna  Sparse convolutional neural networks  In Proceedings of the IEEE Conference on
+Computer Vision and Pattern Recognition  pp   
+ 
+
+Adaptive Neural Networks for Ef cient Inference
+
+Wen  Wei  Wu  Chunpeng  Wang  Yandan  Chen  Yiran 
+and Li  Hai  Learning structured sparsity in deep neural
+networks  In Advances in Neural Information Processing
+Systems  pp     
+
+Wu  Jiaxiang  Leng  Cong  Wang  Yuhang  Hu  Qinghao 
+and Cheng  Jian  Quantized convolutional neural networks for mobile devices  In Proceedings of the IEEE
+Conference on Computer Vision and Pattern Recognition  pp     
+
+Xu     Kusner     Chen     and Weinberger     Costsensitive tree of classi ers  In Proceedings of the  th International Conference on Machine Learning  pp   
+   
+
+Nan  Feng  Wang  Joseph  and Saligrama  Venkatesh  PrunIn Ading random forests for prediction on   budget 
+vances in Neural Information Processing Systems  
+Annual Conference on Neural Information Processing
+Systems   December     Barcelona  Spain 
+pp     
+
+Odena  Augustus  Lawson  Dieterich  and Olah  Christopher  Changing model behavior at testtime using reinforcement learning  arXiv preprint arXiv 
+ 
+
+Rastegari  Mohammad  Ordonez  Vicente  Redmon 
+Joseph  and Farhadi  Ali  Xnornet  Imagenet classi 
+ cation using binary convolutional neural networks  In
+European Conference on Computer Vision  pp   
+Springer   
+
+Russakovsky  Olga  Deng  Jia  Su  Hao  Krause  Jonathan 
+Satheesh  Sanjeev  Ma  Sean  Huang  Zhiheng  Karpathy  Andrej  Khosla  Aditya  Bernstein  Michael  et al 
+Imagenet large scale visual recognition challenge  International Journal of Computer Vision   
+ 
+
+Sutskever  Ilya  Vinyals  Oriol  and Le  Quoc   
+
+SeIn
+quence to sequence learning with neural networks 
+Advances in neural information processing systems  pp 
+   
+
+Szegedy  Christian  Liu  Wei  Jia  Yangqing  Sermanet 
+Pierre  Reed  Scott  Anguelov  Dragomir  Erhan  Dumitru  Vanhoucke  Vincent  and Rabinovich  Andrew 
+In Proceedings of
+Going deeper with convolutions 
+the IEEE Conference on Computer Vision and Pattern
+Recognition  pp     
+
+Trapeznikov    and Saligrama     Supervised sequential
+classi cation under budget constraints  In International
+Conference on Arti cial Intelligence and Statistics  pp 
+   
+
+Wang     Bolukbasi     Trapeznikov     and Saligrama 
+   Model selection by linear programming  In European
+Conference on Computer Vision  pp     
+
+Wang  Joseph and Saligrama  Venkatesh  Local supervised
+learning through space partitioning  In Advances in Neural Information Processing Systems  NIPS  pp   
+ 
+
+Wang 
+
+Joseph  Trapeznikov  Kirill 
+
+and Saligrama 
+Venkatesh  Ef cient learning by directed acyclic graph
+In Advances in
+for resource constrained prediction 
+Neural Information Processing Systems  pp   
+ 
+
+

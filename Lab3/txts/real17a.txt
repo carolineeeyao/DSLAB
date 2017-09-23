@@ -1,0 +1,933 @@
+LargeScale Evolution of Image Classi ers
+
+Esteban Real   Sherry Moore   Andrew Selle   Saurabh Saxena  
+Yutaka Leon Suematsu   Jie Tan   Quoc    Le   Alexey Kurakin  
+
+Abstract
+
+Neural networks have proven effective at solving dif cult problems but designing their architectures can be challenging  even for image classi cation problems alone  Our goal is to minimize human participation  so we employ evolutionary algorithms to discover such networks
+automatically  Despite signi cant computational
+requirements  we show that it is now possible to
+evolve models with accuracies within the range
+of those published in the last year 
+Speci 
+cally  we employ simple evolutionary techniques
+at unprecedented scales to discover models for
+the CIFAR  and CIFAR  datasets  starting from trivial initial conditions and reaching
+accuracies of     for ensemble  and
+  respectively  To do this  we use novel and
+intuitive mutation operators that navigate large
+search spaces  we stress that no human participation is required once evolution starts and that the
+output is   fullytrained model  Throughout this
+work  we place special emphasis on the repeatability of results  the variability in the outcomes
+and the computational requirements 
+
+  Introduction
+Neural networks can successfully perform dif cult tasks
+where large amounts of training data are available  He
+et al    Weyand et al    Silver et al    Wu
+et al    Discovering neural network architectures 
+however  remains   laborious task  Even within the speci   problem of image classi cation  the state of the art
+was attained through many years of focused investigation
+by hundreds of researchers  Krizhevsky et al    Simonyan   Zisserman   Szegedy et al    He
+et al    Huang et al      among many others 
+
+ Google Brain  Mountain View  California  USA  Google Research  Mountain View  California  USA  Correspondence to  Esteban Real  ereal google com 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+It is therefore not surprising that in recent years  techniques to automatically discover these architectures have
+been gaining popularity  Bergstra   Bengio    Snoek
+et al    Han et al    Baker et al    Zoph
+  Le    One of the earliest such  neurodiscovery 
+methods was neuroevolution  Miller et al    Stanley
+  Miikkulainen    Stanley    Bayer et al   
+Stanley et al    Breuel   Shafait    Pugh   Stanley    Kim   Rigazio    Zaremba    Fernando
+et al    Morse   Stanley    Despite the promising
+results  the deep learning community generally perceives
+evolutionary algorithms to be incapable of matching the
+accuracies of handdesigned models  Verbancsics   Harguess    Baker et al    Zoph   Le    In this
+paper  we show that it is possible to evolve such competitive models today  given enough computational power 
+We used slightlymodi ed known evolutionary algorithms
+and scaled up the computation to unprecedented levels  as
+far as we know  This  together with   set of novel and
+intuitive mutation operators  allowed us to reach competitive accuracies on the CIFAR  dataset  This dataset
+was chosen because it requires large networks to reach
+high accuracies  thus presenting   computational challenge 
+We also took   small  rst step toward generalization and
+evolved networks on the CIFAR  dataset 
+In transitioning from CIFAR  to CIFAR  we did not modify any aspect or parameter of our algorithm  Our typical
+neuroevolution outcome on CIFAR  had   test accuracy
+with                   FLOPs  and our
+top model  by validation accuracy  had   test accuracy of
+      FLOPs  Ensembling the validationtop
+  models from each population reaches   test accuracy of
+  at no additional training cost  On CIFAR  our
+single experiment resulted in   test accuracy of    
+    FLOPs  As far as we know  these are the most
+accurate results obtained on these datasets by automated
+discovery methods that start from trivial initial conditions 
+Throughout this study  we placed special emphasis on the
+simplicity of the algorithm 
+In particular  it is    oneshot  technique  producing   fully trained neural network
+requiring no postprocessing 
+It also has few impactful
+metaparameters       parameters not optimized by the algorithm  Starting out with poorperforming models with
+
+LargeScale Evolution
+
+Table   Comparison with singlemodel handdesigned architectures  The     and     columns indicate the test accuracy on
+the dataaugmented CIFAR  and CIFAR  datasets  respectively  The  Reachable  column denotes whether the given handdesigned model lies within our search space  An entry of   indicates that no value was reported  The   indicates   result reported by
+Huang et al      instead of the original author  Much of this table was based on that presented in Huang et al     
+
+STUDY
+
+PARAMS 
+
+  
+
+  
+
+REACHABLE 
+
+MAXOUT  GOODFELLOW ET AL   
+NETWORK IN NETWORK  LIN ET AL   
+ALLCNN  SPRINGENBERG ET AL   
+DEEPLY SUPERVISED  LEE ET AL   
+HIGHWAY  SRIVASTAVA ET AL   
+RESNET  HE ET AL   
+
+EVOLUTION  OURS 
+WIDE RESNET    ZAGORUYKO   KOMODAKIS   
+WIDE RESNET       ZAGORUYKO   KOMODAKIS   
+DENSENET  HUANG ET AL     
+
+ 
+
+ 
+
+ 
+ 
+
+ 
+
+ 
+ 
+ 
+     
+ 
+ 
+     
+ 
+       
+   
+   
+     
+     
+     
+
+ 
+ 
+ 
+ 
+
+ 
+
+NO
+NO
+YES
+NO
+NO
+YES
+
+   
+YES
+NO
+NO
+
+no convolutions  the algorithm must evolve complex convolutional neural networks while navigating   fairly unrestricted search space  no  xed depth  arbitrary skip connections  and numerical parameters that have few restrictions on the values they can take  We also paid close attention to result reporting  Namely  we present the variability in our results in addition to the top value  we account
+for researcher degrees of freedom  Simmons et al   
+we study the dependence on the metaparameters  and we
+disclose the amount of computation necessary to reach the
+main results  We are hopeful that our explicit discussion of
+computation cost could spark more study of ef cient model
+search and training  Studying model performance normalized by computational investment allows consideration of
+economic concepts like opportunity cost 
+
+  Related Work
+Neuroevolution dates back many years  Miller et al 
+  originally being used only to evolve the weights
+of    xed architecture  Stanley   Miikkulainen  
+showed that it was advantageous to simultaneously evolve
+the architecture using the NEAT algorithm  NEAT has
+three kinds of mutations      modify   weight   ii  add  
+connection between existing nodes  or  iii  insert   node
+while splitting an existing connection  It also has   mechanism for recombining two models into one and   strategy
+to promote diversity known as  tness sharing  Goldberg
+et al    Evolutionary algorithms represent the models
+using an encoding that is convenient for their purpose 
+analogous to nature   DNA  NEAT uses   direct encoding 
+every node and every connection is stored in the DNA  The
+alternative paradigm  indirect encoding  has been the subject of much neuroevolution research  Gruau    Stanley et al    Pugh   Stanley    Kim   Rigazio 
+
+  Fernando et al    For example  the CPPN
+ Stanley    Stanley et al    allows for the evolution of repeating features at different scales  Also  Kim
+  Rigazio   use an indirect encoding to improve the
+convolution  lters in an initially highlyoptimized  xed architecture 
+Research on weight evolution is still ongoing  Morse  
+Stanley    but the broader machine learning community defaults to backpropagation for optimizing neural network weights  Rumelhart et al    Backpropagation
+and evolution can be combined as in Stanley et al   
+where only the structure is evolved  Their algorithm follows an alternation of architectural mutations and weight
+backpropagation  Similarly  Breuel   Shafait   use
+this approach for hyperparameter search  Fernando et al 
+  also use backpropagation  allowing the trained
+weights to be inherited through the structural modi cations 
+The above studies create neural networks that are small in
+comparison to the typical modern architectures used for image classi cation  He et al    Huang et al     
+Their focus is on the encoding or the ef ciency of the evolutionary process  but not on the scale  When it comes to
+images  some neuroevolution results reach the computational scale required to succeed on the MNIST dataset  LeCun et al    Yet  modern classi ers are often tested
+on realistic images  such as those in the CIFAR datasets
+ Krizhevsky   Hinton    which are much more challenging  These datasets require large models to achieve
+high accuracy 
+Nonevolutionary neurodiscovery methods have been
+more successful at tackling realistic image data  Snoek
+et al 
+  used Bayesian optimization to tune  
+hyperparameters for    xeddepth architecture  reach 
+
+LargeScale Evolution
+
+Table   Comparison with automatically discovered architectures  The     and     contain the test accuracy on the dataaugmented CIFAR  and CIFAR  datasets  respectively  An entry of   indicates that the information was not reported or is not
+known to us  For Zoph   Le   we quote the result with the most similar search space to ours  as well as their best result  Please
+refer to Table   for handdesigned results  including the state of the art   Discrete params  means that the parameters can be picked
+from   handful of values only       strides        
+
+STUDY
+
+STARTING POINT
+
+CONSTRAINTS
+
+POSTPROCESSING
+
+PARAMS 
+
+  
+
+  
+
+  LAYERS
+
+ 
+
+FIXED ARCHITECTURE  NO
+SKIPS
+
+NONE
+
+ 
+
+ 
+
+ 
+
+DISCRETE PARAMS  MAX 
+NUM  LAYERS  NO SKIPS
+
+TUNE  RETRAIN
+
+     
+
+ 
+
+BAYESIAN
+ SNOEK
+ET AL   
+QLEARNING
+ BAKER
+ET AL   
+RL  ZOPH  
+LE   
+RL  ZOPH  
+LE   
+
+  LAYERS   
+SKIPS
+  LAYERS    POOL
+LAYERS AT   AND
+    SKIPS
+
+DISCRETE PARAMS 
+EXACTLY   LAYERS
+DISCRETE PARAMS 
+EXACTLY   LAYERS   
+POOL LAYERS AT   AND  
+
+SMALL GRID
+SEARCH  RETRAIN
+ADD MORE FILTERS 
+SMALL GRID
+SEARCH  RETRAIN
+
+EVOLUTION
+ OURS 
+
+SINGLE LAYER 
+ZERO CONVS 
+
+POWEROF  STRIDES
+
+NONE
+
+     
+
+     
+
+ 
+
+ 
+
+   
+   
+ENSEMB 
+
+ 
+
+ 
+
+ 
+
+ing   new state of
+the art at
+the time 
+Zoph  
+Le   used reinforcement
+learning on   deeper
+ xedlength architecture 
+In their approach    neural network the  discoverer constructs   convolutional
+neural network the  discovered one layer at   time  In
+addition to tuning layer parameters  they add and remove
+skip connections  This  together with some manual postprocessing  gets them very close to the  current  state of
+the art   Additionally  they surpassed the state of the art on
+  sequenceto sequence problem  Baker et al    use
+Qlearning to also discover   network one layer at   time 
+but in their approach  the number of layers is decided by
+the discoverer  This is   desirable feature  as it would allow
+  system to construct shallow or deep solutions  as may be
+the requirements of the dataset at hand  Different datasets
+would not require specially tuning the algorithm  Comparisons among these methods are dif cult because they explore very different search spaces and have very different
+initial conditions  Table  
+Tangentially  there has also been neuroevolution work on
+LSTM structure  Bayer et al    Zaremba    but
+this is beyond the scope of this paper  Also related to this
+work is that of Saxena   Verbeek   who embed convolutions with different parameters into   species of  supernetwork  with many parallel paths  Their algorithm then
+selects and ensembles paths in the supernetwork  Finally 
+canonical approaches to hyperparameter search are grid
+search  used in Zagoruyko   Komodakis   for example  and random search  the latter being the better of the
+
+two  Bergstra   Bengio   
+Our approach builds on previous work  with some important differences  We explore large modelarchitecture
+search spaces starting with basic initial conditions to avoid
+priming the system with information about known good
+strategies for the speci   dataset at hand  Our encoding
+is different from the neuroevolution methods mentioned
+above  we use   simpli ed graph as our DNA  which is
+transformed to   full neural network graph for training and
+evaluation  Section   Some of the mutations acting on
+this DNA are reminiscent of NEAT  However  instead of
+single nodes  one mutation can insert whole layers     
+tens to hundreds of nodes at   time  We also allow for
+these layers to be removed  so that the evolutionary process
+can simplify an architecture in addition to complexifying it 
+Layer parameters are also mutable  but we do not prescribe
+  small set of possible values to choose from  to allow for
+  larger search space  We do not use  tness sharing  We
+report additional results using recombination  but for the
+most part  we used mutation only  On the other hand  we
+do use backpropagation to optimize the weights  which
+can be inherited across mutations  Together with   learning rate mutation  this allows the exploration of the space
+of learning rate schedules  yielding fully trained models
+at the end of the evolutionary process  Section   Tables   and   compare our approach with handdesigned architectures and with other neurodiscovery techniques  respectively 
+
+LargeScale Evolution
+
+  Methods
+  Evolutionary Algorithm
+
+To automatically search for highperforming neural network architectures  we evolve   population of models 
+Each model or individual is   trained architecture  The
+model   accuracy on   separate validation dataset is   measure of the individual   quality or  tness  During each evolutionary step    computer   worker chooses two individuals at random from this population and compares their
+ tnesses  The worst of the pair is immediately removed
+from the population it is killed  The best of the pair is
+selected to be   parent  that is  to undergo reproduction 
+By this we mean that the worker creates   copy of the parent and modi es this copy by applying   mutation  as described below  We will refer to this modi ed copy as the
+child  After the worker creates the child  it trains this child 
+evaluates it on the validation set  and puts it back into the
+population  The child then becomes alive      free to act
+as   parent  Our scheme  therefore  uses repeated pairwise
+competitions of random individuals  which makes it an example of tournament selection  Goldberg   Deb   
+Using pairwise comparisons instead of whole population
+operations prevents workers from idling when they  nish
+early  Code and more detail about the methods described
+below can be found in Supplementary Section   
+Using this strategy to search large spaces of complex image models requires considerable computation  To achieve
+scale  we developed   massivelyparallel  lockfree infrastructure  Many workers operate asynchronously on different computers  They do not communicate directly with
+each other  Instead  they use   shared  lesystem  where
+the population is stored  The  lesystem contains directories that represent the individuals  Operations on these
+individuals  such as the killing of one  are represented as
+atomic renames on the directory  Occasionally    worker
+may concurrently modify the individual another worker is
+operating on  In this case  the affected worker simply gives
+up and tries again  The population size is   individuals 
+unless otherwise stated  The number of workers is always
+  of the population size  To allow for long runtimes with
+ 
+  limited amount of space  dead individuals  directories are
+frequently garbagecollected 
+
+  Encoding and Mutations
+
+Individual architectures are encoded as   graph that we
+refer to as the DNA  In this graph  the vertices represent
+rank  tensors or activations  As is standard for   convo 
+ The use of the  lename string to contain key information
+about the individual was inspired by Breuel   Shafait   and
+it speeds up disk access enormously  In our case  the  le name
+contains the state of the individual  alive  dead  training  etc 
+
+lutional network  two of the dimensions of the tensor represent the spatial coordinates of the image and the third is
+  number of channels  Activation functions are applied at
+the vertices and can be either     batchnormalization  Ioffe
+  Szegedy    with recti ed linear units  ReLUs  or  ii 
+plain linear units  The graph   edges represent identity connections or convolutions and contain the mutable numerical parameters de ning the convolution   properties  When
+multiple edges are incident on   vertex  their spatial scales
+or numbers of channels may not coincide  However  the
+vertex must have   single size and number of channels for
+its activations  The inconsistent inputs must be resolved 
+Resolution is done by choosing one of the incoming edges
+as the primary one  We pick this primary edge to be the
+one that is not   skip connection  The activations coming
+from the nonprimary edges are reshaped through zerothorder interpolation in the case of the size and through truncation padding in the case of the number of channels  as in
+He et al    In addition to the graph  the learningrate
+value is also stored in the DNA 
+  child is similar but not identical to the parent because of
+the action of   mutation  In each reproduction event  the
+worker picks   mutation at random from   predetermined
+set  The set contains the following mutations 
+  ALTERLEARNING RATE  sampling details below 
+  IDENTITY  effectively means  keep training 
+  RESETWEIGHTS  sampled as in He et al    for
+  INSERTCONVOLUTION  inserts   convolution at   random location in the  convolutional backbone  as in Figure   The inserted convolution has        lters  strides
+of   or   at random  number of channels same as input 
+May apply batchnormalization and ReLU activation or
+none at random 
+
+example 
+
+dom convolution  odd values only 
+
+  REMOVECONVOLUTION 
+  ALTERSTRIDE  only powers of   are allowed 
+  ALTERNUMBER OFCHANNELS  of random conv 
+  FILTERSIZE  horizontal or vertical at random  on ran 
+  INSERTONE TOONE  inserts   oneto one identity
+connection  analogous to insertconvolution mutation 
+  ADDSKIP  identity between random layers 
+  REMOVESKIP  removes random skip 
+These speci   mutations were chosen for their similarity
+to the actions that   human designer may take when improving an architecture  This may clear the way for hybrid
+evolutionary handdesign methods in the future  The probabilities for the mutations were not tuned in any way 
+  mutation that acts on   numerical parameter chooses the
+new value at random around the existing value  All sampling is from uniform distributions  For example    mutation acting on   convolution with   output channels will
+
+LargeScale Evolution
+
+result in   convolution having between   and   output
+channels  that is  half to twice the original value  All values within the range are possible  As   result  the models
+are not constrained to   number of  lters that is known to
+work well  The same is true for all other parameters  yielding    dense  search space  In the case of the strides  this
+applies to the logbase  of the value  to allow for activation shapes to match more easily  In principle  there is also
+no upper limit to any of the parameters  All model depths
+are attainable  for example  Up to hardware constraints  the
+search space is unbounded  The dense and unbounded nature of the parameters result in the exploration of   truly
+large set of possible architectures 
+
+  Initial Conditions
+
+Every evolution experiment begins with   population of
+simple individuals  all with   learning rate of   They
+are all very bad performers  Each initial individual constitutes just   singlelayer model with no convolutions  This
+conscious choice of poor initial conditions forces evolution
+to make the discoveries by itself  The experimenter contributes mostly through the choice of mutations that demarcate   search space  Altogether  the use of poor initial conditions and   large search space limits the experimenter  
+impact  In other words  it prevents the experimenter from
+ rigging  the experiment to succeed 
+
+  Computation cost
+
+To estimate computation costs  we identi ed the basic
+TensorFlow  TF  operations used by our model training
+and validation  like convolutions  generic matrix multiplications  etc  For each of these TF operations  we estimated the theoretical number of  oatingpoint operations
+ FLOPs  required  This resulted in   map from TF operation to FLOPs  which is valid for all our experiments 
+For each individual within an evolution experiment  we
+compute the total FLOPs incurred by the TF operations in
+its architecture over one batch of examples  both during its
+training  Ft FLOPs  and during its validation  Fv FLOPs 
+Then we assign to the individual the cost FtNt   FvNv 
+where Nt and Nv are the number of training and validation
+batches  respectively  The cost of the experiment is then
+the sum of the costs of all its individuals 
+We intend our FLOPs measurement as   coarse estimate
+only  We do not take into account input output  data preprocessing  TF graph building or memorycopying operations 
+Some of these unaccounted operations take place once per
+training run or once per step and some have   component
+that is constant in the model size  such as diskaccess latency or input data cropping  We therefore expect the estimate to be more useful for large architectures  for example 
+those with many convolutions 
+
+  Training and Validation
+
+  Weight Inheritance
+
+Training and validation is done on the CIFAR  dataset 
+This dataset consists of   training examples and
+  test examples  all of which are       color images
+labeled with   of   common object classes  Krizhevsky  
+Hinton      of the training examples are held out
+in   validation set  The remaining   examples constitute our actual training set  The training set is augmented
+as in He et al    The CIFAR  dataset has the same
+number of dimensions  colors and examples as CIFAR 
+but uses   classes  making it much more challenging 
+Training is done with TensorFlow  Abadi et al    using SGD with   momentum of    Sutskever et al     
+batch size of   and   weight decay of   Each training runs for   steps    value chosen to be brief enough
+so that each individual could be trained in   few seconds to
+  few hours  depending on model size  The loss function is
+the crossentropy  Once training is complete    single evaluation on the validation set provides the accuracy to use as
+the individual    tness  Ensembling was done by majority
+voting during the testing evaluation  The models used in
+the ensemble were selected by validation accuracy 
+
+ For integer DNA parameters  we actually store and mutate  
+ oatingpoint value  This allows multiple small mutations to have
+  cumulative effect in spite of integer roundoff 
+
+We need architectures that are trained to completion within
+an evolution experiment  If this does not happen  we are
+forced to retrain the best model at the end  possibly having to explore its hyperparameters  Such extra exploration tends to depend on the details of the model being
+retrained  On the other hand    steps are not enough
+to fully train each individual  Training   large model to
+completion is prohibitively slow for evolution  To resolve
+this dilemma  we allow the children to inherit the parents  weights whenever possible  Namely  if   layer has
+matching shapes  the weights are preserved  Consequently 
+some mutations preserve all the weights  like the identity or
+learningrate mutations  some preserve none  the weightresetting mutation  and most preserve some but not all  An
+example of the latter is the  ltersize mutation  only the  lters of the convolution being mutated will be discarded 
+
+  Reporting Methodology
+
+To avoid over tting  neither the evolutionary algorithm nor
+the neural network training ever see the testing set  Each
+time we refer to  the best model  we mean the model with
+the highest validation accuracy  However  we always report
+the test accuracy  This applies not only to the choice of the
+best individual within an experiment  but also to the choice
+
+LargeScale Evolution
+
+of the best experiment  Moreover  we only include experiments that we managed to reproduce  unless explicitly
+noted  Any statistical analysis was fully decided upon before seeing the results of the experiment reported  to avoid
+tailoring our analysis to our experimental data  Simmons
+et al   
+
+  Experiments and Results
+We want to answer the following questions 
+  Can   simple oneshot evolutionary process start from
+trivial initial conditions and yield fully trained models
+that rival handdesigned architectures 
+  What are the variability in outcomes  the parallelizabil 
+  Can an algorithm designed iterating on CIFAR  be applied  without any changes at all  to CIFAR  and still
+produce competitive models 
+
+ity  and the computation cost of the method 
+
+We used the algorithm in Section   to perform several experiments  Each experiment evolves   population in   few
+days  typi ed by the example in Figure   The  gure also
+contains examples of the architectures discovered  which
+turn out to be surprisingly simple  Evolution attempts skip
+connections but frequently rejects them 
+To get   sense of the variability in outcomes  we repeated
+the experiment   times  Across all   experiment runs  the
+best model by validation accuracy has   testing accuracy of
+    Not all experiments reach the same accuracy  but
+they get close             Fine differences in the
+experiment outcome may be somewhat distinguishable by
+validation accuracy  correlation coef cient     The
+total amount of computation across all   experiments was
+  FLOPs  or   FLOPs on average per experiment  Each experiment was distributed over   parallel
+workers  Section   Figure   shows the progress of the
+experiments in detail 
+As   control  we disabled the selection mechanism  thereby
+reproducing and killing random individuals  This is the
+form of random search that is most compatible with our
+infrastructure  The probability distributions for the parameters are implicitly determined by the mutations  This
+control only achieves an accuracy of     in the same
+amount of run time on the same hardware  Figure   The
+total amount of computation was   FLOPs  The low
+FLOP count is   consequence of random search generating
+many small  inadequate models that train quickly but consume roughly constant amounts of setup time  not included
+in the FLOP count  We attempted to minimize this overhead by avoiding unnecessary disk access operations  to no
+avail  too much overhead remains spent on   combination
+of neural network setup  data augmentation  and training
+step initialization 
+
+We also ran   partial control where the weightinheritance
+mechanism is disabled  This run also results in   lower
+accuracy     in the same amount of time  Figure  
+using   FLOPs  This shows that weight inheritance
+is important in the process 
+Finally  we applied our neuroevolution algorithm  without any changes and with the same metaparameters  to
+CIFAR  Our only experiment reached an accuracy
+of     using       FLOPs  We did not attempt
+other datasets  Table   shows that both the CIFAR 
+and CIFAR  results are competitive with modern handdesigned networks 
+
+  Analysis
+Metaparameters  We observe that populations evolve
+until they plateau at some local optimum  Figure   The
+ tness       validation accuracy  value at this optimum
+varies between experiments  Figure   inset  Since not all
+experiments reach the highest possible value  some populations are getting  trapped  at inferior local optima  This
+entrapment is affected by two important metaparameters
+      parameters that are not optimized by the algorithm 
+These are the population size and the number of training
+steps per individual  Below we discuss them and consider
+their relationship to local optima 
+Effect of population size  Larger populations explore the
+space of models more thoroughly  and this helps reach better optima  Figure   left  Note  in particular  that   population of size   can get trapped at very low  tness values 
+Some intuition about this can be gained by considering the
+fate of   super   individual       an individual such that any
+one architectural mutation reduces its  tness  even though
+  sequence of many mutations may improve it  In the case
+of   population of size   if the super   individual wins
+once  it will win every time  After the  rst win  it will produce   child that is one mutation away  By de nition of
+super    therefore  this child is inferior  Consequently 
+in the next round of tournament selection  the super   individual competes against its child and wins again  This
+cycle repeats forever and the population is trapped  Even if
+  sequence of two mutations would allow for an  escape 
+from the local optimum  such   sequence can never take
+place  This is only   rough argument to heuristically suggest why   population of size   is easily trapped  More
+generally  Figure    left  empirically demonstrates   bene 
+   from an increase in population size  Theoretical analyses of this dependence are quite complex and assume very
+speci   models of population dynamics  often larger populations are better at handling local optima  at least beyond
+  size threshold  Weinreich   Chao   and references
+
+ Except after identity or learning rate mutations  but these pro 
+
+duce   child with the same architecture as the parent 
+
+LargeScale Evolution
+
+Figure   Progress of an evolution experiment  Each dot represents an individual in the population  Blue dots  darker  topright  are alive 
+The rest have been killed  The four diagrams show examples of discovered architectures  These correspond to the best individual  rightmost  and three of its ancestors  The best individual was selected by its validation accuracy  Evolution sometimes stacks convolutions
+without any nonlinearity in between     white background  which are mathematically equivalent to   single linear operation  Unlike
+typical handdesigned architectures  some convolutions are followed by more than one nonlinear function    BN    BN    
+orange background 
+
+therein 
+Effect of number of training steps  The other metaparameter is the number   of training steps for each individual  Accuracy increases with    Figure   right  Larger
+  means an individual needs to undergo fewer identity mutations to reach   given level of training 
+Escaping local optima  While we might increase population size or number of steps to prevent   trapped population from forming  we can also free an already trapped
+population  For example  increasing the mutation rate or
+resetting all the weights of   population  Figure   work
+well but are quite costly  more details in Supplementary
+Section   
+Recombination  None of the results presented so far
+used recombination  However  we explored three forms of
+recombination in additional experiments  Following Tuson
+  Ross   we attempted to evolve the mutation probability distribution too  On top of this  we employed   recombination strategy by which   child could inherit structure from one parent and mutation probabilities from another  The goal was to allow individuals that progressed
+well due to good mutation choices to quickly propagate
+
+such choices to others 
+In   separate experiment  we attempted recombining the trained weights from two parents
+in the hope that each parent may have learned different
+concepts from the training data 
+In   third experiment 
+we recombined structures so that the child fused the architectures of both parents sideby side  generating wide
+models fast  While none of these approaches improved our
+recombinationfree results  further study seems warranted 
+
+  Conclusion
+In this paper we have shown that     neuroevolution is capable of constructing large  accurate networks for two challenging and popular image classi cation benchmarks   ii 
+neuroevolution can do this starting from trivial initial conditions while searching   very large space   iii  the process  once started  needs no experimenter participation  and
+ iv  the process yields fully trained models  Completely
+training models required weight inheritance  Sections  
+In contrast to reinforcement learning  evolution provides  
+natural framework for weight inheritance  mutations can
+be constructed to guarantee   large degree of similarity be 
+
+ wall time  hours test accuracy  InputInputOutputCC   BN   RGlobal PoolC   BN   RCC   BN   RC   BN   RBN   RC   BN   RCGlobal PoolOutputC   BN       BN   RC   BN       BN       BN       BN   RBN   RC   BN   RGlobal PoolOutputCCCInputC   BN   RC   BN       BN   RC   BN       BN   RC   BN       BN       BN       BN   RC   BN   RC   BN   RC   BN   RC   BN   RC   BN   RGlobal PoolOutputCCCCCInputLargeScale Evolution
+
+Figure   Dependence on metaparameters  In both graphs  each
+circle represents the result of   full evolution experiment  Both
+vertical axes show the test accuracy for the individual with the
+highest validation accuracy at the end of the experiment  All populations evolved for the same total wallclock time  There are  
+data points at each horizontal axis value  LEFT  effect of population size  To economize resources  in these experiments the
+number of individual training steps is only   Note how the accuracy increases with population size  RIGHT  effect of number
+of training steps per individual  Note how the accuracy increases
+with more steps 
+
+Figure   Escaping local optima in two experiments  We used
+smaller populations and fewer training steps per individual  
+to make it more likely for   population to get trapped and to reduce resource usage  Each dot represents an individual  The vertical axis is the accuracy  TOP  example of   population of size  
+escaping   local optimum by using   period of increased mutation
+rate in the middle  Section   BOTTOM  example of   population
+of size   escaping   local optimum by means of three consecutive weight resetting events  Section   Details in Supplementary
+Section   
+
+Figure   Repeatability of results and controls  In this plot  the
+vertical axis at walltime   is de ned as the test accuracy of the
+individual with the highest validation accuracy that became alive
+at or before    The inset magni es   portion of the main graph 
+The curves show the progress of various experiments  as follows 
+The top line  solid  blue  shows the mean test accuracy across  
+largescale evolution experiments  The shaded area around this
+top line has   width of    clearer in inset  The next line down
+ dashed  orange  main graph and inset  represents   single experiment in which weightinheritance was disabled  so every individual has to train from random weights  The lowest curve  dotteddashed  is   randomsearch control  All experiments occupied the
+same amount and type of hardware    small amount of noise in
+the generalization from the validation to the test set explains why
+the lines are not monotonically increasing  Note the narrow width
+of the   area  main graph and inset  which shows that the high
+accuracies obtained in evolution experiments are repeatable 
+
+tween the original and mutated models as we did  Evolution also has fewer tunable metaparameters with   fairly
+predictable effect on the variance of the results  which can
+be made small 
+While we did not focus on reducing computation costs 
+we hope that future algorithmic and hardware improvement
+will allow more economical implementation  In that case 
+evolution would become an appealing approach to neurodiscovery for reasons beyond the scope of this paper  For
+example  it  hits the ground running  improving on arbitrary initial models as soon as the experiment begins  The
+mutations used can implement recent advances in the  eld
+and can be introduced without having to restart an experiment  Furthermore  recombination can merge improvements developed by different individuals  even if they come
+from other populations  Moreover  it may be possible to
+combine neuroevolution with other automatic architecture
+discovery methods 
+
+ wallclock time  hours test accuracy  EvolutionEvolution   oweight inheritanceRandom search population size test accuracy  training steps test accuracy  LargeScale Evolution
+
+Acknowledgements
+We wish to thank Vincent Vanhoucke  Megan Kacholia  Rajat Monga  and especially Jeff Dean for their support and valuable input  Geoffrey Hinton  Samy Bengio  Thomas Breuel  Mark DePristo  Vishy Tirumalashetty 
+Martin Abadi  Noam Shazeer  Yoram Singer  Dumitru Erhan  Pierre Sermanet  Xiaoqiang Zheng  Shan Carter and
+Vijay Vasudevan for helpful discussions  Thomas Breuel 
+Xin Pan and Andy Davis for coding contributions  and the
+larger Google Brain team for help with TensorFlow and
+training vision models 
+
+References
+Abadi  Mart    Agarwal  Ashish  Barham  Paul  Brevdo 
+Eugene  Chen  Zhifeng  Citro  Craig  Corrado  Greg   
+Davis  Andy  Dean  Jeffrey  Devin  Matthieu  et al  Tensor ow  Largescale machine learning on heterogeneous
+distributed systems  arXiv preprint arXiv 
+ 
+
+Baker  Bowen  Gupta  Otkrist  Naik  Nikhil 
+
+and
+Raskar  Ramesh  Designing neural network architectures using reinforcement learning  arXiv preprint
+arXiv   
+
+Bayer  Justin  Wierstra  Daan  Togelius  Julian  and
+Schmidhuber    urgen  Evolving memory cell structures
+In International Conference on
+for sequence learning 
+Arti cial Neural Networks  pp    Springer   
+
+Bergstra  James and Bengio  Yoshua  Random search
+for hyperparameter optimization  Journal of Machine
+Learning Research   Feb   
+
+Goodfellow  Ian    WardeFarley  David  Mirza  Mehdi 
+Courville  Aaron    and Bengio  Yoshua  Maxout networks  International Conference on Machine Learning 
+   
+
+Gruau  Frederic  Genetic synthesis of modular neural networks  In Proceedings of the  th International Conference on Genetic Algorithms  pp    Morgan Kaufmann Publishers Inc   
+
+Han  Song  Pool  Jeff  Tran  John  and Dally  William 
+Learning both weights and connections for ef cient neural network  In Advances in Neural Information Processing Systems  pp     
+
+He  Kaiming  Zhang  Xiangyu  Ren  Shaoqing  and Sun 
+Jian  Delving deep into recti ers  Surpassing humanIn Prolevel performance on imagenet classi cation 
+ceedings of the IEEE international conference on computer vision  pp     
+
+He  Kaiming  Zhang  Xiangyu  Ren  Shaoqing  and Sun 
+Jian  Deep residual learning for image recognition  In
+Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition  pp     
+
+Huang  Gao  Liu  Zhuang  Weinberger  Kilian    and
+van der Maaten  Laurens  Densely connected convoarXiv preprint arXiv 
+lutional networks 
+   
+
+Huang  Gao  Sun  Yu  Liu  Zhuang  Sedra  Daniel  and
+Weinberger  Kilian    Deep networks with stochastic
+depth  In European Conference on Computer Vision  pp 
+  Springer     
+
+Breuel  Thomas and Shafait  Faisal  Automlp  Simple 
+effective  fully automated learning rate and size adjustment  In The Learning Workshop  Utah   
+
+Ioffe  Sergey and Szegedy  Christian  Batch normalization 
+Accelerating deep network training by reducing internal
+covariate shift  arXiv preprint arXiv   
+
+Fernando  Chrisantha  Banarse  Dylan  Reynolds  Malcolm  Besse  Frederic  Pfau  David  Jaderberg  Max 
+Lanctot  Marc  and Wierstra  Daan  Convolution by evolution  Differentiable pattern producing networks 
+In
+Proceedings of the   on Genetic and Evolutionary
+Computation Conference  pp    ACM   
+
+Goldberg  David   and Deb  Kalyanmoy    comparative
+analysis of selection schemes used in genetic algorithms 
+Foundations of genetic algorithms     
+
+Goldberg  David    Richardson  Jon  et al  Genetic algorithms with sharing for multimodal function optimization  In Genetic algorithms and their applications  Proceedings of the Second International Conference on Genetic Algorithms  pp    Hillsdale  NJ  Lawrence
+Erlbaum   
+
+Kim  Minyoung and Rigazio  Luca  Deep clustered convolutional kernels  arXiv preprint arXiv   
+
+Krizhevsky  Alex and Hinton  Geoffrey  Learning multiple
+
+layers of features from tiny images   
+
+Krizhevsky  Alex  Sutskever  Ilya  and Hinton  Geoffrey   
+Imagenet classi cation with deep convolutional neural
+networks  In Advances in Neural Information Processing
+Systems  pp     
+
+LeCun  Yann  Cortes  Corinna  and Burges  Christopher JC  The mnist database of handwritten digits   
+
+Lee  ChenYu  Xie  Saining  Gallagher  Patrick    Zhang 
+Zhengyou  and Tu  Zhuowen  Deeplysupervised nets 
+In AISTATS  volume   pp     
+
+LargeScale Evolution
+
+Lin  Min  Chen  Qiang  and Yan  Shuicheng  Network in
+
+network  arXiv preprint arXiv   
+
+Miller  Geoffrey    Todd  Peter    and Hegde  Shailesh   
+Designing neural networks using genetic algorithms  In
+Proceedings of the third international conference on Genetic algorithms  pp    Morgan Kaufmann Publishers Inc   
+
+Morse  Gregory and Stanley  Kenneth    Simple evolutionary optimization can rival stochastic gradient descent in neural networks  In Proceedings of the   on
+Genetic and Evolutionary Computation Conference  pp 
+  ACM   
+
+Pugh  Justin   and Stanley  Kenneth    Evolving mulIn Proceedings of
+timodal controllers with hyperneat 
+the  th annual conference on Genetic and evolutionary
+computation  pp    ACM   
+
+Rumelhart  David    Hinton  Geoffrey    and Williams 
+Ronald    Learning representations by backpropagating
+errors  Cognitive Modeling     
+
+Saxena  Shreyas and Verbeek  Jakob  Convolutional neural
+fabrics  In Advances In Neural Information Processing
+Systems  pp     
+
+Silver  David  Huang  Aja  Maddison  Chris    Guez 
+Arthur  Sifre  Laurent  Van Den Driessche  George 
+Schrittwieser  Julian  Antonoglou  Ioannis  Panneershelvam  Veda  Lanctot  Marc  et al  Mastering the game of
+go with deep neural networks and tree search  Nature 
+   
+
+Simmons  Joseph    Nelson  Leif    and Simonsohn  Uri 
+Falsepositive psychology  Undisclosed  exibility in
+data collection and analysis allows presenting anything
+Psychological Science   
+as signi cant 
+   
+
+Simonyan  Karen and Zisserman  Andrew  Very deep convolutional networks for largescale image recognition 
+arXiv preprint arXiv   
+
+Snoek  Jasper  Larochelle  Hugo  and Adams  Ryan   
+Practical bayesian optimization of machine learning algorithms  In Advances in neural information processing
+systems  pp     
+
+Springenberg  Jost Tobias  Dosovitskiy  Alexey  Brox 
+Striving for simarXiv preprint
+
+Thomas  and Riedmiller  Martin 
+plicity  The all convolutional net 
+arXiv   
+
+Srivastava  Rupesh Kumar  Greff  Klaus  and SchmidarXiv preprint
+
+huber    urgen  Highway networks 
+arXiv   
+
+Stanley  Kenneth    Compositional pattern producing networks    novel abstraction of development  Genetic programming and evolvable machines     
+
+Stanley  Kenneth   and Miikkulainen  Risto  Evolving
+neural networks through augmenting topologies  Evolutionary Computation     
+
+Stanley  Kenneth      Ambrosio  David    and Gauci  Jason    hypercubebased encoding for evolving largescale neural networks  Arti cial Life   
+ 
+
+Sutskever  Ilya  Martens  James  Dahl  George    and Hinton  Geoffrey    On the importance of initialization and
+momentum in deep learning  ICML    
+ 
+
+Szegedy  Christian  Liu  Wei  Jia  Yangqing  Sermanet 
+Pierre  Reed  Scott  Anguelov  Dragomir  Erhan  Dumitru  Vanhoucke  Vincent  and Rabinovich  Andrew 
+In Proceedings of
+Going deeper with convolutions 
+the IEEE Conference on Computer Vision and Pattern
+Recognition  pp     
+
+Tuson  Andrew and Ross  Peter  Adapting operator settings
+in genetic algorithms  Evolutionary computation   
+   
+
+Verbancsics  Phillip and Harguess  Josh 
+
+neuroevolution for deep learning 
+arXiv   
+
+Generative
+arXiv preprint
+
+Weinreich  Daniel   and Chao  Lin  Rapid evolutionary
+escape by large populations from local  tness peaks is
+likely in nature  Evolution     
+
+Weyand  Tobias  Kostrikov  Ilya  and Philbin  James 
+Planetphoto geolocation with convolutional neural networks  In European Conference on Computer Vision  pp 
+  Springer   
+
+Wu  Yonghui  Schuster  Mike  Chen  Zhifeng  Le  Quoc   
+Norouzi  Mohammad  et al  Google   neural machine
+translation system  Bridging the gap between human and
+machine translation  arXiv preprint arXiv 
+ 
+
+Zagoruyko  Sergey and Komodakis  Nikos  Wide residual
+
+networks  arXiv preprint arXiv   
+
+Zaremba  Wojciech  An empirical exploration of recurrent
+
+network architectures   
+
+Zoph  Barret and Le  Quoc   
+
+search with reinforcement learning 
+arXiv   
+
+Neural architecture
+arXiv preprint
+
+

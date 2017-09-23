@@ -1,0 +1,1763 @@
+Stochastic Variance Reduction Methods for Policy Evaluation
+
+Simon    Du   Jianshu Chen   Lihong Li   Lin Xiao   Dengyong Zhou  
+
+Abstract
+
+Policy evaluation is concerned with estimating
+the value function that predicts longterm values of states under   given policy 
+It is   crucial step in many reinforcementlearning algorithms  In this paper  we focus on policy evaluation with linear function approximation over
+   xed dataset  We  rst transform the empirical policy evaluation problem into    quadratic 
+convexconcave saddlepoint problem  and then
+present   primaldual batch gradient method  as
+well as two stochastic variance reduction methods for solving the problem  These algorithms
+scale linearly in both sample size and feature dimension  Moreover  they achieve linear convergence even when the saddlepoint problem has
+only strong concavity in the dual variables but no
+strong convexity in the primal variables  Numerical experiments on benchmark problems demonstrate the effectiveness of our methods 
+
+learning  RL 
+
+is   powerful
+
+  Introduction
+Reinforcement
+learning
+paradigm for sequential decision making  see       Bertsekas   Tsitsiklis    Sutton   Barto    An RL
+agent interacts with the environment by repeatedly observing the current state  taking an action according to   certain
+policy  receiving   reward signal and transitioning to   next
+state    policy speci es which action to take given the current state  Policy evaluation estimates   value function that
+predicts expected cumulative reward the agent would receive by following    xed policy starting at   certain state 
+In addition to quantifying longterm values of states  which
+can be of interest on its own  value functions also provide
+
+ Machine Learning Department  Carnegie Mellon University  Pittsburgh  Pennsylvania   USA   Microsoft Research  Redmond  Washington   USA  Correspondence
+to  Simon    Du  ssdu cs cmu edu  Jianshu Chen  jianshuc microsoft com  Lihong Li  lihongli microsoft com 
+Lin Xiao  lin xiao microsoft com  Dengyong Zhou  denzho microsoft com 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+important information for the agent to optimize its policy 
+For example  policyiteration algorithms iterate between
+policyevaluation steps and policyimprovement steps  until    near optimal policy is found  Bertsekas   Tsitsiklis 
+  Lagoudakis   Parr    Therefore  estimating the
+value function ef ciently and accurately is essential in RL 
+There has been substantial work on policy evaluation  with
+temporaldifference  TD  methods being perhaps the most
+popular  These methods use the Bellman equation to bootstrap the estimation process  Different cost functions are
+formulated to exploit this idea  leading to different policy
+evaluation algorithms  see Dann et al    for   comprehensive survey  In this paper  we study policy evaluation
+by minimizing the mean squared projected Bellman error
+ MSPBE  with linear approximation of the value function 
+We focus on the batch setting where    xed   nite dataset
+is given  This  xeddata setting is not only important in itself  Lange et al    but also an important component
+in other RL methods such as experience replay  Lin   
+The  nitedata regime makes it possible to solve policy
+evaluation more ef ciently with recently developed fast optimization methods based on stochastic variance reduction 
+such as SVRG  Johnson   Zhang    and SAGA  Defazio et al    For minimizing strongly convex functions with    nitesum structure  such methods enjoy the
+same low computational cost per iteration as the classical stochastic gradient method  but also achieve fast  linear
+convergence rates       exponential decay of the optimality
+gap in the objective  However  they cannot be applied directly to minimize the MSPBE  whose objective does not
+have the  nitesum structure  In this paper  we overcome
+this obstacle by transforming the empirical MSPBE problem to an equivalent convexconcave saddlepoint problem
+that possesses the desired  nitesum structure 
+In the saddlepoint problem  we consider the model parameters as the primal variables  which are coupled with the
+dual variables through   bilinear term  Moreover  without
+an  regularization on the model parameters  the objective
+is only strongly concave in the dual variables  but not in the
+primal variables  We propose   primaldual batch gradient
+method  as well as two stochastic variancereduction methods based on SVRG and SAGA  respectively  Surprisingly 
+we show that when the coupling matrix is full rank  these
+algorithms achieve linear convergence in both the primal
+
+Stochastic Variance Reduction Methods for Policy Evaluation
+
+and dual spaces  despite the lack of strong convexity of the
+objective in the primal variables  Our results also extend to
+offpolicy learning and TD with eligibility traces  Sutton  
+Barto    Precup et al   
+We note that Balamurugan   Bach   have extended
+both SVRG and SAGA to solve convexconcave saddlepoint problems with linearconvergence guarantees  The
+main difference between our results and theirs are
+
+  Linear convergence in Balamurugan   Bach  
+relies on the assumption that the objective is strongly
+convex in the primal variables and strongly concave
+in the dual  Our results show  somewhat surprisingly 
+that only one of them is necessary if the primaldual
+coupling is bilinear and the coupling matrix is full
+rank  In fact  we are not aware of similar previous results even for the primaldual batch gradient method 
+which we show in this paper 
+
+  Even if   strongly convex regularization on the primal
+variables is introduced to the MSPBE objective  the
+algorithms in Balamurugan   Bach   cannot be
+applied ef ciently  Their algorithms require that the
+proximal mappings of the strongly convex and concave regularization functions be computed ef ciently 
+In our saddlepoint formulation  the strong concavity
+of the dual variables comes from   quadratic function de ned by the feature covariance matrix  which
+cannot be inverted ef ciently and makes the proximal
+mapping costly to compute  Instead  our algorithms
+only use its  stochastic  gradients and hence are much
+more ef cient 
+
+We compare various gradient based algorithms on   Random MDP and Mountain Car data sets  The experiments
+demonstrate the effectiveness of our proposed methods 
+  Preliminaries
+We consider   Markov Decision Process  MDP   Puterman 
+  described by         
+ss      where   is the set of
+states    the set of actions     
+ss  the transition probability
+from state   to state    after taking action             the reward received after taking action   in state    and        
+  discount factor  The goal of an agent is to  nd an actionselection policy   so that the longterm reward under this
+policy is maximized  For ease of exposition  we assume  
+is  nite  but none of our results relies on this assumption 
+  key step in many algorithms in RL is to estimate the
+value function of   given policy   de ned as        
+        tR st  at           Let     denote   vector
+constructed by stacking the values of                  
+on top of each other  Then     is the unique  xed point of
+the Bellman operator    
+
+                             
+
+ 
+
+where    is the expected reward vector under policy  
+de ned elementwise as                      and    
+is the transition matrix induced by the policy applying  
+de ned entrywise as                     
+ss 
+  Mean squared projected Bellman error  MSPBE 
+One approach to scale up when the state space size     is
+large or in nite is to use   linear approximation for    
+Formally  we use   feature map        Rd and approximate the value function by bV                where
+    Rd is the model parameter to be estimated  Here  we
+want to  nd   that minimizes the mean squared projected
+Bellman error  or MSPBE 
+MSPBE      
+
+ 
+
+ 
+
+where   is   diagonal matrix with diagonal elements being the stationary distribution over   induced by the policy   and   is the weighted projection matrix onto the
+linear space spanned by               that is 
+
+        
+
+ 
+where                        is the matrix obtained by
+stacking the feature vectors row by row  Substituting  
+and   into   we obtain  see       Dann et al   
+
+ kbV         bV    
+
+MSPBE   
+
+ 
+
+      bV        bV    
+
+    
+
+We can further rewrite the above expression for MSPBE as
+  standard weighted leastsquares problem 
+
+MSPBE   
+
+ 
+ kA    bk 
+
+  
+
+with properly de ned      and    described as follows 
+Suppose the MDP under policy   settles at its stationary
+distribution and generates an in nite transition sequence
+ st  at  rt  st    where st is the current state  at is
+the action  rt is the reward  and st  is the next state  Then
+with the de nitions       st  and       st  we have
+                         trt           
+     
+where    are with respect to the stationary distribution 
+Many TD solutions converge to   minimizer of MSPBE in
+the limit  Tsitsiklis   Van Roy    Dann et al   
+
+  Empirical MSPBE
+In practice  quantities in   are often unknown  and we
+only have access to    nite dataset with   transitions    
+ st  at  rt  st  
+   By replacing the unknown statistics
+with their  nitesample estimates  we obtain the Empirical
+MSPBE  or EMMSPBE  Speci cally  let
+
+bA    
+
+ 
+
+nXt 
+
+At  bb    
+
+ 
+
+nXt 
+
+bt 
+
+bC    
+
+ 
+
+nXt 
+
+Ct 
+
+ 
+
+Stochastic Variance Reduction Methods for Policy Evaluation
+
+where for                 
+At                
+
+bt   rt    Ct       
+   
+
+ 
+
+EMMSPBE with an optional  regularization is given by 
+
+ 
+
+ 
+     
+
+ 
+
+bC   
+
+EMMSPBE    
+
+ kbA   bbk 
+where       is   regularization factor 
+Observe that   is    regularized  weighted least squares
+problem  Assuming bC is invertible  its optimal solution is
+
+ 
+
+     bA bC bA      bA bC bb 
+
+Computing   directly requires   nd  operations to form
+
+the matrices bA  bb and bC  and then      operations to
+
+complete the calculation  This method  known as leastsquares temporal difference or LSTD  Bradtke   Barto 
+  Boyan    can be very expensive when   and
+  are large  One can also skip forming the matrices explicitly and compute   using   recusive rankone updates
+ Nedi     Bertsekas    Since each rankone update
+costs      the total cost is   nd 
+In the sequel  we develop ef cient algorithms to minimize
+EMMSPBE by using stochastic variance reduction methods  which samples one         per update without pre 
+
+computing bA bb and bC  These algorithms not only maintain
+
+  low      periteration computation cost  but also attain
+fast linear convergence rates with   log  dependence
+on the desired accuracy  
+  SaddlePoint Formulation of EMMSPBE
+Our algorithms  in Section   are based on the stochastic
+variance reduction techniques developed for minimizing  
+ nite sum of convex functions  more speci cally  SVRG
+ Johnson   Zhang    and SAGA  Defazio et al   
+They deal with problems of the form
+
+  Rd           
+
+min
+
+ 
+
+fi   
+
+nXi 
+
+ 
+
+where each fi is convex  We immediately notice that the
+EMMSPBE in   cannot be put into such   form  even
+
+though the matrices bA bb and bC have the  nitesum struc 
+
+ture given in   Thus  extending variance reduction techniques to EMMSPBE minimization is not straightforward 
+Nevertheless  we will show that the minimizing the EMMSPBE is equivalent to solving   convexconcave saddlepoint problem which actually possesses the desired  nitesum structure  To proceed  we resort to the machinery of
+conjugate functions       Rockafellar    Section  
+For   function     Rd      its conjugate function      
+
+ 
+ 
+
+is  
+
+max
+
+max
+
+ 
+
+ 
+
+min
+ Rd
+
+ 
+ kyk 
+
+ kyk 
+ 
+ kxk 
+
+With this relation  we can rewrite EMMSPBE in   as
+
+so that minimizing EMMSPBE is equivalent to solving
+
+Rd     is de ned as         supx yT           Note
+bC      
+that the conjugate function of  
+bC 
+
+ kxk 
+bC
+   yT    
+bC    max
+   wT  bb   bA   
+bC   
+ 
+ 
+ kwk 
+       
+Lt    
+  Rd         
+nXt 
+bC   wTbb   
+        wT bA     
+ kwk 
+        wT At     
+Ct   wT bt 
+
+where the Lagrangian  de ned as
+         
+may be decomposed using   with
+Lt        
+Therefore  minimizing the EMMSPBE is equivalent to
+solving the saddlepoint problem   which is convex in
+the primal variable   and concave in the dual variable   
+Moreover  it has    nitesum structure similar to  
+Liu et al    and Valcarcel Macua et al    independently showed that the GTD  algorithm  Sutton et al 
+    is indeed   stochastic gradient method for solving
+the saddlepoint problem   although they obtained the
+saddlepoint formulation with different derivations  More
+recently  Dai et al    used the conjugate function approach to obtain saddlepoint formulations for   more general class of problems and derived primaldual stochastic
+gradient algorithms for solving them  However  these algorithms have sublinear convergence rates  which leaves
+much room to improve when applied to problems with  
+nite datasets  Recently  Lian et al    developed SVRG
+methods for   general  nitesum composition optimization
+that achieve linear convergence rate  Different from our
+methods  their stochastic gradients are biased and they have
+worse dependency on the condition numbers   and  
+The fast linear convergence of our algorithms presented in
+Sections   and   requires the following assumption 
+
+ kwk 
+
+nite  and the feature vector    is uniformly bounded 
+
+Under mild regularity conditions       Wasserman   
+
+Assumption   bA has full rank  bC is strictly positive de 
+Chapter   we have bA and bC converge in probability to  
+
+and   de ned in   respectively  Thus  if the true statistics
+  is nonsingular and   is positive de nite  and we have
+enough training samples  these assumptions are usually satis ed  They have been widely used in previous works on
+gradientbased algorithms       Sutton et al       
+
+Stochastic Variance Reduction Methods for Policy Evaluation
+
+  direct consequence of Assumption   is that   in   is
+the unique minimizer of the EMMSPBE in   even without any strongly convex regularization on         even if
+      However  if       then the Lagrangian       is
+only strongly concave in    but not strongly convex in   In
+this case  we will show that nonsingularity of the coupling
+matrix bA can  pass  an implicit strong convexity on  
+
+which is exploited by our algorithms to obtain linear convergence in both the primal and dual spaces 
+    PrimalDual Batch Gradient Method
+Before diving into the stochastic variance reduction algorithms  we  rst present Algorithm   which is   primaldual
+batch gradient  PDBG  algorithm for solving the saddlepoint problem   In Step   the vector       is obtained by stacking the primal and negative dual gradients 
+
+ 
+
+ 
+
+                
+
+ rwL           bAT  
+bA   bb   bCw   
+
+Some notation is needed in order to characterize the convergence rate of Algorithm   For any symmetric and positive de nite matrix    let  max    and  min    denote its
+maximum and minimum eigenvalues respectively  and de 
+ ne its condition number to be        max   min   
+We also de ne    and   for any      
+      max     bATbC bA 
+     min     bATbC bA 
+
+ 
+ 
+By Assumption   we have            The following
+theorem is proved in Appendix   
+Theorem   Suppose Assumption   holds and let     
+be the  unique  solution of   If the step sizes are chosen
+as    
+  then the number
+of iterations of Algorithm   to achieve            kw  
+         is upper bounded by
+
+   bC 
+ max bC 
+      bATbC bA     bC    log   
+   
+
+We assigned speci   values to the step sizes   and   
+for clarity  In general  we can use similar step sizes while
+keeping their ratio roughly constant as   
+  see
+Appendices   and   for more details  In practice  one can
+use   parameter search on   small subset of data to  nd
+reasonable step sizes  It is an interesting open problem how
+to automatically select and adjust step sizes 
+Note that the linear rate is determined by two parts     
+the strongly convex regularization parameter   and  ii  the
+
+       
+ min bC 
+
+and     
+
+be interpreted as transferring strong concavity in dual vari 
+
+positive de niteness of bATbC bA  The second part could
+ables via the fullrank bilinear coupling matrix bA  For
+
+ 
+
+ 
+
+Algorithm   PDBG for Policy Evaluation
+Inputs  initial point      step sizes   and     and
+
+number of epochs   
+
+  for       to   do
+
+   
+       
+
+    
+
+ 
+
+ 
+
+         
+
+ 
+
+  end for
+
+where       is computed according to  
+
+this reason  even if the saddlepoint problem   has only
+strong concavity in dual variables  when       the algorithm still enjoys   linear convergence rate 
+Moreover  even if     it will be inef cient to solve problem   using primaldual algorithms based on proximal
+mappings of the strongly convex and concave terms      
+Chambolle   Pock    Balamurugan   Bach   
+The reason is that  in   the strong concavity of the Lagrangian with respect to the dual lies in the quadratic func 
+
+puted ef ciently 
+needs its gradients 
+
+In contrast  the PDBG algorithm only
+
+tion  kwkbC  whose proximal mapping cannot be comIf we precompute and store bA  bb and bC  which costs
+  nd  operations  then computing the gradient operator
+      in   during each iteration of PDBG costs     
+operations  Alternatively  if we do not want to store these
+      matrices  especially if   is large  then we can compute       as  nite sums on the     More speci cally 
+   Bt     where for each                 
+         
+
+nPn
+Bt      
+
+At    bt   Ctw    
+
+    Atw
+
+ 
+
+Since At  bt and Ct are all rankone matrices  as given
+in   computing each Bt     only requires      operations  Therefore  computing       costs   nd  operations as it averages Bt     over   samples 
+  Stochastic Variance Reduction Methods
+If we replace       in Algorithm    line   by the
+stochastic gradient Bt     in   then we recover the
+GTD  algorithm of Sutton et al      applied to    xed
+It has   low perdataset  possibly with multiple passes 
+iteration cost but   slow  sublinear convergence rate 
+In
+this section  we provide two stochastic variance reduction
+methods and show they achieve fast linear convergence 
+
+  SVRG for policy evaluation
+Algorithm   is adapted from the stochastic variance reduction gradient  SVRG  method  Johnson   Zhang   
+It uses two layers of loops and maintains two sets of parameters       and      In the outer loop  the algorithm
+computes   full gradient        using       which takes
+
+Stochastic Variance Reduction Methods for Policy Evaluation
+
+Algorithm   SVRG for Policy Evaluation
+Inputs  initial point      step sizes      number of
+outer iterations    and number of inner iterations   
+  for       to   do
+ 
+ 
+ 
+ 
+
+Initialize              and compute       
+for       to   do
+
+Sample an index tj from        and do
+Compute Btj      and Btj      
+    Btj           
+   
+       
+
+    
+
+ 
+
+ 
+
+ 
+
+where Btj            is given in  
+
+end for
+
+ 
+  end for
+
+Algorithm   SAGA for Policy Evaluation
+Inputs  initial point      step sizes   and     and
+
+number of iterations   
+
+   gt 
+
+  Compute each gt   Bt     for                 
+  Compute              
+  for       to   do
+ 
+ 
+
+Sample an index tm from       
+Compute htm   Btm    
+   
+       
+ 
+           
+gtm   htm 
+ 
+  end for
+
+nPn
+         htm   gtm 
+
+    
+
+   htm   gtm 
+
+ 
+
+ 
+
+  nd  operations  Afterwards  the algorithm executes the
+inner loop  which randomly samples an index tj and updates      using variancereduced stochastic gradient 
+Btj             Btj                Btj       
+Here  Btj      contains the stochastic gradients at     
+computed using the random sample with index tj  and
+         Btj       is   term used to reduce the variance
+in Btj      while keeping Btj           an unbiased estimate of      
+Since        is computed once during each iteration of
+the outer loop with cost   nd   as explained at the end of
+Section   and each of the   iterations of the inner loop
+cost      operations  the total computational cost of for
+each outer loop is   nd        We will present the overall
+complexity analysis of Algorithm   in Section  
+
+  SAGA for policy evaluation
+The second stochastic variance reduction method for policy
+evaluation is adapted from SAGA  Defazio et al   
+see Algorithm   It uses   single loop  and maintains   single set of parameters      Algorithm   starts by  rst
+
+computing each component gradients gt   Bt     at
+the initial point  and also form their average     Pn
+  gt 
+At each iteration  the algorithm randomly picks an index
+tm                and computes the stochastic gradient
+htm   Btm     Then  it updates      using   variance reduced stochastic gradient      htm   gtm  where
+gtm is the previously computed stochastic gradient using
+the tmth sample  associated with certain past values of  
+and    Afterwards  it updates the batch gradient estimate
+  as      
+As Algorithm   proceeds  different vectors gt are computed
+using different values of   and    depending on when the
+index   was sampled  So in general we need to store all
+vectors gt  for                  to facilitate individual updates 
+which will cost additional   nd  storage  However  by exploiting the rankone structure in   we only need to store
+     and
+three scalars                      and   
+form gtm on the    using      computation  Overall  each
+iteration of SAGA costs      operations 
+
+   htm   gtm  and replaces gtm with htm 
+
+  Theoretical analyses of SVRG and SAGA
+In order to study the convergence properties of SVRG and
+SAGA for policy evaluation  we introduce   smoothness
+parameter LG based on the stochastic gradients Bt    
+Let         be the ratio between the primal and dual
+stepsizes  and de ne   pair of weighted Euclidean norms
+
+                kwk 
+                kwk 
+
+Note that   upper bounds the error in optimizing  
+                        Therefore  any bound on
+             applies automatically to         
+Next  we de ne the parameter LG through its square 
+    Bt       Bt    
+nPn
+
+             
+
+   
+  
+
+     
+
+sup
+
+ 
+
+ 
+
+This de nition is similar to the smoothness constant    used
+in Balamurugan   Bach   except that we used the
+stepsize ratio   rather than the strong convexity and concavity parameters of the Lagrangian to de ne   and  
+Substituting the de nition of Bt     in   we have
+
+ 
+
+  
+
+ 
+ 
+
+GT
+
+  At
+
+nXt 
+
+   
+
+  Gt  where Gt         AT
+ Ct    
+
+ 
+With the above de nitions  we characterize the convergence of        wm      where      is the solution of   and     wm  is the output of the algorithms
+ Since our saddlepoint problem is not necessarily strongly
+convex in    when       we could not de ne   and   in the
+same way as Balamurugan   Bach  
+
+Stochastic Variance Reduction Methods for Policy Evaluation
+
+   
+
+       bC   
+
+ 
+ 
+
+ 
+
+ bC   
+
+ 
+
+after the mth iteration  For SVRG  it is the mth outer
+iteration in Algorithm   The following two theorems are
+proved in Appendices   and    respectively 
+Theorem    Convergence rate of SVRG  Suppose Assumption   holds 
+      
+
+If we choose    
+
+ 
+
+  where    and   are de ned
+
+ 
+
+ 
+
+ 
+
+in   and   then
+
+ min bC 
+     wm       
+  
+      
+The overall computational cost for reaching      
+  wm          is upper bounded by
+min     bATbC bA   log   
+     
+ 
+ bC   
+ bC   
+
+Theorem    Convergence rate of SAGA  Suppose Assumption   holds 
+ 
+    
+and         
+ min bC 
+
+     wm              
+where    
+        wm          has the same bound in  
+
+If we choose    
+  in Algorithm   then
+
+Similar to our PDBG results in   both the SVRG and
+SAGA algorithms for policy evaluation enjoy linear convergence even if there is no strong convexity in the saddlepoint problem         when       This is mainly due to
+
+  The total cost to achieve
+
+ bC   
+
+ 
+    
+
+ 
+ 
+
+ 
+
+the positive de niteness of bATbC bA when bC is positivede nite and bA is fullrank  In contrast  the linear conver 
+
+gence of SVRG and SAGA in Balamurugan   Bach  
+requires the Lagrangian to be both strongly convex in   and
+strongly concave in   
+Moreover  in the policy evaluation problem  the strong concavity with respect to the dual variable   comes from  
+
+weighted quadratic norm  kwkbC  which does not ad 
+
+mit an ef cient proximal mapping as required by the proximal versions of SVRG and SAGA in Balamurugan  
+Bach   Our algorithms only require computing the
+stochastic gradients of this function  which is easy to do
+due to its  nite sum structure 
+Balamurugan   Bach   also proposed accelerated
+variants of SVRG and SAGA using the  catalyst  framework of Lin et al    Such extensions can be done
+similarly for the three algorithms presented in this paper 
+and we omit the details due to space limit 
+  Comparison of Different Algorithms
+This section compares the computation complexities of
+several representative policyevaluation algorithms that
+minimize EMMSPBE  as summarized in Table  
+
+Table   Complexity of different policy evaluation algorithms  In
+the table    is feature dimension    is dataset size          
+
+Algorithm
+
+Total Complexity
+
+dition number related to GTD 
+
+bATbC bA       LG min     bATbC bA  and   is   con 
+    log 
+SVRG   SAGA   nd      bC 
+  nd    bC    log 
+  nd      bC    log 
+  nd  or   nd      
+
+PDBG   
+PDBG II 
+
+        
+
+GTD 
+
+LSTD
+
+ 
+
+ 
+
+The upper part of the table lists algorithms whose complexity is linear in feature dimension    including the two new
+algorithms presented in the previous section  We can also
+apply GTD  to    nite dataset with samples drawn uniformly at random with replacement  It costs      per iteration  but has   sublinear convergence rate regarding   In
+practice  people may choose         for generalization reasons  see       Lazaric et al    leading to an
+  nd  overall complexity for GTD  where   is   condition number related to the algorithm  However  as veri ed
+by our experiments  the bounds in the table show that our
+SVRG SAGAbased algorithms are much faster as their effective condition numbers vanish when   becomes large 
+TDC has   similar complexity to GTD 
+In the table  we list two different implementations of
+PDBG  PDBG    computes the gradients by averaging the
+stochastic gradients over the entire dataset at each iteration 
+which costs   nd  operations  see discussions at the end of
+
+Section   PDBG II   rst precomputes the matrices bA bb
+and bC using   nd  operations  then computes the batch
+gradient at each iteration with      operations 
+If   is
+very large       when        then PDBG    would have
+an advantage over PDBG II  The lower part of the table
+also includes LSTD  which has   nd  complexity if rankone updates are used 
+SVRG and SAGA are more ef cient than the other algorithms  when either   or   is very large 
+In particular  they have   lower complexity than LSTD when    
+
+when   is very large  On the other hand  SVRG and SAGA
+algorithms are more ef cient than PDBG    if   is large 
+
+  This condition is easy to satisfy 
+  log   
+     bC 
+  bC      where   and    are desay      bC 
+
+scribed in the caption of Table  
+There are other algorithms whose complexity scales
+linearly with   and   
+including iLSTD  Geramifard
+et al    and TDC  Sutton et al      fLSTDSA  Prashanth et al    and the more recent algorithms
+of Wang et al    and Dai et al    However  their
+
+ 
+
+ 
+
+Stochastic Variance Reduction Methods for Policy Evaluation
+
+convergence is slow  the number of iterations required to
+reach   desired accuracy   grows as   or worse  The
+CTD algorithm  Korda   Prashanth    uses   similar
+idea as SVRG to reduce variance in TD updates  This algorithm is shown to have   similar linear convergence rate
+in an online setting where the data stream is generated by  
+Markov process with  nite states and exponential mixing 
+The method solves for    xedpoint solution by stochastic approximation  As   result  they can be nonconvergent
+in offpolicy learning  while our algorithms remain stable
+      Section  
+  Extensions
+It is possible to extend our approach to accelerate optimization of other objectives such as MSBE and NEU  Dann
+et al    In this section  we brie   describe two extensions of the algorithms developed earlier 
+
+  Offpolicy learning
+In some cases  we may want to estimate the value function
+of   policy   from   set of data   generated by   different  behavior  policy     This is called offpolicy learning  Sutton   Barto    Chapter  
+In the offpolicy case  samples are generated from the distribution induced by the behavior policy     not the the
+target policy   While such   mismatch often causes
+stochasticapproximation based methods to diverge  Tsitsiklis   Van Roy    our gradientbased algorithms remain convergent with the same  fast  convergence rate 
+Consider the RL framework outlined in Section   For each
+stateaction pair  st  at  such that    at st      we de ne
+the importance ratio        at st   at st  The EMMSPBE for offpolicy learning has the same expression as
+in   except that At  bt and Ct are modi ed by the weight
+factor     as listed in Table   see also Liu et al   
+Eqn   for   related discussion  Algorithms   remain the
+same for the offpolicy case after At  bt and Ct are modi ed
+correspondingly 
+
+  Learning with eligibility traces
+Eligibility traces are   useful technique to trade off bias and
+variance in TD learning  Singh   Sutton    Kearns  
+Singh    When they are used  we can precompute zt
+in Table   before running our new algorithms  Note that
+EMMSPBE with eligibility traces has the same form of
+  with At  bt and Ct de ned differently according to the
+last row of Table   At the mth step of the learning process  the algorithm randomly samples ztm  tm   tm and
+rtm from the  xed dataset and computes the corresponding
+stochastic gradients  where the index tm is uniformly distributed over              and are independent for different
+values of    Algorithms   immediately work for this
+case  enjoying   similar linear convergence rate and   com 
+
+Table   Expressions of At  bt and Ct for different cases of policy evaluation  Here        at st   at st  and zt  
+Pt
+         where       is   given parameter 
+
+At
+
+bt
+rt  
+ trt  
+rtzt
+
+Ct
+    
+    
+    
+
+Onpolicy
+Offpolicy
+
+Eligibility trace
+
+          
+            
+zt        
+
+ 
+
+ 
+
+  bC 
+
+              
+      
+ max bC 
+
+putation complexity linear in   and    We need additional
+  nd  operations to precompute zt recursively and an additional   nd  storage for zt  However  it does not change
+the order of the total complexity for SVRG SAGA 
+  Experiments
+In this section  we compare the following algorithms on
+two benchmark problems      PDBG  Algorithm    ii 
+GTD  with samples drawn randomly with replacement
+ iii  TD  the fLSTDSA algorithm of
+from   dataset 
+Prashanth et al     iv  SVRG  Algorithm   and
+    SAGA  Algorithm   Note that when     the
+TD solution and EMMSPBE minimizer differ  so we do
+not include TD  For step size tuning    is chosen from
+and    is chosen from
+  We only report the results of
+each algorithm which correspond to the besttuned step
+sizes  for SVRG we choose        
+In the  rst task  we consider   randomly generated MDP
+with   states and   actions  Dann et al    The transs   
+sition probabilities are de ned as              pa
+where pa
+ss          The datagenerating policy and start
+distribution were generated in   similar way  Each state
+is represented by    dimensional feature vector  where
+  of the features were sampled from   uniform distribution  and the last feature was constant one  We chose
+      Fig    shows the performance of various algorithms for       First  notice that the stochastic
+variance methods converge much faster than others  In fact 
+our proposed methods achieve linear convergence  Second 
+as we increase   the performances of PDBG  SVRG and
+SAGA improve signi cantly due to better conditioning  as
+predicted by our theoretical results 
+Next  we test these algorithms on Mountain Car  Sutton  
+Barto    Chapter   To collect the dataset  we  rst ran
+Sarsa with       CMAC features to obtain   good policy 
+Then  we ran this policy to collect trajectories that comprise the dataset  Figs    and   show our proposed stochastic variance reduction methods dominate other  rstorder
+methods  Moreover  with better conditioning  through  
+larger   PDBG  SVRG and SAGA achieve faster convergence rate  Finally  as we increase sample size    SVRG
+and SAGA converge faster  This simulation veri es our
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+
+ 
+
+ 
+ 
+
+ 
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+
+ 
+
+ 
+
+Epochs
+
+         
+
+Stochastic Variance Reduction Methods for Policy Evaluation
+
+ 
+
+PDBG
+GTD 
+TD
+SVRG
+SAGA
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+
+ 
+
+ 
+ 
+
+ 
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+
+ 
+
+PDBG
+GTD 
+SVRG
+SAGA
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+
+ 
+
+ 
+ 
+
+ 
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+
+ 
+
+PDBG
+GTD 
+SVRG
+SAGA
+
+ 
+
+ 
+
+ 
+
+ 
+
+Epochs
+
+         max bA bC bA 
+
+Epochs
+
+         max bA bC bA 
+
+Figure   Random MDP with             and      
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+
+ 
+
+ 
+ 
+
+ 
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+
+ 
+
+PDBG
+GTD 
+SVRG
+SAGA
+
+ 
+
+ 
+
+Epochs
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+
+ 
+
+ 
+ 
+
+ 
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+
+ 
+
+PDBG
+GTD 
+SVRG
+SAGA
+
+ 
+
+ 
+
+Epochs
+
+ 
+
+ 
+
+Figure   Mountain Car Data Set with       and      
+
+         max bA bC bA 
+
+         max bA bC bA 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+
+ 
+
+ 
+ 
+
+ 
+ 
+
+ 
+
+ 
+
+ 
+ 
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+
+ 
+
+ 
+ 
+
+ 
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+
+ 
+
+PDBG
+GTD 
+TD
+SVRG
+SAGA
+
+ 
+
+ 
+
+ 
+
+ 
+
+Epochs
+         
+
+ 
+
+PDBG
+GTD 
+TD
+SVRG
+SAGA
+
+ 
+
+ 
+
+ 
+
+ 
+
+Epochs
+         
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+
+ 
+
+ 
+ 
+
+ 
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+
+ 
+
+PDBG
+GTD 
+SVRG
+SAGA
+
+ 
+
+ 
+
+Epochs
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+
+ 
+
+ 
+ 
+
+ 
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+
+ 
+
+PDBG
+GTD 
+SVRG
+SAGA
+
+ 
+
+ 
+
+Epochs
+
+ 
+
+ 
+
+Figure   Mountain Car Data Set with       and      
+
+         max bA bC bA 
+
+         max bA bC bA 
+
+theoretical  nding in Table   that SVRG SAGA need fewer
+epochs for large   
+  Conclusions
+In this paper  we reformulated the EMMSPBE minimization problem in policy evaluation into an empirical saddlepoint problem  and developed and analyzed   batch gradient method and two  rstorder stochastic variance reduction methods to solve the problem  An important result we
+obtained is that even when the reformulated saddlepoint
+problem lacks strong convexity in primal variables and has
+only strong concavity in dual variables  the proposed algorithms are still able to achieve   linear convergence rate 
+We are not aware of any similar results for primaldual
+
+batch gradient methods or stochastic variance reduction
+methods  Furthermore  we showed that when both the feature dimension   and the number of samples   are large  the
+developed stochastic variance reduction methods are more
+ef cient than any other gradientbased methods which are
+convergent in offpolicy settings 
+This work leads to several interesting directions for research  First  we believe it is important to extend the
+stochastic variance reduction methods to nonlinear approximation paradigms  Bhatnagar et al    especially with
+deep neural networks  Moreover  it remains an important
+open problem how to apply stochastic variance reduction
+techniques to policy optimization 
+
+Stochastic Variance Reduction Methods for Policy Evaluation
+
+References
+Balamurugan    and Bach  Francis  Stochastic variance reduction methods for saddlepoint problems  In Advances
+in Neural Information Processing Systems   pp   
+   
+
+Bertsekas  Dimitri   and Tsitsiklis  John    Neurodynamic programming  An overview  In Decision and
+Control    Proceedings of the  th IEEE Conference on  volume   pp    IEEE   
+
+Bhatnagar  Shalabh  Precup  Doina  Silver  David  Sutton  Richard    Maei  Hamid    and Szepesv ari  Csaba 
+Convergent temporaldifference learning with arbitrary
+smooth function approximation  In Advances in Neural
+Information Processing Systems  pp     
+
+Boyan  Justin    Technical update  Leastsquares temporal difference learning  Machine Learning   
+ 
+
+Bradtke  Steven   and Barto  Andrew    Linear leastsquares algorithms for temporal difference learning  Machine Learning     
+
+Chambolle  Antonin and Pock  Thomas     rstorder
+primaldual algorithm for convex problems with applications to imaging  Journal of Mathematical Imaging
+and Vision     
+
+Dai  Bo  He  Niao  Pan  Yunpeng  Boots  Byron  and Song 
+Le  Learning from conditional distributions via dual embeddings  arXiv   
+
+Dann  Christoph  Neumann  Gerhard  and Peters  Jan  Policy evaluation with temporal differences    survey and
+comparison  Journal of Machine Learning Research   
+   
+
+Defazio  Aaron  Bach  Francis  and LacosteJulien  Simon 
+SAGA    fast incremental gradient method with support
+for nonstrongly convex composite objectives 
+In Advances in Neural Information Processing Systems  pp 
+   
+
+Geramifard  Alborz  Bowling  Michael    Zinkevich 
+Martin  and Sutton  Richard    iLSTD  Eligibility traces
+and convergence analysis  In Advances in Neural Information Processing Systems   pp     
+
+Gohberg  Israel  Lancaster  Peter  and Rodman  Leiba  Inde nite linear algebra and applications  Springer Science   Business Media   
+
+Johnson  Rie and Zhang  Tong  Accelerating stochastic
+gradient descent using predictive variance reduction  In
+Advances in Neural Information Processing Systems  pp 
+   
+
+Kearns  Michael    and Singh  Satinder     Biasvariance 
+error bounds for temporal difference updates 
+In Proceedings of the Thirteenth Annual Conference on Computational Learning Theory  COLT  pp   
+ 
+
+Korda  Nathaniel and Prashanth       On TD  with function approximation  Concentration bounds and   centered variant with exponential convergence  In Proceedings of the ThirtySecond International Conference on
+Machine Learning  ICML  pp     
+
+Lagoudakis  Michail   and Parr  Ronald  Leastsquares
+policy iteration  Journal of Machine Learning Research 
+ Dec   
+
+Lange  Sascha  Gabel  Thomas  and Riedmiller  Martin 
+Batch reinforcement learning 
+In Wiering  Marco and
+van Otterlo  Martijn  eds  Reinforcement Learning 
+State of the Art  pp    Springer Verlag   
+
+Lazaric  Alessandro  Ghavamzadeh  Mohammad  and
+Munos    emi  Finitesample analysis of LSTD 
+In
+Proceedings of the TwentySeventh International Conference on Machine Learning  pp     
+
+Lian  Xiangru  Wang  Mengdi  and Liu  Ji  Finitesum
+composition optimization via variance reduced gradient
+descent 
+In Proceedings of Arti cial Intelligence and
+Statistics Conference  AISTATS  pp     
+
+Liesen    org and Parlett  Beresford    On nonsymmetric
+saddle point matrices that allow conjugate gradient iterations  Numerische Mathematik     
+
+Lin  Hongzhou  Mairal  Julien  and Harchaoui  Zaid 
+In
+  universal catalyst for  rstorder optimization 
+Advances in Neural Information Processing Systems
+ NIPS    pp     
+
+Lin  LongJi  Selfimproving reactive agents based on reinforcement learning  planning and teaching  Machine
+Learning     
+
+Liu  Bo  Liu  Ji  Ghavamzadeh  Mohammad  Mahadevan 
+Sridhar  and Petrik  Marek  Finitesample analysis of
+proximal gradient TD algorithms 
+In Proc  The  st
+Conf  Uncertainty in Arti cial Intelligence  Amsterdam 
+Netherlands   
+
+Nedi       and Bertsekas  Dimitri    Least squares policy evaluation algorithms with linear function approximation  Discrete Event Dynamics Systems  Theory and
+Applications     
+
+Prashanth  LA  Korda  Nathaniel  and Munos    emi  Fast
+LSTD using stochastic approximation  Finite time analysis and application to traf   control  In Joint European
+
+Stochastic Variance Reduction Methods for Policy Evaluation
+
+Wasserman  Larry  All of Statistics    Concise Course in
+Statistical Inference  Springer Science   Business Media   
+
+Conference on Machine Learning and Knowledge Discovery in Databases  pp    Springer   
+
+Precup  Doina  Sutton  Richard    and Dasgupta  Sanjoy 
+Offpolicy temporaldifference learning with funtion approximation 
+In Proceedings of the Eighteenth Conference on Machine Learning  ICML  pp   
+ 
+
+Puterman  Martin    Markov Decision Processes  Discrete
+Stochastic Dynamic Programming  John Wiley   Sons 
+ 
+
+Rockafellar     Tyrrell  Convex Analysis  Princeton Uni 
+
+versity Press   
+
+Shen  ShuQian  Huang  TingZhu  and Cheng  GuangHui    condition for the nonsymmetric saddle point
+matrix being diagonalizable and having real and positive eigenvalues  Journal of Computational and Applied
+Mathematics     
+
+Singh  Satinder    and Sutton  Richard    Reinforcement learning with replacing eligibility traces  Machine
+Learning     
+
+Sutton  Richard   and Barto  Andrew    Reinforcement
+Learning  An Introduction  MIT Press  Cambridge  MA 
+ 
+
+Sutton  Richard    Maei  Hamid    and Szepesv ari  Csaba 
+  convergent      temporaldifference algorithm for
+offpolicy learning with linear function approximation 
+In Advances in neural information processing systems 
+pp       
+
+Sutton  Richard    Maei  Hamid Reza  Precup  Doina 
+Bhatnagar  Shalabh  Silver  David  Szepesv ari  Csaba 
+and Wiewiora  Eric 
+Fast gradientdescent methods
+for temporaldifference learning with linear function approximation  In Proceedings of the  th Annual International Conference on Machine Learning  pp   
+ACM     
+
+Tsitsiklis  John    and Van Roy  Benjamin  An analysis
+of temporaldifference learning with function approximation 
+IEEE Transactions on Automatic Control   
+   
+
+Valcarcel Macua  Sergio  Chen  Jianshu  Zazo  Santiago 
+and Sayed  Ali    Distributed policy evaluation under
+multiple behavior strategies  Automatic Control  IEEE
+Transactions on     
+
+Wang  Mengdi  Liu  Ji  and Fang  Ethan  Accelerating
+stochastic composition optimization 
+In Advances in
+Neural Information Processing Systems  NIPS    pp 
+   
+
+

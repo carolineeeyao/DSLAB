@@ -1,0 +1,1048 @@
+Practical GaussNewton Optimisation for Deep Learning
+
+Aleksandar Botev   Hippolyt Ritter   David Barber    
+
+Abstract
+
+We present an ef cient blockdiagonal approximation to the GaussNewton matrix for feedforward neural networks  Our resulting algorithm
+is competitive against stateof theart  rstorder
+optimisation methods  with sometimes signi 
+cant improvement in optimisation performance 
+Unlike  rstorder methods  for which hyperparameter tuning of the optimisation parameters is
+often   laborious process  our approach can provide good performance even when used with default settings    side result of our work is that for
+piecewise linear transfer functions  the network
+objective function can have no differentiable local maxima  which may partially explain why
+such transfer functions facilitate effective optimisation 
+
+  Introduction
+Firstorder optimisation methods are the current workhorse
+for training neural networks  They are easy to implement
+with modern automatic differentiation frameworks  scale
+to large models and datasets and can handle noisy gradients such as encountered in the typical minibatch setting
+ Polyak    Nesterov    Kingma   Ba    Duchi
+et al    Zeiler    However    suitable initial learning rate and decay schedule need to be selected in order for
+them to converge both rapidly and towards   good local
+minimum  In practice  this usually means many separate
+runs of training with different settings of those hyperparameters  requiring access to either ample compute resources
+or plenty of time  Furthermore  pure stochastic gradient
+descent often struggles to escape  valleys  in the error surface with largely varying magnitudes of curvature  as the
+ rst derivative does not capture this information  Dauphin
+et al    Martens   Sutskever    Modern alternatives  such as ADAM  Kingma   Ba    combine
+
+ University College London  London  United Kingdom  Alan
+Turing Institute  London  United Kingdom  Correspondence to 
+Aleksandar Botev    botev cs ucl ac uk 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+the gradients at the current setting of the parameters with
+various heuristic estimates of the curvature from previous
+gradients 
+Secondorder methods  on the other hand  perform updates
+of the form          where   is the Hessian or some approximation thereof and   is the gradient of the error function  Using curvature information enables such methods to
+make more progress per step than techniques relying solely
+on the gradient  Unfortunately  for modern neural networks  explicit calculation and storage of the Hessian matrix is infeasible  Nevertheless  it is possible to ef ciently
+calculate Hessianvector products Hg by use of extended
+Automatic Differentiation  Schraudolph    Pearlmutter    the linear system     Hv can then be solved
+for         by using conjugate gradients  Martens   
+Martens   Sutskever    Whilst this can be effective 
+the number of iterations required makes this process uncompetitive against simpler  rstorder methods  Sutskever
+et al   
+In this work  we make the following contributions 
+
+  We develop   recursive blockdiagonal approximation of the Hessian  where each block corresponds to the
+weights in   single feedforward layer  These blocks are
+Kronecker factored and can be ef ciently computed and inverted in   single backward pass 
+
+  As   corollary of our recursive calculation of the Hessian  we note that for networks with piecewise linear transfer functions the error surface has no differentiable strict
+local maxima 
+
+  We discuss the relation of our method to KFAC
+ Martens   Grosse      blockdiagonal approximation to the Fisher matrix  KFAC is less generally applicable since it requires the network to de ne   probabilistic
+model on its output  Furthermore  for nonexponential family models  the GaussNewton and Fisher approaches are in
+general different 
+
+  On three standard benchmarks we demonstrate that
+ without tuning  secondorder methods perform competitively  even against welltuned stateof theart  rstorder
+methods 
+
+Practical GaussNewton Optimisation for Deep Learning
+
+  Properties of the Hessian
+As   basis for our approximations to the GaussNewton matrix  we  rst describe how the diagonal Hessian blocks of
+feedforward networks can be recursively calculated  Full
+derivations are given in the supplementary material 
+
+  Feedforward Neural Networks
+
+  feedforward neural network takes an input vector       
+and produces an output vector hL on the  nal  Lth  layer
+of the network 
+
+         
+
+         
+
+           
+
+ cid 
+
+vec       vec               vec  WL   cid  
+
+where    is the preactivation in layer   and    are
+the activation values     is the matrix of weights and
+   the elementwise transfer function  We de ne   loss
+  hL     between the output hL and   desired training
+output    for example squared loss  hL      which
+is   function of all parameters of the network    
+  For   training
+dataset with empirical distribution         the total error function is then de ned as the expected loss      
+            For simplicity we denote by    the loss for
+  generic single datapoint       
+
+  The Hessian
+
+  central quantity of interest in this work is the parameter
+Hessian     which has elements 
+
+   ij  
+
+ 
+
+    
+
+  
+
+ 
+
+The expected parameter Hessian is similarly given by the
+expectation of this equation  To emphasise the distinction
+between the expected Hessian and the Hessian for   single datapoint        we also refer to the single datapoint
+Hessian as the sample Hessian 
+
+  BLOCK DIAGONAL HESSIAN
+
+The full Hessian  even of   moderately sized neural network  is computationally intractable due to the large number of parameters  Nevertheless  as we will show  blocks
+of the sample Hessian can be computed ef ciently  Each
+block corresponds to the second derivative with respect
+to the parameters    of   single layer   We focus on
+these blocks since the Hessian is in practice typically blockdiagonal dominant  Martens   Grosse   
+The gradient of the error function with respect to the
+weights of layer   can be computed by recursively applying
+
+ The usual bias    in the equation for    is absorbed into   
+
+by appending   unit term to every   
+
+the chain rule 
+
+  
+    
+   
+
+ 
+
+ cid 
+
+ 
+
+   
+ 
+    
+   
+
+  
+   
+ 
+
+    
+
+ 
+
+  
+   
+ 
+
+ 
+
+Differentiating again we  nd that the sample Hessian for
+layer   is 
+
+             
+
+  
+       
+   
+  
+
+ 
+
+    
+    
+
+ 
+
+      
+
+ 
+
+ 
+
+where we de ne the preactivation Hessian for layer   as 
+
+        
+
+  
+    
+ 
+
+   
+
+ 
+
+We can reexpress   in matrix form for the sample Hessian of   
+
+ cid 
+
+ cid     
+
+    
+
+  
+
+ vec    vec    
+
+ 
+
+  aT
+
+ 
+
+where   denotes the Kronecker product 
+
+  BLOCK HESSIAN RECURSION
+
+In order to calculate the sample Hessian  we need to evaluate the preactivation Hessian  rst  This can be computed
+recursively as  see Appendix   
+
+where we de ne the diagonal matrices 
+
+          
+
+            
+ cid 
+
+ cid 
+
+     diag    cid 
+   
+  cid cid 
+     
+
+     diag
+
+  
+   
+
+ 
+
+ 
+
+ 
+
+  and   cid cid 
+
+  are the  rst and second derivatives of   
+
+and   cid 
+respectively 
+The recursion is initialised with HL  which depends on the
+objective function    and is easily calculated analytically for the usual objectives  Then we can simply apply
+the recursion   and compute the preactivation Hessian
+for each layer using   single backward pass through the
+network    similar observation is given in  Schaul et al 
+  but restricted to the diagonal entries of the Hessian
+
+ Generally we use   Greek letter to indicate   layer and   Roman letter to denote an element within   layer  We use either subor superscripts wherever most notationally convenient and compact 
+ Using the notation      as the      matrix block  the Kronecker Product is de ned as              aijB 
+ For example for squared loss      hL  the preactivation
+Hessian is simply the identity matrix HL     
+
+Practical GaussNewton Optimisation for Deep Learning
+
+   
+
+   
+
+   
+
+Figure   Two layer network with ReLU and square loss      The objective function   as we vary         along two randomly chosen
+direction matrices   and     giving           xU   yV                     as   function of two randomly chosen directions within
+         for varying jointly      xU       yV   The surfaces contain no smooth local maxima 
+
+rather than the more general blockdiagonal case  Given
+the preactivation Hessian  the Hessian of the parameters
+for   layer is given by   For more than   single datapoint  the recursion is applied per datapoint and the parameter Hessian is given by the average of the individual
+sample Hessians 
+
+  NO DIFFERENTIABLE LOCAL MAXIMA
+
+In recent years piecewise linear transfer functions  such as
+the ReLU functionf       max      have become popular  Since the second derivative   cid cid  of   piecewise linear
+function is zero everywhere  the matrices    in   will be
+zero  away from nondifferentiable points 
+It follows that if HL is Positive SemiDe nite  PSD 
+which is the case for the most commonly used loss functions  the preactivation matrices are PSD for every layer 
+  corollary is that if we    all of the parameters of the network except for    the objective function is locally convex with respect to    wherever it is twice differentiable 
+Hence  there can be no local maxima or saddle points of
+the objective with respect to the parameters within   layer 
+Note that this does not imply that the objective is convex
+everywhere with respect to    as the surface will contain ridges along which it is not differentiable  corresponding to boundary points where the transfer function changes
+regimes  see Figure    
+As the trace of the full Hessian   is the sum of the traces of
+the diagonal blocks  it must be nonnegative and thus it is
+not possible for all eigenvalues to be simultaneously negative  This implies that for feedforward neural networks
+
+ Note that  for piecewise linear      is not necessarily piece 
+
+wise linear in  
+
+ This excludes any pathological regions where the objective
+
+function has zero curvature 
+
+with piecewise linear transfer functions there can be no
+differentiable local maxima   that is  outside of pathological constant regions  all maxima  with respect to the full
+parameter set   must lie at the boundary points of the nonlinear activations and be  sharp  see Figure   Additionally  for transfer functions with zero gradient   cid        
+will have lower rank than    reducing the curvature information propagating from the output layer back up the
+network  This suggests that it is advantageous to use piecewise linear transfer functions with nonzero gradients  such
+as max      
+We state and prove these results more formally in Appendix   
+
+  Approximate GaussNewton Method
+Besides being intractable for large neural networks  the
+Hessian is not guaranteed to be PSD    Newton update
+    could therefore lead to an increase in the error   
+common PSD approximation to the Hessian is the GaussNewton  GN  matrix  For an error   hL  the sample
+Hessian is given by 
+
+  
+ hL
+ 
+
+ hL
+ 
+    
+
+  
+    
+Assuming that HL is PSD  the GN method forms   PSD
+approximation by neglecting the  rst term in   This
+can be written in matrix notation as 
+
+  
+   hL
+ 
+
+ hL
+ 
+  
+
+ hL
+ 
+  
+
+ 
+
+ hL
+
+ cid 
+
+ 
+
+ 
+
+ cid 
+
+   
+
+ 
+
+      hL
+
+THLJ hL
+
+ 
+
+ 
+where   hL
+is the Jacobian of the network outputs with respect to the parameters  The expected GN matrix is the
+average of   over the datapoints 
+
+ 
+
+       cid 
+
+ cid 
+
+  hL
+ 
+
+THLJ hL
+
+ 
+
+      
+
+ 
+
+ 
+
+ Practical GaussNewton Optimisation for Deep Learning
+
+Whilst   shows how to calculate the GN matrix exactly 
+in practice we cannot feasibly store the matrix in this raw
+form  To proceed  similar to the Hessian  we will make  
+block diagonal approximation  As we will show  as for the
+Hessian itself  even   block diagonal approximation is computationally infeasible  and additional approximations are
+required  Before embarking on this sequence of approximations  we  rst show that the GN matrix can be expressed
+as the expectation of   KhatriRao product       blocks of
+Kronecker products  corresponding to the weights of each
+layer  We will subsequently approximate the expectation of
+the Kronecker products as the product of the expectations
+of the factors  making the blocks ef ciently invertible 
+
+        cid 
+
+  The GN Matrix as   KhatriRao Product
+Using the de nition of    in   and the chain rule  we can
+write the block of the matrix corresponding to the parameters in layers   and   as 
+
+ 
+
+THLJ hL
+
+  
+
+    
+  
+
+  hL
+  
+
+    
+  
+
+ 
+  De ning    as the preactivation
+where    hL
+  
+GN matrix between the   and   layers  preactivation vectors 
+
+        hL
+
+ 
+   
+ 
+
+ cid 
+
+       hL
+
+  
+
+THLJ hL
+
+  
+
+and using the fact that     
+  
+
+        cid cid 
+
+  aT
+
+ 
+
+      we obtain
+
+  aT
+
+ cid      
+
+ cid 
+
+ 
+
+ 
+
+We can therefore write the GN matrix as the expectation of
+the KhatriRao product 
+
+           cid    
+
+ 
+where the blocks of   are the preactivation GN matrices
+   as de ned in   and the blocks of   are 
+
+       aT
+
+ 
+
+ 
+
+  Approximating the GN Diagonal Blocks
+
+For simplicity  from here on we denote by    the diagonal
+blocks of the sample GN matrix with respect to the weights
+of layer    dropping the duplicate index  Similarly  we
+drop the index for the diagonal blocks    and    of the
+corresponding matrices in   giving more compactly 
+
+            
+
+ 
+
+The diagonal blocks of the expected GN     are then given
+by       Computing this requires evaluating   block diagonal matrix for each datapoint and accumulating the result  However  since the expectation of   Kronecker product is not necessarily Kronecker factored  one would need
+
+to explicitly store the whole matrix     to perform this accumulation  With   being the dimensionality of   layer 
+this matrix would have      elements  For   of the order of   it would require several terabytes of memory
+to store     As this is prohibitively large  we seek an approximation for the diagonal blocks that is both ef cient to
+compute and store  The approach we take is the factorised
+approximation 
+
+                     
+
+ 
+
+Under this factorisation  the updates for each layer can be
+computed ef ciently by solving   Kronecker product form
+linear system   see the supplementary material  The  rst
+factor       is simply the uncentered covariance of the
+activations 
+
+       
+
+ 
+ 
+
+  AT
+
+ 
+
+ 
+
+where the nth column of the     matrix    is the set of
+activations of layer   for datapoint    The second factor
+      can be computed ef ciently  as described below 
+
+  The PreActivation Recursion
+
+Analogously to the block diagonal preactivation Hessian
+recursion     similar recursion can be derived for the preactivation GN matrix diagonal blocks 
+
+          
+
+       
+
+ 
+
+where the recursion is initialised with the Hessian of the
+output HL 
+This highlights the close relationship between the preactivation Hessian recursion and the preactivation GN recursion 
+Inspecting   and   we notice that the only
+difference in the recursion stems from terms containing the
+diagonal matrices    From   and   it follows that in
+the case of piecewise linear transfer functions  the diagonal
+blocks of the Hessian are equal to the diagonal blocks of
+the GN matrix 
+Whilst
+this shows how to calculate the sample preactivation GN blocks ef ciently  from   we require the
+calculation of the expected blocks       In principle  the
+recursion could be applied for every data point  However 
+this is impractical in terms of the computation time and  
+vectorised implementation would impose infeasible memory requirements  Below  we show that when the number of
+outputs is small  it is in fact possible to ef ciently compute
+the exact expected preactivation GN matrix diagonals  For
+the case of   large number of outputs  we describe   further
+approximation to       in Section  
+
+ This holds only at points where the derivative exists 
+
+Practical GaussNewton Optimisation for Deep Learning
+
+  Exact Low Rank Calculation of      
+Many problems in classi cation and regression deal with  
+relatively small number of outputs  This implies that the
+rank   of the output layer GN matrix GL is low  We use
+the square root representation 
+
+  cid 
+
+    
+
+ 
+
+   
+
+    
+ 
+
+  
+
+From   we then obtain the recursion 
+
+         
+   
+
+    
+
+ 
+
+This allows us to calculate the expectation as 
+
+ cid cid 
+
+ 
+
+ cid 
+
+ cid      
+
+ 
+
+    
+ 
+
+ cid 
+
+ 
+
+         
+
+ 
+
+   
+
+    
+ 
+
+ 
+
+ 
+ 
+
+ 
+
+ 
+
+ 
+
+ cid  
+
+where we stack the column vectors    
+  for each datapoint
+into   matrix     
+    analogous to   Since we need to store
+only the vectors    
+  per datapoint  this reduces the memory
+requirement to            for small   this is   computationally viable option  We call this method Kronecker
+Factored Low Rank  KFLR 
+  Recursive Approximation of      
+For higher dimensional outputs      
+in autoencoders 
+rather than backpropagating   sample preactivation GN
+matrix for every datapoint  we propose to simply pass
+the expected matrix through the network  This yields the
+nested expectation approximation of  
+
+          
+
+     
+
+ 
+
+ 
+The recursion is initialised with the exact value    GL  The
+method will be referred to as Kronecker Factored Recursive
+Approximation  KFRA 
+
+          cid 
+
+ cid 
+
+  Related Work
+Despite the prevalence of  rstorder methods for neural network optimisation  there has been considerable recent interest in developing practical secondorder methods 
+which we brie   outline below 
+Martens   and Martens   Sutskever   exploited
+the fact that full GaussNewton matrixvector products can
+be computed ef ciently using   form of automatic differentiation  This was used to approximately solve the linear
+system          using conjugate gradients to  nd the parameter update   Despite making good progress on   periteration basis  having to run   conjugate gradient descent
+optimisation at every iteration proved too slow to compete
+with welltuned  rstorder methods 
+
+The closest related work to that presented here is the KFAC
+method  Martens   Grosse    in which the Fisher matrix is used as the curvature matrix  This is based on the
+output   of the network de ning   conditional distribution
+       on the observation    with   loss de ned as the KLdivergence between the empirical distribution        and
+the network output distribution  The network weights are
+chosen to minimise the KLdivergence between the conditional output distribution and the data distribution  For example  de ning the network output as the mean of    xed
+variance Gaussian or   Bernoulli Categorical distribution
+yields the common squared error and crossentropy objectives respectively 
+Analogously to our work  Martens   Grosse   develop   blockdiagonal approximation to the Fisher matrix  The Fisher matrix is another PSD approximation to
+the Hessian that is used in natural gradient descent  Amari 
+  In general  the Fisher and GN matrices are different  However  for the case of        de ning an exponential family distribution  the Fisher and GN matrices are
+equivalent  see Appendix    As in our work  Martens
+  Grosse   use   factorised approximation of the
+form   However  they subsequently approximate the
+expected Fisher blocks by drawing Monte Carlo samples
+of the gradients from the conditional distribution de ned
+by the neural network  As   result  KFAC is always an approximation to the GN preactivation matrix  whereas our
+method can provide an exact calculation of       in the low
+rank setting  See also Appendix    for differences between our KFRA approximation and KFAC 
+More generally  our method does not require any probabilistic model interpretation and is therefore more widely
+applicable than KFAC 
+
+  Experiments
+We performed experiments  training deep autoencoders on
+three standard greyscale image datasets and classifying
+handwritten digits as odd or even  The datasets are 
+
+MNIST consists of       images of handwritten
+digits  We used only the  rst     images for training  since the remaining     are usually used for
+validation 
+
+CURVES contains     training images of size    
+pixels of simulated handdrawn curves  created by
+choosing three random points in the       pixel
+plane  see the supplementary material of  Hinton  
+Salakhutdinov    for details 
+
+ Experiments were run on   workstation with   Titan Xp GPU
+
+and an Intel Xeon CPU          GHz 
+
+Practical GaussNewton Optimisation for Deep Learning
+
+FACES is an augmented version of the Olivetti faces
+dataset  Samaria   Harter    with   different images of   people  We follow  Hinton   Salakhutdinov    in creating   training set of     images by choosing   random pairs of rotation angles
+  to   degrees  and scaling factors   to   for
+each of the   images for the  rst   people and then
+subsampling to       pixels 
+
+We tested the performance of secondorder against  rstorder methods and compared the quality of the different
+GN approximations  In all experiments we report only the
+training error  as we are interested in the performance of
+the optimiser rather than how the models generalise 
+When using secondorder methods  it is important in practice to adjust the unmodi ed update   in order to dampen
+potentially overcon dent updates  One of our central interests is to compare our approach against KFAC  We therefore followed  Martens   Grosse    as closely as possible  introducing damping in an analogous way  Details
+on the implementation are in Appendix    We emphasise
+that throughout all experiments we used the default damping parameter settings  with no tweaking required to obtain
+acceptable performance 
+Additionally  as   form of momentum for the secondorder
+methods  we compared the use of   moving average with  
+factor of   on the curvature matrices    and    to only
+estimating them from the current minibatch  We did not
+ nd any bene   in using momentum on the updates themselves  on the contrary this made the optimisation unstable
+and required clipping the updates  We therefore do not include momentum on the updates in our results 
+All of the autoencoder architectures are inspired by  Hinton
+  Salakhutdinov    The layer sizes are   
+    where   is the dimensionality of
+the input  The greyscale values are interpreted as the mean
+parameter of   Bernoulli distribution and the loss is the binary crossentropy on CURVES and MNIST  and square
+error on FACES 
+
+  Comparison to FirstOrder Methods
+
+We investigated the performance of both KFRA and KFAC
+compared to popular  rstorder methods  Four of the
+most prevalent gradientbased optimisers were considered
+  Stochastic Gradient Descent  Nesterov Accelerated Gradient  Momentum and ADAM  Kingma   Ba     
+common practice when using  rstorder methods is to decrease the learning rate throughout the training procedure 
+For this reason we included an extra parameter     the de 
+
+ Our damping parameters could be compared to the exponential decay parameters   and   in ADAM  which are typically
+left at their recommended default values 
+
+cay period   to each of the methods  halving the learning
+rate every   iterations  To  nd the best  rstorder method 
+we ran   grid search over these two hyperarameters 
+Each  rstorder method was run for     parameter updates for MNIST and CURVES and     updates for
+FACES  This resulted in   total of   experiments and
+  million updates for each dataset per method 
+In
+contrast 
+the secondorder methods did not require adjustment of any hyperparameters and were run for only
+      updates  as they converged much faster 
+For the  rstorder methods we found ADAM to outperform
+the others across the board and we consequently compared
+the secondorder methods against ADAM only 
+Figure   shows the performance of the different optimisers
+on all three datasets  We present progress both per parameter update  to demonstrate that the secondorder optimisers
+effectively use the available curvature information  and per
+GPU wall clock time  as this is relevant when training   network in practice  For ADAM  we display the performance
+using the default learning rate   as well as the top performing combination of learning rate and decay period  To
+illustrate the sensitivity of ADAM to these hyperparameter
+settings  and how much can therefore be gained by parameter tuning  we also plot the average performance resulting
+from using the top   and top   settings 
+Even after signi cantly tuning the ADAM learning rate and
+decay period  the secondorder optimisers outperformed
+ADAM outof thebox across all three datasets  In particular on the challenging FACES dataset  the optimisation was
+not only much faster when using secondorder methods 
+but also more stable  On this dataset  ADAM appears to
+be highly sensitive to the learning rate and in fact diverged
+when run with the default learning rate of   In contrast
+to ADAM  the secondorder optimisers did not get trapped
+in plateaus in which the error does not change signi cantly 
+In comparison to KFAC  KFRA showed   noticeable speedup in the optimisation both periteration and when measuring the wall clock time  Their computational cost for each
+update is equivalent in practice  which we discuss in detail
+in Appendix    Thus  to validate that the advantage of
+KFRA over KFAC stems from the quality of its updates  we
+compared the alignment of the updates of each method with
+the exact GaussNewton update  using the slower Hessianfree approach  see Appendix    for the  gures  We found
+that KFRA tends to be more closely aligned with the exact
+GaussNewton update  which provides   possible explana 
+ We varied the learning rate from   to   at every power of   and chose the decay period as one of
+          of the number of updates 
+
+ For fair comparison  all of the methods were implemented
+using Theano  Theano Development Team    and Lasagne
+ Dieleman et al   
+
+Practical GaussNewton Optimisation for Deep Learning
+
+    CURVES
+
+    FACES
+
+    MNIST
+
+Figure   Comparison of the objective function being optimised by KFRA  KFAC and ADAM on CURVES  FACES and MNIST  GPU
+benchmarks are in the  rst row  progress per update in the second  The dashed line indicates the use of momentum on the curvature
+matrix for the secondorder methods  Errors are averaged using   sliding window of ten 
+
+tion for its better performance 
+
+  NonExponential Family Model
+
+To compare our approximate GaussNewton method and
+KFAC in   setting where the Fisher and GaussNewton matrix are not equivalent  we designed an experiment in which
+the model distribution over   is not in the exponential family  The model is   mixture of two binary classi ers 
+
+    hL     hL
+     hL
+
+   hL
+   hL
+
+     hL
+     hL
+
+     
+    
+
+ 
+
+We used the same architecture as for the encoding layers of
+the autoencoders      where      
+is the size of the input  The task of the experiment was to
+classify MNIST digits as even or odd  Our choice was motivated by recent interest in neural network mixture models
+ Eigen et al    Zen   Senior    van den Oord  
+Schrauwen    Shazeer et al    our mixture model
+is also appropriate for testing the performance of KFLR 
+Training was run for     updates for ADAM with  
+grid search as in Section   and for     updates for the
+secondorder methods  The results are shown in Figure  
+For the CPU  both per iteration and wall clock time the
+secondorder methods were faster than ADAM  on the
+GPU  however  ADAM was faster per wall clock time 
+The value of the objective function at the  nal parameter values was higher for secondorder methods than for
+
+ In this context           exp   
+
+ADAM  However  it is important to keep in mind that all
+methods achieved   nearly perfect crossentropy loss of
+around   When so close to the minimum we expect
+the gradients and curvature to be very small and potentially
+dominated by noise introduced from the minibatch sampling  Additionally  since the secondorder methods invert
+the curvature  they are more prone to accumulating numerical errors than  rstorder methods  which may explain this
+behaviour close to   minimum 
+identically to
+Interestingly  KFAC performed almost
+KFLR  despite the fact that KFLR computes the exact preactivation GaussNewton matrix  This suggests that in the
+lowdimensional output setting  the bene ts from using the
+exact lowrank calculation are diminished by the noise and
+the rather coarse factorised Kronecker approximation 
+
+  Rank of the Empirical Curvature
+The empirical success of secondorder methods raises
+questions about the curvature of the error function of  
+neural network  As we show in Appendix   the Monte
+Carlo GaussNewton matrix rank is upper bounded by the
+rank of the last layer Hessian times the size of the minibatch  More generally  the rank is upper bounded by the
+rank of HL times the size of the data set  As modern
+neural networks commonly have millions of parameters 
+the exact GaussNewton matrix is usually severely underdetermined  This implies that the curvature will be zero
+in many directions  This phenomenon is particularly pro 
+
+Practical GaussNewton Optimisation for Deep Learning
+
+Since the Hessian is not guaranteed to be positive semide nite  two common alternative curvature measures are
+the Fisher matrix and the GaussNewton matrix  Unfortunately  both are computationally infeasible and  similar to
+Martens   Grosse   we therefore used   block diagonal approximation  followed by   factorised Kronecker
+approximation  Despite parallels with the Fisher approach 
+formally the two methods are different  Only in the special case of exponential family models are the Fisher and
+GaussNewton matrices equivalent  however  even for this
+case  the subsequent approximations used in the Fisher approach  Martens   Grosse    differ from ours  Indeed 
+we showed that for problems in which the network has  
+small number of outputs no additional approximations are
+required  Even on models where the Fisher and GaussNewton matrices are equivalent  our experimental results
+suggest that our KFRA approximation performs marginally
+better than KFAC  As we demonstrated  this is possibly due
+to the updates of KFRA being more closely aligned with
+the exact GaussNewton updates than those of KFAC 
+Over the past decade  rstorder methods have been predominant for Deep Learning  Secondorder methods  such
+as GaussNewton  have largely been dismissed because
+of their seemingly prohibitive computational cost and potential instability introduced by using minibatches  Our
+results on comparing both the Fisher and GaussNewton
+approximate methods  in line with  Martens   Grosse 
+  con rm that secondorder methods can perform admirably against even welltuned stateof theart  rstorder
+approaches  while not requiring any hyperparameter tuning 
+In terms of wall clock time on   CPU  in our experiments 
+the secondorder approaches converged to the minimum
+signi cantly more quickly than stateof theart  rstorder
+methods  When training on   GPU  as is common in practice  we also found that secondorder methods can perform
+well  although the improvement over  rstorder methods
+was more marginal  However  since secondorder methods
+are much faster per update  there is the potential to further
+improve their practical utility by speeding up the most expensive computations  speci cally solving linear systems
+on parallel compute devices 
+
+Acknowledgements
+We thank the reviewers for their valuable feedback and suggestions  We also thank Raza Habib  Harshil Shah and
+James Townsend for their feedback on earlier drafts of this
+paper  Finally  we are grateful to James Martens for helpful
+discussions on the implementation of KFAC 
+
+Figure   Comparative optimisation performance on an MNIST
+binary mixtureclassi cation model  We used momentum on the
+curvature matrix for all methods  as it stabilises convergence 
+
+nounced for the binary classi er in Section   where the
+rank of the output layer Hessian is one 
+We can draw   parallel between the curvature being zero
+and standard techniques where the maximum likelihood
+problem is underdetermined for small data sets  This explains why damping is so important in such situations  and
+its role goes beyond simply improving the numerical stability of the algorithm  Our results suggest that  whilst in
+practice the GaussNewton matrix provides curvature only
+in   limited parameter subspace  this still provides enough
+information to allow for relatively large parameter updates
+compared to gradient descent  see Figure  
+
+  Conclusion
+We presented   derivation of the blockdiagonal structure
+of the Hessian matrix arising in feedforward neural networks  This leads directly to the interesting conclusion that
+for networks with piecewise linear transfer functions and
+convex loss the objective has no differentiable local maxima  Furthermore  with respect to the parameters of   single layer  the objective has no differentiable saddle points 
+This may provide some partial insight into the success of
+such transfer functions in practice 
+
+Practical GaussNewton Optimisation for Deep Learning
+
+References
+
+Amari       Natural Gradient Works Ef ciently in Learn 
+
+ing  Neural Computation     
+
+Dauphin        Pascanu     Gulcehre     Cho     Ganguli     and Bengio    
+Identifying and attacking the
+saddle point problem in highdimensional nonconvex
+In Advances in Neural Information Prooptimization 
+cessing Systems  pp     
+
+Dieleman     Schl uter     Raffel     Olson       nderby 
+      Nouri     et al  Lasagne  First Release  August
+ 
+
+Duchi     Hazan     and Singer     Adaptive Subgradient
+Methods for Online Learning and Stochastic Optimization  The Journal of Machine Learning Research   
+   
+
+Pearlmutter        Fast Exact Multiplication by the Hes 
+
+sian  Neural Computation     
+
+Polyak        Some Methods of Speeding up the Convergence of Iteration Methods  USSR Computational Mathematics and Mathematical Physics     
+
+Samaria        and Harter        Parameterisation of  
+Stochastic Model for Human Face Identi cation  In Proceedings of the Second IEEE Workshop on Applications
+of Computer Vision  pp    IEEE   
+
+Schaul     Zhang     and LeCun     No More Pesky
+Learning Rates  In Proceedings of the  th International
+Conference on Machine Learning  pp     
+
+Eigen     Ranzato     and Sutskever     Learning Factored Representations in   Deep Mixture of Experts 
+arXiv preprint arXiv   
+
+Schraudolph        Fast Curvature MatrixVector Products
+for SecondOrder Gradient Descent  Neural Computation     
+
+Gower        and Gower        HigherOrder Reverse
+Automatic Differentiation with Emphasis on the ThirdOrder  Mathematical Programming   
+ 
+
+Hinton        and Salakhutdinov        Reducing the Dimensionality of Data with Neural Networks  Science 
+   
+
+Kingma     and Ba     Adam    Method for Stochastic
+
+Optimization  arXiv preprint arXiv   
+
+Martens     Deep Learning via HessianFree Optimization 
+In Proceedings of the  th International Conference on
+Machine Learning  pp     
+
+Martens     New Insights and Perspectives on the Natural Gradient Method  arXiv preprint arXiv 
+ 
+
+Martens     and Grosse        Optimizing Neural Networks with Kroneckerfactored Approximate Curvature 
+In Proceedings of the  nd International Conference on
+Machine Learning  pp     
+
+Martens     and Sutskever     Learning Recurrent Neural
+Networks with HessianFree Optimization  In Proceedings of the  th International Conference on Machine
+Learning  pp     
+
+Nesterov       Method of Solving   Convex Programming
+Problem with Convergence Rate       Soviet Mathematics Doklady     
+
+Shazeer     Mirhoseini     Maziarz     Davis     Le 
+   Hinton     and Dean     Outrageously Large Neural Networks  The SparselyGated Mixtureof Experts
+Layer  arXiv preprint arXiv   
+
+Sutskever     Martens     Dahl     and Hinton     On
+the Importance of Initialization and Momentum in Deep
+Learning  In Proceedings of the  th International Conference on Machine Learning  pp     
+
+Theano Development Team  Theano    Python Framework for Fast Computation of Mathematical Expressions  arXiv preprint arXiv   
+
+van den Oord     and Schrauwen     Factoring Variations
+in Natural Images with Deep Gaussian Mixture Models 
+In Advances in Neural Information Processing Systems 
+pp     
+
+Zeiler        Adadelta  An Adaptive Learning Rate
+
+Method  arXiv preprint arXiv   
+
+Zen     and Senior     Deep Mixture Density Networks for
+Acoustic Modeling in Statistical Parametric Speech Synthesis  In IEEE International Conference on Acoustics 
+Speech and Signal Processing  pp    IEEE 
+ 
+
+

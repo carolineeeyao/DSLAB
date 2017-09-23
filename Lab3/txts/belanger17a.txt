@@ -1,0 +1,1103 @@
+Endto End Learning for Structured Prediction Energy Networks
+
+David Belanger   Bishan Yang   Andrew McCallum  
+
+Abstract
+
+minimization  LeCun et al   
+
+Structured Prediction Energy Networks  SPENs 
+are   simple  yet expressive family of structured prediction models  Belanger   McCallum    An energy function over candidate
+structured outputs is given by   deep network 
+and predictions are formed by gradientbased
+optimization  This paper presents endto end
+learning for SPENs  where the energy function
+is discriminatively trained by backpropagating
+through gradientbased prediction 
+In our experience  the approach is substantially more accurate than the structured SVM method of Belanger   McCallum   as it allows us to
+use more sophisticated nonconvex energies  We
+provide   collection of techniques for improving
+the speed  accuracy  and memory requirements
+of endto end SPENs  and demonstrate the power
+of our method on  Scenes image denoising and
+CoNLL  semantic role labeling tasks 
+In
+both  inexact minimization of nonconvex SPEN
+energies is superior to baseline methods that use
+simplistic energy functions that can be minimized exactly 
+
+  Introduction
+In   variety of application domains  given an input   we
+seek to predict   structured output    For example  given
+  noisy image  we predict   clean version of it  or given
+  sentence we predict its semantic structure  Often  it is
+insuf cient to employ   feedforward predictor          
+since this may have prohibitive sample complexity  fail to
+model global interactions among outputs  or fail to enforce
+hard output constraints  Instead  it can be advantageous to
+de ne the prediction function implicitly in terms of energy
+
+ University of Massachusetts  Amherst
+
+ Carnegie MelCorrespondence to  David Belanger  be 
+
+lon University 
+langer cs umass edu 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+     arg miny Ex   
+
+ 
+
+random  elds  CRFs 
+
+where Ex  depends on   and learned parameters 
+This approach includes factor graphs  Kschischang et al 
+       conditional
+ Lafferty et al    and many recurrent neural networks
+ Sec    Output constraints can be enforced using
+constrained optimization  Compared to feedforward approaches  energybased approaches often provide better opportunities to inject prior knowledge about likely outputs
+and often have more parsimonious models  On the other
+hand  energybased prediction requires nontrivial search in
+the exponentiallylarge space of outputs  and search techniques often need to be designed on   caseby case basis 
+Structured prediction energy networks  SPENs   Belanger
+  McCallum    help reduce these concerns  They
+can capture higharity interactions among components of
+  that would lead to intractable factor graphs and provide
+  mechanism for automatic structure learning  This is accomplished by expressing the energy function in Eq   
+as   deep architecture and forming predictions by approximately optimizing   using gradient descent 
+While providing the expressivity and generality of deep
+networks  SPENs also maintain the useful semantics of energy functions  domain experts can design architectures to
+capture known properties of the data  energy functions can
+be combined additively  and we can perform constrained
+optimization over    Most importantly  SPENs provide
+for blackbox interaction with the energy  via forward and
+backpropagation  This allows practitioners to explore  
+wide variety of models without the need to handdesign
+corresponding prediction methods 
+Belanger   McCallum   train SPENs using   structured SVM  SSVM  loss  Taskar et al    Tsochantaridis et al    and achieve competitive performance
+on simple multilabel classi cation tasks  Unfortunately 
+we have found it dif cult to extend their method to more
+complex domains  SSVMs are unreliable when exact energy minimization is intractable  as lossaugmented inference may fail to discover margin violations  Sec   
+In response  we present endto end training of SPENs 
+
+Endto End SPENs
+
+where one directly backpropagates through   computation graph that unrolls gradientbased energy minimization  This does not assume that exact minimization is
+tractable  and instead directly optimizes the practical performance of   particular approximate minimization algorithm  Endto end training for gradientbased prediction
+was introduced in Domke   and applied to deep energy models by Brakel et al    See Sec    for details 
+When applying endto end training to SPENs for problems
+with sophisticated output structure  we have encountered
+  variety of technical challenges  The core contribution of
+this paper is   set of generalpurpose solutions for overcoming these  Sec    alleviates the effect of vanishing gradients when training SPENs de ned over the convex relaxation of discrete prediction problems  Sec    trains energies such that gradientbased minimization is fast  Sec   
+reduces SPENs  computation and memory overhead  Finally  Sec    provides practical recommendations for speci   architectures  parameter tying schemes  and pretraining methods that reduce over tting and improve ef ciency 
+We demonstrate the effectiveness of our SPEN training
+methods on two diverse tasks  We  rst consider depth image denoising on the  Scenes dataset  Newcombe et al 
+  where we employ deep convolutional networks as
+priors over images  This provides   signi cant performance
+improvement  from   to   PSNR  over the recent
+work of  Wang et al    which unrolls more sophisticated optimization than us  but uses   simpler image prior 
+After that  we apply SPENs to semantic role labeling  SRL 
+on the CoNLL  dataset  Carreras     arquez   
+The task is challenging for SPENs because the output is
+discrete  sparse  and subject to rigid nonlocal constraints 
+We show how to formulate SRL as   SPEN problem and
+demonstrate performance improvements over strong baselines that use deep features  but suf ciently simple energy
+functions that the constraints can be enforced using dynamic programming 
+Despite substantial differences between the two applications  learning and prediction for all models is performed
+using the same gradientbased prediction and endto end
+learning code  This blackbox interaction with the model
+provides many opportunities for further use of SPENs 
+
+  Structured Prediction Energy Networks
+  SPEN is de ned as an instance of Eq    where the
+energy is given by   deep neural network that provides  
+dy Ex     Belanger  
+subroutine for ef ciently evaluating  
+McCallum    Differentiability necessitates that the
+energy is de ned on continuous inputs  Going forward 
+  will always be continuous  Prediction is performed by
+gradientbased optimization with respect to   
+
+This section  rst motivates the SPENs employed in this paper  by contrasting them with alternative energybased approaches to structured prediction  Then  we present two
+families of methods for training energybased structured
+prediction models that have been explored in prior work 
+
+  BlackBox vs  Factorized Energy Functions
+The de nition of SPENs above is extremely general and includes many existing modeling techniques  However  both
+this paper and Belanger   McCallum   depart from
+most prior work by employing monolithic energy functions
+that only provide forward and backpropagation 
+This contrasts with the two principal families of energybased models in the literature  where the tractability of  approximate  energy minimization depends crucially on the
+factorization structure of the energy  First  factor graphs
+decompose the energy into   sum of functions de ned
+over small sets of subcomponents of    Kschischang et al 
+  This structure provides opportunities for energy
+minimization using message passing  MCMC  or combinatorial solvers  Second  autoregressive models  such as
+recurrent neural networks  RNNs  assume an ordering on
+the components of   such that the energy for component
+yi only depends on its predecessors  Approximate energy
+minimization can be performed using search in the space
+of pre xes of   using beam search or greedy search  See 
+for example  Sutskever et al   
+By not relying on any such factorization when choosing
+learning and prediction algorithms for SPENs  we can consider much broader families of deep energy functions  We
+do not specify the interaction structure in advance  but instead learn it automatically by  tting   deep network  This
+can capture sophisticated global interactions among components of   that are dif cult to represent using   factorized
+energy  Of course  the downside of such SPENs is that they
+provide few guarantees  particularly when employing nonconvex energies  Furthermore  for problems with hard constraints on outputs  the ability to do effective constrained
+optimization may have depended crucially on certain factorization structure 
+
+  Learning as Conditional Density Estimation
+One method for estimating the parameters of an energybased model Ex    is to maximize the conditional likelihood of   
+
+         exp  Ex     
+
+ 
+Unfortunately  computing the likelihood requires the distribution   normalizing constant  which is intractable for
+blackbox energies with no available factorization structure  In contrastive backprop  this is circumvented by performing contrastive divergence training  with Hamiltonian
+
+Endto End SPENs
+
+Monte Carlo sampling from the energy surface  Mnih  
+Hinton    Hinton et al    Ngiam et al    Recently  Zhai et al    trained energybased density models for anomaly detection by exploiting the connections between denosing autoencoders  energybased models  and
+score matching  Vincent   
+
+  Learning with Exact Energy Minimization
+Let        be   nonnegative taskspeci   cost function
+for comparing    and the ground truth    Belanger  
+McCallum   employ   structured SVM  SSVM  loss
+ Taskar et al    Tsochantaridis et al   
+
+max
+
+ 
+
+    yi    Exi      Exi yi   
+
+  xi yi 
+where     max  Each step of minimizing Eq   
+by subgradient descent requires lossaugmented inference 
+
+ 
+
+min
+
+ 
+
+    yi    Exi     
+
+ 
+
+For differentiable     yi    local optimum of Eq    can
+obtained using  rstorder methods 
+Solving Eq    probes the model for margin violations 
+If none exist  the gradient of the loss with respect to the
+parameters is zero  Therefore  SSVM performance does
+not degrade gracefully with optimization errors in the inner prediction problem  since inexact energy minimization
+may fail to discover margin violations that exist  Performance can be recovered if Eq    returns   lower bound 
+eg  by solving an LP relaxation  Finley   Joachims   
+However  this is not possible in general  In Sec    we
+compare the image denoising performance of SSVM learning vs  this paper   endto end method  Overall  we have
+found SSVM learning to be unstable and dif cult to tune
+for nonconvex energies in applications more complex than
+the multilabel classi cation experiments of Belanger  
+McCallum  
+The implicit function theorem offers an alternative framework for training energybased predictors  Foo et al   
+Samuel   Tappen   
+See Domke   for an
+overview  While   naive implementation requires inverting
+Hessians  one can solve the product of an inverse Hessian
+and   vector using conjugate gradients  which can leverage
+the techniques discussed in Sec    as   subroutine  To perform reliably  the method unfortunately requires exact energy minimization and many conjugate gradient iterations 
+Overall  both of these learning algorithms only update the
+energy function in the neighborhoods of the ground truth
+and the predictions of the current model  On the other hand 
+it may be advantageous to shape the entire energy surface
+such that is exhibits certain properties       gradient descent converges quickly when initialized well  Sec   
+
+these methods may be undesirable even for
+
+Therefore 
+problems where exact energy minimization is tractable 
+For nonconvex Ex    gradientbased prediction will only
+ nd   local optimum  Amos et al    present inputconvex neural networks  ICNNs  which employ an easyto implement method for constraining the parameters of
+  SPEN such that the energy is convex with respect to
+   but perhaps nonconvex with respect to the parameters 
+One simply uses convex  nondecreasing nonlinearities
+and only nonnegative parameters in any part of the computation graph downstream from    Here  prediction will
+return the global optimum  but convexity  especially when
+achieved this way  may impose   strong restriction on the
+expressivity of the energy  Their construction is   suf 
+cient condition for achieving convexity  but there are convex energies that disobey this property  Our experiments
+present results for instances of ICNNs 
+In general  nonconvex SPENS perform better 
+
+  Learning with Unrolled Optimization
+The methods of Sec    are unreliable with nonconvex
+energies because we cannot simply use the output of inexact energy minimization as   dropin replacement for
+the exact minimizer 
+Instead    collection of prior work
+has performed endto end learning of gradientbased predictors  Gregor   LeCun    Domke    Maclaurin et al    Andrychowicz et al    Wang et al 
+  Metz et al    Greff et al    Rather than
+reasoning about the energy minimum as an abstract quantity  the authors pose   speci   gradientbased algorithm
+for approximate energy minimization and optimize its empirical performance using backpropagation  This is   form
+of direct risk minimization  Tappen et al    Stoyanov
+et al    Domke   
+Consider simple gradient descent 
+
+yT       
+
+  
+
+ 
+dy
+
+Ex yt 
+
+ 
+
+TXt 
+
+To learn the energy function endto end  we can backpropagate through the unrolled optimization Eq    for
+ xed     With this  it can be rendered APIequivalent to
+  feedforward network that takes   as input and returns
+  prediction for    and can thus be trained using standard
+methods  Furthermore  certain hyperparameters  such as
+the learning rates     are trainable  Domke   
+This backpropagation requires nonstandard interaction
+with   neuralnetwork library because Eq    computes
+gradients in the forward pass  and thus it must compute
+second order terms in the backwards pass  We can save
+space and computation by avoiding instantiating Hessian
+terms and instead directly computing Hessianvector prod 
+
+Endto End SPENs
+
+ucts  These can be achieved three ways  First  the method
+of Pearlmutter   is exact  but requires nontrivial code
+modi cations  Second  some libraries construct computation graphs for gradients that are themselves differentiable 
+Third  we can employ  nitedifferences  Domke   
+It is clear that Eq    can be naturally extended to certain alternative optimization methods  such as gradient descent with momentum  or LBFGS  Liu   Nocedal   
+Domke    These require an additional state vector ht
+that is evolved along with yt across iterations  Andrychowicz et al    unroll gradientdescent  but employ  
+learned nonlinear RNN to perform percoordinate updates
+to    Endto end learning is also applicable to specialcase
+energy minimization algorithms for graphical models  such
+as mean eld inference and belief propagation  Domke 
+  Chen et al    Tompson et al    Li   Zemel 
+  Hershey et al    Zheng et al   
+
+  Endto End Learning for SPENs
+We now present details for applying the methods of the previous section to SPENs  We  rst describe considerations
+for learning SPENs de ned for the convex relaxation of discrete labeling problems  Then  we describe how to encourage our models to optimize quickly in practice  Finally 
+we present methods for improving the speed and memory
+overhead of SPEN implementations 
+Our experiments unroll either Eq    or an analogous
+version implementing gradient descent with momentum 
+We compute Hessianvector products using the  nitedifference method of  Domke    which allows blackbox interaction with the energy 
+We avoid the RNNbased approach of Andrychowicz et al 
+  because it diminishes the semantics of the energy  as
+the interaction between the optimizer and gradients of the
+energy is complicated  In recent work  Gygli et al   
+propose an alternative learning method that  ts the energy
+function such that Ex         where   is de ned
+as in Sec    This is an interesting direction for future
+research  as it allows for nondifferentiable   The advantage of endto end learning  however  is that it provides  
+energy function that is precisely tuned for   particular testtime energy minimization procedure 
+
+  Endto End Learning for Discrete Problems
+To apply SPENs to   discrete structured prediction problem  we relax to   constrained continuous problem  apply
+SPEN prediction  and then round to   discrete output  For
+example  for tagging each pixel of         image with  
+binary label  we would relax from        to        
+and if the pixels can take on one of   values  we would
+relax from                     to     
+    where    is the
+
+probability simplex on   elements 
+While this rounding introduces poorlyunderstood sources
+of error  it has worked well for nonconvex energybased
+prediction in multilabel classi cation  Belanger   McCallum    sequence tagging  Vilnis et al    and
+translation  Hoang et al   
+Both        and     
+are Cartesian products of probability simplices  and it is easy to adopt existing methods
+for projected gradient optimization over the simplex 
+First  it is natural to apply Euclidean projected gradient descent  Over         we have 
+
+ 
+
+yt    Clip   yt    trEx yt   
+
+ 
+
+This is unusable for endto end learning  however  since
+backpropagation through the projection will yield   gradients whenever yt    trEx yt        This is similarly
+problematic for projection onto     
+ Duchi et al   
+Alternatively  we can apply entropic mirror descent  ie 
+projected gradient with distance measured by KL divergence  Beck   Teboulle    For         
+    we have 
+ 
+yt    SoftMax  log yt     trEx yt 
+
+ 
+
+This is suitable for endto end learning  but the updates are
+similar to an RNN with sigmoid nonlinearities  which is
+vulnerable to vanishing gradients  Bengio et al   
+Instead  we have found it useful to avoid constrained optimization entirely  by optimizing unnormalized logits lt 
+with yt   SoftMax lt 
+
+lt    lt    trEx  SoftMax lt   
+
+ 
+
+Here  the updates to lt are additive  and thus will be less
+susceptible to vanishing gradients  Hochreiter   Schmidhuber    Srivastava et al    He et al   
+Finally  Amos et al    present the bundle entropy
+method for convex optimization with simplex constraints 
+along with   method for differentiating the output of the
+optimizer  Endto end learning for Eq    can be performed using generic learning software  since the unrolled
+optimization obeys the API of   feedforward predictor  but
+unfortunately this is not true for their method  Future work
+should consider their method  however  as it performs very
+rapid energy minimization 
+
+  Learning to Optimize Quickly
+We next enumerate methods for learning   model such
+that gradientbased energy minimization converges to highquality   quickly  When using such methods  we have
+found it important to maintain the same optimization con 
+ guration  such as     at both train and test time 
+
+Endto End SPENs
+
+First  we can encourage rapid optimization by de ning our
+loss function as   sum of losses on every iterate yt  rather
+than only on the  nal one  Let  yt     be   differentiable
+loss between an iterate and the ground truth  We employ
+
+  Recommended SPEN Architectures for
+
+Endto End Learning
+
+To train SPENs endto end  we write Eq    as 
+
+   
+
+ 
+ 
+
+TXt 
+
+wt yt    
+
+ 
+
+where wt is   nonnegative weight  This encourages the
+model to achieve highquality predictions early  It has the
+additional bene   that it reduces vanishing gradients  since
+  learning signal is introduced at every timestep  Our experiments use wt    
+Second  for the simplexconstrained problems of Sec   
+
+    
+
+dyt
+
+we smooth the energy with an entropy term Pi   yi 
+
+This introduces extra strong convexity  which helps improve convergence  It also strengthens the parallel between
+SPEN prediction and marginal inference in   Markov random  eld  where the inference objective is expected energy
+plus entropy  Koller   Friedman        
+Third  we can set   to   small value  Of course  this guarantees that optimization converges quickly on the train data 
+Here  we lose the contract that Eq    is even performing energy minimization  since it hasn   converged  but this
+may be acceptable if predictions are accurate  For example 
+some experiments achieve good performance with      
+In future work  it may be fruitful to directly penalize convergence criteria  such as kyt   yt   and    
+Ex yt   
+  Ef cient Implementation
+Since we can explicitly encourage our model to converge
+quickly  it is important to exploit fast convergence at train
+time  Eq    is unrolled for    xed     However  if optimization converges at          it suf ces to start backpropagation at    since the updates to yt for        are
+the identity  Therefore  we unroll for    xed number of
+iterations     but iterate only until convergence is detected 
+To support backpropagation    naive implementation of
+Eq    would require   clones of the energy  with tied
+parameters  We reduce memory overhead by checkpointing the inputs and outputs of the energy  but discarding
+its internal state  This allows us to use   single copy of
+the energy  but requires recomputing forward evaluations at
+speci   yt during the backwards pass  To save additional
+memory  we could have reconstructed the yt onthe   either by reversing the dynamics of the energy minimization
+method  Domke    Maclaurin et al    or by performing   small amount of extra forwardpropagation  Geoffrey   Padmanabhan    Lewis   
+
+yT   Init        
+
+  
+
+ 
+dy
+
+TXt 
+
+  yt        
+
+ 
+
+Here  Init  is   differentiable procedure for predicting an
+initial iterate    Following Belanger   McCallum  
+we also employ Ex                  where the dependence of Ex    on   comes by way of   parametrized
+feature function       This is useful because testtime prediction can avoid backpropagation in      
+We have found it useful in practice to employ an energy
+that splits into global and local terms 
+
+              Eg            Xi
+
+El
+
+  yi          
+
+Here    indexes the components of   and Eg           is
+an arbitrary global energy function  The modeling bene ts
+of the local terms are similar to the bene ts of using local
+factors in popular factor graph models  We also can use the
+local terms to provide an implementation of Init 
+We pretrain       by training the feedforward predictor
+Init       We also stabilize learning by  rst clamping the
+local terms for   few epochs while updating Eg          
+To backpropagate through Eq    the energy function
+must be at least twice differentiable with respect to   
+Therefore  we can   use nonlinearities with discontinuous
+gradients  Instead of ReLUs  we use   SoftPlus with   reasonably high temperature  Note that       and Init  can
+be arbitrary networks that are subdifferentiable with respect to their parameters 
+
+  Experiments
+We evaluate SPENs on image denoising and semantic role
+labeling  SRL  tasks 
+Image denoising is an important
+benchmark for SPENs  since the task appears in many prior
+works employing endto end learning  SRL is useful for
+evaluating SPENs  suitability for challenging combinatorial problems  since the outputs are subject to rigid  nonlocal constraints  For both  we provide controlled experiments that isolate the impact of various SPEN design decisions  such as the optimization method that is unrolled and
+the expressivity of the energy function 
+In these applications  we employ speci   architectures
+based on our prior knowledge about the problem domain 
+This capability is crucial for introducing the necessary inductive bias to fbe able to    SPENs on limited datasets 
+Overall  blackbox prediction and learning methods for
+
+Endto End SPENs
+
+SPENs are useful because we can select architectures based
+on their suitability for the data  not whether they support
+modelspeci   algorithms 
+
+  Image Denoising
+Let            be an observed grayscale image  We
+assume that it is   noisy realization of   latent clean image
+            which we estimate using MAP inference 
+Consider   Gaussian noise model with variance   and  
+prior      The associated energy function is 
+
+ky   xk 
+
+      log     
+
+ 
+Here  the feature network is the identity  The  rst term is
+the local energy network and the second  which does not
+depend on    is the global energy network 
+There are three general families for the prior  First  it can be
+hardcoded  Second  it can be learned by approximate density estimation  Third  given   collection of        pairs 
+we can perform supervised learning  where the prior   parameters are discriminatively trained such that the output
+of   particular algorithm for minimizing Eq    is highquality  Endto end learning has proven to be highly successful for the third approach  Tappen et al    Barbu 
+  Schmidt et al    Sun   Tappen    Domke 
+  Wang et al    and thus it is important to evaluate the methods of this paper on the task 
+
+  IMAGE PRIORS
+Much of the existing work on endto end training for denoising considers some form of    eldof experts  FOE 
+prior  Roth   Black    We consider an   version 
+which assigns high probability to images with sparse activations from   learned  lters 
+
+       exp  Xk
+
+  fk         
+
+ 
+
+  perform endto end learning for
+Wang et al 
+Eq    by unrolling proximal gradient methods that analytically handle the nondifferentiable   term 
+This paper assumes we only have blackbox interaction
+with the energy  In response  we alter Eq    such that
+it is twice differentiable  so that we can unroll generic  rstorder optimization methods  We approximate Eq    by
+leveraging   SoftPlus with temperature   replacing   by 
+SoftAbs        SoftPlus        SoftPlus     
+The principal advantage of learning algorithms that are not
+handcrafted to the problem structure is that they provide
+the opportunity to employ more expressive energies  In response  we also consider   deeper prior  given by 
+
+       exp  DNN     
+
+ 
+
+Here  DNN    is   general deep convolutional network that
+takes an image and returns   number  The architecture in
+our experiments consists of             convolution   
+SoftPlus  another           convolution    SoftPlus   
+          convolution  and  nally spatial average pooling 
+The method of Wang et al    cannot handle this prior 
+
+  EXPERIMENTAL SETUP
+We evaluate on the  Scenes dataset  Newcombe et al 
+  where we seek to denoise depth measurements from
+  Kinect sensor  Our data processing and hyperparameters are designed to replicate the setup of Wang et al 
+  who demonstrate stateof the art results for energyminimization based denoising on the dataset  We train using random       crops from   images of the same
+scene and report PSNR  higher is better  for   images
+from different scenes  We treat   as   trainable parameter
+and minimize the meansquared error of   
+
+  RESULTS AND DISCUSSION
+Example outputs are given in Figure   and Table   compares PSNR  BM   is   widelyused nonparametric
+method  Dabov et al    FilterForest  FF  adaptively
+selects denoising  lters for each location  Fanello et al 
+  ProximalNet  PN  is the system of Wang et al 
+  FOE  is an attempt to replicate PN using endto 
+end SPEN learning  We unroll   steps of gradient descent
+with momentum   and use the modi cation in Eq   
+Note it performs similarly to PN  which unrolls   iterations
+of sophisticated optimization  Note that we can obtain  
+PSNR using   feedforward convnet with   similar architecture to our DeepPrior  but without spatial pooling 
+The next set of results consider improved instances of the
+FOE model  First  FOE  is identical to FOE  except that it employs the average loss Eq    uses   momentum constant of   and treats the learning rates   
+as trainable parameters  We  nd that this results in both
+better performance and faster convergence  Of course  we
+could achieve fast convergence by simply setting   to be
+small  In response  we consider FOE  This only unrolls
+for       iterations and obtains superior performance 
+The  nal three results are with the DNN prior Eq    DP 
+  unrolls   steps of gradient descent with   momentum
+constant of   The gain in performance is substantial 
+especially considering that   PSNR of   can be obtained
+with elementary signal processing  Similar to FOE  vs 
+FOE  we experience   modest performance gain using DP  which only unrolls for   gradient steps but is
+otherwise identical 
+Finally  the FOESSVM and DPSSVM con gurations
+use SSVM training  We  nd that FOESSVM performs
+
+Endto End SPENs
+
+Ground Truth
+
+Noisy Input
+
+FOE 
+
+FOE 
+
+DeepPrior 
+
+DeepPrior 
+
+Figure   Example Denoising Outputs
+
+BM  
+ 
+
+FOE 
+
+ 
+
+FF
+PN
+ 
+ 
+FOE  DP 
+ 
+ 
+
+FOE 
+ 
+DP 
+ 
+
+FOESSVM
+
+ 
+
+DPSSVM
+
+ 
+
+Table   Denoising Results  PSNR 
+
+competitively with the other FOE con gurations  This is
+not surprising  since the FOE prior is convex  However   tting the DeepPrior with an SSVM is inferior to using endto end learning  The performance is very sensitive to the
+energy minimization hyperparameters 
+In these experiments  it is superior to only unroll for   few
+iterations for endto end learning  One possible reason is
+that   shallow unrolled architecture is easier to train  Truncated optimization with respect to   may also provide an
+interesting prior over outputs  Duvenaud et al    It is
+also observed in Wang et al    that better energy minimization for FOE models may not improve PSNR  Often
+unrolling for   iterations results in oversmoothed outputs 
+We are unable achieve reasonable performance with an
+ICNN  Amos et al    which restricts all of the parameters of the convolutions to be positive  Unfortunately  this
+hinders the ability of the  lters in the prior to act as edge
+detectors or encourage local smoothness  Both of these are
+important for highquality denoising  Note that the   FOE
+is convex  even without the restrictive ICNN constraint 
+
+  Semantic Role Labeling
+Semantic role labeling  SRL  predicts the semantic structure of predicates and arguments in sentences  Gildea  
+Jurafsky    For example  in the sentence    want to
+buy   car  the verbs  want  and  buy  are two predicates 
+and     is an argument that refers to the wanter and buyer 
+ to buy   car  is the thing wanted  and    car  is the thing
+bought  Given predicates  we seek to identify arguments
+and their semantic roles in relation to each predicate  Formally  given   set of predicates   in   sentence   and   set
+of candidate argument spans    we assign   discrete semantic role   to each pair of predicate and argument  where  
+can be either   prede ned role label or an empty label  We
+evaluate SRL instead of  for example  nounphrase chunking  LacosteJulien et al    since it is   more challenging task  where the outputs are subject to substantially
+more complex nonlocal constraints 
+Existing work imposes hard constraints on    such as excluding overlapping arguments and repeated core roles during prediction  The objective is to minimize the energy 
+
+min
+
+ 
+
+                                  
+
+ 
+
+where            is set of feasible joint role assignments 
+This constrained optimization problem can be solved using integer linear programming  ILP   Punyakanok et al 
+  or its relaxations  Das et al    These methods rely on the output of local classi ers that are unaware of structural constraints during training  More
+recently    ackstr om et al    account for the constraint structure using dynamic programming at
+train
+time  FitzGerald et al    extend this using neural network features and show improved results 
+
+  DATA AND PREPROCESSING AND BASELINES
+We consider the CoNLL   shared task data  Carreras
+    arquez    with standard data splits and of 
+cial evaluation scripts  We apply similar preprocessing
+as   ackstr om et al    This includes partof speech
+tagging  dependency parsing  and using the parse to generate candidate arguments 
+Our baseline is an arcfactored model for the conditional
+probability of the predicateargument arc labels 
+
+               iP ri         
+
+ 
+
+where   ri            exp   ri           Here  each
+
+conditional distribution is given by   multiclass logistic regression model  See Appendix    for details of the architecture and training procedure for our baseline 
+When using the negative log of Eq    as an energy in
+Eq    there are variety of methods for  nding   nearoptimal                First  we can employ simple
+
+Endto End SPENs
+
+heuristics for locally resolving constraint violation  The
+Local     system uses Eq    and these  We can instead
+use the AD  message passing algorithm  Martins et al 
+  to solve the LP relaxation of this constrained problem  We use Local   AD  to refer to this system  Since the
+LP solution may not be integral  we postprocess the AD 
+output using the same heuristics as Local     
+
+ 
+
+  SPEN MODEL
+The SPEN performs continuous optimization over the relaxed set yi      for each discrete label ri  where  
+is the number of possible roles  The preprocessing generates sparse predicateargument candidates  but we optimize
+over the complete bipartite graph between predicates and
+arguments to support vectorization  We have         
+ 
+where   and   are the max number of predicates and arguments  Invalid arcs are constrained to the empty label 
+We employ   pretrained version of Eq    to provide the
+local energy term of   SPEN  This is augmented with global
+terms that couple the outputs together  See Appendix   
+for details of the architecture we use  It has terms  for example  that apply   deep network to the feature representations of all of the arcs selected for   given predicate 
+As with   ackstr om et al    we seek to account for
+constraints            during both inference and learning  rather than only imposing them via postprocessing 
+Therefore  we include additional energy terms that encode
+membership in            as twicedifferentiable soft constraints that can be applied to    All of the constraints in
+           express that certain arcs cannot cooccur  For
+example  two arguments cannot attach to the same predicate if the arguments correspond to spans of tokens that
+overlap  Consider general binary variables   and   with
+corresponding relaxations              We convert the constraint       into an energy function  SoftPlus     
+where   is   learned parameter 
+We consider the SPEN     and SPEN   AD  con gurations  which employ heuristics or AD  to enforce the output constraints  Rather than applying these methods to the
+probabilities from Eq    we use the soft prediction output by energy minimization 
+
+  RESULTS AND DISCUSSION
+Table   contains results on the CoNLL   WSJ dev and
+test sets and the Brown test set  We compare the SPEN
+and Local systems with the best nonensemble systems
+of   ackstr om et al    and FitzGerald et al   
+which have similar overall setups as us for feature extraction and for the parametrization of the local energy terms 
+For these   Local   ts Eq    without regard for the output constraints  whereas  Structured  explicitly considers
+
+Model
+
+Local    
+Local   AD 
+SPEN    
+SPEN   AD 
+
+  ackstr om  Local 
+
+  ackstr om  Structured 
+
+FitzGerald  Local 
+
+FitzGerald  Structured 
+
+Dev
+ WSJ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Test
+ WSJ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Test
+
+ Brown 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Table   SRL Results    
+
+them during training  Note that Zhou   Xu   obtain
+slightly better performance with alternative RNN methods 
+We were unable to outputerform the Local systems using  
+SPEN system trained with an SSVM loss 
+We select our SPEN con guration by maximizing performance of SPEN   AD  on the dev data  Our best system
+unrolls for   iterations  trains periteration learning rates 
+uses no momentum  and unrolls Eq    Overall  SPEN
+  AD  performs the best of all systems on the WSJ test
+data  We expect our diminished performance on the Brown
+test set is due to over tting  The Brown set is not from the
+same source as the train  dev  and test WSJ data  SPENs
+are more susceptible to over tting because the expressive
+global term introduces many parameters 
+Note that SPEN   AD  and SPEN     performs identically  whereas LOCAL   AD  and LOCAL     do not 
+This is because our learned global energy encourages constraint satisfaction during gradientbased optimization of   
+Using the method of Amos et al    for restricting the
+energy to be convex wrt    we obtain   on the test set 
+
+  Conclusion and Future Work
+SPENs are    exible  expressive framework for structured
+prediction  but training them can be challenging  This paper provides   new endto end training method that enables
+high performance on considerably more complex tasks than
+those of Belanger   McCallum   We unroll an approximate energy minimization algorithm into   differentiable computation graph that is trainable by gradient descent  The approach is userfriendly in practice because it
+returns not just an energy function but also   testtime prediction procedure that has been tailored for it 
+In the future  it may be useful to employ more sophisticated
+unrolled optimizers  perhaps where the optimizer   hyperparameters are   learned function of    and to perform iterative optimization in   learned feature space  rather than
+output space  Finally  we could model gradientbased prediction as   sequential decision making problem and train
+the energy using valuebased reinforcement learning 
+
+Endto End SPENs
+
+Acknowledgments
+Many thanks to Justin Domke  Tim Vieiria  Luke Vilnis 
+and Shenlong Wang for helpful discussions  The  rst and
+third authors were supported in part by the Center for Intelligent Information Retrieval and in part by DARPA under
+agreement number FA  The second author
+was supported in part by DARPA under contract number
+FA  The      Government is authorized
+to reproduce and distribute reprints for Governmental purposes notwithstanding any copyright notation thereon  Any
+opinions   ndings and conclusions or recommendations expressed in this material are those of the authors and do not
+necessarily re ect those of the sponsor 
+
+References
+Amos  Brandon  Xu  Lei  and Kolter    Zico  Inputconvex
+
+deep networks  ICML   
+
+Andrychowicz  Marcin  Denil  Misha  Gomez  Sergio 
+Hoffman  Matthew    Pfau  David  Schaul  Tom  and
+de Freitas  Nando  Learning to learn by gradient descent
+by gradient descent  NIPS   
+
+Barbu  Adrian  Training an active random  eld for realtime image denoising  IEEE Transactions on Image Processing     
+
+Beck  Amir and Teboulle  Marc  Mirror descent and nonlinear projected subgradient methods for convex optimization  Operations Research Letters     
+
+Belanger  David and McCallum  Andrew  Structured pre 
+
+diction energy networks  In ICML   
+
+Bengio  Yoshua  Simard  Patrice  and Frasconi  Paolo 
+Learning longterm dependencies with gradient descent
+is dif cult  IEEE transactions on neural networks   
+   
+
+Brakel  Phil emon  Stroobandt  Dirk  and Schrauwen  Benjamin  Training energybased models for timeseries imputation  JMLR     
+
+Carreras  Xavier and   arquez  Llu   
+
+Introduction to
+the conll  shared task  Semantic role labeling  In
+CoNLL   
+
+Chen  LiangChieh  Papandreou  George  Kokkinos  Iasonas  Murphy  Kevin  and Yuille  Alan    Semantic image segmentation with deep convolutional nets and fully
+connected crfs  ICLR   
+
+Dabov  Kostadin  Foi  Alessandro  Katkovnik  Vladimir 
+and Egiazarian  Karen  Image denoising by sparse   
+transformdomain collaborative  ltering  IEEE Transactions on image processing     
+
+Das  Dipanjan  Martins  Andr   FT  and Smith  Noah    An
+exact dual decomposition algorithm for shallow semantic parsing with constraints 
+In Conference on Lexical
+and Computational Semantics   
+
+Domke  Justin  Generic methods for optimizationbased
+
+modeling  In AISTATS   
+
+Domke  Justin  Learning graphical model parameters with
+approximate marginal inference  Pattern Analysis and
+Machine Intelligence   
+
+Duchi  John  ShalevShwartz  Shai  Singer  Yoram  and
+Chandra  Tushar  Ef cient projections onto the    ball
+for learning in high dimensions  In ICML   
+
+Duvenaud  David  Maclaurin  Dougal  and Adams  Ryan   
+Early stopping as nonparametric variational inference  In
+AISTATS   
+
+Fanello  Sean Ryan  Keskin  Cem  Kohli  Pushmeet  Izadi 
+Shahram  Shotton  Jamie  Criminisi  Antonio  Pattacini 
+Ugo  and Paek  Tim  Filter forests for learning datadependent convolutional kernels  In CVPR   
+
+Finley  Thomas and Joachims  Thorsten  Training structural svms when exact inference is intractable  In ICML 
+ 
+
+FitzGerald  Nicholas    ackstr om  Oscar  Ganchev  Kuzman  and Das  Dipanjan  Semantic role labeling with
+neural network factors  In EMNLP  pp     
+
+Foo  Chuansheng  Do  Chuong    and Ng  Andrew    Ef 
+ cient multiple hyperparameter learning for loglinear
+models  In NIPS   
+
+Geoffrey  Zweig and Padmanabhan  Mukund  Exact alphabeta computation in logarithmic space with application
+to map word graph construction   
+
+Gildea  Daniel and Jurafsky  Daniel  Automatic labeling of
+semantic roles  Computational linguistics   
+   
+
+Greff  Klaus  Srivastava  Rupesh    and Schmidhuber 
+  urgen  Highway and residual networks learn unrolled
+iterative estimation  ICLR   
+
+Gregor  Karol and LeCun  Yann  Learning fast approxima 
+
+tions of sparse coding  In ICML   
+
+Gygli     Norouzi     and Angelova     Deep Value
+Networks Learn to Evaluate and Iteratively Re ne Structured Outputs  In ICML   
+
+He  Kaiming  Zhang  Xiangyu  Ren  Shaoqing  and Sun 
+Jian  Deep residual learning for image recognition  In
+CVPR   
+
+Endto End SPENs
+
+Hershey  John    Roux  Jonathan Le  and Weninger  Felix 
+Deep unfolding  Modelbased inspiration of novel deep
+architectures  arXiv preprint arXiv   
+
+Metz  Luke  Poole  Ben  Pfau  David  and SohlDickstein 
+Jascha  Unrolled generative adversarial networks  ICLR 
+ 
+
+Hinton  Geoffrey  Osindero  Simon  Welling  Max  and
+Teh  YeeWhye  Unsupervised discovery of nonlinear
+structure using contrastive backpropagation  Cognitive
+science     
+
+Mikolov  Tomas  Sutskever  Ilya  Chen  Kai  Corrado 
+Greg    and Dean  Jeff  Distributed representations of
+words and phrases and their compositionality  In NIPS 
+ 
+
+Hoang  Cong Duy Vu  Haffari  Gholamreza  and Cohn 
+Trevor  Decoding as continuous optimization in neural
+machine translation  arXiv preprint   
+
+Mnih  Andriy and Hinton  Geoffrey  Learning nonlinear
+constraints with contrastive backpropagation  In IJCNN 
+ 
+
+Hochreiter  Sepp and Schmidhuber    urgen  Long short 
+
+term memory  Neural computation   
+
+Kingma  Diederik and Ba  Jimmy  Adam    method for
+
+stochastic optimization  ICLR   
+
+Koller  Daphne and Friedman  Nir  Probabilistic graphical
+
+models  principles and techniques  MIT press   
+
+Kschischang  Frank    Frey  Brendan    and Loeliger 
+HA  Factor graphs and the sumproduct algorithm 
+IEEE Transactions on information theory   
+   
+
+LacosteJulien  Simon  Jaggi  Martin  Schmidt  Mark 
+and Pletscher  Patrick  Blockcoordinate frankwolfe
+optimization for structural svms 
+arXiv preprint
+arXiv   
+
+Lafferty  John  McCallum  Andrew  and Pereira  Fernando 
+Conditional random  elds  Probabilistic models for segmenting and labeling sequence data  In ICML   
+
+LeCun  Yann  Chopra  Sumit  Hadsell  Raia  Ranzato    
+and Huang       tutorial on energybased learning  Predicting Structured Data     
+
+Lewis  Bil  Debugging backwards in time  arXiv preprint
+
+cs   
+
+Li  Yujia and Zemel  Richard    Mean eld networks 
+ICML Workshop on Learning Tractable Probabilistic
+Models   
+
+Liu  Dong   and Nocedal  Jorge  On the limited memory
+bfgs method for large scale optimization  Mathematical
+programming     
+
+Maclaurin  Dougal  Duvenaud  David  and Adams  Ryan   
+Gradientbased hyperparameter optimization through reversible learning  In ICML   
+
+Martins  Andr   FT  Figeuiredo  Mario AT  Aguiar  Pedro MQ  Smith  Noah    and Xing  Eric    An augmented lagrangian approach to constrained map inference  In ICML   
+
+Newcombe  Richard    Izadi  Shahram  Hilliges  Otmar 
+Molyneaux  David  Kim  David  Davison  Andrew   
+Kohi  Pushmeet  Shotton  Jamie  Hodges  Steve  and
+Fitzgibbon  Andrew  Kinectfusion  Realtime dense surface mapping and tracking  In IEEE international symposium on Mixed and augmented reality   
+
+Ngiam  Jiquan  Chen  Zhenghao  Koh  Pang    and Ng 
+In ICML 
+
+Andrew    Learning deep energy models 
+ 
+
+Pearlmutter  Barak    Fast exact multiplication by the hes 
+
+sian  Neural computation     
+
+Punyakanok  Vasin  Roth  Dan  and Yih  Wentau  The importance of syntactic parsing and inference in semantic
+role labeling  Computational Linguistics     
+
+Roth  Stefan and Black  Michael    Fields of experts   
+
+framework for learning image priors  In CVPR   
+
+Samuel  Kegan GG and Tappen  Marshall    Learning optimized map estimates in continuouslyvalued mrf models  In CVPR   
+
+Schmidt  Uwe  Gao  Qi  and Roth  Stefan    generative
+perspective on mrfs in lowlevel vision  In CVPR   
+
+Srivastava  Rupesh    Greff  Klaus  and Schmidhuber 
+
+  urgen  Training very deep networks  In NIPS   
+
+Stoyanov  Veselin  Ropson  Alexander  and Eisner  Jason 
+Empirical risk minimization of graphical model parameters given approximate inference  decoding  and model
+structure  In AISTATS   
+
+Sun  Jian and Tappen  Marshall    Learning nonlocal
+In
+
+range markov random  eld for image restoration 
+CVPR   
+
+Sutskever  Ilya  Vinyals  Oriol  and Le  Quoc    Sequence
+In NIPS 
+
+to sequence learning with neural networks 
+ 
+
+  ackstr om  Oscar  Ganchev  Kuzman  and Das  Dipanjan 
+Ef cient inference and structured learning for semantic
+role labeling  TACL   
+
+Endto End SPENs
+
+Tappen  Marshall    Liu  Ce  Adelson  Edward    and Freeman  William    Learning gaussian conditional random
+ elds for lowlevel vision  In CVPR   
+
+Taskar     Guestrin     and Koller     Maxmargin
+
+Markov networks  NIPS   
+
+Tompson  Jonathan    Jain  Arjun  LeCun  Yann  and Bregler  Christoph  Joint training of   convolutional network
+and   graphical model for human pose estimation 
+In
+Advances in neural information processing systems  pp 
+   
+
+Tsochantaridis 
+
+Ioannis  Hofmann  Thomas  Joachims 
+Thorsten  and Altun  Yasemin  Support vector machine
+learning for interdependent and structured output spaces 
+In ICML   
+
+Vilnis  Luke  Belanger  David  Sheldon  Daniel  and McCallum  Andrew  Bethe projections for nonlocal inference  UAI   
+
+Vincent  Pascal    connection between score matching and
+
+denoising autoencoders  Neural Computation   
+
+Wang  Shenlong  Schwing  Alex  and Urtasun  Raquel 
+Ef cient inference of continuous markov random  elds
+with polynomial potentials  In NIPS   
+
+Wang  Shenlong  Fidler  Sanja  and Urtasun  Raquel  Prox 
+
+imal deep structured models  In NIPS   
+
+Zhai  Shuangfei  Cheng  Yu  Lu  Weining  and Zhang 
+Zhongfei  Deep structured energy based models for
+anomaly detection  In ICML   
+
+Zheng  Shuai  Jayasumana  Sadeep  RomeraParedes 
+Bernardino  Vineet  Vibhav  Su  Zhizhong  Du  Dalong 
+Huang  Chang  and Torr  Philip HS  Conditional random
+ elds as recurrent neural networks  In ICCV   
+
+Zhou  Jie and Xu  Wei  Endto end learning of semantic
+role labeling using recurrent neural networks  In ACL 
+ 
+
+

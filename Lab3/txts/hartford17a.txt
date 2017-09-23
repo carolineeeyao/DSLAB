@@ -1,0 +1,1037 @@
+Deep IV    Flexible Approach for Counterfactual Prediction
+
+Jason Hartford   Greg Lewis   Kevin LeytonBrown   Matt Taddy  
+
+Abstract
+
+Counterfactual prediction requires understanding
+causal relationships between socalled treatment
+and outcome variables  This paper provides  
+recipe for augmenting deep learning methods to
+accurately characterize such relationships in the
+presence of instrument variables  IVs sources
+of treatment randomization that are conditionally
+independent from the outcomes  Our IV speci 
+cation resolves into two prediction tasks that can
+be solved with deep neural nets     rststage network for treatment prediction and   secondstage
+network whose loss function involves integration
+over the conditional treatment distribution  This
+Deep IV framework  allows us to take advantage
+of   theshelf supervised learning techniques
+to estimate causal   ects by adapting the loss
+function  Experiments show that it outperforms
+existing machine learning approaches 
+
+  Introduction
+Supervised machine learning  ML  provides many   ective methods for tasks in which   model is learned based
+on samples from some data generating process  DGP  and
+then makes predictions about new samples from the same
+distribution  However  decision makers would often like to
+predict the   ects of interventions into the DGP through policy changes  Such changes impact the relationship between
+inputs and outcomes  making straightforward prediction approaches inappropriate  In order to accurately answer such
+counterfactual questions it is necessary to model the structural  or causal  relationship between policy  or  treatment 
+and outcome variables 
+For example  consider an airline that wants to use historical
+
+ University of British Columbia  Canada  Microsoft Research 
+New England  USA  Correspondence to  Jason Hartford  jasonhar cs ubc ca  Matt Taddy  taddy microsoft com 
+
+Proceedings of the  th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright   by
+the author   
+
+ Implementation with all simulation experiments is available
+
+at https github com jhartford DeepIV
+
+data to optimize the prices it charges its customers  in this
+case  price is the treatment variable and the customer   decision about whether to buy   ticket is the outcome  There are
+two ways that   naive analysis could lead to incorrect counterfactual predictions  First  imagine that price varies in the
+training data because the airline gradually increases prices
+as   plane  lls  Around holidays  more people want to   
+and hence planes become fuller leading to higher prices  So 
+in our training set we observe examples with high prices and
+high sales    direct ML approach might incorrectly predict
+that if the airline were to increase prices at other times in the
+year they would also observe increased sales  whereas the
+true relationship between price and sales is surely negative 
+Typically we can observe holidays  and include them in the
+model  so that we can correct for their   ects  This case
+where an observable feature  holidays  is correlated with
+both the outcome and treatment variable is called  selection
+on observables 
+But say there is also sometimes high demand because of
+conferences  which the airline is not able to observe  This
+presents   more challenging problem  even if price distortions due to holidays were taken into account    naive
+analysis could conclude that higher prices drive higher demand  whereas in fact high price is only correlated with
+high demand via the latent conference variable  This is the
+more challenging case of  selection on unobservables 
+The gold standard for establishing causal relationships is
+to conduct  AB  experiments  with subjects randomly assigned to di erent values of the treatment variable  In the
+airline example  this would mean assigning passengers random prices that do not depend on the number of seats sold 
+Enough data collected in this way would make it straightforward to identify the true relationship between price and
+demand even if the latent variable were never observed 
+However  such   strategy would be exceedingly expensive
+ the airline would sometimes turn away interested passengers for nearlyempty  ights and   er steep discounts for
+nearlyfull  ights  Depending on the timescale over which
+such randomization were conducted  it could also hurt the
+airline   longterm interests  because it could be perceived
+as unfair  and could fail if passengers were able to hide their
+identities       by logging in from   di erent computer if
+they didn   like the price 
+
+Deep IV    Flexible Approach for Counterfactual Prediction
+
+The alternative is to work with observational data  but doing
+so requires explicit assumptions about the causal structure of
+the DGP  Bottou et al    Most recent approaches to using machine learning methods such as trees  Wager   Athey 
+  Athey   Imbens    and deep networks  Johansson et al    Shalit et al    for causal inference in
+observational data leverage an  unconfoundedness  assumption that the treatment is conditionally independent of any
+latent variables given the observed features  This amounts
+to assuming away selection on unobservables  which may
+or may not be reasonable depending on the setting 
+We can do without this assumption and get around both
+types of selection if we can identify one or more instrumental variables  IVs  that only   ect treatment assignment
+and not the outcome variable  In our airline example  the
+cost of fuel could be such an instrument  its variation is
+independent of demand for airline tickets and it   ects sales
+only via ticket prices  Changes in the cost of fuel thus create
+movement in ticket prices that is independent of our latent
+variable  and this movement is as good as randomization for
+the purposes of causal inference  See Figure   for an graphical illustration of this example and of the general class of
+causal graphs that we consider 
+The IV framework has   long history  especially in economics       Wright    Reiers      It provides
+methods for learning the regression function that relates the
+treatment and response variables under the  interventional
+distribution  for DGPs that conform to the graphical model
+shown in Figure    Pearl    Most IV applications make
+use of   twostage least squares procedure  SLS       Angrist   Pischke    that applies   model of linear and
+homogeneous treatment   ects       all airline customers
+must have the same price sensitivity  Nonparametric IV
+methods from the econometrics literature relax these assumptions       Newey   Powell    Darolles et al 
+  However  these methods typically work by modeling
+the outcome as an unknown linear combination of   prespeci ed set of basis functions of the treatment and other
+covariates       Hermite polynomials  wavelets  or splines 
+and then modeling the conditional expectation of each of
+these basis functions in terms of the instruments       the
+number of parameters is quadratic in the number of basis
+functions  This requires   strong prior understanding of
+the DGP by the researcher  also  the complexity of both
+speci cation and estimation explodes when there are more
+than   handful of inputs 
+Advances in deep learning have demonstrated the power of
+learning latent representations of complex features spaces
+ for recent surveys  see eg  LeCun et al    Schmidhuber    This paper   goal is to use these powerful
+learning algorithms for IV analysis  We do this by breaking
+IV analysis into two supervised stages that can each be tar 
+
+geted with deep networks and that  when solved  allow us
+to make counterfactual claims and perform causal inference 
+Speci cally  we  rst model the conditional distribution of
+the treatment variable given the instruments and covariates
+and then target   loss function involving integration over the
+conditional treatment distribution from the  rst stage  Both
+stages use deep neural nets trained via stochastic gradient
+descent  Robbins   Monro    Bottou    We also
+present an outof sample causal validation procedure for
+selecting hyperparameters of the models on   validation set 
+We refer to this setup as the Deep IV framework 
+Section   describes our general IV speci cation and its decomposition into two learning tasks  Section   outlines
+neural network estimation for these tasks with particular
+attention paid to the SGD routine used in model training
+and our causal validation procedure  Section   presents experimental results that illustrate the bene ts of our methods 
+
+  Counterfactual prediction
+We aim to predict the value of some outcome variable        
+sales in our airline example  under an intervention in   policy
+or treatment variable         price  There exists   set of
+observable covariate features         holidays  that we know
+  ect both   and    There also exist unobservable latent
+variables   that may   ect      and         conferences 
+Counterfactual prediction aims to recover     do       in
+the context of the graphical model given by Figure   where
+the do  operator indicates that we have intervened to set
+the value of the policy variable    as per Pearl    We
+assume the   is structurally determined by      and   as
+
+                 
+
+ 
+That is      is some unknown and potentially nonlinear
+continuous function of both   and    and we assume that the
+latent variables  or  error    enter additively with unconditional mean Ee     We allow for errors that are potentially
+correlated with the inputs             cid    and  in particular 
+  pe     cid   
+De ne the counterfactual prediction function
+                           
+
+ 
+
+which is the conditional expectation of   given the observables   and    holding the distribution of   constant as   is
+changed  Note that we condition only on   and not   in the
+term        this term is typically nonzero  but it will remain
+constant under arbitrary changes to our policy variable   
+Thus         is the structural equation that we estimate  It is
+ It may be easier to think about   setting where        so that
+the latent error is simply de ned as being due to factors orthogonal
+to the observable controls  In that case                     All of
+our results apply in either setup 
+
+Deep IV    Flexible Approach for Counterfactual Prediction
+
+Figure    Left  Our airtravel demand example  with arrows representing causal   ects  Price is the policy variable  sales is the outcome 
+and holidays are observable covariates  There is   big  conference  unobserved to the policymaker  that drives demand and  due to
+the airline   pricing algorithms  price  The instrument is the cost of fuel  which in uences sales only via price   Right  The general
+structure of the DGP under our IV speci cation    represents observable features    is our treatment variable of interest    represents the
+instruments  and latent   ects   in uence the outcome   additively 
+
+useful because to evaluate policy options       changing the
+ticket price from    to    we can look at the di erence in
+outcomes                                   
+In standard supervised learning settings  the prediction
+model is trained to              This will typically be biased
+against our structural objective because
+
+                                  cid         
+
+ 
+
+since our treatment is not independent of the latent errors
+by assumption and hence            cid         This object is
+inappropriate for policy analysis as it will lead to biased
+counterfactuals 
+
+                   
+
+                     
+
+ cid 
+ cid 
+                   
+
+ 
+
+ 
+
+In our airline example  high prices during conferences imply
+that                     will be positive  resulting in the
+incorrect prediction that higher prices are associated with
+higher sales if this bias is su ciently large 
+Fortunately  the presence of instruments allows us to estimate an unbiased          that captures the structural relationship between   and    These are sets of variables   that
+satisfy the following three conditions 
+Relevance          the distribution of   given   and    is
+
+not constant in   
+
+Exclusion   does not enter Eq                        
+Unconfounded Instrument   is conditionally independent
+
+of the error                
+ Under the additive error assumption made in Eq    unconfoundedness of the instrument is not necessary  we could replace
+this assumption with the weaker mean independence assumption
+             without changing anything that follows  We use the
+stronger assumption to facilitate extensions      
+to estimating
+counterfactual quantiles  Our assumption is similar to the  unconfoundedness  assumption in the Neyman Rubin potential outcomes framework  Rosenbaum   Rubin                     But
+our assumption is weaker in particular  we allow for    cid      
+and so the matching and propensityscore reweighting approaches
+often used in that literature will not work here 
+
+ cid 
+
+Taking the expectation of both sides of Equation   conditional on       and applying these assumptions establishes
+the relationship  cf  Newey   Powell   
+                                   
+
+       dF       
+
+ 
+
+ 
+where  again  dF        is the conditional treatment distribution  The relationship in Equation   de nes an inverse
+problem for   in terms of two directly observable functions 
+         and          IV analysis typically splits this into
+two stages   rst estimating      xt zt        xt zt  and then
+estimating    after replacing   with    
+Most existing approaches to IV analysis assume linear models for the treatment density function    and the counterfactual prediction function    to solve Equation   in closed
+form  For example  the twostage leastsquares  SLS  procedure       Angrist et al    posits                 
+and                   with the assumptions that             
+             and   ev   cid     which implies   ep   cid    This
+procedure is straightforward       linear model for   given
+  and   and use the predicted values    in   second linear
+model of    This is   statistically   cient way to estimate
+the   ect of the policy variable         as long as two strong
+assumptions hold  linearity       both  rstand secondstage
+regressions are correctly speci ed  and homegeneity      
+the policy   ects all individuals in the same way 
+Flexible nonparametric extensions of  SLS either replace
+the linear regressions with   linear projection onto   series
+of known basis functions  Newey   Powell    Blundell
+et al    Chen   Pouzo    or use kernelbased methods as in Hall   Horowitz   and Darolles et al   
+This system of series estimators is an   ective strategy for
+introducing  exibility and heterogeneity with low dimensional inputs  but the approach faces the same limitations as
+kernel methods in general  their performance depends on
+the choice of kernel function  and they often become com 
+
+ The estimated   remains interpretable as    local average
+treatment   ect   LATE  under less stringent assumptions  see
+Angrist et al    for an overview 
+
+holidaysconferencesalesfuelcostspricexeyzpDeep IV    Flexible Approach for Counterfactual Prediction
+
+putationally intractable in highdimensional feature spaces
+      or with large numbers of training examples 
+
+  Estimating and validating DeepIV
+We now describe how to use deep networks to perform  exible  scalable IV analysis in   framework we call DeepIV 
+We make two contributions that are each necessary components of the approach  First  we propose   loss function and
+optimization procedure that allows us to optimize deep networks for counterfactual prediction  Second  we describe  
+general procedure for outof sample validation of twostage
+instrument variable methods  This allows us to perform
+causally valid hyperparameter optimization  which in general is necessary for achieving good predictive performance
+using deep networks 
+Our approach is conceptually simple given the counterfactual prediction framework described in Section   Rather
+than constraining ourselves to analytic solutions to the integral in Equation   we instead directly optimize our
+estimate of the structural equation      Speci cally  to minimize  cid  loss given   data points and given   function space
+ cid 
+   which may not include the true    we solve
+      xt dF   xt zt 
+
+  cid 
+
+yt  
+
+ cid 
+
+ cid 
+
+ 
+
+ 
+
+min
+    
+
+  
+
+Since the treatment distribution is unknown  we estimate
+          in   separate  rst stage 
+So the DeepIV procedure has two stages     rst stage density estimation procedure to estimate           and   second
+that optimizes the loss function described in Equation  
+In both stages hyperparameters can be chosen to minimize
+the respective loss functions on   held out validation set  and
+improvements in performance against this metric will correlate with improvements on the true structural loss which
+cannot be evaluated directly  We brie   discuss these two
+stages before describing our methods for optimizing the loss
+given in Equation   and our causal validation procedure 
+
+First stage  Treatment network In the  rst stage we
+learn          using an appropriately chosen distribution
+parameterized by   deep neural network  DNN  say     
+         where   is the set of network parameters  Since
+we will be integrating over    in the second stage  we must
+fully specify this distribution 
+In the case of discrete    we model          as   categorical
+Cat             with       pk              for each treatment category pk and where           is given by   DNN
+with softmax output  For continuous treatment  we model  
+as   mixture of Gaussian distributions where component
+
+weights           and parameters  cid                   cid 
+
+form the  nal layer of   neural network parametrized by
+
+  This model is known as   mixture density network  as
+detailed in   of Bishop   With enough mixture
+components it can approximate arbitrary smooth densities 
+To obtain mixed continuous discrete distributions we replace some mixture components with point masses  In each
+case   tting    is   standard supervised learning problem 
+
+Second stage  Outcome network In the second stage 
+our counterfactual prediction function   is approximated
+by   DNN with realvalued output  say    We optimize
+network parameters   to minimize the integral loss function
+in Equation   over training data   of size         from the
+joint DGP   
+
+            cid 
+
+ cid 
+
+ cid 
+
+ cid 
+     xt        xt zt 
+
+yt  
+
+ 
+
+ 
+
+ 
+
+Note that this loss involves the estimated treatment distribution function      from our  rst stage 
+
+  Optimization for DeepIV networks
+
+We use stochastic gradient descent  SGD  see algorithms
+in       Duchi et al    Kingma   Ba    to train
+the network weights  For    standard   theshelf methods apply  but second stage optimization  for    needs to
+account for the integral in Equation   SGD convergence
+only requires that each sampled gradient  Lt is unbiased
+for the population gradient          Lower variance for
+ Lt will tend to yield faster convergence  Zinkevich   
+while the computational   ciency of SGD on large datasets
+requires limiting the number of operations going into each
+gradient calculation  Bousquet   Bottou   
+We can approximate the integral with respect to   probability measure with the average of draws from the associated
+    pb  for
+probability distribution 
+iid     Hence we can get an unbiased estimate of Equa 
+ pb  
+tion   by replacing the integral with   sum over samples
+from our  tted treatment distribution function     
+
+ cid 
+
+ 
+
+            cid 
+
+ 
+
+ yt    
+
+ 
+
+    dF        cid 
+ 
+
+ cid 
+
+       xt 
+
+         xt zt 
+
+         
+
+ 
+This equation can be used to estimate    with an important
+caveat  if we want to maintain unbiased gradient estimates 
+independent samples must be used for each instance of the
+integral in the gradient calculation  To see this  note that the
+
+  We can replace Eq    with other functions         softmax
+for categorical outcomes  but use  cid  loss for most of our exposition 
+
+Deep IV    Flexible Approach for Counterfactual Prediction
+
+ cid 
+
+ 
+
+ 
+
+ cid cid 
+ cid   cid   
+
+gradient of Equation   has expectation
+ED Lt    ED
+
+ cid 
+ cid 
+ cid 
+ cid 
+yt    pk  xt 
+EF   xt zt 
+ cid cid 
+ cid 
+  EF   xt zt 
+  cid 
+ pk  xt 
+ cid   EDEF   xt zt 
+yt    pk  xt 
+  cid 
+ pk  xt 
+ cid cid 
+ cid 
+long
+as
+holds
+inequality
+where
+the
+so
+yt    pk  xt 
+  cid 
+ pk  xt 
+covF   xt zt 
+We thus
+need   gradient estimate based on unbiased MC estimates
+for each EF   xt zt  term in Equation   We obtain such an
+estimate by taking two samples    pb  
+iid      xt zt 
+and calculating the gradient as
+ cid  
+  Lt    
+Independence of the two samples ensures that   cid  
+  Lt  
+ED Lt           as desired  The variance of our estimate depends on    the number of samples that we draw 
+Each of these samples is relatively expensive to compute
+because they require   forward pass through the network
+        xt  If this varies signi cantly with    we might need  
+large number of samples to get   lowvariance estimate of
+the gradient  which is computationally intensive 
+An alternative is to optimize an upper bound on Equation  
+By using Jensen   inequality and the fact that the squared
+error function is convex we get that
+
+ yt     cid 
+
+  cid 
+   pb  xt   
+
+     pb  
+
+ 
+
+    cid 
+
+    pb  xt 
+
+ 
+
+ 
+
+             cid 
+
+ cid 
+
+ cid 
+
+yt         xt 
+
+ 
+
+ 
+
+ cid 
+
+ 
+
+         xt zt 
+
+Taking the RHS of Equation   as the objective and calculating the gradient leads to   version of Equation   in
+which   single draw can be used instead of two independent
+draws  This objective is easy to implement in practice as
+it just involves drawing samples during training  This is
+wellsupported in deep network implementations because it
+is analogous to the data augmentation procedures that are
+commonly used to encourage invariance in deep networks 
+The analogy is more than just aesthetic by optimizing this
+loss  we are essentially encouraging the network to be invariant to variations in the treatment that cannot be explained by
+our features and instrument  This encourages the network
+to ignore the   ects of unobserved confounding variables 
+However  we do not have theoretical guarantees that optimizing this upper bound on        leads to good counterfactual
+performance  While it may converge more quickly because
+it exhibits lower variance  it will have worse asymptotic performance as it only approximates the desired loss function 
+We evaluated this tradeo  experimentally by comparing
+optimizing the upper bound to the more computationally
+
+expensive unbiased procedure  In our simulations  we found
+that upper bound loss tended to give better performance
+under practical computational limitations 
+
+Discrete treatment and outcome spaces The discussion
+thus far has focused on continuous treatment and outcome
+spaces because they are more challenging mathematically 
+When the treatment space is discrete and low dimensional 
+   is modeled as   categorical response so the gradient of
+Equation   can be expressed exactly as
+
+ yt  cid 
+
+ 
+
+ Lt    
+
+ 
+
+ cid 
+
+   xt zt     pk  xt 
+   xt zt     cid 
+
+ 
+
+ pk  xt 
+
+ 
+
+Thus when the outcome space is discrete  we also have less
+to worry about with respect to bias in gradient updates  For
+discrete outcomes  we use the softmax loss and can use
+singlesample MC gradient estimates without introducing
+bias or large amounts of variance because the gradient with
+respect to the softmax loss does not involve   product of
+random variables 
+
+  Causal validation
+
+There is   widespread belief that    tandard methods for
+hyperparameter selection  such as crossvalidation  are not
+applicable when there are no samples of the counterfactual
+outcome   Shalit et al    This would be   signi 
+cant problem in our setting because outof sample  OOS 
+validation procedures are crucial for tuning deep network
+hyperparameters and optimization rules  Fortunately  both
+steps in our Deep IV procedure can be validated by simply
+evaluating the respective losses on held out data  Consider
+  heldout dataset Dho  Our  rst stage   tting    is  
+standard density estimation problem and can be tuned to
+minimize the OOS deviance criterion
+
+ log   pl xl zl 
+
+ 
+
+ cid 
+
+min
+ 
+
+dl Dho
+
+where    is either the probability mass function or density
+function associated with    as appropriate  Second stage
+validation proceeds conditional upon    tted    and we
+seek to minimize the heldout loss criterion
+
+ cid 
+
+yl  
+
+     xl dF   xl zl 
+
+ 
+
+ 
+
+ cid 
+
+ cid 
+
+ cid 
+
+min
+
+ 
+
+dl Dho
+
+The integral here can either be exact or MC approximate via
+sampling from   
+Each stage is evaluated in turn  with second stage validation
+using the bestpossible network as selected in the  rst stage 
+
+Deep IV    Flexible Approach for Counterfactual Prediction
+
+This procedure guards against the  weak instruments  bias
+ Bound et al    that can occur when the instruments
+are only weakly correlated with the policy variable  To
+see why  consider the worst case where the instruments are
+independent of the policy variable                     Without validation    su ciently powerful model will perfectly
+over   by approximating the conditional distribution     zi 
+with   point mass at pi  As   result  the causal loss function
+will approximate the standard prediction loss  leading to
+spurious conclusions  By contrast  the expected  rststage
+loss minimizer on the validation set is the model that best
+approximates the unconditional distribution      and given
+that  the second stage minimizer best approximates          
+which predicts no relationship when there is no evidence in
+favor of it  That said  it should be noted that these criteria
+provide relative performance guidance  improving on each
+criterion will improve performance on counterfactual prediction problems  but without giving any information about
+how far         is from true        
+Our causal validation procedure is sequential  stage two  
+validation depends on the model chosen in the  rst stage 
+This greedy procedure is computationally   cient and
+causally valid  but potentially suboptimal because the  rststage loss is not of independent interest  Peysakhovich  
+Eckles   concurrently developed   casual validation
+framework that considers both stages jointly in domains with
+categorical instruments and no observable features  These
+assumptions are too restrictive for the problems we consider 
+but it would be interesting to investigate whether there exists
+  joint optimization approach that   ers practical bene ts
+under more permissive assumptions 
+
+  Experiments
+We evaluated our approach on both simulated and real
+data  We used simulations to assess DeepIV   ability to
+recover an underlying counterfactual function both in   lowdimensional domain with informative features and in   highdimensional domain with features consisting of pixels of  
+handwritten image  We compared our approach to  SLS and
+to   standard feedforward network  evaluated the   ectiveness of hyperparameter optimization  and contrasted our
+biased and unbiased loss functions with various numbers
+of samples underlying the SGD step  We also considered
+  realworld dataset where ground truth was not available 
+showing that we could replicate the  ndings of   previous
+study in   dramatically more automatic fashion 
+
+  Simulations
+
+Our simulation models   richer version of the airline example described in Section   We assume that there are  
+customer types         that each exhibit di erent levels of price sensitivity  We model the holiday   ect on
+
+ cid 
+
+        exp
+
+ cid     cid 
+
+ cid 
+sales by letting the customer   price sensitivity vary continuously throughout the year according to   complex nonlinear
+      
+function        
+ 
+The time of year   is an observed variable  generated as
+    unif  Prices are   function of    and of the fuel
+price    with the motivation that they are chosen strategically
+by the airline in order to move with average price sensitivity 
+In our example  the high demand that results from conferences breaks the conditional independence between our
+treatment variable   and the latent   ects    thereby violating the  unconfoundedness  assumption  We model this
+abstractly by generating our latent errors   with   parameter
+  that allows us to smoothly vary the correlation between  
+and    Sales   are then generated as
+
+                           
+          and           
+
+                   
+
+Our target counterfactual function is                 
+            To evaluate the model  we consider the counterfactual question   What would sales have been if prices
+had been changed to   cid  Thus the price in our test set is set
+deterministically over    xed grid of price values that spans
+the range of training set prices  The observed features       
+are sampled as in the original data generating process and
+we compare estimated    against the ground truth   
+
+Low dimensional domain We evaluated structural mean
+square error  MSE  while varying both the number of training examples and   the correlation between   and    In
+addition to Deep IV  we considered   regular feedforward
+network  FFNet  with the same architecture as our outcome
+network    nonparametric IV polynomial kernel regression  NonPar  Darolles et al    using Hay eld et al 
+     implementation  and standard twostage least
+squares  SLS  Full details of model architectures and hyperparameter choices for all the models are given in the
+Appendix 
+The results are summarized in Figure   The performance of
+NonPar  of  SLS  and of our Deep IV model was mostly una ected by changes in   re ecting the fact that these models
+are designed to be resilient to unobserved confounders  For
+  data points  NonPar   mean performance was better
+than  SLS but failed to match DeepIV  Because of NonPar   excessive computational requirements we were not
+able to    it to the larger datasets   SLS is constrained by
+its homogeneity and linearity assumptions  and so did not
+improve with increasing amounts of data  Adding regularized polynomial basis functions to  SLS  SLS poly 
+gives some empirical improvements in performance over
+ SLS on larger datasets but the procedure is not causally
+valid because it violates  SLS   linearity assumptions  Both
+forms of  SLS performed far better than FFNet which did  
+
+Deep IV    Flexible Approach for Counterfactual Prediction
+
+Figure   Outof sample predictive performance for di erent levels of endogeneity   Note that the test samples were generated with
+independent errors conditional upon    xed grid of price values  breaking the endogeneity that existed in the training sample  this is why
+the feedforward network did so poorly  Each model was  tted on   random samples from the DGP for each sample size and  level 
+
+classes  but may instead observe   large number of features
+that correlate with such types  To simulate this  we replaced
+the customer type label         with the pixels of the
+corresponding handwritten digit from the MNIST dataset
+ LeCun   Cortes    The task remained the same  but
+the model was no longer explicitly told that there were  
+customer types and instead had to infer the relationship
+between the image data and the outcome 
+In this far more challenging domain  performance is sensitive to the choice of hyperparameters  necessitating optimization on   validation set  Figure   shows an evaluation of
+the appropriateness of our loss function for hyperparameter
+tuning  comparing our validationset loss after grid search
+over Dropout and   regularization parameters to test set
+loss  We found   clear linear relationship between the losses 
+the best performing validation set model was among the best
+ ve performing models under the true causal loss 
+We can get an upper bound on the performance of   particular model architecture by comparing its performance to
+the same architecture trained on data from   simulated randomized experiment on the same datagenerating process 
+We simulated this by generating the outcome   with independent noise   and by generating   uniformly at random
+over its support  Thus the controlled model had to solve
+  standard supervised learning problem where errors were
+generated independently and there was no testtime covariate shift  As before  the naive deep network also shared
+the same architecture in addition to taking the instrument
+as input  This experiment showed that DeepIV was able to
+make up most of the loss in counterfactual prediction performance that the naive network su ered by not accounting for
+the causal prediction problem  However  there was still  
+gap in performance  with     data points the controlled
+experiment achieved an average mean squared error of  
+while DeepIV managed  
+
+Figure   For the highdimensional feature space problem we used
+  fourlayer convolutional network to build an embedding of the
+image features which was concatenated with the observed time
+features and the instrument  rst stage  and the treatment samples
+ second stage  and fed the resulting vector through another hidden
+ Left  Grid search over    and
+layer before the output layer 
+dropout parameters for the embedding used in the convolution
+network   Right  Performance on an image experiment 
+
+good job of estimating                     but   terrible job of
+recovering the true counterfactual  As   dropped  decreasing        FFNet   performance improved but even with
+low levels of correlation between   and   it remained far
+worse than simple  SLS  This occurred because we evaluated the models with respect to    xed grid of treatment
+values which induced   covariate shift at test time  In contrast  Deep IV was the best performing model throughout
+and its performance improved as the amount of data grew 
+
+High dimensional feature space
+In real applications  we
+do not typically get to observe variables like customer type
+that cleanly delineate our training examples into explicit
+
+      ll llll lll          lll ll        ll   lll        lll lll        ll lll ll ll Training Sample in  sOut of Sample MSE  log scale FFNet SLS SLS poly NonParDeepIVlllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll Counterfactual loss  MSE Validation loss  MSE lllllll       lllllllllllllTraining Samples in  sOut of Sample Counterfactual MSEControlled ExperimentDeepIV SLSNaive deep netDeep IV    Flexible Approach for Counterfactual Prediction
+
+Loss Function
+Upper bound
+Unbiased
+Unbiased
+Unbiased
+Unbiased
+
+  Samples Mean
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+
+Stdev
+ 
+ 
+ 
+ 
+ 
+
+Table   Comparing loss functions on the highdimensional image
+task  Bold indicates best performing models  Although the upper
+bound loss   ered better mean performance  the two results are
+not statistically signi cantly di erent 
+
+Performance of the unbiased loss relative to the upper
+bound loss We tested how our two approaches to optimization   ected performance on the image task with
+    training examples  The results are summarized in
+Table   The upper bound loss loss gave signi cantly better
+performance than all but the unbiased loss version based
+on   samples  without requiring multiple passes through
+the network to evaluate the gradient  Thus  the bias introduced by the upper bound did not meaningfully degrade
+counterfactual performance in our experiments 
+
+  Application  Searchadvertisement position   ects
+
+Our experiments so far have considered synthetic data  We
+now evaluate the utility of our approach on real data for
+which we do not have access to ground truth  This means
+that we cannot evaluate models in terms of their predictions 
+instead  we show that we can replicate the results of   previously published study in   dramatically more automated
+fashion  Speci cally  we examine how advertiser   position
+on the Bing search page  their  slot    ects the probability
+of   user click  allowing for di erent treatment   ects for
+di erent advertiserquery pairs  For example  we aim to detect di erences in the importance of ad position when Coke
+bids on the word  Coke   an  onbrand query  versus when
+Pepsi bids on  Coke   an    brand query  versus when
+Coke bids on  www coke com   an  onnav query  occurring when   user types   url in the search box by mistake 
+versus when Pepsi bids on  www coke com   an    nav
+query  This question was studied extensively by Goldman   Rao   using   nonparametric IV estimation
+approach that involved   detailed construction of optimal
+instruments  as well as   separate handcoded classi cation
+of advertiser query pairs into the four categories above 
+Our goal is to replicate these results in an automated fashion 
+Advertiser position is correlated with latent user intent      
+when   user searches for  Coke  it is likely both that they
+will click and that  Coke  will be the top advertiser  so we
+need instruments to infer causation  The instruments proposed by Goldman   Rao   are   series of indicators
+for experiments run by Bing in which advertiser query pairs
+
+Figure   The interquartile range in advertiserquery speci   estimates of the relative drop in click rate from moving from position
+  to position         yaxis denotes cr cr 
+  as the popularity of
+cr 
+the advertiser varies along the xaxis  as measured by visit rank on
+Alexa com  for onbrand versus   brand queries  left panel  and
+onnav versus   nav queries  right panel  for   single combination
+of advertiser and searchquery text 
+
+were randomly assigned to di erent algorithms that in turn
+scored advertisers di erently in search auctions  resulting
+in random variation in position  Our estimation algorithm
+takes the experiment ID directly as an instrument 
+As features  we gave the deep nets the query url and user
+query as text  The url was parsed into tokens on dashes
+and dots and these tokens were then parsed on punctuation
+and whitespace  Given the outcome variable  an indicator for user click  the features  and the instruments  we
+applied our methodology directly to the data without any
+of the additional feature engineering and construction of
+optimal instruments performed by Goldman   Rao  
+This approach was tractable despite the fact that the dataset
+contained over   million observations  Figure   shows
+the results  We were able to replicate the original study  
+broad  ndings  namely that     that for  onbrand  queries 
+position was worth more to small websites  and  ii  that the
+value of position for onnav queries was much smaller than
+for   nav queries    naive noncausal regression found an
+unrealistic average treatment   ect  ATE  across sampled
+advertisers and queries  drop in click rate of   from  st
+to  nd position  in contrast  the causal estimate of the ATE
+was   more modest   drop 
+
+  Discussion
+We have presented DeepIV  an approach that leverages instrument variables to train deep networks that directly minimize the counterfactual prediction error and validate the
+resulting models on heldout data  DeepIV signi cantly
+reduced counterfactual error measured in simulation experiments and was able to replicate previous IV experiments without extensive feature engineering  In future work 
+we plan to discuss interference techniques for the DeepIV
+framework and explore how this approach generalizes to
+other causal graphs given appropriate assumptions 
+
+ on brandoff brand on navoff navwebsite US rankrelative click rateDeep IV    Flexible Approach for Counterfactual Prediction
+
+Acknowledgements
+We would like to thank Susan Athey  Xiaohong Chen and
+Demian Pouzo for their helpful discussions and the anonymous reviewers for their useful comments on the paper  We
+would also like to thank Holger Hoos for the use of the Ada
+cluster  without which the experiments would not have been
+possible 
+
+References
+Angrist        Imbens       and Rubin        Identi cation
+of causal   ects using instrumental variables  Journal of
+the American Statistical Association   
+ 
+
+Angrist  Joshua   and Pischke    ornSte en  Mostly harmless econometrics  An empiricist   companion  Princeton
+university press   
+
+Athey  Susan and Imbens  Guido  Recursive partitioning for
+heterogeneous causal   ects  Proceedings of the National
+Academy of Sciences     
+
+Bishop  Christopher    Pattern Recognition and Machine
+
+Learning  Springer   
+
+Blundell  Richard  Chen  Xiaohong  and Kristensen  Dennis  Seminonparametric iv estimation of shapeinvariant
+engel curves  Econometrica     
+
+Bottou     Largescale machine learning with stochastic
+gradient descent  In Proceedings of COMPSTAT 
+pp    Springer   
+
+Bottou    eon  Peters  Jonas  Qui noneroCandela  Joaquin 
+Charles  Denis    Chickering    Max  Portugaly  Elon 
+Ray  Dipankar  Simard  Patrice  and Snelson  Ed  Counterfactual reasoning and learning systems  The example
+of computational advertising  The Journal of Machine
+Learning Research     
+
+Bound  John  Jaeger  David    and Baker  Regina    Problems with instrumental variables estimation when the
+correlation between the instruments and the endogenous
+explanatory variable is weak  Journal of the American
+Statistical Association     
+
+Bousquet  Olivier and Bottou    eon  The tradeo   of large
+scale learning  In Advances in neural information processing systems  NIPS  pp     
+
+Chen     and Pouzo     Estimation of nonparametric conditional moment models with possibly nonsmooth generalized residuals  Econometrica     
+
+Darolles  Serge  Fan  Yanqin  Florens  JeanPierre  and
+Renault  Eric  Nonparametric instrumental regression 
+Econometrica     
+
+Duchi  John  Hazan  Elad  and Singer  Yoram  Adaptive
+subgradient methods for online learning and stochastic
+optimization  Journal of Machine Learning Research   
+   
+
+Goldman  Mathew and Rao  Justin    Experiments as
+instruments  heterogeneous position   ects in sponsored
+search auctions   
+
+Hall  Peter and Horowitz  Joel    Nonparametric methods
+for inference in the presence of instrumental variables 
+Ann  Statist       
+
+Hay eld  Tristen  Racine  Je rey    et al  Nonparametric
+econometrics  The np package  Journal of statistical
+software     
+
+Johansson        Shalit     and Sontag     Learning representations for counterfactual inference  In Proceedings of
+the  nd International Conference on Machine Learning 
+ ICML  pp     
+
+Kingma  Diederik and Ba  Jimmy  ADAM    method for
+International Conference on
+
+stochastic optimization 
+Learning Representations  ICLR   
+
+LeCun     Bengio     and Hinton     Deep learning  Na 
+
+ture   
+
+LeCun  Yann and Cortes  Corinna  MNIST handwritten
+digit database    URL http yann lecun com 
+exdb mnist 
+
+Newey        and Powell        Instrumental variable estimation of nonparametric models  Econometrica   
+   
+
+Pearl     Causality  Cambridge University Press   
+
+Peysakhovich     and Eckles     Learning causal   ects
+from many randomized experiments using regularized
+instrumental variables  ArXiv eprints  January  
+
+Reiers       Con uence analysis by means of instrumental
+sets of variables  Arkiv   or Matematik  Astronomi och
+Fysik       
+
+Robbins     and Monro       stochastic approximation
+method  The Annals of Mathematical Statistics  pp   
+   
+
+Rosenbaum        and Rubin        Assessing sensitivity to
+an unobserved binary covariate in an observational study
+with binary outcome  Journal of the Royal Statistical
+Society  Series    Methodological     
+
+Schmidhuber     Deep learning in neural networks  An
+
+overview  Neural Networks   
+
+Deep IV    Flexible Approach for Counterfactual Prediction
+
+Shalit     Johansson     and Sontag     Estimating individual treatment   ect  generalization bounds and algorithms  ArXiv eprints  June  
+
+Wager  Stefan and Athey  Susan 
+
+Inference of heterogeneous treatment   ects using random forests 
+arXiv   
+
+Wright        The Tari  on Animal and Vegetable Oils 
+
+Macmillan   
+
+Zinkevich  Martin  Online convex programming and generalized in nitesimal gradient ascent  In Proceedings of the
+Twentieth International Conference on Machine Learning
+ ICML   
+
+

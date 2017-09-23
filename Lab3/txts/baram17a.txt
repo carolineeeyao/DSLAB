@@ -1,0 +1,1129 @@
+Endto End Differentiable Adversarial Imitation Learning
+
+Nir Baram   Oron Anschel   Itai Caspi   Shie Mannor  
+
+Abstract
+
+Generative Adversarial Networks  GANs  have
+been successfully applied to the problem of policy imitation in   modelfree setup  However 
+the computation graph of GANs  that include
+  stochastic policy as the generative model  is
+no longer differentiable endto end  which requires the use of highvariance gradient estimation 
+In this paper  we introduce the Modelbased Generative Adversarial Imitation Learning
+ MGAIL  algorithm  We show how to use   forward model to make the computation fully differentiable  which enables training policies using
+the exact gradient of the discriminator  The resulting algorithm trains competent policies using
+relatively fewer expert samples and interactions
+with the environment  We test it on both discrete
+and continuous action domains and report results
+that surpass the stateof theart 
+
+  Introduction
+Learning   policy from scratch is often dif cult  However  in many problems  there exists an expert policy that
+achieves satisfactory performance  We are interested in the
+scenario of imitating an expert  Imitation is needed for several reasons  Automation  in case the expert is human  distillation       if the expert is too expensive to run in realtime  Rusu et al    and initialization  using an expert
+policy as an initial solution  In our setting  we assume that
+trajectories             
+   of an expert policy    are
+given  Our goal is to train   new policy   which imitates
+   without access to the original reward signal rE that was
+used by the expert 
+There are two main approaches to solve imitation problems  The  rst  known as Behavioral Cloning  BC  directly learns the conditional distribution of actions over
+states        in   supervised learning fashion  Pomerleau 
+ Technion Institute of Technology  Israel  Correspondence to 
+
+Nir Baram  nirb campus technion ac il 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+  cid cid 
+
+ 
+
+  By providing constant supervision  dense reward
+signal in Reinforcement Learning  RL  terminology  BC
+overcomes fundamental dif culties of RL such as the credit
+assignment problem  Sutton    However  BC has its
+downsides as well  Contrary to temporal difference methods  Sutton    that integrate information over time 
+BC methods are trained using single timestep stateaction
+pairs  st  at  Therefore  an agent trained using BC is unaware of how his choice of actions affects the future state
+distribution  which makes it susceptible to compounding
+errors  Ross   Bagnell    Ross et al    On top of
+that  the sample complexity of BC methods is usually high 
+requiring   signi cant amount of expert data that could be
+expensive to obtain 
+The second approach to imitation is comprised of two
+stages  First  recovering   reward signal under which the
+expert is uniquely optimal  often called inverse RL  for instance see Ng  Russell  et al 
+
+ cid      cid cid 
+     st  at cid   
+ cid  The problem
+ cid cid  
+
+ 
+After reconstructing   reward signal     the second step is
+to train   policy that maximizes the discounted cumulative
+expected reward          
+with this approach stems from the fact that restoring an informative reward signal  solely based on stateaction observations  is an illposed problem  Ziebart et al      different strategy could be to recover   sparser reward signal
+   more wellde ned problem  and enrich it by hand  However  this requires extensive domain knowledge  Dorigo  
+Colombetti   
+Generative Adversarial Networks  GANs   Goodfellow
+et al    is   recent method for training generative models  It uses   second neural network     to guide the generative model     towards producing patterns similar to those
+of the expert  see illustration in Figure  
+The elegance of GANs has made it popular among   variety of problems other than creating generative models  such
+as image captioning  Mirza   Osindero    and video
+prediction  Mathieu et al    More recently    work
+named Generative Adversarial Imitation Learning  GAIL 
+ Ho   Ermon    has successfully applied the ideas of
+GANs to imitate an expert in   modelfree setup  It showed
+
+     st  at  
+
+ 
+
+      rt
+
+Endto End Differentiable Adversarial Imitation Learning
+
+to imitation learning  Lastly  we present GANs in detail 
+
+  Markov Decision Process
+
+Consider an in nitehorizon discounted Markov decision
+process  MDP  de ned by the tuple                 
+where   is   set of states    is   set of actions     
+                is the transition probability distribution                  is the reward function 
+            is the distribution over initial states  and
+        is the discount factor  Let   denote   stochastic
+policy                    denote its expected discounted reward          
+trajectory of states and actions                   
+
+ cid  and   denote  
+
+ cid cid  
+
+      rt
+
+Figure   Illustration of GANs 
+The generative model follows the discriminating hyperplane de ned by the discriminator 
+Eventually    will produce patterns similar to the expert patterns
+
+that this type of learning could alleviate problems such as
+sample complexity or covariate shifts  Kanamori   Shimodaira    traditionally coupled with imitation learning 
+The disadvantage of the modelfree approach comes to
+light when training stochastic policies  The presence of
+stochastic elements breaks the  ow of information  gradients  from one neural network to the other  thus prohibiting
+the use of backpropagation  In this situation    standard solution is to use gradient estimation  Williams    This
+tends to suffer from high variance  resulting in   need for
+larger sample sizes as well as variance reduction methods 
+In this work  we present   modelbased imitation learning
+algorithm  MGAIL  in which information propagates  uently from the guiding neural network     to the generative model    which in our case represents the policy  
+we wish to train  This is achieved by     learning   forward model that approximates the environment   dynamics  and     building an endto end differentiable computation graph that spans over multiple timesteps  The gradient in such   graph carries information from future states to
+earlier timesteps  helping the policy to account for compounding errors  This leads to better policies that require
+fewer expert samples and interactions with the environment 
+
+  Background
+In this section  we review the mathematical formulation of
+Markov Decision Processes  as well as previous approaches
+
+  Imitation Learning
+
+tered by the expert            cid 
+
+Learning control policies directly from expert demonstrations  has been proven very useful in practice  and has led
+to satisfying performance in   wide range of applications
+ Ross et al      common approach to imitation learning is to train   policy   to minimize some loss function
+         under the discounted state distribution encount   tp st  This is
+possible using any standard supervised learning algorithm 
+Es              where   denotes the
+    argmin 
+class of all possible policies  However  the policy   prediction affects the future state distribution  which violates the
+      assumption made by most SL algorithms    slight deviation in the learner   behavior may lead it to   different
+state distribution than the one encountered by the expert 
+resulting in compounding errors 
+To overcome this issue  Ross   Bagnell   introduced
+the Forward Training  FT  algorithm that trains   nonstationary policy iteratively over time  one policy    for
+each timestep  At time       is trained to mimic    on the
+state distribution induced by the previously trained policies         This way     is trained on the actual
+state distribution it will encounter at inference  However 
+the FT algorithm is impractical when the time horizon  
+is large  or unde ned  since it needs to train   policy at
+each timestep  and cannot be stopped before completion 
+The Stochastic Mixing Iterative Learning  SMILe  algorithm  proposed by the same authors  solves this problem
+by training   stochastic stationary policy over several iterations  SMILe starts with an initial policy   that blindly
+follows the expert   action choice  At iteration      policy
+   is trained to mimic the expert under the trajectory distribution induced by     and then updates 
+
+                         
+
+Overall  both the FT algorithm and SMILe gradually modify the policy from following the expert   policy to the
+learned one 
+
+Endto End Differentiable Adversarial Imitation Learning
+
+  Generative Adversarial Networks
+
+GANs learn   generative model using   twoplayer zerosum game 
+
+argmin
+
+ 
+
+argmax
+  
+
+Ex cid pE  log     
+Ez cid pz
+
+ cid  log cid          cid cid 
+
+ 
+
+where pz is some noise distribution  In this game  player  
+produces patterns  denoted as    and the second one    
+judges their authenticity 
+It does so by solving   binary
+classi cation problem where     patterns are labeled as  
+and expert patterns are labeled as   At the point when
+   the judge  can no longer discriminate between the two
+distributions  the game ends since   has learned to mimic
+the expert 
+The two players are modeled by neural networks  with parameters        respectively  therefore  their combination
+creates an endto end differentiable computation graph 
+For this reason    can train by generating patterns  feeding it to    and minimize the probability that   assigns to
+them 
+
+           log cid             cid 
+
+The bene   of GANs is that it relieves us from the need to
+de ne   loss function or to handle complex models such as
+RBM   and DBN    Lee et al    Instead  GANs rely
+on basic ideas  binary classi cation  and basic algorithms
+ backpropagation  The judge   trains to solve   binary
+classi cation problem by ascending at the following gradient 
+  
+
+ cid       cid cid cid 
+
+  cid 
+
+log    
+
+ cid 
+
+ 
+
+ 
+ 
+
+  
+
+interchangeably while   descends at the following direction 
+
+ cid 
+
+       
+
+ cid     cid    log
+      cid          cid cid 
+ cid 
+
+log
+
+ 
+
+  cid 
+
+  
+
+  
+
+ 
+ 
+
+Ho   Ermon    GAIL  proposed to apply GANs to
+an expert policy imitation task in   modelfree approach 
+GAIL draws   similar objective function like GANs  except
+that here pE stands for the expert   joint distribution over
+stateaction tuples 
+
+argmin
+
+ 
+
+argmax
+  
+
+  log        
+     log                 
+
+ 
+
+where     cid     log       is the entropy 
+The new game de ned by Eq    can no longer be solved
+using the standard tools mentioned above because player  
+      the policy   is now stochastic  Following this modi cation  the exact form of the  rst term in Eq    is given
+
+by Es   Ea   log         instead of the following
+expression if   was deterministic  Es log         
+The resulting game depends on the stochastic properties of
+the policy  So  assuming that       it is no longer clear
+how to differentiate Eq               standard solution is
+to use score function methods  Fu    of which REINFORCE is   special case  Williams    to obtain an
+unbiased gradient estimation 
+
+   log                  log             
+where          is the score function of the gradient 
+                log                          
+
+ 
+
+ 
+
+Although unbiased  REINFORCE gradients tend to suffer
+high variance  which makes it hard to work with even after
+applying variance reduction techniques  Ranganath et al 
+  Mnih   Gregor    In the case of GANs  the difference between using the exact gradient and REINFORCE
+can be explained in the following way  with REINFORCE 
+  asks   whether the pattern it generates are authentic or
+not    in return provides   brief Yes No answer  On the
+other hand  using the exact gradient    gets access to the
+internal decision making logic of    Thus it is better able
+to understand the changes needed to fool    Such information is present in the Jacobian of   
+In this work  we show how   forward model utilizes the
+Jacobian of   when training   without resorting to highvariance gradient estimations  The challenge of this approach is that it requires learning   differentiable approximation to the environment   dynamics  Errors in the forward model introduce   bias to the policy gradient which
+impairs the ability of   to learn robust and competent policies  We share our insights regarding how to train forward
+models  and in subsection   present an architecture that
+was found empirically adequate in modeling complex dynamics 
+
+  Algorithm
+We start this section by analyzing the characteristics of the
+discriminator  Then  we explain how   forward model can
+alleviate problems that arise when using GANs for policy
+imitation  Afterward  we present our modelbased adversarial imitation algorithm  We conclude this section by presenting   forward model architecture that was found empirically adequate 
+
+  The discriminator network
+
+The discriminator network is trained to predict the conditional distribution                      where    
+      Put in words          represents the likelihood
+ratio that the pair        is generated by   rather than by
+
+Endto End Differentiable Adversarial Imitation Learning
+
+   
+
+Figure       Blockdiagram of the modelfree approach  given  
+state    the policy outputs   which is fed to   stochastic sampling
+unit  An action   is sampled  and together with   are presented to
+the discriminator network  In the backward phase  the error message    is blocked at the stochastic sampling unit  From there   
+highvariance gradient estimation is used  HV   Meanwhile  the
+error message    is  ushed      Discarding    can be disastrous
+as shown in the following example  Assume some        pairs
+produced by the expert and    Let            and           
+Assuming the expert data lies in the upper halfspace        
+and the policy emits trajectories in the lower halfspace        
+Perfect discrimination can be achieved by applying the following
+rule  sign                         Differentiating       the three
+inputs give    
+       Discarding the partial
+   
+derivatives               the state  will result in zero information
+gradients 
+
+      
+   
+
+      
+
+    Using Bayes rule and the law of total probability we
+can write that 
+
+         
+
+       
+
+ 
+
+                   
+         
+
+       
+
+                   
+
+ 
+
+                         
+
+ 
+
+ 
+
+Next let us de ne        and     to be 
+
+        
+
+       
+
+          
+        
+
+      
+    
+
+ 
+
+and attain the  nal expression for        
+
+         
+
+ 
+
+                
+
+ 
+
+ 
+
+Inspecting the derived expression we see that        represents   policy likelihood ratio  and     represents   state
+distribution likelihood ratio  This interpretation suggests
+that the discriminator makes its decisions by answering two
+questions  The  rst relates to the state distribution  what is
+the likelihood of encountering state   under the distribution
+induced by    vs  the one induced by   And the second
+question relates to the behavior  given   state    how likely
+is action   under    vs   
+We reach the conclusion that effective learning requires the
+learner to be mindful of two effects  First  how its choice
+of actions stands against the expert  And second  how it
+affects the future state distribution  The desired change in
+states is given by            careful inspection of
+the partial derivatives of   reveals that this information is
+present in the Jacobian of the discriminator 
+
+ aD               
+
+              
+
+ sD                            
+
+            
+
+ 
+
+ 
+
+which increases the motivation to use it over other highvariance estimations  Next  we show how using   forward
+model  we can build   policy gradient directly from the Jacobian of the discriminator        aD and  sD 
+
+  Backpropagating through stochastic units
+
+We are interested in training stochastic policies  Stochasticity is important for Policy Gradient  PG  methods since
+it encourages exploration  However  it poses   challenge
+for policies modeled by neural networks  considering it is
+unclear how to backpropagate through the stochastic elements  This problem plays   major role in algorithms that
+build differentiable computation graphs where gradients
+ ow from one component to another  as in the case of deep
+actorcritic methods  Lillicrap et al    and GANs  In
+the following  we show how to estimate the gradients of
+continuous stochastic elements  for continuous action domains  and categorical stochastic elements  for the discrete
+case 
+
+The last equality is correct since the discriminator is trained
+on an even distribution of expert generator examples  there 
+  Rearranging and factoring the
+fore               
+joint distribution we can rewrite         as 
+
+         
+
+ 
+
+               
+
+      
+
+ 
+
+ 
+
+             
+      
+
+ 
+
+ 
+             
+
+                
+    
+
+ 
+
+ 
+
+  CONTINUOUS ACTION DISTRIBUTIONS
+
+In the case of continuous action policies we use   mathematical tool known as  reparametrization   Kingma  
+
+Endto End Differentiable Adversarial Imitation Learning
+
+Welling    Rezende et al    which enables computing the derivatives of stochastic models  Assume  
+stochastic policy with   Gaussian distribution  where the
+mean and variance are given by some deterministic functions   and   respectively                 
+     
+It is possible to rewrite   as                  
+where           In this way  we are able to get   MonteCarlo estimator of the derivative of the expected value of
+        with respect to  
+                  aD            
+ aD          
+
+  cid 
+
+ 
+
+ cid cid cid  
+
+ 
+ 
+
+  
+
+ 
+
+  CATEGORICAL ACTION DISTRIBUTIONS
+
+For the case of discrete action domains  we suggest to
+follow the idea of categorical reparametrization with
+GumbelSoftmax  Maddison et al    Jang et al 
+  This approach relies on the GumbelMax trick
+ Gumbel   Lieblein      method to draw samples
+from   categorical distribution with class probabilities
+             aN   
+
+aargmax   argmax
+
+ 
+
+ gi   log  ai   
+
+where gi   Gumbel    GumbelSoftmax provides  
+differentiable approximation of the hard sampling procedure in the GumbelMax trick  by replacing the argmax
+operation with   softmax 
+
+exp cid   
+   gi   log  ai   cid 
+   gj   log  ai   cid   
+   exp cid   
+ cid  
+
+asoftmax  
+
+where   is    temperature  hyperparameter that trades bias
+with variance  When   approaches zero  the softmax operator acts like argmax  asoftmax   aargmax  resulting in low
+bias  However  the variance of the gradient  asoftmax increases  Alternatively  when   is set to   large value  the
+softmax operator creates   smoothing effect  This leads
+to low variance gradients  but at the cost of   high bias
+ asoftmax  cid  aargmax 
+We use asoftmax  that is not necessarily  onehot  to interact with the environment  which expects   single  pure 
+action  We solve this by applying argmax over asoftmax  but
+use the continuous approximation in the backward pass
+by using the estimation   aargmax    asoftmax 
+
+   general version of the reparametrization trick for other
+distributions such as beta or gamma was recently proposed by
+Ruiz et al   
+
+  Backpropagating through   Forward model
+
+So far we showed the changes necessary to use the exact
+partial derivative  aD  Incorporating the use of  sD as
+well is   more involved and constitutes the crux of this
+work  To understand why  we can look at the block diagram of the modelfree approach in Figure   There    is
+treated as  xed  it is given as an input  therefore  sD is
+discarded  On the contrary  in the modelbased approach 
+st can be written as   function of the previous state and action  st      st  at  where   is the forward model 
+This way  using the law of total derivatives  we get that 
+
+ cid cid cid cid cid   st   at
+ cid cid cid cid cid   at
+ cid 
+
+  
+  
+
+ 
+
+  
+ 
+
+ cid cid cid cid cid   at
+ cid cid cid cid cid   st 
+
+ 
+
+ 
+
+  
+  
+
+  
+  
+
+  
+ 
+
+  
+ 
+
+ cid cid cid cid cid   st
+ cid cid cid cid cid   at 
+ cid 
+
+ 
+
+ 
+
+  
+  
+
+  
+  
+
+  
+ 
+
+   st  at 
+
+  
+  
+
+  
+ 
+
+ 
+ 
+Considering that at  is   function of   we understand
+that by creating   computation graph that spans over more
+than   single timestep  we can link between  sD and the
+policy  Put in words  during the backward pass  the error
+message regarding deviations of future states     propagates back in time and in uences the actions of the policy
+in earlier times  Figure   summarizes this idea 
+
+  MGAIL Algorithm
+
+We showed that   good approach for imitation requires 
+    to use   model  and     to process multistep transitions  This setup was previously suggested by ShalevShwartz et al    and Heess et al    who built
+  multistep computation graph for describing the familiar
+policy gradient objective  which in our case is given by 
+  To show how to differentiate    over   trajectory of          cid  transitions  we
+rely on the results of Heess et al   
+
+    tD st  at cid cid 
+
+       cid cid 
+
+ cid 
+
+Js   Ep     Ep   cid     
+
+Ds   Da        cid 
+
+  cid fs   fa   
+
+ 
+
+     Ep     Ep   cid     
+
+Da       cid 
+
+  cid fa      cid 
+ 
+
+The  nal policy gradient    is calculated by applying
+Eq    and   recursively  starting from       all the way
+down to       The full algorithm is presented in Algorithm  
+
+  Forward Model Structure
+
+The forward model prediction accuracy plays   crucial role
+in the stability of the learning process  However  learning
+
+ cid 
+ cid 
+
+ cid 
+
+ cid 
+
+ 
+
+   
+
+Endto End Differentiable Adversarial Imitation Learning
+
+Figure   Block diagram of modelbased adversarial imitation learning  This diagram describes the computation graph for training
+the policy          The discriminator network   is  xed at this stage and is trained separately  At time   of the forward pass    outputs
+  distribution over actions        st  from which an action at is sampled  For example  in the continuous case  this is done using the
+reparametrization trick  at              where           The next state st       st  at  is computed using the forward model
+ which is also trained separately  and the entire process repeats for time       In the backward pass  the gradient of   is comprised of
+   the error message     Green  that propagates  uently through the differentiable approximation of the sampling process  And    the
+error message     Blue  of future timesteps  that propagate back through the differentiable forward model 
+
+for       to   do
+
+        cid 
+
+  
+
+   
+
+tial policy and discriminator parameters       
+
+Act on environment               
+Push          cid  into  
+
+Algorithm   Modelbased Generative Adversarial Imitation Learning
+  Input  Expert trajectories     experience buffer    ini 
+  for trajectory     to   do
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+  end for
+
+end for
+train forward model   using  
+train discriminator model     using  
+set    cid 
+for       down to   do
+       Da        cid 
+js    Ds   Da        cid 
+
+end for
+Apply gradient update using   
+  
+
+ cid cid 
+  cid fs   fa    cid cid 
+
+  cid fa       cid 
+
+  
+
+an accurate forward model is   challenging problem by itself  We found that the performance of the forward model
+can be improved by considering the following two aspects
+of its functionality  First  the forward model should learn to
+use the action as an operator over the state space  Actions
+and states are sampled from entirely different distributions 
+so it would be preferable to  rst represent both in   shared
+space  Therefore  we  rst encode the state and action with
+two separate neural networks and then combine them to
+form   single vector  We found empirically that using  
+Hadamard product to combine the encoded state and action
+achieves the best performance  Additionally  predicting the
+next state based on the current state alone requires the environment to be representable as    rst order MDP  Instead 
+we can assume the environment to be representable as an
+  th order MDP and use multiple previous states to predict the next state  To model the multistep dependencies 
+we use   recurrent connection from the previous state by
+incorporating   GRU layer  Cho et al    as part of
+the state encoder  Introducing these two modi cations  see
+Figure   we found the complete model to achieve better
+
+Endto End Differentiable Adversarial Imitation Learning
+
+ure   shows that better and more stable results are obtained
+when using the advanced forward model 
+
+Figure   Comparison between   vanilla forward model  Top 
+and an advanced forward model  Bottom  In the vanilla forward model  the state and action vectors are concatenated and then
+passed through   twolayer neural network  In the advanced forward model  the action and state are passed independently through
+two neural networks and are then combined using Hadamard
+product  The result is then passed through another neural network
+to form the output 
+
+and more stable results compared to using   vanilla feedforward neural network as the forward model  as seen in
+Figure  
+
+  Experiments
+We evaluate the proposed algorithm on three discrete control tasks  Cartpole  MountainCar  Acrobot  and  ve continuous control tasks  Hopper  Walker  HalfCheetah  Ant 
+and Humanoid  modeled by the MuJoCo physics simulator  Todorov et al    These tasks involve complex
+second order dynamics and direct torque control  We use
+the Trust Region Policy Optimization  TRPO  algorithm
+ Schulman et al    to train expert policies  For each
+task  we produce datasets with   different number of trajectories  where each trajectory              sN   aN  is of
+length      
+The discriminator and policy neural networks are built from
+two hidden layers with Relu nonlinearity and are trained
+using the ADAM optimizer  Kingma   Ba    Table   presents the total reward over   period of   steps 
+measured using three different algorithms  BC  GAIL  and
+MGAIL  The results for BC and GAIL are as reported in
+Ho   Ermon   Our algorithm achieves the highest reward for most environments while exhibiting performance comparable to the expert over all of them   
+Wilcoxon signedrank test indicates superior performance
+with pvalue     We also compared the performance
+of MGAIL when using   basic forward model  versus using
+the more advanced model as described in Section   Fig 
+
+Figure   Performance comparison between   basic forward
+model  Blue  and the advanced forward model  Green 
+
+  Discussion
+In this work  we presented   modelbased algorithm for imitation learning  We showed how using   forward model
+enables to train policies using the exact gradient of the discriminator network  This way  the policy can imitate the
+expert   behavior  but also account for undesired deviations
+in the distributions of future states  The downside of this
+approach is the need to learn   forward model    task that
+could prove dif cult in some domains  An interesting line
+of future work would be to learn the system dynamics directly from raw images  as was done in Oh et al   
+GANs algorithm violates   fundamental assumption made
+by all SL algorithms  which requires the data to be       
+The problem arises because the discriminator network
+trains on   dynamic data distribution  For the training to
+succeed  the discriminator must continually adapt to the
+changes in the policy  In our context  the problem is emphasized even more since both the discriminator and the
+forward models are trained in   SL fashion using data that
+is sampled from   replay buffer    Lin      possible
+remedy is to restart the learning multiple times along the
+training period by resetting the learning rate  Loshchilov
+  Hutter    We tried this solution without signi cant
+success  However  we believe that further research in this
+direction is needed 
+
+Endto End Differentiable Adversarial Imitation Learning
+
+    Cartpole
+
+    MountainCar
+
+    Acrobot
+
+    Hopper
+
+    Walker
+
+    HalfCheetah
+
+    Ant
+
+    Humanoid
+
+Dataset size Behavioral cloning
+
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+
+     
+     
+     
+
+     
+
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+
+GAIL
+
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+
+MGAIL
+
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+
+Task
+Cartpole
+
+Mountain Car
+
+Acrobot
+
+Hopper
+
+Walker
+
+HalfCheetah
+
+Ant
+
+Humanoid
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Table   Policy performance  boldface indicates better results    represents one standard deviation 
+
+Endto End Differentiable Adversarial Imitation Learning
+
+This research was supported in part by the European Communitys Seventh Framework Programme  FP 
+under grant agreement    SUPREL  and the Intel
+Collaborative Research Institute for Computational Intelligence  ICRICI 
+
+Kingma  Diederik and Ba  Jimmy  Adam    method for stochas 
+
+tic optimization  arXiv preprint arXiv   
+
+Kingma  Diederik   and Welling  Max  Autoencoding variational
+
+bayes  arXiv preprint arXiv   
+
+References
+Cho  Kyunghyun  van Merrienboer  Bart    ulc ehre     aglar 
+Bougares  Fethi  Schwenk  Holger  and Bengio  Yoshua 
+Learning phrase representations using RNN encoderdecoder
+for statistical machine translation  CoRR  abs 
+ 
+
+Dorigo  Marco and Colombetti  Marco  Robot shaping  an exper 
+
+iment in behavior engineering  MIT press   
+
+Fu  Michael    Gradient estimation  Handbooks in operations
+
+research and management science     
+
+Goodfellow  Ian  PougetAbadie  Jean  Mirza  Mehdi  Xu  Bing 
+WardeFarley  David  Ozair  Sherjil  Courville  Aaron  and
+Bengio  Yoshua  Generative adversarial nets  In Advances in
+Neural Information Processing Systems  pp     
+
+Gumbel  Emil Julius and Lieblein  Julius  Statistical theory of
+extreme values and some practical applications    series of lectures   
+
+Heess  Nicolas  Wayne  Gregory  Silver  David  Lillicrap  Tim 
+Erez  Tom  and Tassa  Yuval  Learning continuous control policies by stochastic value gradients  In Advances in Neural Information Processing Systems  pp     
+
+Ho  Jonathan and Ermon  Stefano  Generative adversarial imita 
+
+tion learning  arXiv preprint arXiv   
+
+Jang  Eric  Gu  Shixiang  and Poole  Ben 
+
+reparameterization with gumbelsoftmax 
+arXiv   
+
+Categorical
+arXiv preprint
+
+Kanamori  Takafumi and Shimodaira  Hidetoshi  Active learning algorithm using the maximum weighted loglikelihood estimator  Journal of statistical planning and inference   
+   
+
+Lee  Honglak  Grosse  Roger  Ranganath  Rajesh  and Ng  Andrew    Convolutional deep belief networks for scalable unsupervised learning of hierarchical representations  In Proceedings of the  th annual international conference on machine
+learning  pp    ACM   
+
+Lillicrap  Timothy    Hunt  Jonathan    Pritzel  Alexander  Heess 
+Nicolas  Erez  Tom  Tassa  Yuval  Silver  David  and Wierstra 
+Daan  Continuous control with deep reinforcement learning 
+arXiv preprint arXiv   
+
+Lin  LongJi  Reinforcement learning for robots using neural net 
+
+works  Technical report  DTIC Document   
+
+Loshchilov  Ilya and Hutter  Frank  Sgdr  Stochastic gradient
+descent with restarts  arXiv preprint arXiv   
+
+Maddison  Chris    Mnih  Andriy  and Teh  Yee Whye  The concrete distribution    continuous relaxation of discrete random
+variables  arXiv preprint arXiv   
+
+Mathieu  Michael  Couprie  Camille  and LeCun  Yann  Deep
+multiscale video prediction beyond mean square error  arXiv
+preprint arXiv   
+
+Mirza  Mehdi and Osindero  Simon  Conditional generative ad 
+
+versarial nets  arXiv preprint arXiv   
+
+Mnih  Andriy and Gregor  Karol  Neural variational inference and
+learning in belief networks  arXiv preprint arXiv 
+ 
+
+Ng  Andrew    Russell  Stuart    et al  Algorithms for inverse
+
+reinforcement learning  In Icml  pp     
+
+Oh  Junhyuk  Guo  Xiaoxiao  Lee  Honglak  Lewis  Richard   
+and Singh  Satinder  Actionconditional video prediction using
+deep networks in atari games  In Advances in Neural Information Processing Systems  pp     
+
+Pomerleau  Dean    Ef cient training of arti cial neural networks
+for autonomous navigation  Neural Computation   
+ 
+
+Ranganath  Rajesh  Gerrish  Sean  and Blei  David    Black box
+
+variational inference  In AISTATS  pp     
+
+Rezende  Danilo Jimenez  Mohamed  Shakir  and Wierstra  Daan 
+Stochastic backpropagation and approximate inference in deep
+generative models  arXiv preprint arXiv   
+
+Ross  St ephane and Bagnell  Drew  Ef cient reductions for imi 
+
+tation learning  In AISTATS  pp     
+
+Ross  St ephane  Gordon  Geoffrey    and Bagnell  Drew    reduction of imitation learning and structured prediction to noregret
+online learning  In AISTATS  volume   pp     
+
+Ruiz  Francisco    AUEB  Michalis Titsias RC  and Blei  David 
+The generalized reparameterization gradient  In Advances in
+Neural Information Processing Systems  pp     
+
+Endto End Differentiable Adversarial Imitation Learning
+
+Rusu  Andrei    Colmenarejo  Sergio Gomez  Gulcehre  Caglar 
+Desjardins  Guillaume  Kirkpatrick  James  Pascanu  Razvan 
+Mnih  Volodymyr  Kavukcuoglu  Koray  and Hadsell  Raia 
+Policy distillation  arXiv preprint arXiv   
+
+Schulman 
+
+John  Levine  Sergey  Moritz  Philipp 
+
+Jordan 
+Michael    and Abbeel  Pieter  Trust region policy optimization  CoRR  abs   
+
+ShalevShwartz  Shai  BenZrihem  Nir  Cohen  Aviad  and
+Shashua  Amnon  Longterm planning by shortterm prediction  arXiv preprint arXiv   
+
+Sutton  Richard    Learning to predict by the methods of temporal
+
+differences  Machine learning     
+
+Sutton  Richard Stuart  Temporal credit assignment in reinforce 
+
+ment learning   
+
+Todorov  Emanuel  Erez  Tom  and Tassa  Yuval  Mujoco   
+physics engine for modelbased control  In Intelligent Robots
+and Systems  IROS    IEEE RSJ International Conference
+on  pp    IEEE   
+
+Williams  Ronald    Simple statistical gradientfollowing algorithms for connectionist reinforcement learning  Machine
+learning     
+
+Ziebart  Brian    Maas  Andrew    Bagnell    Andrew  and Dey 
+Anind    Maximum entropy inverse reinforcement learning 
+In AAAI  pp     
+
+

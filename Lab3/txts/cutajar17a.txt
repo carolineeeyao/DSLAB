@@ -1,0 +1,1581 @@
+Random Feature Expansions for Deep Gaussian Processes
+
+Kurt Cutajar   Edwin    Bonilla   Pietro Michiardi   Maurizio Filippone  
+
+Abstract
+
+The composition of multiple Gaussian Processes
+as   Deep Gaussian Process  DGP  enables   deep
+probabilistic nonparametric approach to  exibly
+tackle complex machine learning problems with
+sound quanti cation of uncertainty  Existing inference approaches for DGP models have limited scalability and are notoriously cumbersome
+to construct  In this work we introduce   novel
+formulation of DGPs based on random feature
+expansions that we train using stochastic variational inference  This yields   practical learning framework which signi cantly advances the
+stateof theart in inference for DGPs  and enables accurate quanti cation of uncertainty  We
+extensively showcase the scalability and performance of our proposal on several datasets with
+up to   million observations  and various DGP architectures with up to   hidden layers 
+
+  Introduction
+Given their impressive performance on machine learning and pattern recognition tasks  Deep Neural Networks
+ DNNs  have recently attracted   considerable deal of attention in several applied domains such as computer vision
+and natural language processing  see       LeCun et al 
+  and references therein  Deep Gaussian Processes
+ DGPs  Damianou   Lawrence    alleviate the outstanding issue characterizing DNNs of having to specify
+the number of units in hidden layers by implicitly working
+with in nite representations at each layer  From   generative perspective  DGPs transform the inputs using   cascade of Gaussian Processes  GPs  Rasmussen   Williams 
+
+ Department of Data Science  EURECOM  France
+ School of Computer Science and Engineering  University of New South Wales  Australia 
+Correspondence to 
+Kurt Cutajar  kurt cutajar eurecom fr  Pietro Michiardi
+ pietro michiardi eurecom fr  Edwin    Bonilla Cutajar    bonilla unsw edu au  Maurizio Filippone  maurizio lippone eurecom fr 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+  such that the output of each layer of GPs forms the
+input to the GPs at the next layer  effectively implementing
+  deep probabilistic nonparametric model for compositions
+of functions  Neal    Duvenaud et al   
+Because of their probabilistic formulation  it is natural to
+approach the learning of DGPs through Bayesian inference
+techniques  however  the application of such techniques
+to learn DGPs leads to various forms of intractability   
+number of contributions have been proposed to recover
+tractability  extending or building upon the literature on approximate methods for GPs  Nevertheless  only few works
+leverage one of the key features that arguably make DNNs
+so successful  that is being scalable through the use of minibatch based learning  Hensman   Lawrence    Dai
+et al    Bui et al    Even among these works 
+there does not seem to be an approach that is truly applicable to largescale problems  and practical beyond only  
+few hidden layers 
+In this paper  we develop   practical learning framework for
+DGP models that signi cantly improves the stateof theart
+on those aspects  In particular  our proposal introduces two
+sources of approximation to recover tractability  while    
+scaling to largescale problems   ii  being able to work with
+moderately deep architectures  and  iii  being able to accurately quantify uncertainty  The  rst is   model approximation  whereby the GPs at all layers are approximated using
+random feature expansions  Rahimi   Recht    the
+second approximation relies upon stochastic variational inference to retain   probabilistic and scalable treatment of
+the approximate DGP model 
+We show that random feature expansions for DGP models
+yield Bayesian DNNs with lowrank weight matrices  and
+the expansion of different covariance functions results in
+different DNN activation functions  namely trigonometric
+for the Radial Basis Function  RBF  covariance  and Recti ed Linear Unit  ReLU  functions for the ARCCOSINE
+covariance  In order to retain   probabilistic treatment of
+the model we adapt the work on variational inference for
+DNNs and variational autoencoders  Graves    Kingma
+  Welling    using minibatch based stochastic gradient optimization  which can exploit GPU and distributed
+computing  In this respect  we can view the probabilistic
+treatment of DGPs approximated through random feature
+
+Random Feature Expansions for Deep Gaussian Processes
+
+expansions as   means to specify sensible and interpretable
+priors for probabilistic DNNs  Furthermore  unlike popular inducing pointsbased approximations for DGPs  the resulting learning framework does not involve any matrix decompositions in the size of the number of inducing points 
+but only matrix products  We implement our model in TensorFlow  Abadi et al    which allows us to rely on
+automatic differentiation to apply stochastic variational inference 
+Although having to select the appropriate number of random features goes against the nonparametric formulation
+favored in GP models  the level of approximation can be
+tuned based on constraints on running time or hardware 
+Most importantly  the random feature approximation enables us to develop   learning framework for DGPs which
+signi cantly advances the stateof theart  We extensively
+demonstrate the effectiveness of our proposal on   variety
+of regression and classi cation problems by comparing it
+with DNNs and other stateof theart approaches to infer
+DGPs  The results indicate that for   given DGP architecture  our proposal is consistently faster at achieving better
+generalization compared to the competitors  Another key
+observation is that the proposed DGP outperforms DNNs
+trained with dropout when quantifying uncertainty 
+We focus part of the experiments on largescale problems  such as MNIST   digit classi cation and the AIRLINE dataset  which contain over   and   million observations  respectively  Only very recently there have been attempts to demonstrate performance of GP models on such
+large data sets  Wilson et al    Krauth et al   
+and our proposal is on par with these latest GP methods 
+Furthermore  we obtain impressive results when employing our learning framework to DGPs with moderate depth
+ few tens of layers  on the AIRLINE dataset  We are not
+aware of any other DGP models having such depth that can
+achieve comparable performance when applied to datasets
+with millions of observations  Crucially  we obtain all these
+results by running our algorithm on   single machine without GPUs  but our proposal is designed to be able to exploit
+GPU and distributed computing to signi cantly accelerate
+our deep probabilistic learning framework  see supplement
+for experiments in distributed mode 
+In summary  the most signi cant contributions of this work
+are as follows      we propose   novel approximation of
+DGPs based on random feature expansions that we study
+in connection with DNNs   ii  we demonstrate the ability
+of our proposal to systematically outperform stateof theart methods to carry out inference in DGP models  especially for largescale problems and moderately deep architectures   iii  we validate the superior quanti cation of uncertainty offered by DGPs compared to DNNs 
+
+  Related work
+
+Following the original proposal of DGP models in Damianou   Lawrence   there have been several attempts
+to extend GP inference techniques to DGPs  Notable examples include the extension of inducing point approximations  Hensman   Lawrence    Dai et al   
+and Expectation Propagation  Bui et al    Sequential inference for training DGPs has also been investigated
+in Wang et al      recent example of   DGP  natively  formulated as   variational model appears in Tran
+et al    Our work is the  rst to employ random feature expansions to approximate DGPs as DNNs  The expansion of the squared exponential covariance for DGPs leads
+to trigonometric DNNs  whose properties were studied in
+Sopena et al    Meanwhile  the expansion of the arccosine covariance is inspired by Cho   Saul   and it
+allows us to show that DGPs with such covariance can be
+approximated with DNNs having ReLU activations 
+The connection between DGPs and DNNs has been pointed
+out in several papers  such as Neal   and Duvenaud
+et al    where pathologies with deep nets are investigated  The approximate DGP model described in our work
+becomes   DNN with lowrank weight matrices  which have
+been used in       Novikov et al    Sainath et al 
+  Denil et al    as   regularization mechanism 
+Dropout is another technique to speedup training and improve generalization of DNNs that has recently been linked
+to variational inference  Gal   Ghahramani   
+Random Fourier features for large scale kernel machines
+were proposed in Rahimi   Recht   and their application to GPs appears in   azaroGredilla et al   
+In the case of squared exponential covariances  variational
+learning of the posterior over the frequencies was proposed
+in Gal   Turner   to avoid potential over tting caused
+by optimizing these variables  These approaches are special cases of our DGP model when using no hidden layers 
+In our work  we learn the proposed approximate DGP model
+using stochastic variational inference  Variational learning
+for DNNs was  rst proposed in Graves   and later
+extended to include the reparameterization trick to clamp
+randomness in the computation of the gradient with respect
+to the posterior over the weights  Kingma   Welling   
+Rezende et al    and to include   Gaussian mixture
+prior over the weights  Blundell et al   
+
+  Preliminaries
+Consider   supervised learning scenario where   set of in 
+  is associated with   set of
+put vectors                 xn 
+  where
+ possibly multivariate  labels                 yn 
+xi   RDin and yi   RDout  We assume that there is an underlying function fo xi  characterizing   mapping from the
+
+Random Feature Expansions for Deep Gaussian Processes
+
+inputs to   latent representation  and that the labels are   realization of some probabilistic process   yiojfo xi  which
+is based on this latent representation 
+In this work  we consider modeling the latent functions using Deep Gaussian Processes  DGPs  Damianou  
+Lawrence    Let variables in layer   be denoted by
+the     superscript  In DGP models  the mapping between
+inputs and labels is expressed as   composition of functions
+
+ 
+
+ 
+
+       
+
+   Nh cid               
+
+   
+
+where each of the Nh layers is composed of    possibly transformed  multivariate Gaussian process  GP  Formally    GP is   collection of random variables such that
+any subset of these are jointly Gaussian distributed  Rasmussen   Williams    In GPs  the covariance between
+variables at different inputs is modeled using the socalled
+covariance function 
+Given the relationship between GPs and singlelayered neural networks with an in nite number of hidden units  Neal 
+  the DGP model has an obvious connection with
+DNNs  In contrast to DNNs  where each of the hidden layers implements   parametric function of its inputs  in DGPs
+these functions are assigned   GP prior  and are therefore
+nonparametric  Furthermore  because of their probabilistic
+formulation  it is natural to approach the learning of DGPs
+through Bayesian inference techniques that lead to principled approaches for both determining the optimal settings
+of architecturedependent parameters  such as the number
+of hidden layers  and quanti cation of uncertainty 
+While DGPs are attractive from   theoretical standpoint  inference is extremely challenging  Denote by       the set
+of latent variables with entries      
+   xi  and let
+    jF  Nh  be the conditional likelihood  Learning and
+making predictions with DGPs requires solving integrals
+that are generally intractable  For example  computing the
+marginal likelihood to optimize covariance parameters  cid   
+at all layers entails solving
+ 
+  jF  Nh 
+    jX   cid   
+
+   Nh jF  Nh cid   cid Nh cid 
+
+ 
+ 
+   jX   cid 
+
+ 
+ 
+ cid         cid   
+
+dF  Nh        dF  
+
+io        
+
+ 
+
+ 
+
+ 
+
+In the following section we use random feature approximations to the covariance function in order to develop  
+scalable algorithm for inference in DGPs 
+
+  Random Feature Expansions for GPs
+
+We start by describing how random feature expansions
+can be used to approximate the covariance of   single GP
+model  Such approximations have been considered previously  for example by Rahimi   Recht   in the context of nonprobabilistic kernel machines  Here we focus
+
+ 
+
+on random feature expansions for the radial basis function
+ RBF  covariance and the ARCCOSINE covariance  which
+we will use in our experiments 
+For the sake of clarity  we will present the covariances without any explicit scaling of the features or the covariance itself  After explaining the random feature expansion associated with each covariance  we will generalize these results
+in the context of DGPs to include scaling the covariance by
+  factor  cid  and scaling the features for Automatic Relevance Determination  ARD   Mackay   
+
+  RADIAL BASIS FUNCTION COVARIANCE
+
+  popular example of   covariance function  which we consider here  is the Radial Basis Function  RBF  covariance
+
+ 
+
+ 
+
+ 
+krbf      
+
+    exp
+
+    cid   
+
+ 
+
+ cid   
+ 
+
+ 
+
+ 
+
+Appealing to Bochner   theorem  any continuous shiftinvariant normalized covariance function   xi  xj   
+  xi cid  xj  is positive de nite if and only if it can be rewritten as the Fourier transform of   nonnegative measure
+  cid  and  cid    xi  cid  xj 
+    Rahimi   Recht    Denoting the spectral frequencies by   while assigning  cid   
+in the case of the RBF covariance in equation   this
+ 
+yields 
+
+ 
+
+ 
+
+krbf  cid   
+
+   exp
+
+ cid cid 
+
+ 
+
+  
+
+ 
+
+ 
+
+with   corresponding nonnegative measure     
+       Because the covariance function and the nonnegative measures are real  we can drop the unnecessary
+complex part of the argument of the expectation  keeping
+ 
+  that can be rewritten as
+cos cid 
+ 
+    sin  
+cos  
+
+    cos xi  cid  xj 
+ 
+ 
+ 
+      sin  
+    cos  
+
+ 
+   
+
+The importance of the expansion above is that it allows us
+to interpret the covariance function as an expectation that
+can be estimated using Monte Carlo  De ning   xj   
+  the covariance function can be
+ cos  
+therefore unbiasedly approximated as
+
+  sin  
+
+ 
+
+ 
+
+ 
+
+krbf  xi  xj   cid   
+NRF
+
+  xij    
+ 
+
+  xjj    
+
+ 
+
+with     cid     This has an important practical implication  as it provides the means to access an approximate
+explicit representation of the mapping induced by the covariance function that  in the RBF case  is in nite dimensional  ShaweTaylor   Cristianini    Various results have been established on the accuracy of the random
+Fourier feature approximation  see       Rahimi   Recht
+ 
+
+NRF 
+
+  
+
+Random Feature Expansions for Deep Gaussian Processes
+
+ 
+
+ cid 
+
+   
+
+ cid 
+
+   
+
+ 
+
+ 
+
+   
+
+ 
+
+   
+
+ cid 
+
+ cid 
+
+Figure The proposed DGP approximation  At each hidden layer
+GPs are replaced by their twolayer weightspace approximation 
+Randomfeatures  cid    are obtained using   weight matrix    
+This is followed by   linear transformation parameterized by
+weights       The prior over     is determined by the covariance parameters  cid    of the original GPs 
+
+  ARCCOSINE COVARIANCE
+
+We also consider the ARCCOSINE covariance of order  
+
+    
+arc      
+
+ 
+
+   
+
+ 
+ cid 
+
+    
+
+ cid 
+
+cos
+
+ 
+
+ 
+ 
+ 
+     
+
+ 
+
+   Jp
+ 
+
+ 
+   
+
+ 
+ 
+
+ 
+
+ 
+ 
+
+  
+
+ 
+
+where we have de ned
+Jp cid     cid   sin  cid   
+
+ 
+
+sin  cid 
+
+ 
+ cid 
+
+ cid   cid   cid 
+sin  cid 
+
+Let   cid  be the Heaviside function  Following Cho   Saul
+  an integral representation of this covariance is 
+
+ 
+
+ 
+
+  
+
+ 
+
+ 
+
+ 
+
+  
+
+  
+ 
+ cid            
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  
+
+ 
+
+ 
+
+ 
+
+    
+arc      
+
+ 
+
+     
+
+This integral formulation immediately suggests   random
+feature approximation for the ARCCOSINE covariance in
+equation   noting that it can be seen as an expectation
+of the product of the same function applied to the inputs to
+the covariance  As before  this provides an approximate explicit representation of the mapping induced by the covariance function  Interestingly  for the ARCCOSINE covariance of order       this yields an approximation based on
+popular Recti ed Linear Unit  ReLU  functions  We note
+that when       the resulting Heaviside activations are
+unsuitable for our inference scheme  given that they yield
+systematically zero gradients 
+
+  Random Feature Expansions for DGPs
+In this section  we present our approximate formulation of
+DGPs which  as we illustrate in the experiments  leads to
+  practical learning algorithm for these deep probabilistic
+
+nonparametric models  We propose to employ the random
+feature expansion at each layer  and by doing so we obtain an approximation to the original DGP model as   DNN
+ Figure  
+Assume that the GPs have zero mean  and de ne      
+   Also  assume that the GP covariances at each layer
+are parameterized through   set of parameters  cid    The
+parameter set  cid    comprises the layerwise GP marginal
+variances  cid    and lengthscale parameters  cid     
+diag 
+
+             
+
+   
+
+    
+ 
+
+ 
+
+cos
+
+  sin
+
+ 
+
+ cid   
+
+ 
+
+ 
+
+ 
+
+rbf  
+
+ 
+
+       
+
+       
+
+ cid   
+     
+RF
+
+ 
+ 
+
+ 
+ cid 
+
+Considering   DGP with RBF covariances  taking    weightspace view  of the GPs at each layer  and extending the
+results in the previous section  we have that
+
+ 
+ 
+ 
+and          cid   
+rbf       At each layer  the priors over the
+   cid  
+weights are  
+ 
+       Each matrix     has dimensions DF      cid       
+RF 
+On the other hand  the weight matrices       have dimen 
+ cid  DF      weighting of sine and cosine ransions       
+RF
+dom features  with the constraint that DF  Nh     Dout 
+Similarly  considering   DGP with ARCCOSINE covariances of order       the application of the random feature
+approximation leads to DNNs with ReLU activations 
+
+   
+
+     cid  
+
+and  
+
+ 
+
+ 
+
+ cid   
+
+ 
+
+ 
+
+ 
+
+ 
+
+         
+
+ 
+
+ 
+
+ 
+ 
+
+ 
+
+ cid   
+
+arc  
+
+ cid   
+
+ cid   
+
+     
+RF
+
+max
+
+ 
+
+ cid 
+
+ 
+
+ cid   
+
+with    cid  
+  which are cheaper to evaluate and differentiate than the trigonometric functions required in the RBF case  As in the RBF case  we allowed
+the covariance and the features to be scaled by  cid    and
+ cid    respectively  The dimensions of the weight matrices
+    are the same as in the RBF case  but the dimensions of
+the       matrices are      
+RF
+
+ cid  DF    
+
+  Lowrank weights in the resulting DNN
+
+ 
+
+ 
+
+ cid          
+
+Our formulation of an approximate DGP using random
+feature expansions reveals   close connection with DNNs 
+In our formulation  the design matrices at each layer are
+  where  cid cid  denotes the
+ cid       cid 
+elementwise application of covariancedependent functions       sine and cosine for the RBF covariance and ReLU
+for the ARCCOSINE covariance  Instead  for the DNN case 
+the design matrices are computed as  cid        cid     
+where   cid  is   socalled activation function  In light of this 
+we can view our approximate DGP model as   DNN  From  
+probabilistic standpoint  we can interpret our approximate
+
+Random Feature Expansions for Deep Gaussian Processes
+
+and weights 
+
+ 
+
+ 
+
+ 
+
+      
+
+ijl
+
+ 
+
+     
+ij
+
+ 
+
+ 
+
+ 
+
+ijl
+
+ 
+
+ 
+
+ 
+
+ 
+
+    
+
+ij        
+
+ij
+
+ij        
+
+The variational parameters are the mean and the variance
+of each of the approximating factors     
+ij   and we
+aim to optimize the lower bound with respect to these as
+well as all covariance parameters  cid 
+In the case of   likelihood that factorizes across observations  an interesting feature of the expression of the lower
+bound is that it is amenable to fast stochastic optimization 
+In particular  we derive   doublystochastic approximation
+of the expectation in the lower bound as follows  First 
+  can be rewritten as   sum over the input points  which
+allows us to estimate it in an unbiased fashion using minibatches  selecting   points indexed by Im 
+
+   cid   
+ 
+
+Eq   log   ykjxk        cid 
+
+ 
+
+ 
+
+  Im
+
+ 
+
+DGP model as   DNN with speci   Gaussian priors over
+the     weights controlled by the covariance parameters
+ cid    and standard Gaussian priors over the       weights 
+Covariance parameters act as hyperpriors over the weights
+    and the objective is to optimize these during training 
+Another observation about the resulting DGP approximation is that  for   given layer    the transformations given
+by       and     are both linear 
+If we collapsed
+the two transformations into   single one  by introducing weights  cid              we would have to learn
+weights at each layer  which is conO
+siderably more than learning the two separate sets of
+weights  As   result  we can view the proposed approximate DGP model as   way to impose   lowrank structure
+on the weights of DNNs  which is   form of regularization
+proposed in the literature of DNNs  Novikov et al   
+Sainath et al    Denil et al   
+
+ cid       
+
+     
+RF
+
+ 
+
+ 
+
+RF
+
+  Variational inference
+
+Nh cid 
+
+ 
+
+In order to keep the notation uncluttered  let  cid  be the collection of all covariance parameters  cid    at all layers  Also 
+consider the case of   DGP with  xed spectral frequencies
+    collected into   and let   be the collection of the
+weight matrices       at all layers  For   we have   product of standard normal priors stemming from the approximation of the GPs at each layer       
+       
+and we propose to treat   using variational inference following Kingma   Welling   and Graves   and
+optimize all covariance parameters  cid  We will consider  
+to be  xed here  but we will discuss alternative ways to treat
+  in the next section  In the supplement we also assess the
+quality of the variational approximation over    with  
+and  cid   xed  by comparing it with MCMC techniques 
+The marginal likelihood     jX     cid  involves intractable
+integrals  but we can obtain   tractable lower bound using
+variational inference  De ning     log      jX     cid 
+and     Eq     log       jX        cid  we obtain
+
+  
+
+   cid     cid  DKL             
+
+ 
+
+where      acts as an approximation to the posterior over
+all the weights   WjY        cid 
+We are interested in optimizing            nding an optimal approximate distribution over the parameters according to the bound above  The  rst term can be interpreted as
+  model  tting term  whereas the second as   regularization
+term  In the case of   Gaussian distribution      and  
+Gaussian prior      it is possible to compute the DKL
+term analytically  see supplementary material  whereas
+the remaining term needs to be estimated  Assume   Gaussian approximating distribution that factorizes across layers
+
+NMC 
+
+Second  each of the elements of the sum can be estimated
+using NMC Monte Carlo samples  yielding 
+
+   cid   
+ 
+
+  Im
+
+NMC
+
+  
+
+ 
+
+log   ykjxk   Wr     cid   
+
+with  Wr  cid       In order to facilitate the optimization 
+we reparameterize the weights as follows 
+
+        
+
+   ij       
+
+ij    
+
+rij       
+ij  
+
+ 
+
+By differentiating the lower bound with respect to  cid  and
+the mean and variance of the approximate posterior over
+   we obtain an unbiased estimate of the gradient for the
+lower bound  The reparameterization trick ensures that the
+randomness in the computation of the expectation is  xed
+when applying stochastic gradient ascent moves to the parameters of      and  cid   Kingma   Welling    Automatic differentiation tools enabled us to compute stochastic gradients automatically  which is why we opted to implement our model in TensorFlow  Abadi et al   
+
+  Treatment of the spectral frequencies  
+
+ 
+
+ 
+
+ 
+
+ij    
+
+So far  we have assumed the spectral frequencies   to
+be sampled from the prior and  xed throughout  whereby
+we employ the reparameterization trick to obtain    
+ij  
+ cid   
+ij determined by the
+prior  
+  We then draw the
+   
+rij   and    them from the outset  such that covariance
+parameters  cid  can be optimized along with      We refer to this variant as PRIORFIXED 
+
+ij   with  cid   
+ij and  cid   
+   
+ cid   
+
+rij    cid   
+   cid  
+
+ cid 
+
+ 
+
+ 
+
+ 
+
+Random Feature Expansions for Deep Gaussian Processes
+
+ 
+
+ 
+
+ 
+
+samples from the posterior over    and   when treated
+ 
+variationally  and given the minibatch formulation  the
+former costs  
+  while the latter costs
+ 
+RFD   
+
+       
+ 
+
+  NMC
+
+mD   
+
+RFNMC
+
+mN    
+
+Figure Performance of different strategies for dealing with   as
+  function of the number of random features  These can be  xed
+ PRIORFIXED  or treated variationally  with  xed randomness
+VARFIXED and resampled at each iteration VARRESAMPLED 
+
+Inspired by previous work on random feature expansions
+for GPs  we can think of alternative ways to treat these parameters         azaroGredilla et al    Gal   Turner
+  In particular  we study   variational treatment of
+  we refer the reader to the supplementary material for
+details on the derivation of the lower bound in this case 
+When being variational about   we introduce an approximate posterior    which also has   factorized form  We
+use the reparameterization trick once again  but   are now
+sampled from the posterior  which in general has different
+mean and variances to the prior  We report two variations of
+this treatment  namely VARFIXED and VARRESAMPLED 
+In VARFIXED  we       
+rij in computing   throughout the
+learning of the model  whereas in VARRESAMPLED we resample these at each iteration  We note that one can also be
+variational about  cid  but we leave this for future work 
+In Figure   we illustrate the differences between the strategies discussed in this section  we report the accuracy of the
+proposed onelayer DGP with RBF covariances with respect
+to the number of random features on one of the datasets that
+we consider in the experiment section  EEG dataset  For
+PRIORFIXED  more random features result in   better approximation of the GP priors at each layer  and this results
+in better generalization  When we resample   from the
+approximate posterior  VARRESAMPLED  we notice that
+the model quickly struggles with the optimization when increasing the number of random features  We attribute this
+to the fact that the factorized form of the posterior over  
+and   is unable to capture posterior correlations between
+the coef cients for the random features and the weights
+of the corresponding linearized model  Being deterministic about the way spectral frequencies are computed  VARFIXED  offers the best performance among the three learning strategies  and this is what we employ throughout the
+rest of this paper 
+
+Because of feature expansions and stochastic variational
+inference  the resulting algorithm does not involve any
+Cholesky decompositions  This is in sharp contrast with
+stochastic variational inference using inducingpoint approximations  see      Dai et al    Bui et al   
+where such operations could signi cantly limit the number
+of inducing points that can be employed 
+
+  Experiments
+We evaluate our model by comparing it against relevant alternatives for both regression and classi cation  and assess
+its performance when applied to largescale datasets  We
+also investigate the extent to which such deep compositions
+continue to yield good performance when the number of
+layers is signi cantly increased 
+
+  Model Comparison
+
+We primarily compare our model to the stateof theart
+DGP inference method presented in the literature  namely
+DGPs using expectation propagation  DGPEP  Bui et al 
+  We originally intended to include results for the
+variational autoencoded DGP  Damianou   Lawrence 
+  however  the results obtained using the available
+code were not competitive with DGPEP and we thus decided to exclude them from the  gures  We also omitted DGP training using sequential inference  Wang et al 
+  given that we could not  nd an implementation of
+the method and  in any case  the performance reported in
+the paper is inferior to more recent approaches  We also
+compare against DNNs in order to present the results in  
+wider context  and demonstrate that DGPs lead to better
+quanti cation of uncertainty  Finally  to substantiate the
+bene ts of using   deep model  we compare against the
+shallow sparse variational GP  Hensman et al      implemented in GP ow  Matthews et al   
+We use the same experimental setup for both regression
+and classi cation tasks using datasets from the UCI repository  Asuncion   Newman    for models having one
+hidden layer  The results for architectures with two hidden layers are included in the supplementary material  The
+speci   con gurations for each model are detailed below 
+
+  Computational complexity
+
+When estimating the lower bound  there are two main
+operations performed at each layer  that is         and
+ cid         Recalling that this matrix product is done for
+
+DGPRBF  DGPARC   In the proposed DGP with an RBF
+kernel  we use   random features at every hidden layer
+to construct   multivariate GP with     
+      and set the
+batch size to       We initially only use   single
+
+ log RFs RMSE log RFs MNLLpriorfixedvar fixedvarresampledRandom Feature Expansions for Deep Gaussian Processes
+
+REGRESSION
+
+Powerplant
+
+         
+
+RMSE
+
+Protein
+
+         
+
+RMSE
+
+Spam
+
+         
+
+Error rate
+
+CLASSIFICATION
+
+EEG
+
+         
+
+Error rate
+
+MNIST
+
+         
+
+Error rate
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+log sec 
+MNLL
+
+ 
+
+ 
+
+log sec 
+
+ 
+
+ 
+
+ 
+
+log sec 
+MNLL
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+log sec 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+log sec 
+MNLL
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+ 
+log sec 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+log sec 
+MNLL
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+log sec 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+log sec 
+MNLL
+
+ 
+
+ 
+
+log sec 
+
+Figure Progression of error rate  RMSE in the regression case  and MNLL over time for competing models  Results are shown for
+con gurations having   hidden layer  while the results for models having   such layers may be found in the supplementary material 
+
+Monte Carlo sample  and halfway through the allocated
+optimization time  this is then increased to   samples 
+We employ the Adam optimizer  Kingma   Ba   
+with   learning rate of   and in order to stabilize the optimization procedure  we    the parameters  cid  for    
+iterations  before jointly optimizing all parameters  As discussed in Section     are optimized variationally with
+ xed randomness  The same setup is used for DGPARC 
+the variation of our model using the ARCCOSINE kernel 
+
+DGPEP   For this technique  we use the same architecture and optimizer as for DGPRBF and DGPARC    batch
+size of   and   inducing points at each hidden layer 
+For the classi cation case  we use   samples for approximating the Softmax likelihood 
+
+DNN   We construct   DNN con gured with   dropout rate
+of   at each hidden layer in order to provide regularization during training  In order to preserve   degree of
+fairness  we set the number of hidden units in such   way
+as to ensure that the number of weights to be optimized
+match those in the DGPRBF and DGPARC models when
+the random features are taken to be  xed 
+
+We assess the performance of each model using the error
+rate  RMSE in the regression case  and mean negative loglikelihood  MNLL  on withheld test data  The results are
+averaged over   folds for every dataset  The experiments
+were launched on single nodes of   cluster of Intel Xeon
+   CPUs having   cores and  GB RAM 
+Figure   shows that DGPRBF and DGPARC consistently
+outperform competing techniques both in terms of convergence speed and predictive accuracy  This is particu 
+
+ Code obtained from 
+
+github com thangbui deepGP approxEP
+
+larly signi cant for larger datasets where other techniques
+take considerably longer to converge to   reasonable error
+rate  although DGPEP converges to superior MNLL for the
+PROTEIN dataset  The results are also competitive  and
+sometimes superior  to those obtained by the variational
+GP  VARGP  in Hensman et al      It is striking to
+see how inferior uncertainty quanti cation provided by the
+DNN  which is inherently limited to the classi cation case 
+so no MNLL reported on regression datasets  is compared
+to DGPs  despite the error rate being comparable 
+By virtue of its higher dimensionality  larger con gurations
+were used for MNIST  For DGPRBF and DGPARC  we use
+  random features    GPs in the hidden layers  batch
+size of   and Adam with     learning rate  Similarly for DGPEP  we use   inducing points  with the only
+difference being   slightly smaller batch size to cater for issues with memory requirements  Following Simard et al 
+  we employ   hidden units at each layer of the
+DNN  The DGPRBF peaks at   and   for  
+and   hidden layers respectively  It was observed that the
+model performance degrades noticeably when more than
+  hidden layers are used  without feeding forward the inputs  This is in line with what is reported in the literature
+on DNNs  Neal    Duvenaud et al    By simply
+reintroducing the original inputs in the hidden layer  the
+accuracy improves to   for the one hidden layer case 
+Recent experiments on MNIST using   variational GP with
+MCMC report overall accuracy of    Hensman et al 
+    while the AutoGP architecture has been shown
+to give   accuracy  Krauth et al    Using  
+ nertuned con guration  DNNs were also shown to obtain
+  accuracy  Simard et al    whereas   has
+been reported for SVMs  Sch olkopf    In view of this
+wider scope of inference techniques  it can be con rmed
+
+dgprbfdgp arcdgpepdnnvar gpRandom Feature Expansions for Deep Gaussian Processes
+
+Table Performance of our proposal on largescale datasets 
+
+Dataset
+
+Accuracy
+RBF
+ARC
+
+MNLL
+
+RBF
+
+ARC
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+MNIST  
+AIRLINE
+
+   
+   
+
+ 
+ 
+
+ 
+ 
+
+Error rate
+
+ 
+
+ 
+
+ 
+
+ 
+
+MNLL
+
+ cid 
+
+Neg  Lower Bound
+
+ 
+
+ 
+
+ 
+ 
+log sec 
+
+ 
+
+ 
+
+ 
+ 
+log sec 
+
+ 
+
+ 
+
+ 
+ 
+Layers
+
+ 
+
+that the results obtained using the proposed architecture
+are comparable to the stateof theart  even if further extensions may be required for obtaining   proper edge  Note
+that this comparison focuses on approaches without preprocessing  and excludes convolutional neural nets 
+
+  Largescale Datasets
+
+One of the de ning characteristics of our model is the ability to scale up to large datasets without compromising on
+performance and accuracy in quantifying uncertainty  As
+  demonstrative example  we evaluate our model on two
+largescale problems which go beyond the scale of datasets
+to which GPs and especially DGPs are typically applied 
+We  rst consider MNIST    which arti cially extends the
+original MNIST dataset to   million observations  We
+trained this model using the same con guration described
+for standard MNIST  and we obtained   accuracy
+on the test set using one hidden layer  Given the size of
+this dataset  there are only few reported results for other
+GP models  Most notably  Krauth et al    recently
+obtained   accuracy with the AutoGP framework 
+which is comparable to the result obtained by our model 
+Meanwhile  the AIRLINE dataset contains  ight information for   million US  ights  Following the procedure described in Hensman et al    and Wilson et al   
+we use this  dimensional dataset for classi cation  where
+the task is to determine whether    ight has been delayed
+or not  We construct the test set using the scripts provided
+in Wilson et al    where     data points are heldout for testing  We construct our DGP models using  
+random features at each layer  and set the dimensionality
+to DF         As shown in Table   our model works signi cantly better when using the RBF kernel  In addition 
+the results are also directly comparable to those obtained
+by Wilson et al    which reports accuracy and MNLL
+of   and   respectively 
+
+  Model Depth
+
+Finally  we assess the scalability of our model with respect
+to additional hidden layers in the constructed model 
+In
+particular  we reconsider the AIRLINE dataset and evaluate
+the performance of DGPRBF models constructed using up
+to   layers  In order to cater for the increased depth in the
+
+Figure Left and center   Performance of our model on the AIRLINE dataset as function of time for different depths  The baseline
+ SVDKL  is taken from Wilson et al    Right   The box
+plot of the negative lower bound  estimated over   minibatches
+of size     con rms this is   suitable objective for model selection 
+
+model  we feedforward the original input to each hidden
+layer  as suggested in Duvenaud et al   
+Figure   reports the progression of error rate and MNLL
+over time for different number of hidden layers  using the
+results obtained in Wilson et al    as   baseline  reportedly obtained in about   hours  As expected  the
+model takes longer to train as the number of layers increases  However  the model converges to an optimal state
+in every case in less than   couple of hours  with an improvement being noted in the case of   and   layers over
+the shallower  layer model  The box plot within the same
+ gure indicates that the negative lower bound is   suitable
+objective function for carrying out model selection 
+
+  Conclusions
+In this work  we have proposed   novel formulation of
+DGPs which exploits the approximation of covariance functions using random features  as well as stochastic variational inference for preserving the probabilistic representation of   regular GP  We demonstrated how inference using
+this model is not only faster  but also frequently superior
+to other stateof theart methods  with particular emphasis on competing DGP models  The results obtained for
+both the AIRLINE dataset and the MNIST   digit recognition problem are particularly impressive since such large
+datasets have been generally considered to be beyond the
+computational scope of DGPs  We perceive this to be  
+considerable step forward in the direction of scaling and
+accelerating DGPs 
+The results obtained on higherdimensional datasets
+strongly suggest that approximations such as Fastfood  Le
+et al    could be instrumental in the interest of using
+more random features  We are also currently investigating ways to mitigate the decline in performance observed
+when optimizing   variationally with resampling  The obtained results also encourage the extension of our model to
+include convolutional layers suitable for computer vision
+applications 
+
+ layers layers layers layersSVDKLRandom Feature Expansions for Deep Gaussian Processes
+
+ACKNOWLEDGEMENTS
+
+MF gratefully acknowledges support from the AXA Research Fund  PM was partially supported by the EU project
+    IOStack 
+
+References
+Abadi  Mart    Agarwal  Ashish  Barham  Paul  et al  TensorFlow  Largescale machine learning on heterogeneous systems   
+
+Asuncion  Arthur and Newman  David    UCI machine
+
+learning repository   
+
+Blundell  Charles  Cornebise  Julien  Kavukcuoglu  Koray 
+and Wierstra  Daan  Weight Uncertainty in Neural Network  In Proceedings of the  nd International Conference on Machine Learning  ICML   Lille  France 
+  July   volume   of JMLR Workshop and Conference Proceedings  pp    JMLR org   
+
+Bui  Thang    Hern andezLobato  Daniel  Hern andezLobato  Jos      Li  Yingzhen  and Turner  Richard   
+Deep Gaussian Processes for Regression using ApproxIn Proceedings of the
+imate Expectation Propagation 
+ nd International Conference on Machine Learning 
+ICML   New York City  NY  USA  June    
+volume   of JMLR Workshop and Conference Proceedings  pp    JMLR org   
+
+Cho  Youngmin and Saul  Lawrence    Kernel methods for
+deep learning  In Advances in Neural Information Processing Systems    rd Annual Conference on Neural
+Information Processing Systems   Proceedings of  
+meeting held   December   Vancouver  British
+Columbia  Canada  pp     
+
+Dai  Zhenwen  Damianou  Andreas  Gonz alez  Javier  and
+Lawrence  Neil  Variational autoencoded deep GausIn Proceedings of the Fourth Internasian processes 
+tional Conference on Learning Representations  ICLR
+  San Juan  Puerto Rico    May     
+
+Damianou  Andreas    and Lawrence  Neil    Deep Gaussian Processes  In Proceedings of the Sixteenth International Conference on Arti cial Intelligence and Statistics  AISTATS   Scottsdale  AZ  USA  April     May
+    volume   of JMLR Proceedings  pp   
+JMLR org   
+
+Denil  Misha  Shakibi  Babak  Dinh  Laurent  Ranzato 
+Marc Aurelio  and de Freitas  Nando  Predicting Parameters in Deep Learning  In Advances in Neural Information Processing Systems    th Annual Conference on
+Neural Information Processing Systems   Proceedings of   meeting held December     Lake Tahoe 
+Nevada  United States  pp     
+
+Duvenaud  David    Rippel  Oren  Adams  Ryan    and
+Ghahramani  Zoubin  Avoiding pathologies in very deep
+In Proceedings of the Seventeenth Internanetworks 
+tional Conference on Arti cial Intelligence and Statistics  AISTATS   Reykjavik  Iceland  April  
+  volume   of JMLR Workshop and Conference
+Proceedings  pp    JMLR org   
+
+Gal  Yarin and Ghahramani  Zoubin 
+
+Dropout as  
+Bayesian Approximation  Representing Model UncerIn Proceedings of the  nd
+tainty in Deep Learning 
+International Conference on Machine Learning  ICML
+  New York City  NY  USA  June     volume   of JMLR Workshop and Conference Proceedings  pp    JMLR org   
+
+Gal  Yarin and Turner  Richard  Improving the Gaussian
+Process Sparse Spectrum Approximation by Representing Uncertainty in Frequency Inputs  In Proceedings of
+the  nd International Conference on Machine Learning  ICML   Lille  France    July   volume   of JMLR Workshop and Conference Proceedings  pp    JMLR org   
+
+Graves  Alex  Practical Variational Inference for Neural
+Networks  In ShaweTaylor     Zemel        Bartlett 
+      Pereira     and Weinberger         eds  Advances
+in Neural Information Processing Systems   pp   
+  Curran Associates  Inc   
+
+Hensman  James and Lawrence  Neil    Nested Variational Compression in Deep Gaussian Processes  December  
+
+Hensman  James  Fusi  Nicol    and Lawrence  Neil   
+Gaussian processes for big data  In Proceedings of the
+TwentyNinth Conference on Uncertainty in Arti cial Intelligence  UAI   Bellevue  WA  USA  August  
+   
+
+Hensman  James  de    Matthews  Alexander    Filippone  Maurizio  and Ghahramani  Zoubin  MCMC
+In Adfor variationally sparse Gaussian processes 
+vances in Neural Information Processing Systems  
+Annual Conference on Neural Information Processing
+Systems   December     Montreal  Quebec 
+Canada  pp       
+
+Hensman  James  de    Matthews  Alexander    and
+Ghahramani  Zoubin  Scalable variational Gaussian proIn Proceedings of the Eighteenth
+cess classi cation 
+International Conference on Arti cial Intelligence and
+Statistics  AISTATS   San Diego  California  USA 
+May     pp       
+
+Kingma  Diederik    and Ba  Jimmy  Adam    method
+for stochastic optimization  In Proceedings of the Third
+
+Random Feature Expansions for Deep Gaussian Processes
+
+International Conference on Learning Representations 
+ICLR   San Diego  California    May     
+
+Kingma  Diederik    and Welling  Max  AutoEncoding
+Variational Bayes  In Proceedings of the Second International Conference on Learning Representations  ICLR
+  Banff  Canada  April      
+
+Krauth  Karl  Bonilla  Edwin    Cutajar  Kurt  and Filippone  Maurizio  AutoGP  Exploring the Capabilities and
+Limitations of Gaussian Process Models  arXiv preprint
+  October  
+
+  azaroGredilla     QuinoneroCandela     Rasmussen 
+      and FigueirasVidal        Sparse Spectrum Gaussian Process Regression  Journal of Machine Learning
+Research     
+
+Le  Quoc    Sarls  Tams  and Smola  Alexander    Fastfood   computing Hilbert space expansions in loglinear
+time  In ICML   volume   of JMLR Workshop and
+Conference Proceedings  pp    JMLR org   
+
+LeCun  Yann  Bengio  Yoshua  and Hinton  Geoffrey  Deep
+
+learning  Nature     
+
+Mackay           Bayesian methods for backpropagation
+networks  In Domany     van Hemmen        and Schulten      eds  Models of Neural Networks III  chapter  
+pp    Springer   
+
+Matthews  Alexander    de    van der Wilk  Mark  Nickson  Tom  Fujii  Keisuke  Boukouvalas  Alexis  Le onVillagr    Pablo  Ghahramani  Zoubin  and Hensman 
+James  GP ow    Gaussian process library using TensorFlow  arXiv preprint   October  
+
+Neal  Radford    Bayesian Learning for Neural Networks
+ Lecture Notes in Statistics  Springer    edition  August
+  ISBN  
+
+Novikov  Alexander  Podoprikhin  Dmitry  Osokin  Anton 
+and Vetrov  Dmitry    Tensorizing Neural Networks  In
+Advances in Neural Information Processing Systems  
+Annual Conference on Neural Information Processing
+Systems   December     Montreal  Quebec 
+Canada  pp     
+
+Rahimi  Ali and Recht  Benjamin  Random Features for
+LargeScale Kernel Machines  In Platt        Koller    
+Singer     and Roweis         eds  Advances in Neural Information Processing Systems   pp   
+Curran Associates  Inc   
+
+Rasmussen  Carl    and Williams  Christopher  Gaussian
+
+Processes for Machine Learning  MIT Press   
+
+Rezende  Danilo Jimenez  Mohamed  Shakir  and Wierstra 
+Daan  Stochastic backpropagation and approximate inIn Proceedings of
+ference in deep generative models 
+the  th International Conference on Machine Learning  ICML   Beijing  China    June   volume   of JMLR Workshop and Conference Proceedings  pp    JMLR org   
+
+Sainath  Tara    Kingsbury  Brian  Sindhwani  Vikas 
+Arisoy  Ebru  and Ramabhadran  Bhuvana  Lowrank
+matrix factorization for Deep Neural Network training
+with highdimensional output targets  In IEEE International Conference on Acoustics  Speech and Signal Processing  ICASSP   Vancouver  BC  Canada  May  
+    pp    IEEE    doi   
+ICASSP 
+
+Sch olkopf  Bernhard  Support vector learning  PhD thesis 
+
+Berlin Institute of Technology   
+
+ShaweTaylor  John and Cristianini  Nello  Kernel Methods
+for Pattern Analysis  Cambridge University Press  New
+York  NY  USA   
+
+Simard  Patrice    Steinkraus  Dave  and Platt  John   
+Best Practices for Convolutional Neural Networks ApIn Proceedings
+plied to Visual Document Analysis 
+of the Seventh International Conference on Document
+Analysis and Recognition   Volume   ICDAR   Washington  DC  USA    IEEE Computer Society 
+
+Sopena        Romero     and Alquezar     Neural networks with periodic and monotonic activation functions 
+  comparative study in classi cation problems  In Arti 
+ cial Neural Networks    ICANN   Ninth International Conference on  Conf  Publ  No    volume  
+  doi   cp 
+
+Tran  Dustin  Ranganath  Rajesh  and Blei  David    The
+In Proceedings of the
+Variational Gaussian Process 
+Fourth International Conference on Learning Representations  ICLR   San Juan  Puerto Rico    May 
+   
+
+Wang  Yali  Brubaker  Marcus    Chaibdraa  Brahim  and
+Urtasun  Raquel  Sequential inference for deep Gaussian
+process  In Proceedings of the  th International Conference on Arti cial Intelligence and Statistics  AISTATS
+  Cadiz  Spain  May     pp     
+
+Wilson  Andrew Gordon  Hu  Zhiting  Salakhutdinov  Ruslan  and Xing  Eric    Stochastic variational deep kernel
+In Advances in Neural Information Processlearning 
+ing Systems   Annual Conference on Neural Information Processing Systems   December    
+Barcelona  Spain  pp     
+
+

@@ -1,0 +1,1028 @@
+Coupling Distributed and Symbolic Execution for Natural Language Queries
+
+Lili Mou   Zhengdong Lu   Hang Li   Zhi Jin  
+
+Abstract
+
+Building neural networks to query   knowledge
+base    table  with natural language is an emerging research topic in deep learning  An executor for table querying typically requires multiple steps of execution because queries may have
+complicated structures  In previous studies  researchers have developed either fully distributed
+executors or symbolic executors for table querying    distributed executor can be trained in
+an endto end fashion  but is weak in terms of
+execution ef ciency and explicit interpretability 
+  symbolic executor is ef cient in execution 
+but is very dif cult to train especially at initial
+stages  In this paper  we propose to couple distributed and symbolic execution for natural language queries  where the symbolic executor is
+pretrained with the distributed executor   intermediate execution results in   stepby step fashion  Experiments show that our approach signi 
+cantly outperforms both distributed and symbolic
+executors  exhibiting high accuracy  high learning ef ciency  high execution ef ciency  and high
+interpretability 
+
+  Introduction
+Using natural language to query   knowledge base is an
+important task in NLP and has wide applications in question answering  QA   Yin et al      humancomputer
+conversation  Wen et al    etc  Table   illustrates an
+example of   knowledge base    table  and   query  How
+long is the game with the largest host country size  To
+answer the question  we should  rst  nd   row with the
+
+ Key Laboratory of High Con dence Software Technologies  Peking University  MoE  Software Institute  Peking University  China  DeeplyCurious ai  Noah   Ark Lab  Huawei
+Technologies  Work done when the  rst author was an
+intern at Huawei 
+      double
+power mou gmail com        luz DeeplyCurious ai      
+ HangLi HL huawei com        zhijin sei pku edu cn 
+
+Correspondence to 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+Query 
+
+How long is the game with the largest host country size 
+
+Knowledge base  table 
+
+Year
+
+City
+
+ 
+ 
+ 
+ 
+  Rio de Janeiro
+
+Sydney
+Athens
+Beijing
+London
+
+Area
+
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Duration
+
+ 
+ 
+ 
+ 
+ 
+
+Table   An example of   natural language query and   knowledge
+base  table 
+
+largest value in the column Area  and then select the value
+of the chosen row with the column being Duration 
+  typical approach to table querying is to convert   natural
+language sentence to an  executable  logic form  known
+as semantic parsing  Traditionally  building   semantic
+parser requires extensive human engineering of explicit
+features  Berant et al    Pasupat   Liang   
+With the fast development of deep learning  an increasingly
+number of studies use neural networks for semantic parsing  Dong   Lapata   and Xiao et al    apply
+sequenceto sequence  seq seq  neural models to generate   logic form conditioned on an input sentence  but
+the training requires groundtruth logic forms  which are
+costly to obtain and speci   to   certain dataset  In realistic settings  we only assume groundtruth denotations  are
+available  and that we do not know execution sequences or
+intermediate execution results  Liang et al    train  
+seq seq network by REINFORCE policy gradient  But it
+is known that the REINFORCE algorithm is sensitive to the
+initial policy  also  it could be very dif cult to get started at
+early stages 
+Yin et al      propose   fully distributed neural enquirer  comprising several neuralized execution layers of
+ eld attention  row annotation  etc  The model can be
+trained in an endto end fashion because all components
+are differentiable  However  it lacks explicit interpretation and is not ef cient in execution due to intensive matrix vector operation during neural processing 
+Neelakantan et al    propose   neural programmer
+
+   denotation refers to an execution result 
+
+Coupling Distributed and Symbolic Execution for Natural Language Queries
+
+by de ning   set of symbolic operators       argmax 
+greater than  at each step  all possible execution results are fused by   softmax layer  which predicts the probability of each operator at the current step  The stepby step
+fusion is accomplished by weighted average and the model
+is trained with mean square error  Hence  such approaches
+work with numeric tables  but may not be suited for other
+operations like string matching 
+It also suffers from the
+problem of  exponential numbers of combinatorial states 
+as the model explores the entire space at   time by stepby 
+step weighted average 
+In this paper  we propose to couple distributed and symbolic execution for natural language queries  By  symbolic execution  we mean that we de ne symbolic operators and keep discrete intermediate execution results 
+Our intuition rises from the observation that   fully distributed neuralized executor also exhibits some  imperfect 
+symbolic interpretation  For example  the  eld attention
+gadget in Yin et al      generally aligns with column
+selection  We therefore use the distributed model   intermediate execution results as supervision signals to pretrain   symbolic executor  Guided by such imperfect stepby step supervision  the symbolic executor learns   fairly
+meaningful initial policy  which largely alleviates the cold
+start problem of REINFORCE  Moreover  the improved
+policy can be fed back to the distributed executor to improve the neural network   performance 
+We evaluated the proposed approach on the QA dataset
+in Yin et al      Our experimental results show that
+the REINFORCE algorithm alone takes long to get started 
+Even if it does  it is stuck in poor local optima  Once
+pretrained by imperfect supervision signals  the symbolic
+executor can recover most execution sequences  and also
+achieves the highest denotation accuracy  It should be emphasized that  in our experiment  neither the distributed executor nor the symbolic executor is aware of groundtruth
+execution sequences  and that the entire model is trained
+with weak supervision of denotations only 
+To the best of our knowledge  we are the  rst to couple
+distributed and symbolic execution for semantic parsing 
+Our study also sheds light on neural sequence prediction in
+general 
+
+  Approach
+In Subsection   we introduce the fully distributed neural executor  which is mostly based on Yin et al     
+For symbolic execution  we design   set of operators that
+
+ The sense of symbolic execution here should not be confused
+with  symbolic execution of   program   see https en 
+wikipedia org wiki Symbolic execution for example 
+
+Figure   An overview of the coupled distributed and symbolic
+executors 
+
+are complete to the task at hand  at each execution step   
+neural network predicts   particular operator and possibly
+arguments  Subsection  
+Subsection   provides   uni ed view of distributed and
+symbolic execution  Figure   We explain how the symbolic executor is pretrained by the distributed one   intermediate execution results  and then further trained with the
+REINFORCE algorithm 
+
+  Distributed Executor
+
+The distributed executor makes full use of neural networks
+for table querying  By  distributed  we mean that all semantic units  including words in the query  entries in the
+table  and execution results  are represented as distributed 
+realvalued vectors and processed by neural networks  One
+of the most notable studies of distributed semantics is word
+embeddings  which map discrete words to vectors as meaning representations  Mikolov et al   
+The distributed executor consists of the following main
+components 
+
+  Query encoder  Words are mapped to word embeddings and   bidirectional recurrent neural network  RNN  aggregates information over the sentence  RNNs  last states in both directions are concatenated as the query representation  detonated as   
+  Table encoder  All table cells are also represented as
+embeddings  For   cell         Beijing in Table  
+with its column eld name being         City  the
+cell vector is the concatenation of the embeddings of
+  and    further processed by   feedforward neural
+network  also known as multilayer perceptron  We
+denote the representation of   cell as   
+  Executor  As shown in Figure     the neural network
+comprises several steps of execution  In each execution step  the neural network selects   column by soft 
+
+NeuralExecutorIntermediateResultOperator Operator OperatornOperator ArgumentPredictorOperator ArgumentPredictorOperator ArgumentPredictor     DifferentiableNondifferentiableImperfectstep bystepsupervisionIntermediateResultNeuralExecutorIntermediateResultOperator Operator OperatornIntermediateResultNeuralExecutorOutputOperator Operator Operatorn     Output         QueryCoupling Distributed and Symbolic Execution for Natural Language Queries
+
+where     indexes   row of the selected column 
+The current row annotation is computed by another MLP 
+based on the query    previous execution results     
+ 
+previous global information      as well as the selected
+row in the current step     
+select     the selection is in   soft
+manner      
+
+ 
+
+ cid cid 
+
+ cid cid 
+
+Figure     single step of distributed execution 
+
+    
+    MLP
+
+            
+
+ 
+
+      
+
+select   
+
+ 
+
+max attention  and annotates each row with   vector 
+     an embedding  Figure   The row vector can be
+intuitively thought of as row selection in query execution  but is represented by distributed semantics here 
+In the last step of execution    softmax classi er is applied to the entire table to select   cell as the answer 
+Details are further explained as below 
+
+ 
+
+Let     
+be the previous step   row annotation result 
+where the subscript   indexes   particular row  We summarize global execution information  denoted as      by
+maxpooling the row annotation          
+    
+
+       MaxPooli
+
+ cid 
+
+ cid 
+
+ 
+
+ 
+
+In the current execution step  we  rst compute   distribution     
+  over all  elds as  soft   eld selction  The computation is based on the query    the previous global information      and the  eld name embeddings        
+
+    
+fj
+
+  softmax
+
+ cid 
+
+MLP cid    fj      cid cid 
+exp cid MLP cid    fj      cid cid 
+  cid  exp cid MLP cid    fj cid      cid cid 
+ cid 
+
+ 
+
+ 
+
+ 
+
+where         denotes vector concatenation  MLP refers
+to   multilayer perceptron 
+Here  the weights of softmax are  eld embeddings  rather
+than parameters indexed by positions  In this way  there is
+no difference if one shuf es table columns  Besides  for  
+same  eld name  its embedding is shared among all training
+samples containing this  eld  but different tables may have
+different  elds 
+We represent the selected cell in each row as the sum of
+all cells in that row  weighted by soft  eld selection     
+ 
+Formally  for the ith row  we have
+
+ 
+
+    
+select     
+
+    
+fj
+
+cij
+
+ 
+
+ 
+
+ In   pilot experiment  we tried   gating mechanism to indicate the results of row selection in hopes of aligning symbolic
+table execution  However  our preliminary experiments show that
+such gates do not exhibit much interpretation  but results in performance degradation  The distributed semantics provide more
+information than    bit gate for   row 
+
+ cid 
+
+As said  the last execution layer applies   softmax classi er
+over all cells to select an answer  Similar to Equation  
+the weights of softmax are not associated with positions 
+but the cell embeddings  In other words  the probability of
+choosing the ith row  jth column is
+
+ cid 
+  cid cid 
+
+exp
+
+MLP
+
+ cid 
+
+ cid 
+
+            
+
+  cij
+            
+
+ 
+
+  cid 
+
+  cid  exp
+
+MLP
+
+pij  
+
+ cid cid 
+
+  ci cid   cid 
+
+ cid cid 
+
+ cid 
+
+ cid 
+
+ 
+In this way  the neural executor is invariant with respect to
+the order of rows and columns  While ordersensitive architectures       convolutional recurrent neural networks 
+might also model   table by implicitly ignoring such order information  the current treatment is more reasonable 
+which also better aligns with symbolic interpretation 
+
+  Symbolic Executor
+
+The methodology of designing   symbolic executor is to
+de ne   set of primitive operators for the task  and then to
+use   machine learning model to predict the operator sequence and its arguments 
+Our symbolic executor is different from the neural programmer  Neelakantan et al    in that we keep
+discrete symbolic operators as well as execution results 
+whereas Neelakantan et al    fuse execution results
+by weighted average 
+
+  PRIMITIVE OPERATORS
+
+We design six operators for symbolic execution  which are
+complete as they cover all types of queries in our scenario 
+Similar to the distributed executor  the result of onestep
+symbolic execution is some information for   row  here 
+we use     boolean scalar  indicating whether   row is
+selected or not after   particular step of execution  Then
+  symbolic execution step takes previous results as input 
+with   column eld being the argument  The green boxes
+in Figure    illustrate the process and Table   summarizes
+our primitive operator set 
+In Table   for example 
+the  rst step of execution is
+argmax over the column Area  with previous  initial 
+row selection being all ones  This step yields   single
+
+Soft column selectionDistributed row annotationSelected columnCoupling Distributed and Symbolic Execution for Natural Language Queries
+
+Explanation
+Choose   row whose value of   particular column is mentioned in the query
+Choose the row from previously selected candidate rows with the minimum value in   particular column
+Choose the row from previously selected candidate rows with the maximum value in   particular column
+
+Operator
+select row
+argmin
+argmax
+greater than Choose rows whose value in   particular column is greater than   previously selected row
+less than
+select value Choose the value of   particular column and of the previously selected row
+EOE
+
+Choose rows whose value in   particular column is less than   previously selected row
+
+Terminate  indicating the end of execution
+
+Table   Primitive operators for symbolic execution 
+
+row  cid  Beijing         cid  The second execution operator is select value  with an argument column Duration  yielding the result   Then the executor terminates  EOE 
+Stacked with multiple steps of primitive operators  the executor can answer fairly complicated questions like  How
+long is the last game which has smaller country size than
+the game whose host country GDP is   In this example  the execution sequence is
+
+  select row  select the row where the column is
+
+GDP and the value is mentioned in the query 
+
+  less than  select rows whose country size is less
+
+than that of the previously selected row 
+
+  argmax  select the row whose year is the largest
+
+among previously selected rows 
+
+  select value  choose the value of the previously
+
+selected row with the column being Duration 
+
+Then the execution terminates  In our scenario  the execution is limited to four steps  EOE excluded  as such queries
+are already very complicated in terms of logical depth 
+
+  OPERATOR AND ARGUMENT PREDICTORS
+
+We also leverage neural models  in particular RNNs  to predict the operator and its argument    selected  eld column 
+Let      be the previous state   hidden vectors  The current hidden state is
+
+op   sigmoid    rec 
+    
+
+op     
+
+op
+
+ 
+
+ 
+
+op
+
+where    rec 
+is weight parameters     bias term is omitted
+in the equation for simplicity  The initial hidden state is
+the query embedding         
+The predicted probability of an operator   is given by
+
+op     
+
+ cid 
+
+ cid 
+
+    
+opi
+
+  softmax
+
+  out 
+opi
+
+ cid     
+op
+
+ 
+
+The operator with the largest predicted probability is selected for execution 
+Our RNN here does not have input  because the execution
+sequence is not dependent on the result of the previous execution step  Such architecture is known as   Jordantype
+RNN  Jordan    Mesnil et al   
+
+Likewise  another Jordantype RNN selects    eld  The
+only difference lies in the weight of the output softmax 
+     wi in Equation   is substituted with the embedding of
+   eld column name    given by
+
+ cid 
+ eld     
+ eld   sigmoid    rec 
+    
+ eld  
+  cid 
+    
+      
+ eld
+fj
+
+  softmax
+
+ cid 
+
+ 
+
+ 
+
+Training   symbolic executor without stepby step supervision signals is nontrivial    typical training method is
+reinforcement learning in   trialand error fashion  However  for   random initial policy  the probability of recovering an accurate execution sequence is extremely low 
+Given         table  for example  the probability is
+              the probability of obtaining an
+accurate denotation is   which is also very low  Therefore  symbolic executors are not ef cient in learning 
+
+    Uni ed View
+
+We now have two worlds of execution 
+
+  The distributed executor is endto end learnable  but
+it is of low execution ef ciency because of intensive
+matrix vector multiplication during neural information processing  The fully neuralized execution also
+lacks explicit interpretation 
+  The symbolic executor has high execution ef ciency
+and explicit interpretation  However  it cannot be
+trained in an endto end manner  and suffers from the
+cold start problem of reinforcement learning 
+
+We propose to combine the two worlds by using the distributed executor   intermediate execution results to pretrain the symbolic executor for an initial policy  we then
+use the REINFORCE algorithm to improve the policy  The
+welltrained symbolic executor   intermediate results can
+also be fed back to the distributed executor to improve performance 
+  DISTRIBUTED   SYMBOLIC
+We observe that the  eld attention in Equation   generally
+aligns with column selection in Equation   We therefore
+pretrain the column selector in the symbolic executor with
+labels predicted by   fully neuralized distributed executor 
+
+Coupling Distributed and Symbolic Execution for Natural Language Queries
+
+        cid 
+
+label cid 
+
+    
+
+Such pretraining can obtain up to   accurate  eld selection and largely reduce the search space during reinforcement learning 
+Formally  the operator predictor  Equation   and argument predictor  Equation   in each execution step are
+the actions  denoted as    in reinforcement learning terIf we would like to pretrain   actions
+minologies 
+        am      the cost function of   particular data
+sample is
+
+     
+ 
+
+log     
+ 
+
+ 
+
+  
+
+  
+
+where     
+label is the number of labels  possible candidates 
+for the jth action         Rn   
+label is the predicted probability by the operator argument predictors in Figure    
+        Rn   
+label is the induced action from the fully distributed
+model in Figure     In our scenario  we only pretrain column predictors 
+After obtaining   meaningful  albeit imperfect  initial policy  we apply REINFORCE  Williams    to improve
+the policy 
+We de ne   binary reward   indicating whether the  nal
+result of symbolic execution matches the groundtruth denotation  The loss function of   policy is the negative expected reward where actions are sampled from the current
+predicted probabilities
+
+     Ea     an           an 
+
+ 
+
+The partial derivative for   particular sampled action is
+
+        pi    ai 
+
+  
+ oi
+
+ 
+
+where pi is the predicted probability of all possible actions
+at the time step     ai is   onehot representation of   sampled action ai  and oi is the input  also known as logit  of
+softmax     is the adjusted reward  which will be described
+shortly 
+To help the training of REINFORCE  we have two tricks 
+  We balance exploration and exploitation with   small
+probability  
+In other words  we sample an action
+from the predicted action distribution with probability
+    and from   uniform distribution over all possible
+actions with probability   The small fraction of uniform sampling helps the model to escape from poor
+local optima  as it continues to explore the entire action space during training 
+  We adjust the reward by subtracting the mean reward 
+averaged over sampled actions for   certain data point 
+This is   common practice for REINFORCE  Ranzato
+et al    We also truncate negative rewards as
+
+zero to prevent gradient from being messed up by incorrect execution  This follows the idea of  rewardinaction  where unsuccessful trials are ignored  Section   in Sutton   Barto   The adjusted reward is denoted as    in Equation  
+
+Notice that these tricks are applied to both coupled training
+and baselines for fairness 
+  DISTRIBUTED   SYMBOLIC   DISTRIBUTED
+After policy improvement by REINFORCE  we could further feed back the symbolic executor   intermediate results
+to the distributed one  akin to the stepby step supervision
+setting in Yin et al      The loss is   combination of
+denotation cross entropy loss Jdenotation and  eld attention
+cross entropy loss   elds     elds is similar to Equation  
+and details are not repeated  The overall training objective
+is     Jdenotation      elds  where   is   hyperparameter
+balancing the two factors 
+As will be seen in Section   feeding back intermediate results improves the distributed executor   performance 
+This shows the distributed and symbolic worlds can indeed
+be coupled well 
+
+  Experiments
+  Dataset
+
+We evaluated our approach on   QA dataset
+in Yin
+et al      The dataset comprises    different tables and queries for training  validation and test sets contain    samples  respectively  and do not overlap with the
+training data  Each table is of size       but different samples have different tables  the queries can be divided into four types  SelectWhere  Superlative 
+WhereSuperlative  and NestQuery  requiring  
+execution steps  EOE excluded 
+We have both groundtruth denotation and execution actions
+ including operators and  elds  as the dataset is synthesized by complicated rules and templates for research purposes  However  only denotations are used as labels during
+training  which is   realistic setting  execution sequences
+are only used during testing  For the sake of simplicity  we
+presume the number of execution steps is known   priori
+during training  but not during testing  Although we have
+such  little  knowledge of execution  it is not   limitation of
+our approach and out of our current focus  One can easily
+design   dummy operator to  ll an unnecessary step or one
+can also train   discriminative sentence model to predict the
+number of execution steps if   small number of labels are
+available 
+We chose the synthetic datasets because it is magnitudes
+larger than existing resources       WEBQUESTIONS 
+
+Coupling Distributed and Symbolic Execution for Natural Language Queries
+
+Query type
+SelectWhere
+Superlative
+WhereSuperlative
+NestQuery
+Overall
+
+SEMPRE  Distributed 
+SEMPRE
+
+Denotation
+
+Symbolic Coupled Distributed
+
+Execution
+
+Symbolic Coupled
+
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+
+Table   Accuracies  in percentage  of the SEMPRE tookit  the distributed neural enquirer  the symbolic executor  and our coupled
+approach   Results reported in Yin et al     
+
+The process of data synthesizing also provides intermediate execution results for indepth analysis  Like BABI for
+machine comprehension  our dataset and setting are   prerequisite for general semantic parsing  The data are available at out project website  the code for data generation
+can also be downloaded to facilitate further development
+of the dataset 
+
+  Settings
+
+The symbolic executor   settings were generally derived
+from Yin et al      so that we can have   fair comparison  The dimensions of all layers were in the range of
+  the learning algorithm was AdaDelta with default
+hyperparameters 
+For the pretraining of the symbolic executor  we applied
+maximum likelihood estimation for   epochs to column
+selection with labels predicted by the distributed executor 
+We then used the REINFORCE algorithm to improve the
+policy  where we generated   action samples for each data
+point with the exploration probability   being  
+When feeding back to the distributed model  we chose  
+from       by validation to balance denotation error
+and  eld attention error    outperforms the rest 
+Besides neural networks  we also included the SEMPRE
+system as   baseline for comparison  The results are reported in Yin et al      where   SEMPRE version that
+is specially optimized for table query is adopted  Pasupat
+  Liang    Thus it is suited in our scenario 
+
+  Results
+
+  OVERALL PERFORMANCE
+
+Table   presents the experimental results of our coupled approach as well as baselines  Because reinforcement learning is much more noisy to train  we report the test accuracy
+
+ https sites google com site 
+
+coupleneuralsymbolic 
+
+ One exception is the query RNN   hidden states  Yin
+et al      used    BiRNN  but we found it more likely
+to over   in the symbolic setting  and hence we used     This
+results in slower training  more rugged error surfaces  but higher
+peak performance 
+
+corresponding to highest validation accuracy among three
+different random initializations  called trajectories  This
+is also known as   restart strategy for nonconvex optimization 
+As we see  both distributed and symbolic executors outperform the SEMPRE system  showing that neural networks can capture query information more effectively than
+humanengineered features  Further  the coupled approach
+also signi cantly outperforms both of them 
+If trained solely by REINFORCE  the symbolic executor can recover the execution sequences for simple questions  SelectWhere and Superlative  However 
+for more complicated queries  it only learns last one or two
+steps of execution and has trouble in recovering early steps 
+even with the tricks in Section   This results in low
+execution accuracy but near   denotation accuracy because  in our scenario  we still have half chance to obtain
+an accurate denotation even if the nested  early  execution
+is wrong the ultimate result is either in the candidate list
+or not  given   wrong whereclause execution 
+By contrast  the coupled training largely improves the symbolic executor   performance in terms of all query types 
+
+  INTERPRETABILITY
+
+The accuracy of execution is crucial to the interpretability
+of   model  We say an execution is accurate  if all actions
+ operators and arguments  are correct  As shown above  an
+accurate denotation does not necessarily imply an accurate
+execution 
+We  nd that coupled training recovers most correct execution sequences  that the symbolic executor alone cannot
+recover complicated cases  and that   fully distributed enquirer does not have explicit interpretations of execution 
+The results demonstrate high interpretability of our approach  which is helpful for human understanding of execution processes 
+
+  LEARNING EFFICIENCY
+
+We plot in Figure   the validation learning curves of the
+symbolic executor  trained by either reinforcement learning
+
+Coupling Distributed and Symbolic Execution for Natural Language Queries
+
+Fully
+
+Our approach
+
+Distributed Op Arg Pred  Symbolic Exe  Total
+ 
+ 
+
+ 
+ 
+
+ 
+ 
+
+ 
+
+CPU
+GPU
+
+Figure   Validation learning curves 
+    Symbolic executor
+trained by REINFORCE  RL  only      Symbolic executor with
+ epoch pretraining using   distributed executor in   supervised
+learning  SL  fashion  Both settings have three trajectories with
+different random initializations  Dotted lines  Denotation accuracy  Solid lines  Execution accuracy 
+
+alone or our coupled approach 
+Figure    shows that the symbolic executor is hard to train
+by REINFORCE alone  one trajectory obtains nearzero
+execution accuracy after   epochs  the other two take
+  epochs to get started to escape from initial plateaus 
+Even if they achieve   execution accuracy  for simple
+query types  and   denotation accuracy  they are stuck
+in the poor local optima 
+Figure    presents the learning curves of the symbolic executor pretrained with intermediate  eld attention of the
+distributed executor  Since the operation predictors are still
+hanging after pretraining  the denotation accuracy is near
+  before reinforcement learning  However  after only  
+few epochs of REINFORCE training  the performance increases sharply and achieves high accuracy gradually 
+Notice that we have   epochs of  imperfectly  supervised
+pretraining  However  its time is negligible compared with
+reinforcement learning because in our experiments REINFORCE generates   samples and hence is theoretically  
+times slower  The results show that our coupled approach
+has much higher learning ef ciency than   pure symbolic
+executor 
+
+  EXECUTION EFFICIENCY
+
+Table   compares the execution ef ciency of   distributed
+executor and our coupled approach  All neural networks
+are implemented in Theano with   TITAN Black GPU and
+Xeon       core  CPU  symbolic execution is assessed in    implementation  The comparison makes
+sense because the Theano platform is not specialized in
+symbolic execution  and fortunately  execution results do
+not affect actions in our experiment  Hence they can be
+easily disentangled 
+As shown in the table  the execution ef ciency of our approach is   times higher than the distributed executor 
+depending on the implementation  The distributed executor is when predicting because it maps every token to  
+
+Table   Execution ef ciency  We present the running time  in
+seconds  of the test set  containing    samples   The symbolic
+execution is assessed in    implementation  Others are implemented in Theano  including the fully distributed model as well
+as the operator and argument predictors 
+
+Training Method
+Endto end     denotation labels 
+Stepby step     execution labels 
+Feeding back
+
+Accuracy  
+ 
+ 
+ 
+
+Table   The accuracy of   fully distributed model  trained by different methods  In the last row  we  rst train   distributed executor
+and feed its intermediate execution results to the symbolic one 
+then the symbolic executor   intermediate results are fed back to
+the distributed one   Reported in Yin et al     
+
+distributed realvalued vector  resulting in intensive matrixvector operations  The symbolic executor only needs   neural network to predict actions  operators and arguments 
+and thus is more lightweight  Further  we observe the execution itself is blazingly fast  implying that  compared with
+distributed models  our approach could achieve even more
+ef ciency boost with   larger table or more complicated
+operation 
+
+  FEEDING BACK
+
+We now feed back the welltrained symbolic executor   intermediate results to the fully distributed one  As our welltrained symbolic executor has achieved high execution accuracy  this setting is analogous to strong supervision with
+stepby step groundtruth signals  and thus it also achieves
+similar performance  shown in Table  
+We showcase the distributed executor    eld attention  in
+Figure  
+If trained in an endto end fashion  the neural
+network exhibits interpretation in the last three steps of this
+example  but in the early step  the  eld attention is incorrect
+ also more uncertain as it scatters   broader range  After feeding back the symbolic executor   intermediate results as stepby step supervision  the distributed executor
+exhibits nearperfect  eld attention 
+This experiment further con rms that the distributed and
+
+ We even have   performance boost compared with the
+stepby step setting  but we think it should be better explained as
+variance of execution 
+
+ The last neural executor is   softmax layer over all cells  We
+
+marginalize over rows to obtain the  eld probability 
+
+Coupling Distributed and Symbolic Execution for Natural Language Queries
+
+Query  How many people watched the earliest game whose host country GDP is larger than the game in Cape Town 
+
+Figure   Distributed executor   intermediate results of  eld attention  Top  Trained in an endto end fashion       Bottom  Oneround
+cotraining of distributed and symbolic executors       The red plot indicates incorrect  eld attention 
+
+symbolic worlds can indeed be coupled well  In more complicated applications  there could also be possibilities in iteratively training one model by leveraging the other in  
+cotraining fashion 
+
+  Related Work and Discussions
+Neural execution has recently aroused much interest in
+the deep learning community  Besides SQLlike execution as has been extensively discussed in previous sections  neural Turing machines  Graves et al    and
+neural programmerinterpreters  Reed   De Freitas   
+are aimed at more general  programs  The former is  
+ distributed analog  to Turing machines with soft operators
+      read  write  and address  its semantics  however  cannot be grounded to actual operations  The latter
+learns to generate an execution trace in   fully supervised 
+stepby step manner 
+Another related topic is incorporating neural networks with
+external  hard  mechanisms  Hu et al    propose to
+better train   neural network by leveraging the classi cation distribution induced from   rulebased system  Lei
+et al    propose to induce   sparse code by REINFORCE to make neural networks focus on relevant information  In machine translation  Mi et al    use alignment heuristics to train the attention signal of neural networks in   supervised manner  In these studies  researchers
+typically leverage external hard mechanisms to improve
+neural networks  performance 
+The uniqueness of our work is to train   fully neuralized distributed model  rst  which takes advantage of its
+differentiability  and then to guide   symbolic model to
+achieve   meaningful initial policy  Further trained by reinforcement learning  the symbolic model   knowledge can
+
+improve neural networks  performance by feeding back
+stepby step supervision  Our work sheds light on neural sequence prediction in general  for example  exploring word alignment  Mi et al    or chunking information  Zhou et al    in machine translation by coupling
+neural and external mechanisms 
+
+  Conclusion and Future Work
+In this paper  we have proposed   coupled view of
+distributed and symbolic execution for natural language
+queries  By pretraining with intermediate execution results of   distributed executor  we manage to accelerate
+the symbolic model   REINFORCE training to   large extent  The welltrained symbolic executor could also guide
+  distributed executor to achieve better performance  Our
+proposed approach takes advantage of both distributed and
+symbolic worlds  achieving high interpretability  high execution ef ciency  high learning ef ciency  as well as high
+accuracy 
+As   pilot study  our paper raises several key open questions  When do neural networks exhibit symbolic interpretations  How can we better transfer knowledge between
+distributed and symbolic worlds 
+In future work  we would like to design interpretable operators in the distributed model to better couple the two
+worlds and to further ease the training with REINFORCE 
+We would also like to explore different ways of transferring
+knowledge       distilling knowledge from the action distributions  rather than using the max   posteriori action 
+or sampling actions by following the distributed model  
+predicted distribution during symbolic one   Monte Carlo
+policy gradient training  REINFORCE 
+
+Coupling Distributed and Symbolic Execution for Natural Language Queries
+
+Pasupat  Panupong and Liang  Percy  Compositional seIn ACL 
+
+mantic parsing on semistructured tables 
+IJCNLP  pp     
+
+Ranzato  MarcAurelio  Chopra  Sumit  Auli  Michael  and
+Zaremba  Wojciech  Sequence level training with recurrent neural networks  In ICLR   
+
+Reed  Scott and De Freitas  Nando  Neural programmer 
+
+interpreters  In ICLR   
+
+Sutton  Richard   and Barto  Andrew    Reinforcement
+Learning  An Introduction  MIT Press Cambridge   
+
+Wen  TsungHsien  Vandyke  David  Mrk si    Nikola  Gasic  Milica  Rojas Barahona  Lina    Su  PeiHao 
+Ultes  Stefan  and Young  Steve    networkbased endto end trainable taskoriented dialogue system  In EACL 
+pp     
+
+Williams  Ronald    Simple statistical gradientfollowing
+learning 
+
+algorithms for connectionist reinforcement
+Machine Learning     
+
+Xiao  Chunyang  Dymetman  Marc  and Gardent  Claire 
+Sequencebased structured prediction for semantic parsing  In ACL  pp     
+
+Yin  Jun  Jiang  Xin  Lu  Zhengdong  Shang  Lifeng  Li 
+Hang  and Li  Xiaoming  Neural generative question answering  In IJCAI  pp       
+
+Yin  Pengcheng  Lu  Zhengdong  Li  Hang  and Kao  Ben 
+Neural enquirer  Learning to query tables with natural
+language  In IJCAI  pp       
+
+Zhou  Hao  Tu  Zhaopeng  Huang  Shujian  Liu  Xiaohua 
+Li  Hang  and Chen  Jiajun  Chunkbased biscale decoder for neural machine translation  In ACL   
+
+Acknowledgments
+We thank Pengcheng Yin and Jiatao Gu for helpful discussions  we also thank the reviewers for insightful comments  This research is partially supported by the National
+Basic Research Program of China  the   Program  under
+Grant Nos   CB  and  CB  and the
+National Natural Science Foundation of China under Grant
+Nos      and  
+
+References
+Berant  Jonathan  Chou  Andrew  Frostig  Roy  and Liang 
+Percy  Semantic parsing on Freebase from questionanswer pairs  In EMNLP  pp     
+
+Dong  Li and Lapata  Mirella  Language to logical form
+
+with neural attention  In ACL  pp     
+
+Graves  Alex  Wayne  Greg  and Danihelka  Ivo  Neural
+Turing machines  arXiv preprint arXiv   
+
+Hu  Zhiting  Ma  Xuezhe  Liu  Zhengzhong  Hovy  Eduard 
+and Xing  Eric  Harnessing deep neural networks with
+logic rules  In ACL  pp     
+
+Jordan  Michael    Serial order    parallel distributed processing approach  Advances in Psychology   
+   
+
+Lei  Tao  Barzilay  Regina  and Jaakkola  Tommi  RatioIn EMNLP  pp   
+
+nalizing neural predictions 
+ 
+
+Liang  Chen  Berant  Jonathan  Le  Quoc  Forbus  Kenneth    and Lao  Ni  Neural symbolic machines  Learning semantic parsers on Freebase with weak supervision 
+In ACL  to appear   
+
+Mesnil  Gr egoire  He  Xiaodong  Deng  Li  and Bengio 
+Yoshua  Investigation of recurrentneural network architectures and learning methods for spoken language understanding  In INTERSPEECH  pp     
+
+Mi  Haitao  Sankaran  Baskaran  Wang  Zhiguo  and Ittycheriah  Abe  Coverage embedding models for neural
+machine translation  In EMNLP  pp     
+
+Mikolov  Tomas  Sutskever  Ilya  Chen  Kai  Corrado 
+Greg    and Dean  Jeff  Distributed representations of
+words and phrases and their compositionality  In NIPS 
+pp     
+
+Neelakantan  Arvind  Le  Quoc    and Sutskever  Ilya 
+Neural programmer  Inducing latent programs with gradient descent  In ICLR   
+
+

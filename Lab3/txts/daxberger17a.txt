@@ -1,0 +1,1049 @@
+Distributed Batch Gaussian Process Optimization
+
+Erik    Daxberger   Bryan Kian Hsiang Low  
+
+Abstract
+
+This paper presents   novel distributed batch
+Gaussian process upper
+con dence bound
+ DBGP UCB  algorithm for performing batch
+Bayesian optimization  BO  of highly complex 
+costlyto evaluate blackbox objective functions 
+In contrast to existing batch BO algorithms  DBGP UCB can jointly optimize   batch of inputs
+ as opposed to selecting the inputs of   batch
+one at   time  while still preserving scalability
+in the batch size  To realize this  we generalize
+GPUCB to   new batch variant amenable to  
+Markov approximation  which can then be naturally formulated as   multiagent distributed constraint optimization problem in order to fully exploit the ef ciency of its stateof theart solvers
+for achieving linear time in the batch size  Our
+DBGP UCB algorithm offers practitioners the
+ exibility to trade off between the approximation quality and time ef ciency by varying the
+Markov order  We provide   theoretical guarantee for the convergence rate of DBGP UCB
+via bounds on its cumulative regret  Empirical evaluation on synthetic benchmark objective
+functions and   realworld optimization problem
+shows that DBGP UCB outperforms the stateof theart batch BO algorithms 
+
+  Introduction
+Bayesian optimization  BO  has recently gained considerable traction due to its capability of  nding the global maximum of   highly complex       nonconvex  no closedform expression nor derivative  noisy blackbox objective
+
+ LudwigMaximilians Universit at  Munich  Germany    substantial part of this research was performed during his student exchange program at the National University of Singapore under
+the supervision of Bryan Kian Hsiang Low and culminated in his
+ Department of Computer Science  National
+Bachelor   thesis 
+University of Singapore  Republic of Singapore  Correspondence
+to  Bryan Kian Hsiang Low  lowkh comp nus edu sg 
+
+Proceedings of the   th International Conference on Machine
+Learning  Sydney  Australia  PMLR     Copyright  
+by the author   
+
+function with   limited budget of  often costly  function
+evaluations  consequently witnessing its use in an increasing diversity of application domains such as robotics  environmental sensing monitoring  automatic machine learning  among others  Brochu et al    Shahriari et al 
+    number of acquisition functions       probability of improvement or expected improvement  EI  over the
+currently found maximum  Brochu et al    entropybased  Villemonteix et al    Hennig   Schuler   
+Hern andezLobato et al    and upper con dence
+bound  UCB   Srinivas et al    have been devised
+to perform BO  They repeatedly select an input for evaluating querying the blackbox function       until the budget is depleted  that intuitively trades off between sampling
+where the maximum is likely to be given the current  possibly imprecise belief of the function modeled by   Gaussian process  GP        exploitation  vs  improving the GP
+belief of the function over the entire input domain       exploration  to guarantee  nding the global maximum 
+The rapidly growing affordability and availability of hardware resources       computer clusters  sensor networks 
+robot teams swarms  have motivated the recent development of BO algorithms that can repeatedly select   batch
+of inputs for querying the blackbox function in parallel instead  Such batch parallel BO algorithms can be classi ed
+into two types  On one extreme  batch BO algorithms like
+multipoints EI  qEI   Chevalier   Ginsbourger   
+parallel predictive entropy search  PPES   Shah   Ghahramani    and the parallel knowledge gradient method
+ qKG   Wu   Frazier    jointly optimize the batch of
+inputs and hence scale poorly in the batch size  On the
+other extreme  greedy batch BO algorithms  Azimi et al 
+  Contal et al    Desautels et al    Gonz alez
+et al    boost the scalability by selecting the inputs of
+the batch one at   time  We argue that such   highly suboptimal approach to gain scalability is an overkill  In practice  each function evaluation is often much more computationally and or economically costly       hyperparameter
+tuning for deep learning  drug testing on human subjects 
+which justi es dedicating more time to obtain better BO
+performance  In this paper  we show that it is in fact possible to jointly optimize the batch of inputs and still preserve
+scalability in the batch size by giving practitioners the  exibility to trade off BO performance for time ef ciency 
+
+Distributed Batch Gaussian Process Optimization
+
+To achieve this  we  rst observe that  interestingly  batch
+BO can be perceived as   cooperative multiagent decision
+making problem whereby each agent optimizes   separate
+input of the batch while coordinating with the other agents
+doing likewise  To the best of our knowledge  this has not
+been considered in the BO literature  In particular  if batch
+BO can be framed as some known class of multiagent decision making problems  then it can be solved ef ciently
+and scalably by the latter   stateof theart solvers  The key
+technical challenge would therefore be to investigate how
+batch BO can be cast as one of such to exploit its advantage of scalability in the number of agents  hence  batch
+size  while at the same time theoretically guaranteeing the
+resulting BO performance 
+To tackle the above challenge  this paper presents   novel
+distributed batch BO algorithm  Section   that  in contrast to greedy batch BO algorithms  Azimi et al   
+Contal et al    Desautels et al    Gonz alez et al 
+  can jointly optimize   batch of inputs and  unlike
+the batch BO algorithms  Chevalier   Ginsbourger   
+Shah   Ghahramani    Wu   Frazier    still preserve scalability in the batch size  To realize this  we generalize GPUCB  Srinivas et al    to   new batch variant
+amenable to   Markov approximation  which can then be
+naturally formulated as   multiagent distributed constraint
+optimization problem  DCOP  in order to fully exploit the
+ef ciency of its stateof theart solvers for achieving linear
+time in the batch size  Our proposed distributed batch GPUCB  DBGP UCB  algorithm offers practitioners the  exibility to trade off between the approximation quality and
+time ef ciency by varying the Markov order  We provide  
+theoretical guarantee for the convergence rate of our DBGP UCB algorithm via bounds on its cumulative regret 
+We empirically evaluate the cumulative regret incurred by
+our DBGP UCB algorithm and its scalability in the batch
+size on synthetic benchmark objective functions and   realworld optimization problem  Section  
+
+  Problem Statement  Background  and
+
+Notations
+
+Consider the problem of sequentially optimizing an unknown objective function           where     Rd
+denotes   domain of ddimensional input feature vectors 
+We consider the domain to be discrete as it is known how
+to generalize results to   continuous  compact domain via
+suitable discretizations  Srinivas et al    In each iteration                     batch Dt     of inputs is selected for evaluating querying   to yield   corresponding
+of noisy observed outputs
+column vector yDt
+yx  cid            with        Gaussian noise          
+   and
+noise variance  
+  
+
+ cid   yx cid   Dt
+
+  
+
+  Dt
+
+Regret  Supposing our goal is to get close to the global
+maximum       as rapidly as possible where     cid 
+arg maxx         this can be achieved by minimizing  
+standard batch BO objective such as the batch or full cumulative regret  Contal et al    Desautels et al   
+The notion of regret intuitively refers to   loss in reward
+from not knowing    beforehand  Formally  the instantaneous regret incurred by selecting   single input   to evaluate its corresponding   is de ned as rx  cid               
+Assuming    xed cost of evaluating   for every possible batch Dt of the same size  the batch and full cumulative regrets are  respectively  de ned as sums  over itRT  cid   cid  
+eration                   of the smallest instantaneous regret incurred by any input within every batch Dt      
+ cid  
+ cid 
+   minx Dt rx  and of the instantaneous re 
+ cid 
+grets incurred by all inputs of every batch Dt         cid  
+rx  The convergence rate of   batch BO algorithm can then be assessed based on some upper bound
+on the average regret RT    or   cid       Section   since the
+currently found maximum after   iterations is no further
+away from       than RT    or   cid        It is desirable for
+  batch BO algorithm to asymptotically achieve no regret 
+     limT  RT        or limT    cid          implying
+that it will eventually converge to the global maximum 
+Gaussian Processes  GPs  To guarantee no regret  Section   the unknown objective function   is modeled as  
+sample of   GP  Let           denote   GP  that is  every
+ nite subset of           follows   multivariate Gaussian distribution  Rasmussen   Williams    Then 
+the GP is fully speci ed by its prior mean mx  cid         
+and covariance kxx cid   cid  cov            cid  for all      cid      
+which  for notational simplicity  and          are assumed
+to be zero       mx     and bounded       kxx cid      re 
+ cid   yx cid       
+spectively  Given   column vector yD   
+of noisy observed outputs for some set       cid      
+        Dt  of inputs after       iterations    GP model can
+perform probabilistic regression by providing   predictive
+distribution   fDt yD           Dt   DtDt  of the latent
+ cid        cid   Dt
+outputs fDt
+for any set Dt     of inputs
+selected in iteration   with the following posterior mean
+vector and covariance matrix 
+
+nI KD   Dt
+ 
+
+ cid KDtD   KD       
+nI yD   
+ cid KDtDt KDtD   KD       
+
+ Dt
+ DtDt
+where KBB cid   cid   kxx cid       cid   cid  for all     cid      
+GPUCB and its Greedy Batch Variants  Inspired by the
+UCB algorithm for the multiarmed bandit problem  the
+GPUCB algorithm  Srinivas et al    selects  in each
+iteration  an input       for evaluating querying   that
+trades off between sampling close to an expected maximum
+      with large posterior mean    
+  given the current GP
+belief of         exploitation  vs  that of high predictive un 
+
+Distributed Batch Gaussian Process Optimization
+
+   
+
+certainty       with large posterior variance      
+  to improve the GP belief of   over         exploration  that is 
+where the parameter       
+maxx          
+     
+is set to trade off between exploitation vs  exploration for
+bounding its cumulative regret 
+Existing generalizations of GPUCB such as GP batch
+UCB  GPBUCB   Desautels et al    and GPUCB
+with pure exploration  GPUCB PE   Contal et al   
+are greedy batch BO algorithms that select the inputs of the
+batch one at   time  Section   Speci cally  to avoid selecting the same input multiple times within   batch  hence
+reducing to GPUCB  they update the posterior variance
+ but not the posterior mean  after adding each input to
+the batch  which can be performed prior to evaluating its
+corresponding   since the posterior variance is independent of the observed outputs   They differ in that GPBUCB greedily adds each input to the batch using GPUCB
+ without updating the posterior mean  while GPUCB PE
+selects the  rst input using GPUCB and each remaining
+input of the batch by maximizing only the posterior variance       pure exploration  Similarly    recently proposed
+UCBDPP SAMPLE algorithm  Kathuria et al    selects the  rst input using GPUCB and the remaining inputs
+by sampling from   determinantal point process  DPP 
+Like GPBUCB  GPUCB PE  and UCBDPP SAMPLE 
+we can theoretically guarantee the convergence rate of our
+DBGP UCB algorithm  which  from   theoretical point
+of view  signi es an advantage of GPUCB based batch
+BO algorithms over those       qEI and PPES  inspired
+by other acquisition functions such as EI and PES  Unlike
+these greedy batch BO algorithms  Contal et al    Desautels et al    our DBGP UCB algorithm can jointly
+optimize the batch of inputs while still preserving scalability in batch size by casting as   DCOP to be described next 
+Distributed Constraint Optimization Problem  DCOP 
+  DCOP can be de ned as   tuple               that
+comprises   set   of input random vectors    set   of
+    corresponding  nite domains         separate domain
+for each random vector    set   of agents    function
+          assigning each input random vector to an agent
+responsible for optimizing it  and   set    cid   wn    
+of nonnegative payoff functions such that each function
+wn de nes   constraint over only   subset Xn     of input random vectors and represents the joint payoff that the
+corresponding agents An  cid           Xn      achieve 
+ cid  
+Solving   DCOP involves  nding the input values of   that
+maximize the sum of all functions            wn       social
+   wn Xn  To
+welfare maximization  that is  maxX
+achieve   truly decentralized solution  each agent can only
+optimize its local input random vector    based on the assignment function   but communicate with its neighboring agents  Two agents are considered neighbors if there
+is   function constraint involving input random vectors that
+
+the agents have been assigned to optimize  Complete and
+approximation algorithms exist for solving   DCOP  see
+ Chapman et al    Leite et al    for reviews of
+such algorithms 
+
+  Distributed Batch GPUCB  DBGP UCB 
+  straightforward generalization of GPUCB  Srinivas
+et al    to jointly optimize   batch of inputs is to simply consider summing the GPUCB acquisition function
+over all inputs of the batch  This  however  results in selecting the same input  Dt  times within   batch  hence reducing to GPUCB  as explained earlier in Section   To resolve this issue but not suffer from the suboptimal behavior
+of greedy batch BO algorithms such as GPBUCB  Desautels et al    and GPUCB PE  Contal et al    we
+propose   batch variant of GPUCB that jointly optimizes  
+batch of inputs in each iteration                 according to
+
+maxDt    cid Dt    
+
+ 
+
+  fD  yDt yD   
+
+ 
+
+ cid        cid    
+
+  Dt
+
+posterior means  cid Dt    cid 
+
+where the parameter        which performs   similar role
+to that of    in GPUCB  is set to trade off between exploitation vs  exploration for bounding its cumulative regret  Theorem   and the conditional mutual information 
+  fD  yDt yD    can be interpreted as the information gain
+  by seon   over         equivalent to fD
+lecting the batch Dt of inputs for evaluating querying  
+given the noisy observed outputs yD    from the previous       iterations  So  in each iteration    our proposed
+batch GPUCB algorithm   selects   batch Dt     of inputs for evaluating querying   that trades off between sampling close to expected maxima       with   large sum of
+  given the cur 
+   
+rent GP belief of         exploitation  vs 
+that yielding
+  large information gain   fD  yDt yD      on   over  
+to improve its GP belief       exploration  It can be derived that   fD  yDt yD        log     
+   DtDt   Appendix    which implies that the exploration term in  
+can be maximized by spreading the batch Dt of inputs far
+apart to achieve large posterior variance individually and
+small magnitude of posterior covariance between them to
+encourage diversity 
+Unfortunately  our proposed batch variant of GPUCB  
+involves evaluating prohibitively many batches of inputs
+      exponential in the batch size  hence scaling poorly in
+the batch size  However  we will show in this section that
+our batch variant of GPUCB is  interestingly  amenable to
+  Markov approximation  which can then be naturally formulated as   multiagent DCOP in order to fully exploit the
+
+ In contrast to the BO algorithm of Contal et al    that
+also uses mutual information  our work here considers batch BO
+by exploiting the correlation information between inputs of  
+batch in our acquisition function in   to encourage diversity 
+
+Distributed Batch Gaussian Process Optimization
+
+ cid       
+
+ef ciency of its stateof theart solvers for achieving linear
+time in the batch size 
+Markov Approximation  The key idea is to design the
+structure of   matrix  DtDt whose logdeterminant can
+closely approximate that of  DtDt
+   DtDt residing in the   fD  yDt yD    term in   and at the same
+time be decomposed into   sum of logdeterminant terms 
+each of which is de ned by submatrices of  DtDt that all
+depend on only   subset of the batch  Such   decomposition
+enables our resulting approximation of   to be formulated
+as   DCOP  Section  
+At  rst glance  our proposed idea may be naively implemented by constructing   sparse blockdiagonal matrix
+ DtDt using  say  the       diagonal blocks of  DtDt 
+Then  log  DtDt  can be decomposed into   sum of logdeterminants of its diagonal blocks  each of which depends on only   disjoint subset of the batch  This  however 
+entails an issue similar to that discussed at the beginning of
+this section of selecting the same  Dt   inputs   times
+within   batch due to the assumption of independence of
+outputs between different diagonal blocks of  DtDt  To
+address this issue  we signi cantly relax this assumption
+and show that it is in fact possible to construct   more
+re ned  dense matrix approximation  DtDt by exploiting
+  Markov assumption  which consequently correlates the
+outputs between all its constituent blocks and is  perhaps
+surprisingly  still amenable to the decomposition to achieve
+scalability in the batch size 
+Speci cally  evenly partition the batch Dt of inputs into
+             Dt  disjoint subsets Dt         DtN and
+ cid 
+ DtDt  DtDt  into       square blocks        DtDt
+ cid   DtnDtn cid       cid    
+ DtnDtn cid       cid    DtDt
+Our  rst result below derives   decomposition of the logdeterminant of any symmetric positive de nite block matrix  DtDt
+into   sum of logdeterminant terms  each
+of which is de ned by   separate diagonal block of the
+Cholesky factor of  
+Proposition   Consider the Cholesky factorization of
+ cid    cid   where
+  symmetric positive de nite  
+Cholesky factor    cid   Unn cid     cid         partitioned
+ cid  
+into       square blocks  is an upper triangular block
+matrix       Unn cid      for       cid  Then  log  DtDt   
+   log    cid nnUnn 
+
+DtDt
+
+DtDt
+
+ 
+
+Its proof  Appendix    utilizes properties of the determinant and that the determinant of an upper triangular block
+matrix is   product of determinants of its diagonal blocks
+    Unn  Proposition   reveals   subtle
+possibility of imposing some structure on the inverse of
+
+             cid  
+
+ The determinant of   blockdiagonal matrix is   product of
+
+determinants of its diagonal blocks 
+
+ DtDt such that each diagonal block Unn of its Cholesky
+factor  and hence each log    cid nnUnn  term  will depend on only   subset of the batch  The following result
+presents one such possibility 
+Proposition   Let                  be given  If  
+DtDt
+is Bblock banded  then
+
+tn
+
+ 
+tnDB
+DB
+
+ DB
+
+ cid cid 
+  cid    Dtn cid   DtnDB
+ cid   Dtn cid Dtn cid cid     cid   cid cid    and  DB
+
+   cid nnUnn     DtnDtn    DtnDB
+tnDtn 
+for                 where    cid  min           
+ cid   DtnDtn cid     cid   
+DB
+ cid 
+ DB
+tnDB
+ cid 
+DtnDB
+
+tnDtn
+
+tn
+
+tn
+
+tn
+
+tn
+
+tn
+
+ 
+
+tn  cid 
+
+Its proof follows directly from   blockbanded matrix result
+of  Asif   Moura          Theorem   Proposition  
+indicates that if  
+is Bblock banded  Fig      then
+each log    cid nnUnn  term depends on only the subset
+Dtn   DB
+Our next result de nes   structure of  DtDt in terms of
+the blocks within the Bblock band of  DtDt to induce  
+Bblock banded inverse of  DtDt 
+Proposition   Let
+
+DtDt
+  cid   Dtn cid  of the batch Dt  Fig     
+
+   DtnDtn cid 
+
+tn
+
+ DtnDtn cid cid 
+
+ DtnDB
+ DtnDB
+
+if       
+if        
+tnDtn cid 
+tn cid Dtn cid  if       
+where    cid      cid  for      cid                 see Fig      Then 
+ 
+DtDt
+
+ 
+tnDB
+DB
+tn cid   
+DB
+tn cid DB
+
+is Bblock banded  see Fig     
+
+ DB
+tn cid   DB
+
+ 
+
+tn
+
+DtDt
+
+Its proof follows directly from   blockbanded matrix result
+of  Asif   Moura          Theorem   It can be observed from   and Fig    that     though  
+is   sparse
+Bblock banded matrix   DtDt is   dense matrix approximation for                         when          
+or        DtDt    DtDt  and     the blocks within
+the Bblock band of  DtDt              cid       coincide with that of  DtDt while each block outside the Bblock band of  DtDt              cid       is fully speci 
+ ed by the blocks within the Bblock band of  DtDt      
+       cid       due to its recursive series of        cid     
+reducedrank approximations  Fig      Note  however  that
+the log    cid nnUnn  terms   for                 depend
+on only the blocks within  and not outside  the Bblock
+band of  DtDt  Fig     
+Remark   Proposition   provides an attractive principled
+interpretation  Let     cid   
+   yx       denote   scaled
+   block matrix    cid   Pnn cid       cid         partitioned into
+      square blocks  is Bblock banded if any block Pnn cid  outside its Bblock band              cid       is  
+
+Distributed Batch Gaussian Process Optimization
+
+     DtDt
+
+     
+
+DtDt
+
+        cholesky 
+
+DtDt 
+
+ DtDt  and   with       and           Shaded blocks             cid       form the Bblock band while unshaded
+Figure    DtDt   
+blocks              cid       fall outside the band  Each arrow denotes   recursive call      Unshaded blocks outside the Bblock band
+ DtDt              cid       are   which result in the     unshaded blocks of its Cholesky factor   being               cid      or
+of  
+  cid           Using   and            and    depend on only the shaded blocks of  DtDt enclosed in red  green  blue  and
+purple  respectively 
+
+residual incurred by the GP predictive mean   Its covariance is then cov       cid         cid 
+  In the same spirit as
+  Gaussian Markov random process  imposing   Bth order Markov property on the residual process      Dt is
+equivalent to approximating  DtDt with  DtDt   whose
+inverse is Bblock banded  In other words  if      cid      
+then      Dtn and      Dtn cid  are conditionally independent given      Dt Dtn Dtn cid    This conditional independence assumption therefore becomes more relaxed with
+  larger batch Dt  Proposition   demonstrates the importance of such   Bth order Markov assumption  or  equivalently  the sparsity of Bblock banded  
+  to achieving
+scalability in the batch size 
+Remark   Regarding the approximation quality of  DtDt
+  the following result  see Appendix   for its proof 
+shows that the KullbackLeibler  KL  distance of  DtDt
+from  DtDt measures an intuitive notion of the approximation error of  DtDt being the difference in information
+gain when relying on our Markov approximation  which
+can be bounded by some quantity    
+Proposition   Let
+
+the KL distance DKL cid   cid 
+ tr cid    log  cid     Dt  between two symmetric positive de nite  Dt     Dt  matrices   and  cid 
+measure the error of approximating   with  cid  Also  let
+   fD  yDt yD     cid    log  DtDt  denote the approximated information gain  and            yDt yD      for
+all       and        Then  for all       
+
+DtDt
+
+DKL DtDt   DtDt 
+     fD  yDt yD          fD  yDt yD     
+   exp          fD  yDt yD     cid      
+
+exact
+
+is never smaller
+information gain   fD  yDt yD   
+
+Proposition   implies
+that
+the approximated information gain    fD  yDt yD   
+than
+the
+since
+DKL DtDt   DtDt      with equality when       in
+which case  DtDt    DtDt   Thus  intuitively  our proposed Markov approximation hallucinates information into
+ DtDt to yield an optimistic estimate of the information
+gain  by selecting   particular batch  ultimately making
+our resulting algorithm overcon dent in selecting   batch 
+This overcon dence is informationtheoretically quanti ed
+by the approximation error DKL DtDt   DtDt       
+Remark   The KL distance DKL DtDt   DtDt  of  DtDt
+from  DtDt is also the least among all  Dt Dt  matrices
+with   Bblock banded inverse  as proven in Appendix   
+DCOP Formulation  By exploiting the approximated information gain    fD  yDt yD     Proposition   Proposition     and   our batch variant of GPUCB   can
+be reformulated in an approximate sense  to   distributed
+batch GPUCB  DBGP UCB  algorithm  that jointly optimizes   batch of inputs in each iteration                
+according to
+
+wn Dtn   DB
+tn 
+
+Dt  cid  arg max
+Dt  
+tn   cid   cid Dtn   log  DtnDtn DB
+ DB
+
+wn Dtn   DB
+ Note that our acquisition function   uses cid  
+with  DtnDtn DB
+instead of  cid  
+
+tn 
+ 
+tnDtn 
+ 
+DB
+tnDB
+  log  
+
+   log       to enable the decomposition 
+
+ cid   DtnDtn DtnDB
+
+tn
+
+  cid 
+
+  
+
+tn
+
+tn
+
+ Pseudocode for DBGP UCB is provided in Appendix   
+
+ Dt Dt  Dt Dt  Dt Dt  Dt Dt  Dt Dt Dt Dt Dt Dt Dt Dt Dt Dt  Dt Dt  Dt Dt  Dt Dt  Dt Dt  Dt Dt  Dt Dt  Dt Dt              Dt Dt  Dt Dt  Dt Dt  Dt Dt Dt Dt Dt Dt Dt Dt Dt Dt             Dt Dt Dt Dt Dt Dt Dt Dt                           Distributed Batch Gaussian Process Optimization
+
+tn    cid 
+
+Note that   is equivalent to our batch variant of GPUCB
+  when      
+It can also be observed that   is
+naturally formulated as   multiagent DCOP  Section  
+whereby every agent an     is responsible for optimizing   disjoint subset Dtn of the batch Dt for                
+and each function wn de nes   constraint over only the
+subset Dtn   DB
+  cid   Dtn cid  of the batch Dt and
+represents the joint payoff that the corresponding agents
+An  cid   an cid 
+  cid       achieve  As   result    can be ef 
+ciently and scalably solved by the stateof theart DCOP algorithms  Chapman et al    Leite et al    For example  the time complexity of an iterative messagepassing
+algorithm called maxsum  Farinelli et al    scales exponentially in only the largest arity maxn     Dtn  
+tn       Dt   of the functions            wN   Given
+DB
+  limited time budget    practitioner can set   maximum
+arity of   for any function wn  after which the number
+  of functions is adjusted to  cid      Dt cid  so that
+the time incurred by maxsum to solve the DCOP in  
+is       Dt  per iteration       linear in the batch
+size  Dt  by assuming   and the Markov order   to be constants  In contrast  our batch variant of GPUCB   incurs
+exponential time in the batch size  Dt  The maxsum algorithm is also amenable to   distributed implementation on  
+cluster of parallel machines to boost scalability further  If  
+solution quality guarantee is desired  then   variant of maxsum called bounded maxsum  Rogers et al    can be
+used  Finally  the Markov order   can be varied to trade
+off between the approximation quality of  DtDt   and
+the time ef ciency of maxsum in solving the DCOP in  
+Regret Bounds  Our main result to follow derives probabilistic bounds on the cumulative regret of DBGP UCB 
+      be given      cid 
+  Dt  exp    log      and     cid   cid  
+Theorem   Let  
+  fD  yD         cid 
+  log     
+      
+Then  for the batch and full cumulative regrets incurred by
+RT    cid   DT              cid  and
+our DBGP UCB algorithm  
+
+        cid  maxD     
+
+  cid                        
+hold with probability of at least      
+
+ We assume the use of online sparse GP models  Csat    
+Opper    Hensman et al    Hoang et al     
+Low et al      Xu et al    that can update the GP predictive posterior distribution   in constant time in each iteration 
+
+ Bounded maxsum is previously used in  Rogers et al   
+to solve   related maximum entropy sampling problem  Shewry  
+Wynn    formulated as   DCOP  But  the largest arity of any
+function wn in this DCOP is still the batch size  Dt  and  unlike
+the focus of our work here  no attempt is made in  Rogers et al 
+  to reduce it  thus causing maxsum and bounded maxsum
+to incur exponential time in  Dt  In fact  our proposed Markov
+approximation can be applied to this problem to reduce the largest
+arity of any function wn in this DCOP to again       Dt   
+
+ cid 
+
+place the cid 
+
+Its proof  Appendix    when compared to that of GPUCB
+ Srinivas et al    and its greedy batch variants  Contal et al    Desautels et al    requires tackling
+the additional technical challenges associated with jointly
+optimizing   batch Dt of inputs in each iteration    Note
+that the uncertainty sampling based initialization strategy
+proposed by Desautels et al    can be employed to reexp    term       growing linearly in  Dt 
+appearing in our regret bounds by   kerneldependent constant factor of   cid  that is independent of  Dt  values of   cid 
+for the most commonlyused kernels are replicated in Table   in Appendix    see section   in  Desautels et al 
+  for   more detailed discussion on this issue 
+Table   in Appendix   compares the bounds on RT of
+DBGP UCB   GPUCB PE  GPBUCB  GPUCB  and
+UCBDPP SAMPLE  Compared to the bounds on RT of
+GPUCB PE and UCBDPP SAMPLE  our bound includes
+the additional kerneldependent factor of   cid  which is similar to GPBUCB  In fact  our regret bound is of the same
+form as that of GPBUCB except that our bound incorporates   parameter   of our Markov approximation and
+an upper bound    on the cumulative approximation error 
+both of which vanish for our batch variant of GPUCB  
+Corollary   For our batch variant of GPUCB   the
+
+cumulative regrets reduce to RT    cid   DT     
+
+and   cid                 
+Corollary   follows directly from Theorem   and by noting
+that for our batch variant          since  DtDt then
+trivially reduces to  DtDt  and        for                  
+Finally  the convergence rate of our DBGP UCB algorithm is dominated by the growth behavior of          
+While it is wellknown that the bounds on the maximum
+mutual information    established for the commonlyused
+linear  squared exponential  and Mat ern kernels in  Srinivas
+et al    Kathuria et al          replicated in Table  
+in Appendix    only grow sublinearly in     it is not immediately clear how the upper bound    on the cumulative
+approximation error behaves  Our next result reveals that
+   in fact only grows sublinearly in   as well 
+Corollary         exp          
+Corollary   follows directly from the de nitions of    in
+Proposition   and    and    in Theorem   and applying
+the chain rule for mutual information  Since    grows
+sublinearly in   for the abovementioned kernels  Srinivas et al    and   can be chosen to be independent of
+           cid   
+ Dt   Desautels et al    it follows
+from Corollary   that    grows sublinearly in     As   result  Theorem   guarantees sublinear cumulative regrets for
+the abovementioned kernels  which implies that our DBGP UCB algorithm   asymptotically achieves no regret 
+regardless of the degree of our proposed Markov approxi 
+
+Distributed Batch Gaussian Process Optimization
+
+mation       con guration of        Thus  our batch variant of GPUCB   achieves no regret as well 
+
+  Experiments and Discussion
+This section evaluates the cumulative regret incurred by
+our DBGP UCB algorithm   and its scalability in the
+batch size empirically on two synthetic benchmark objective functions such as BraninHoo  Lizotte    and
+gSobol  Gonz alez et al     Table   in Appendix   
+and   realworld pH  eld of Broom   Barn farm  Webster
+  Oliver     Fig    in Appendix    spatially distributed
+over       by     region discretized into        
+grid of sampling locations  These objective functions and
+the realworld pH  eld are each modeled as   sample of
+  GP whose prior covariance is de ned by the widelyused squared exponential kernel kxx cid   cid   
+  exp    
+  cid cid       cid  where    cid  diag cid           cid    and  
+  are
+its lengthscale and signal variance hyperparameters  respectively  These hyperparameters together with the noise
+  are learned using maximum likelihood estimavariance  
+tion  Rasmussen   Williams   
+The performance of our DBGP UCB algorithm   is
+compared with the stateof theart batch BO algorithms
+such as GPBUCB  Desautels et al    GPUCB PE
+ Contal et al    SMUCB  Azimi et al    qEI
+ Chevalier   Ginsbourger    and BBOLP by plugging in GPUCB  Gonz alez et al    whose implementations  are publicly available  These batch BO algorithms are evaluated using   performance metric that measures the cumulative regret incurred by   tested algorithm 
+ 
+is the recommendation of the tested algorithm after   batch
+evaluations  For each experiment    noisy observations are
+randomly selected and used for initialization  This is independently repeated   times and we report the resulting
+mean cumulative regret incurred by   tested algorithm  All
+experiments are run on   Linux system with Intel cid  Xeon cid 
+   at  GHz with   GB memory 
+For our experiments  we use    xed budget of   DT   
+  function evaluations and analyze the tradeoff between
+batch size  DT                vs 
+time horizon    respectively          on the performance of the tested
+algorithms  This experimental setup represents   practical scenario of costly function evaluations  On one hand 
+when   function evaluation is computationally costly      
+timeconsuming  it is more desirable to evaluate   for  
+larger batch        DT      of inputs in parallel in each
+iteration         if hardware resources permit  to reduce the
+total time needed  hence smaller     On the other hand 
+
+ cid  
+              cid xt  where cid xt  cid  arg maxxt    xt 
+
+ Details on the used implementations are given in Table   in
+Appendix    We implemented DBGP UCB in MATLAB to exploit the GPML toolbox  Rasmussen   Williams   
+
+when   function evaluation is economically costly  one may
+be willing to instead invest more time  hence larger     to
+evaluate   for   smaller batch        DT      of inputs
+in each iteration   in return for   higher frequency of information and consequently   more adaptive BO to achieve
+potentially better performance  In some settings  both factors may be equally important  that is  moderate values of
+ DT  and   are desired  To the best of our knowledge  such
+  form of empirical analysis does not seem to be available
+in the batch BO literature 
+Fig    shows results  of the cumulative regret incurred by
+the tested algorithms to analyze their tradeoff between
+time horizon    rebatch size  DT                vs 
+spectively          using    xed budget of   DT     
+function evaluations for the BraninHoo function  left column  gSobol function  middle column  and realworld pH
+ eld  right column  Our DBGP UCB algorithm uses the
+con gurations of                      in the experiments with batch size  DT          respectively 
+in the case of  DT      we use our batch variant of GPUCB   which is equivalent to DBGP UCB when      
+It can be observed that DBGP UCB achieves lower cumulative regret than GPBUCB  GPUCB PE  SMUCB  and
+BBOLP in all experiments  with the only exception being
+the gSobol function for the smallest batch size of  DT     
+where BBOLP performs slightly better  since DBGP 
+UCB can jointly optimize   batch of inputs while GPBUCB  GPUCB PE  SMUCB  and BBOLP are greedy
+batch algorithms that select the inputs of   batch one at
+time  Note that as the realworld pH  eld is not as wellbehaved as the synthetic benchmark functions  see Fig   
+in Appendix    the estimate of the Lipschitz constant by
+BBOLP is potentially worse  hence likely degrading its
+performance  Furthermore  DBGP UCB can scale to  
+much larger batch size of   than the other batch BO algorithms that also jointly optimize the batch of inputs  which
+include qEI  PPES  Shah   Ghahramani    and qKG
+ Wu   Frazier    Results of qEI are not available for
+ DT      as they require   prohibitively huge computational effort to be obtained  while PPES can only operate
+with   small batch size of up to   for the BraninHoo function and up to   for other functions  as reported in  Shah
+  Ghahramani    and qKG can only operate with
+  small batch size of   for all tested functions  including
+the BraninHoo function and four others  as reported in
+ Wu   Frazier    The scalability of DBGP UCB is
+attributed to our proposed Markov approximation of our
+
+ Error bars are omitted in Fig    to preserve the readability of
+the graphs    replication of the graphs in Fig    including standard
+error bars is provided in Appendix   
+
+ In the experiments of Gonz alez et al    qEI can reach  
+batch size of up to   but performs much worse than GPBUCB 
+which is likely due to   considerable downsampling of possible
+batches available for selection in each iteration 
+
+Distributed Batch Gaussian Process Optimization
+
+batch BO algorithms 
+We have also investigated and analyzed the tradeoff between approximation quality and time ef ciency of our DPGP UCB algorithm and reported the results in Appendix  
+due to lack of space  To summarize  it can be observed
+from our results that the approximation quality improves
+nearlinearly with an increasing Markov order   at the expense of higher computational cost       exponential in   
+
+  Conclusion
+This paper develops   novel distributed batch GPUCB
+ DBGP UCB  algorithm for performing batch BO of
+highly complex  costlyto evaluate  noisy blackbox objective functions  In contrast to greedy batch BO algorithms
+ Azimi et al    Contal et al    Desautels et al 
+  Gonz alez et al    our DBGP UCB algorithm
+can jointly optimize   batch of inputs and  unlike  Chevalier   Ginsbourger    Shah   Ghahramani    Wu
+  Frazier    still preserve scalability in the batch size 
+To realize this  we generalize GPUCB  Srinivas et al 
+  to   new batch variant amenable to   Markov approximation  which can then be naturally formulated as  
+multiagent DCOP in order to fully exploit the ef ciency
+of its stateof theart solvers such as maxsum  Farinelli
+et al    Rogers et al    for achieving linear time
+in the batch size  Our proposed DBGP UCB algorithm
+offers practitioners the  exibility to trade off between the
+approximation quality and time ef ciency by varying the
+Markov order  We provide   theoretical guarantee for the
+convergence rate of our DBGP UCB algorithm via bounds
+on its cumulative regret  Empirical evaluation on synthetic
+benchmark objective functions and   realworld pH  eld
+shows that our DBGP UCB algorithm can achieve lower
+cumulative regret than the greedy batch BO algorithms
+such as GPBUCB  GPUCB PE  SMUCB  and BBOLP 
+and scale to larger batch sizes than the other batch BO
+algorithms that also jointly optimize the batch of inputs 
+which include qEI  PPES  and qKG  For future work 
+we plan to generalize DBGP UCB     to the nonmyopic
+context by appealing to existing literature on nonmyopic
+BO  Ling et al    and active learning  Cao et al   
+Hoang et al        Low et al           
+as well as     to be performed by   multirobot team to
+ nd hotspots in environmental sensing monitoring by seeking inspiration from existing literature on multirobot active sensing learning  Chen et al          Low
+et al    Ouyang et al    For applications with
+  huge budget of function evaluations  we like to couple
+DBGP UCB with the use of parallel distributed sparse GP
+models  Chen et al      Hoang et al    Low et al 
+  to represent the belief of the unknown objective function ef ciently 
+
+BraninHoo
+
+gSobol
+
+pH  eld
+
+Figure   Cumulative regret incurred by tested algorithms with
+varying batch sizes  DT             rows from top to bottom 
+using    xed budget of   DT      function evaluations for the
+BraninHoo function  gSobol function  and realworld pH  eld 
+
+batch variant of GPUCB    Section   which can then
+be naturally formulated as   multiagent DCOP   in order
+to fully exploit the ef ciency of one of its stateof theart
+solvers called maxsum  Farinelli et al    In the experiments with the largest batch size of  DT      we have
+reduced the number of iterations in maxsum to less than  
+without waiting for convergence to preserve the ef ciency
+of DBGP UCB  thus sacri cing its BO performance  Nevertheless  DBGP UCB can still outperform the other tested
+
+ RegretDBGP UCBGPUCB PEGPBUCBSM UCBBBOLPqEI RegretDBGP UCBGPUCB PEGPBUCBSM UCBBBOLP RegretDBGP UCBGPUCB PEGPBUCBSM UCBBBOLP   RegretDBGP UCBGPUCB PEGPBUCBSM UCBBBOLP     Distributed Batch Gaussian Process Optimization
+
+Acknowledgements
+This research is supported by Singapore Ministry of Education Academic Research Fund Tier   MOE   
+Erik    Daxberger would like to thank Volker Tresp for his
+advice throughout this research project 
+
+References
+Anderson        Moore        and Cohn       nonparametric approach to noisy and costly optimization  In
+Proc  ICML   
+
+Asif     and Moura           Block matrices with Lblock 
+banded inverse  Inversion algorithms  IEEE Trans  Signal Processing     
+
+Azimi     Fern     and Fern        Batch Bayesian optimization via simulation matching  In Proc  NIPS  pp 
+   
+
+Brochu     Cora        and de Freitas       tutorial on
+Bayesian optimization of expensive cost functions  with
+application to active user modeling and hierarchical reinforcement learning  arXiv   
+
+Cao     Low        and Dolan        Multirobot informative path planning for active sensing of environmental
+phenomena    tale of two algorithms  In Proc  AAMAS 
+pp     
+
+Chapman     Rogers     Jennings        and Leslie 
+     unifying framework for iterative approximate bestresponse algorithms for distributed constraint optimisation problems  The Knowledge Engineering Review   
+   
+
+Chen     Low        Tan          Oran     Jaillet    
+Dolan        and Sukhatme        Decentralized data
+fusion and active sensing with mobile sensors for modeling and predicting spatiotemporal traf   phenomena 
+In Proc  UAI  pp     
+
+Chen     Cao     Low        Ouyang     Tan         
+and Jaillet     Parallel Gaussian process regression with
+In Proc 
+lowrank covariance matrix approximations 
+UAI  pp       
+
+Chen     Low        and Tan          Gaussian processbased decentralized data fusion and active sensing for
+mobilityon demand system  In Proc  RSS     
+
+Chen     Low        Jaillet     and Yao     Gaussian process decentralized data fusion and active sensing for spatiotemporal traf   modeling and prediction in mobilityon demand systems  IEEE Trans  Autom  Sci  Eng   
+   
+
+Chevalier     and Ginsbourger     Fast computation of the
+multipoints expected improvement with applications in
+batch selection  In Proc   th International Conference on
+Learning and Intelligent Optimization  pp     
+
+Contal     Buffoni     Robicquet     and Vayatis 
+Parallel Gaussian process optimization with upIn Proc 
+
+  
+per con dence bound and pure exploration 
+ECML PKDD  pp     
+
+Contal     Perchet     and Vayatis     Gaussian process
+optimization with mutual information  In Proc  ICML 
+pp     
+
+Csat       and Opper     Sparse online Gaussian processes 
+
+Neural Computation     
+
+Desautels     Krause     and Burdick        Parallelizing explorationexploitation tradeoffs in Gaussian process bandit optimization  JMLR     
+
+Farinelli     Rogers     Petcu     and Jennings       
+Decentralised coordination of lowpower embedded deIn Proc  AAMAS 
+vices using the maxsum algorithm 
+pp     
+
+Gonz alez     Dai     Hennig     and Lawrence       
+Batch Bayesian optimization via local penalization  In
+Proc  AISTATS   
+
+Hennig     and Schuler       
+
+informationef cient global optimization 
+   
+
+Entropy search for
+JMLR   
+
+Hensman     Fusi     and Lawrence        Gaussian pro 
+
+cesses for big data  In Proc  UAI   
+
+Hern andezLobato        Hoffman        and Ghahramani     Predictive entropy search for ef cient global
+optimization of blackbox functions  In Proc  NIPS  pp 
+   
+
+Hoang        Hoang        and Low          generalized
+stochastic variational Bayesian hyperparameter learning
+framework for sparse spectrum Gaussian process regression  In Proc  AAAI  pp     
+
+Hoang        Low        Jaillet     and Kankanhalli 
+   Active learning is planning  Nonmyopic  Bayesoptimal active learning of Gaussian processes  In Proc 
+ECML PKDD Nectar Track  pp       
+
+Hoang        Low        Jaillet     and Kankanhalli    
+Nonmyopic  Bayesoptimal active learning of Gaussian
+processes  In Proc  ICML  pp       
+
+Hoang        Hoang        and Low          unifying
+framework of anytime sparse Gaussian process regression models with stochastic variational inference for big
+data  In Proc  ICML  pp     
+
+Distributed Batch Gaussian Process Optimization
+
+Hoang        Hoang        and Low          distributed variational inference framework for unifying
+parallel sparse Gaussian process regression models  In
+Proc  ICML  pp     
+
+Ouyang     Low        Chen     and Jaillet     Multirobot active sensing of nonstationary Gaussian processbased environmental phenomena  In Proc  AAMAS  pp 
+   
+
+Rasmussen        and Williams           Gaussian Pro 
+
+cesses for Machine Learning  MIT Press   
+
+Rogers     Farinelli     Stranders     and Jennings       
+Bounded approximate decentralised coordination via the
+maxsum algorithm  AIJ     
+
+Shah     and Ghahramani     Parallel predictive entropy
+search for batch global optimization of expensive objective functions  In Proc  NIPS  pp     
+
+Shahriari     Swersky     Wang     Adams        and de
+Freitas     Taking the human out of the loop    review
+of Bayesian optimization  Proceedings of the IEEE   
+   
+
+Shewry        and Wynn        Maximum entropy sam 
+
+pling     Applied Statistics     
+
+Srinivas     Krause     Kakade     and Seeger     Gaussian process optimization in the bandit setting  No regret and experimental design  In Proc  ICML  pp   
+   
+
+Villemonteix     Vazquez     and Walter     An informational approach to the global optimization of expensiveto evaluate functions     Glob  Optim   
+ 
+
+Webster     and Oliver     Geostatistics for Environmental
+
+Scientists  John Wiley   Sons  Inc   
+
+Wu     and Frazier     The parallel knowledge gradient
+method for batch Bayesian optimization  In Proc  NIPS 
+pp     
+
+Xu     Low        Chen     Lim        and Ozgul       
+GPLocalize  Persistent mobile robot localization using
+online sparse Gaussian process observation model 
+In
+Proc  AAAI  pp     
+
+Kathuria     Deshpande     and Kohli     Batched Gaussian process bandit optimization via determinantal point
+processes  In Proc  NIPS  pp     
+
+Leite        Enembreck     and Barth es          Distributed constraint optimization problems  Review and
+perspectives  Expert Systems with Applications   
+   
+
+Ling        Low        and Jaillet     Gaussian process planning with Lipschitz continuous reward functions  Towards unifying Bayesian optimization  active
+In Proc  AAAI  pp   
+learning  and beyond 
+ 
+
+Lizotte        Practical Bayesian optimization  Ph    The 
+
+sis  University of Alberta   
+
+Low        Dolan        and Khosla     Adaptive multirobot widearea exploration and mapping  In Proc  AAMAS  pp     
+
+Low        Dolan        and Khosla    
+
+Informationtheoretic approach to ef cient adaptive path planning for
+mobile robotic environmental sensing  In Proc  ICAPS 
+pp     
+
+Low        Dolan        and Khosla     Active Markov
+informationtheoretic path planning for robotic environmental sensing  In Proc  AAMAS  pp     
+
+Low        Chen     Dolan        Chien     and Thompson        Decentralized active robotic exploration and
+mapping for probabilistic  eld classi cation in environmental sensing  In Proc  AAMAS  pp     
+
+Low        Chen     Hoang        Xu     and Jaillet 
+   Recent advances in scaling up Gaussian process predictive models for large spatiotemporal data  In Ravela 
+   and Sandu      eds  Dynamic DataDriven Environmental Systems Science  First International Conference 
+DyDESS   pp    LNCS   Springer International Publishing     
+
+Low        Xu     Chen     Lim        and  Ozg ul       
+Generalized online sparse Gaussian processes with application to persistent mobile robot localization  In Proc 
+ECML PKDD Nectar Track  pp       
+
+Low        Yu     Chen     and Jaillet     Parallel Gaussian
+process regression for big data  Lowrank representation
+meets Markov approximation  In Proc  AAAI  pp   
+   
+
+
